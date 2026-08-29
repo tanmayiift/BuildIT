@@ -168,6 +168,72 @@ describe("Convex tenant isolation", () => {
     expect(first.map((review) => review.id)).toEqual([alpha.reviewId]);
     expect(secondOnly.map((review) => review.id)).toEqual([second.reviewId]);
   });
+
+  it("rejects a repository attached to an installation from another organization", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const beta = await seedTenant(t, "beta", "bob");
+    await t.run((ctx) => ctx.db.patch(alpha.repositoryId, { installationId: beta.installationId }));
+    await expect(t.withIdentity({ subject: "alice" }).query(api.reviews.list, {
+      organizationId: alpha.organizationId,
+      repositoryId: alpha.repositoryId,
+    })).rejects.toThrow("not_found_or_forbidden");
+  });
+
+  it("keeps identical base-result cache inputs separate by repository", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const beta = await seedTenant(t, "beta", "alice");
+    const ids = await t.run(async (ctx) => {
+      const common = {
+        baseSha: "b".repeat(40), commandFingerprint: "same-command", runnerImageVersion: "runner-1",
+        toolVersions: [], architecture: "amd64", networkPolicyVersion: "network-1",
+        conclusion: "passed" as const, computedAt: 1, expiresAt: 10,
+      };
+      const alphaReview = await ctx.db.get(alpha.reviewId);
+      const betaReview = await ctx.db.get(beta.reviewId);
+      if (!alphaReview || !betaReview) throw new Error("missing fixture");
+      const first = await ctx.db.insert("baseResults", {
+        ...common, organizationId: alpha.organizationId, repositoryId: alpha.repositoryId,
+        configRevisionId: alphaReview.configRevisionId,
+      });
+      const second = await ctx.db.insert("baseResults", {
+        ...common, organizationId: beta.organizationId, repositoryId: beta.repositoryId,
+        configRevisionId: betaReview.configRevisionId,
+      });
+      const alphaHit = await ctx.db.query("baseResults").withIndex("by_full_cache_key", (q) => q
+        .eq("repositoryId", alpha.repositoryId).eq("baseSha", common.baseSha)
+        .eq("commandFingerprint", common.commandFingerprint).eq("configRevisionId", alphaReview.configRevisionId)
+        .eq("runnerImageVersion", common.runnerImageVersion).eq("architecture", common.architecture)
+        .eq("networkPolicyVersion", common.networkPolicyVersion)).unique();
+      return { first, second, alphaHit: alphaHit?._id };
+    });
+    expect(ids.first).not.toBe(ids.second);
+    expect(ids.alphaHit).toBe(ids.first);
+  });
+
+  it("scopes metric aggregation to validated repository and review parents", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const beta = await seedTenant(t, "beta", "bob");
+    await t.run(async (ctx) => {
+      await ctx.db.insert("metricEvents", {
+        organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId,
+        name: "review_completed", value: 1, organizationTimezone: "Asia/Kolkata", occurredAt: 2,
+      });
+    });
+    const asAlice = t.withIdentity({ subject: "alice" });
+    expect(await asAlice.query(api.metrics.summarize, { organizationId: alpha.organizationId, since: 0 }))
+      .toEqual({ review_completed: 1 });
+    await expect(asAlice.query(api.metrics.summarize, { organizationId: beta.organizationId, since: 0 }))
+      .rejects.toThrow("not_found_or_forbidden");
+    await t.run((ctx) => ctx.db.insert("metricEvents", {
+      organizationId: alpha.organizationId, repositoryId: beta.repositoryId, reviewId: beta.reviewId,
+      name: "review_completed", value: 99, organizationTimezone: "Asia/Kolkata", occurredAt: 3,
+    }));
+    await expect(asAlice.query(api.metrics.summarize, { organizationId: alpha.organizationId, since: 0 }))
+      .rejects.toThrow("not_found_or_forbidden");
+  });
 });
 
 describe("Convex review state integrity", () => {

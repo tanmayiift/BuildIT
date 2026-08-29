@@ -17,6 +17,7 @@ import type * as integrations from "../integrations.js";
 import type * as lib_authz from "../lib/authz.js";
 import type * as lib_durableStages from "../lib/durableStages.js";
 import type * as lib_lifecycle from "../lib/lifecycle.js";
+import type * as metrics from "../metrics.js";
 import type * as organizations from "../organizations.js";
 import type * as reviewState from "../reviewState.js";
 import type * as reviews from "../reviews.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   "lib/authz": typeof lib_authz;
   "lib/durableStages": typeof lib_durableStages;
   "lib/lifecycle": typeof lib_lifecycle;
+  metrics: typeof metrics;
   organizations: typeof organizations;
   reviewState: typeof reviewState;
   reviews: typeof reviews;
