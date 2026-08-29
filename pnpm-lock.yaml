@@ -66,6 +66,19 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  packages/orchestrator:
+    dependencies:
+      '@buildit/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@buildit/runner':
+        specifier: workspace:*
+        version: link:../runner
+    devDependencies:
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   packages/runner:
     devDependencies:
       typescript:
