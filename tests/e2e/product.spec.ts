@@ -64,3 +64,27 @@ test("repository and integration screens use truthful live connection states", a
   await expect(githubAction).toHaveCSS("color", "rgb(255, 255, 255)");
   await page.screenshot({ path: `.local/ui-evidence/integrations-${testInfo.project.name}.png`, fullPage: true });
 });
+
+test("the complete signed-out journey reports access and safety honestly", async ({ page }, testInfo) => {
+  await page.goto("/");
+  const readiness = page.getByRole("region", { name: "Explore freely. Connect only when an action needs it." });
+  await expect(readiness.getByText("Save your workspaces and preferences")).toBeVisible();
+  await expect(readiness.getByText("GitHub identity verified")).toHaveCount(0);
+
+  await page.goto("/setup/health");
+  await expect(page.getByText("GitHub identity").locator("..").getByText("Required")).toBeVisible();
+  await expect(page.getByText("Repository execution").locator("..").getByText("Safety blocked")).toBeVisible();
+  const repositoryHealth = page.locator(".health-list > div").filter({ hasText: "Repository installation" });
+  const sandboxHealth = page.locator(".health-list > div").filter({ hasText: "Sandbox boundary" });
+  await expect(repositoryHealth.getByText("required", { exact: true })).toBeVisible();
+  await expect(sandboxHealth.getByText("blocked", { exact: true })).toBeVisible();
+  await page.screenshot({ path: `.local/ui-evidence/setup-health-${testInfo.project.name}.png`, fullPage: true });
+
+  await page.goto("/members");
+  await expect(page.getByRole("heading", { name: "Sign in to manage members" })).toBeVisible();
+  const signIn = page.getByRole("main").getByRole("link", { name: "Sign in with GitHub" });
+  await expect(signIn).toHaveAttribute("href", "/sign-in?returnTo=%2Fmembers");
+  await page.screenshot({ path: `.local/ui-evidence/members-${testInfo.project.name}.png`, fullPage: true });
+
+  await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
+});
