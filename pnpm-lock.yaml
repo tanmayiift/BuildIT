@@ -48,6 +48,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@convex-dev/auth':
+        specifier: 0.0.95
+        version: 0.0.95(@auth/core@0.41.3)(convex@1.45.0(react@19.2.8))(react@19.2.8)
+      convex:
+        specifier: 1.45.0
+        version: 1.45.0(react@19.2.8)
       next:
         specifier: ^16.1.0
         version: 16.3.3(@playwright/test@1.62.1)(@types/node@24.13.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

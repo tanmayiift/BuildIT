@@ -1,12 +1,13 @@
 import "./globals.css";
 import "./mobile.css";
 import type { ReactNode } from "react";
+import { ConvexClientProvider } from "./convex-client-provider";
 
 const nav = ["Review Queue", "Repositories", "Metrics", "Usage", "Integrations", "Policies", "Members", "Audit Log"];
 const href = (name: string) => name === "Review Queue" ? "/" : "/" + name.toLowerCase().replace(" log", "").replaceAll(" ", "-");
 
 export default function Layout({ children }: { children: ReactNode }) {
-  return <html lang="en"><body>
+  return <html lang="en"><body><ConvexClientProvider>
     <div className="preview-banner" role="status"><strong>Product preview</strong><span>All reviews, people, organizations, and usage shown here are sample data. Sign-in and repository access are not active yet.</span></div>
     <div className="shell">
       <aside className="side">
@@ -23,5 +24,5 @@ export default function Layout({ children }: { children: ReactNode }) {
         {children}
       </main>
     </div>
-  </body></html>;
+  </ConvexClientProvider></body></html>;
 }

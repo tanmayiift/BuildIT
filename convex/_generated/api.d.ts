@@ -12,6 +12,7 @@ import type * as artifacts from "../artifacts.js";
 import type * as auth from "../auth.js";
 import type * as dataClassification from "../dataClassification.js";
 import type * as durableReview from "../durableReview.js";
+import type * as http from "../http.js";
 import type * as integrations from "../integrations.js";
 import type * as lib_authz from "../lib/authz.js";
 import type * as lib_durableStages from "../lib/durableStages.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   dataClassification: typeof dataClassification;
   durableReview: typeof durableReview;
+  http: typeof http;
   integrations: typeof integrations;
   "lib/authz": typeof lib_authz;
   "lib/durableStages": typeof lib_durableStages;

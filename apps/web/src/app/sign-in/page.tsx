@@ -1,10 +1,31 @@
+"use client";
+
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useState } from "react";
+
 export default function SignIn() {
+  const { signIn } = useAuthActions();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+
+  async function continueWithGitHub() {
+    setPending(true);
+    setError("");
+    try {
+      await signIn("github", { redirectTo: "/" });
+    } catch {
+      setError("GitHub sign-in could not start. No repository access was granted. Please try again.");
+      setPending(false);
+    }
+  }
+
   return <div className="content auth-card">
-    <p className="eyebrow">Product preview</p>
-    <h1 className="title">GitHub sign-in is not active yet</h1>
-    <p>BuildIT is currently showing sample screens while authentication and repository isolation are being completed and tested.</p>
-    <button className="button" type="button" disabled>Continue with GitHub</button>
-    <p className="muted">This button will be enabled only after a real OAuth round trip, account isolation, sign-out, and access-revocation tests pass.</p>
-    <a className="text-link" href="/data-handling">See what this preview collects</a>
+    <p className="eyebrow">Secure account access</p>
+    <h1 className="title">Sign in with GitHub</h1>
+    <p>Sign-in identifies you. It does not give BuildIT access to a repository. You choose repositories separately when installing the GitHub App.</p>
+    <button className="button" type="button" disabled={pending} onClick={continueWithGitHub}>{pending ? "Opening GitHub…" : "Continue with GitHub"}</button>
+    {error ? <p className="auth-error" role="alert">{error}</p> : null}
+    <p className="muted">GitHub shows the identity permission before you approve it. BuildIT repository access remains off until a separate App installation.</p>
+    <a className="text-link" href="/data-handling">See what BuildIT stores and where</a>
   </div>;
 }

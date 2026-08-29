@@ -1,10 +1,12 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 import * as value from "./validators";
 
 const timestampFields = { createdAt: v.number(), updatedAt: v.number() };
 
 export default defineSchema({
+  ...authTables,
   organizations: defineTable({
     name: v.string(), slug: v.string(), timezone: v.string(), region: v.literal("eu-west-1"),
     retentionHours: v.number(), monthlyBudget: v.number(), concurrencyLimit: v.number(),
