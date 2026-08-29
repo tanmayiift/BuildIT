@@ -11,13 +11,16 @@
 import type * as artifacts from "../artifacts.js";
 import type * as auth from "../auth.js";
 import type * as dataClassification from "../dataClassification.js";
+import type * as durableReview from "../durableReview.js";
 import type * as integrations from "../integrations.js";
 import type * as lib_authz from "../lib/authz.js";
+import type * as lib_durableStages from "../lib/durableStages.js";
 import type * as lib_lifecycle from "../lib/lifecycle.js";
 import type * as organizations from "../organizations.js";
 import type * as reviewState from "../reviewState.js";
 import type * as reviews from "../reviews.js";
 import type * as validators from "../validators.js";
+import type * as workflowManager from "../workflowManager.js";
 
 import type {
   ApiFromModules,
@@ -29,13 +32,16 @@ declare const fullApi: ApiFromModules<{
   artifacts: typeof artifacts;
   auth: typeof auth;
   dataClassification: typeof dataClassification;
+  durableReview: typeof durableReview;
   integrations: typeof integrations;
   "lib/authz": typeof lib_authz;
+  "lib/durableStages": typeof lib_durableStages;
   "lib/lifecycle": typeof lib_lifecycle;
   organizations: typeof organizations;
   reviewState: typeof reviewState;
   reviews: typeof reviews;
   validators: typeof validators;
+  workflowManager: typeof workflowManager;
 }>;
 
 /**
@@ -64,4 +70,7 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;
+  reviewWorkpool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"reviewWorkpool">;
+};

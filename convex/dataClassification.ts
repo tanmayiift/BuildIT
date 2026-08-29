@@ -34,7 +34,7 @@ export const storedTextClassifications = {
   sourceRef: "metadata", sourceUrlHash: "hashed_metadata", storageKey: "artifact_locator",
   timezone: "metadata", triggerActor: "operational_identifier", trustedRef: "metadata",
   trustedRefSha: "operational_identifier", userId: "operational_identifier", version: "metadata",
-  workspaceId: "operational_identifier",
+  workspaceId: "operational_identifier", workflowId: "operational_identifier",
 } as const satisfies Record<string, StoredTextClassification>;
 
 export const forbiddenInlineSourceFieldPattern = /(^|_)(code|diff|snippet|path|log|output|patch|prompt|prose|message|title|body|excerpt|command|source)(_|$)/i;

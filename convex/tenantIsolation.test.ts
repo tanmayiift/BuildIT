@@ -74,7 +74,7 @@ describe("Convex tenant isolation", () => {
     await seedTenant(t, "alpha", "alice");
     await seedTenant(t, "beta", "bob");
     const result = await t.withIdentity({ subject: "alice" }).query(api.organizations.listMine, {});
-    expect(result.map((organization) => organization.slug)).toEqual(["alpha"]);
+    expect(result.map((organization: { slug: string }) => organization.slug)).toEqual(["alpha"]);
   });
 
   it("rejects guessed organization and review IDs from another tenant", async () => {
@@ -113,6 +113,21 @@ describe("Convex tenant isolation", () => {
 });
 
 describe("Convex review state integrity", () => {
+  it("replays a persisted workflow checkpoint idempotently", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedTenant(t, "alpha", "alice");
+    const args = {
+      organizationId: seeded.organizationId, reviewId: seeded.reviewId,
+      expectedHeadSha: "a".repeat(40), expectedGeneration: 0,
+      stage: "context" as const, sequence: 1, now: 2,
+    };
+    const first = await t.mutation(internal.durableReview.checkpoint, args);
+    const replay = await t.mutation(internal.durableReview.checkpoint, { ...args, now: 3 });
+    expect(replay).toBe(first);
+    const events = await t.run((ctx) => ctx.db.query("reviewEvents").collect());
+    expect(events).toHaveLength(1);
+  });
+
   it("preserves terminal status while allowing an independent stale marker", async () => {
     const t = convexTest(schema, modules);
     const seeded = await seedTenant(t, "alpha", "alice");
