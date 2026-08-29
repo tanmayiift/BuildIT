@@ -27,3 +27,21 @@ export async function requireOrganizationRole(
   }
   return { userId, role: membership.role };
 }
+
+export async function requireRepositoryRole(
+  ctx: Ctx,
+  repositoryId: Id<"repositories">,
+  minimum: AppRole,
+  expectedOrganizationId?: Id<"organizations">,
+) {
+  const repository = await ctx.db.get(repositoryId);
+  if (!repository || (expectedOrganizationId && repository.organizationId !== expectedOrganizationId)) {
+    throw new ConvexError("not_found_or_forbidden");
+  }
+  const installation = await ctx.db.get(repository.installationId);
+  if (!installation || installation.organizationId !== repository.organizationId || installation.status !== "active") {
+    throw new ConvexError("not_found_or_forbidden");
+  }
+  const access = await requireOrganizationRole(ctx, repository.organizationId, minimum);
+  return { ...access, repository, installation };
+}

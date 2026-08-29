@@ -19,7 +19,7 @@ async function seedTenant(t: ReturnType<typeof convexTest>, slug: string, userId
     const installationId = await ctx.db.insert("githubInstallations", {
       organizationId, installationId: Math.floor(Math.random() * 1_000_000), accountLogin: slug,
       accountType: "organization", permissionSnapshot: {
-        metadata: "read", contents: "write", pullRequests: "write", issues: "write", checks: "write",
+        metadata: "read", contents: "write", pullRequests: "write", issues: "read", checks: "write",
       }, status: "active", createdAt: now, updatedAt: now,
     });
     const repositoryId = await ctx.db.insert("repositories", {
@@ -29,7 +29,7 @@ async function seedTenant(t: ReturnType<typeof convexTest>, slug: string, userId
       concurrencyLimit: 1, createdAt: now, updatedAt: now,
     });
     const configArtifactId = await ctx.db.insert("artifacts", {
-      organizationId, type: "configuration", storageKey: `${slug}/config`, encrypted: true,
+      organizationId, repositoryId, type: "configuration", storageKey: `${slug}/config`, encrypted: true,
       checksum: "hash", size: 1, redactionStatus: "redacted", expiresAt: now + 60_000,
       deletionAttempts: 0,
     });
@@ -55,7 +55,7 @@ async function seedTenant(t: ReturnType<typeof convexTest>, slug: string, userId
       expiresAt: now + 60_000, createdAt: now, updatedAt: now,
     });
     const artifactId = await ctx.db.insert("artifacts", {
-      organizationId, reviewId, type: "command_output", storageKey: `${slug}/output`, encrypted: true,
+      organizationId, repositoryId, reviewId, type: "command_output", storageKey: `${slug}/output`, encrypted: true,
       checksum: "output-hash", size: 10, redactionStatus: "redacted", expiresAt: now + 60_000,
       deletionAttempts: 0,
     });
@@ -64,11 +64,24 @@ async function seedTenant(t: ReturnType<typeof convexTest>, slug: string, userId
       nonce: "nonce", authTag: "tag", aadDigest: "aad", keyVersion: 1,
       maskedSuffix: "…1234", status: "valid", createdBy: userId, createdAt: now,
     });
-    return { organizationId, reviewId, artifactId };
+    return { organizationId, installationId, repositoryId, reviewId, artifactId };
   });
 }
 
 describe("Convex tenant isolation", () => {
+  it("allows one user to belong to multiple organizations without merging their records", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const beta = await seedTenant(t, "beta", "alice");
+    const asAlice = t.withIdentity({ subject: "alice" });
+    const organizations = await asAlice.query(api.organizations.listMine, {});
+    expect(organizations.map((organization: { slug: string }) => organization.slug).sort()).toEqual(["alpha", "beta"]);
+    const alphaReviews = await asAlice.query(api.reviews.list, { organizationId: alpha.organizationId });
+    const betaReviews = await asAlice.query(api.reviews.list, { organizationId: beta.organizationId });
+    expect(alphaReviews.map((review) => review.id)).toEqual([alpha.reviewId]);
+    expect(betaReviews.map((review) => review.id)).toEqual([beta.reviewId]);
+  });
+
   it("returns only organizations belonging to the authenticated user", async () => {
     const t = convexTest(schema, modules);
     await seedTenant(t, "alpha", "alice");
@@ -109,6 +122,51 @@ describe("Convex tenant isolation", () => {
       });
     });
     await expect(t.withIdentity({ subject: "viewer" }).query(api.integrations.listProviderCredentials, { organizationId: alpha.organizationId })).rejects.toThrow("not_found_or_forbidden");
+  });
+
+  it("rejects an artifact whose review and repository parents do not match", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const forgedArtifactId = await t.run(async (ctx) => {
+      const now = Date.now();
+      const repositoryId = await ctx.db.insert("repositories", {
+        organizationId: alpha.organizationId, installationId: alpha.installationId,
+        githubRepositoryId: 99, owner: "alpha", name: "fixture", defaultBranch: "main",
+        enabled: true, autofixMode: "stacked", forkPolicy: "manual_review_only",
+        indexState: "ready", concurrencyLimit: 1, createdAt: now, updatedAt: now,
+      });
+      return ctx.db.insert("artifacts", {
+        organizationId: alpha.organizationId, repositoryId, reviewId: alpha.reviewId,
+        type: "command_output", storageKey: "forged/output", encrypted: true,
+        checksum: "hash", size: 1, redactionStatus: "redacted", expiresAt: now + 60_000,
+        deletionAttempts: 0,
+      });
+    });
+    await expect(t.withIdentity({ subject: "alice" }).query(api.artifacts.getMetadata, { artifactId: forgedArtifactId })).rejects.toThrow("not_found_or_forbidden");
+  });
+
+  it("keeps review filters separate for repositories with the same name", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const second = await t.run(async (ctx) => {
+      const now = Date.now();
+      const repositoryId = await ctx.db.insert("repositories", {
+        organizationId: alpha.organizationId, installationId: alpha.installationId,
+        githubRepositoryId: 100, owner: "alpha", name: "fixture", defaultBranch: "main",
+        enabled: true, autofixMode: "stacked", forkPolicy: "manual_review_only",
+        indexState: "ready", concurrencyLimit: 1, createdAt: now, updatedAt: now,
+      });
+      const original = await ctx.db.get(alpha.reviewId);
+      if (!original) throw new Error("missing fixture");
+      const { _id: _id, _creationTime: _creationTime, ...copy } = original;
+      const reviewId = await ctx.db.insert("reviews", { ...copy, repositoryId, githubRepositoryId: 100, prNumber: 2 });
+      return { repositoryId, reviewId };
+    });
+    const asAlice = t.withIdentity({ subject: "alice" });
+    const first = await asAlice.query(api.reviews.list, { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId });
+    const secondOnly = await asAlice.query(api.reviews.list, { organizationId: alpha.organizationId, repositoryId: second.repositoryId });
+    expect(first.map((review) => review.id)).toEqual([alpha.reviewId]);
+    expect(secondOnly.map((review) => review.id)).toEqual([second.reviewId]);
   });
 });
 
@@ -211,6 +269,25 @@ describe("Convex review state integrity", () => {
     const replay = await t.mutation(internal.reviewState.reserveSideEffect, { ...args, now: 2 });
     expect(replay).toBe(first);
     await expect(t.mutation(internal.reviewState.reserveSideEffect, { ...args, requestHash: "hash-2", now: 3 })).rejects.toThrow("idempotency_key_conflict");
+  });
+
+  it("allows identical idempotency labels in different repositories without collision", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const secondReviewId = await t.run(async (ctx) => {
+      const original = await ctx.db.get(alpha.reviewId);
+      if (!original) throw new Error("missing fixture");
+      const repository = await ctx.db.get(alpha.repositoryId);
+      if (!repository) throw new Error("missing repository");
+      const { _id: _repoId, _creationTime: _repoTime, ...repoCopy } = repository;
+      const repositoryId = await ctx.db.insert("repositories", { ...repoCopy, githubRepositoryId: 101, name: "second" });
+      const { _id: _reviewId, _creationTime: _reviewTime, ...reviewCopy } = original;
+      return ctx.db.insert("reviews", { ...reviewCopy, repositoryId, githubRepositoryId: 101, prNumber: 3 });
+    });
+    const common = { organizationId: alpha.organizationId, operationKey: "review:summary", type: "comment_update" as const, requestHash: "hash", now: 1 };
+    const first = await t.mutation(internal.reviewState.reserveSideEffect, { ...common, reviewId: alpha.reviewId });
+    const second = await t.mutation(internal.reviewState.reserveSideEffect, { ...common, reviewId: secondReviewId });
+    expect(second).not.toBe(first);
   });
 
   it("counts applied patches and validated rounds independently within hard bounds", async () => {

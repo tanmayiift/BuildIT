@@ -25,7 +25,7 @@ export default defineSchema({
     accountType: value.accountType,
     permissionSnapshot: v.object({
       metadata: v.literal("read"), contents: v.union(v.literal("read"), v.literal("write")),
-      pullRequests: v.literal("write"), issues: v.literal("write"),
+      pullRequests: v.literal("write"), issues: v.literal("read"),
       checks: v.union(v.literal("read"), v.literal("write")),
     }),
     status: value.installationStatus, suspendedAt: v.optional(v.number()), ...timestampFields,
@@ -172,11 +172,12 @@ export default defineSchema({
     .index("by_attempt", ["attemptId"]),
 
   artifacts: defineTable({
-    organizationId: v.id("organizations"), reviewId: v.optional(v.id("reviews")), type: value.artifactType,
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.optional(v.id("reviews")), type: value.artifactType,
     storageKey: v.string(), encrypted: v.literal(true), checksum: v.string(), size: v.number(),
     redactionStatus: value.redactionStatus, expiresAt: v.number(), deletedAt: v.optional(v.number()),
     deletionAttempts: v.number(),
   }).index("by_expiry", ["expiresAt"])
+    .index("by_repository", ["repositoryId"])
     .index("by_review", ["reviewId"]),
 
   usageLedger: defineTable({
@@ -187,10 +188,10 @@ export default defineSchema({
     .index("by_review", ["reviewId"]),
 
   githubSideEffects: defineTable({
-    organizationId: v.id("organizations"), reviewId: v.id("reviews"), operationKey: v.string(),
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.id("reviews"), operationKey: v.string(),
     type: value.sideEffectType, externalId: v.optional(v.string()), requestHash: v.string(),
     status: value.sideEffectStatus, createdAt: v.number(), updatedAt: v.number(),
-  }).index("by_operation_key", ["operationKey"])
+  }).index("by_repo_operation_key", ["repositoryId", "operationKey"])
     .index("by_review", ["reviewId"]),
 
   deliveries: defineTable({

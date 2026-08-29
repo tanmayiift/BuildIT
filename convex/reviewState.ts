@@ -125,13 +125,13 @@ export const reserveSideEffect = internalMutation({
   handler: async (ctx, args) => {
     const review = await ctx.db.get(args.reviewId);
     if (!review || review.organizationId !== args.organizationId) throw new ConvexError("not_found_or_forbidden");
-    const existing = await ctx.db.query("githubSideEffects").withIndex("by_operation_key", (q) => q.eq("operationKey", args.operationKey)).unique();
+    const existing = await ctx.db.query("githubSideEffects").withIndex("by_repo_operation_key", (q) => q.eq("repositoryId", review.repositoryId).eq("operationKey", args.operationKey)).unique();
     if (existing) {
       if (existing.requestHash !== args.requestHash || existing.reviewId !== args.reviewId) throw new ConvexError("idempotency_key_conflict");
       return existing._id;
     }
     return ctx.db.insert("githubSideEffects", {
-      organizationId: args.organizationId, reviewId: args.reviewId, operationKey: args.operationKey,
+      organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: args.reviewId, operationKey: args.operationKey,
       type: args.type, requestHash: args.requestHash, status: "reserved",
       createdAt: args.now, updatedAt: args.now,
     });
