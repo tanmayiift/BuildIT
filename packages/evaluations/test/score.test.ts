@@ -1,0 +1,2 @@
+import {expect,it} from "vitest";import {releaseGate,score} from "../src/score.js";
+it("enforces the numeric quality gate",()=>{const rows=[{expected:true,surfaced:true,critical:true},{expected:true,surfaced:true,critical:true},{expected:true,surfaced:true,critical:false},{expected:false,surfaced:true,critical:false}];expect(score(rows)).toEqual({precision:.75,criticalRecall:1});expect(releaseGate(rows)).toBe(false)});

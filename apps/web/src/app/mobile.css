@@ -1,0 +1,1 @@
+.mobile-nav{display:none}.mobile-nav nav{position:absolute;right:12px;top:56px;background:var(--paper);border:1px solid var(--line);padding:8px;z-index:5}.mobile-nav a{display:block;min-width:180px;padding:12px}@media(max-width:800px){.mobile-nav{display:block}.budget{display:none}}
