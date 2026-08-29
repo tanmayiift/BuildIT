@@ -16,7 +16,8 @@ export const current = query({
       ctx.db.query("repositories").withIndex("by_org_enabled", q => q.eq("organizationId", organization._id)).collect(),
     ]);
     const installations = installationDocs.map(item => ({ id: item._id, installationId: item.installationId, accountLogin: item.accountLogin, accountType: item.accountType, status: item.status, updatedAt: item.updatedAt }));
-    const repositories = repositoryDocs.filter(item => item.enabled).map(item => ({ id: item._id, installationId: item.installationId, githubRepositoryId: item.githubRepositoryId, owner: item.owner, name: item.name, defaultBranch: item.defaultBranch, visibility: item.visibility ?? "unknown" as const, autofixMode: item.autofixMode, indexState: item.indexState, updatedAt: item.updatedAt }));
+    const activeInstallationIds = new Set(installationDocs.filter(item => item.status === "active").map(item => item._id));
+    const repositories = repositoryDocs.filter(item => item.enabled && activeInstallationIds.has(item.installationId)).map(item => ({ id: item._id, installationId: item.installationId, githubRepositoryId: item.githubRepositoryId, owner: item.owner, name: item.name, defaultBranch: item.defaultBranch, visibility: item.visibility ?? "unknown" as const, autofixMode: item.autofixMode, indexState: item.indexState, updatedAt: item.updatedAt }));
     const hasActiveInstallation = installationDocs.some(item => item.status === "active");
     const state = !installationDocs.length ? "installation_required" as const : !hasActiveInstallation ? "installation_unavailable" as const : !repositories.length ? "no_repositories_selected" as const : "connected" as const;
     return { state, organization: { id: organization._id, name: organization.name, slug: organization.slug, role: membership.role, region: organization.region, retentionHours: organization.retentionHours }, installations, repositories };

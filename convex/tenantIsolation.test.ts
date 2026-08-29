@@ -149,6 +149,49 @@ describe("Convex tenant isolation", () => {
     expect(JSON.stringify(result)).not.toContain("ciphertext");
   });
 
+  it("reports an active installation with no selected repositories without inventing access", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const asAlice = t.withIdentity({ subject: "alice|session-one" });
+    await asAlice.mutation(api.organizations.selectActive, { organizationId: alpha.organizationId });
+    await t.run(async (ctx) => {
+      const repositories = await ctx.db.query("repositories").withIndex("by_org_enabled", (q) => q.eq("organizationId", alpha.organizationId)).collect();
+      await Promise.all(repositories.map((repository) => ctx.db.patch(repository._id, { enabled: false, pausedAt: Date.now() })));
+    });
+    expect(await asAlice.query(api.repositoryConnections.current, {})).toMatchObject({
+      state: "no_repositories_selected", organization: { slug: "alpha" }, repositories: [],
+    });
+  });
+
+  it("reports a revoked installation as unavailable and never returns its repositories", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const asAlice = t.withIdentity({ subject: "alice|session-one" });
+    await asAlice.mutation(api.organizations.selectActive, { organizationId: alpha.organizationId });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(alpha.installationId, { status: "removed", updatedAt: Date.now() });
+    });
+    const result = await asAlice.query(api.repositoryConnections.current, {});
+    expect(result).toMatchObject({ state: "installation_unavailable", repositories: [] });
+    expect(result.installations).toEqual([expect.objectContaining({ status: "removed" })]);
+  });
+
+  it("fails closed when a saved workspace outlives its active membership", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const asAlice = t.withIdentity({ subject: "alice|stale-session" });
+    await asAlice.mutation(api.organizations.selectActive, { organizationId: alpha.organizationId });
+    await t.run(async (ctx) => {
+      const membership = await ctx.db.query("memberships").withIndex("by_org_user", (q) =>
+        q.eq("organizationId", alpha.organizationId).eq("userId", "alice")).unique();
+      if (!membership) throw new Error("missing membership");
+      await ctx.db.patch(membership._id, { status: "removed", updatedAt: Date.now() });
+    });
+    expect(await asAlice.query(api.repositoryConnections.current, {})).toEqual({
+      state: "no_workspace", organization: null, installations: [], repositories: [],
+    });
+  });
+
   it("rejects guessed organization and review IDs from another tenant", async () => {
     const t = convexTest(schema, modules);
     await seedTenant(t, "alpha", "alice");
