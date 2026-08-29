@@ -1,5 +1,6 @@
 export type StoredTextClassification =
   | "metadata"
+  | "personal_identity"
   | "hashed_metadata"
   | "encrypted_secret"
   | "artifact_locator"
@@ -19,8 +20,9 @@ export const storedTextClassifications = {
   encryptedCiphertext: "encrypted_secret", encryptedRefreshToken: "encrypted_secret",
   evalSetVersion: "metadata", event: "metadata", eventHash: "hashed_metadata",
   externalId: "operational_identifier", externalIdHash: "hashed_metadata",
-  fetchedVersion: "metadata", fingerprintHmac: "hashed_metadata", githubLogin: "metadata", headSha: "operational_identifier",
-  internalCode: "metadata", leaseOwner: "operational_identifier", maskedSuffix: "metadata",
+  email: "personal_identity", fetchedVersion: "metadata", fingerprintHmac: "hashed_metadata",
+  githubLogin: "personal_identity", headSha: "operational_identifier", image: "personal_identity",
+  internalCode: "metadata", leaseOwner: "operational_identifier", login: "personal_identity", maskedSuffix: "metadata",
   model: "metadata", modelVersion: "metadata", name: "metadata", nameHash: "hashed_metadata",
   networkPolicyVersion: "metadata", nonce: "encrypted_secret", observedHeadSha: "operational_identifier",
   operationKey: "operational_identifier", organizationTimezone: "metadata", owner: "metadata",
@@ -32,7 +34,7 @@ export const storedTextClassifications = {
   schemaVersion: "metadata", scopeValueHmac: "hashed_metadata", slug: "metadata",
   sourceCommitSha: "operational_identifier", sourceHeadSha: "operational_identifier",
   sourceRef: "metadata", sourceUrlHash: "hashed_metadata", storageKey: "artifact_locator",
-  timezone: "metadata", triggerActor: "operational_identifier", trustedRef: "metadata",
+  phone: "personal_identity", timezone: "metadata", triggerActor: "operational_identifier", trustedRef: "metadata",
   trustedRefSha: "operational_identifier", userId: "operational_identifier", version: "metadata",
   workspaceId: "operational_identifier", workflowId: "operational_identifier",
 } as const satisfies Record<string, StoredTextClassification>;
