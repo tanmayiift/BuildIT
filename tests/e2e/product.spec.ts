@@ -23,6 +23,14 @@ test("setup protects the model key and permits skipping it", async ({ page }) =>
 
 test("GitHub installation return preserves sign-in and claim context",async({page})=>{await page.goto("/setup/install?installation_id=157557707");const link=page.getByRole("link",{name:"Sign in and return"});await expect(link).toBeVisible();await expect(link).toHaveAttribute("href",/returnTo=.*installation_id%3D157557707/)});
 
+test("GitHub callback failures are visible and recoverable", async ({ page }) => {
+  await page.goto("/sign-in?error=OAuthCallbackError&returnTo=%2Fsetup%2Finstall%3Finstallation_id%3D157557707");
+  const error = page.locator(".auth-error[role=alert]");
+  await expect(error).toContainText("without a verified BuildIT session");
+  await expect(error).toContainText("No repository access was granted");
+  await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
+});
+
 test("navigation exposes all promised product areas", async ({ page }) => {
   await page.goto("/");
   const menu = page.getByText("Menu", { exact: true });

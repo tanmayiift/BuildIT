@@ -1,12 +1,17 @@
 "use client";
 
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function SignIn() {
   const { signIn } = useAuthActions();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const callbackError = new URLSearchParams(window.location.search).get("error");
+    if (callbackError) setError("GitHub sign-in returned without a verified BuildIT session. No repository access was granted. Try again, or use a different GitHub account if this one is already linked.");
+  }, []);
 
   async function continueWithGitHub() {
     setPending(true);
