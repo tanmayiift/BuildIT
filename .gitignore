@@ -11,3 +11,5 @@ test-results
 .DS_Store
 PLAN.md
 docs/plan-BuildIT.md
+.agents/
+docs/release/deployment.md
