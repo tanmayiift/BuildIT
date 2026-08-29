@@ -1,0 +1,1 @@
+export default function SignIn(){return <div className="content" style={{maxWidth:520,margin:"15vh auto"}}><h1 className="title">BuildIT</h1><p>Evidence-backed pull-request verification. BuildIT never merges.</p><button className="button">Continue with GitHub</button><p className="muted">You will review the exact repository permissions before installation.</p></div>}
