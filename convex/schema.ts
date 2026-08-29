@@ -42,7 +42,7 @@ export default defineSchema({
 
   repositories: defineTable({
     organizationId: v.id("organizations"), installationId: v.id("githubInstallations"),
-    githubRepositoryId: v.number(), owner: v.string(), name: v.string(), defaultBranch: v.string(),
+    githubRepositoryId: v.number(), owner: v.string(), name: v.string(), defaultBranch: v.string(), visibility: v.optional(value.repositoryVisibility),
     enabled: v.boolean(), pausedAt: v.optional(v.number()), autofixMode: value.autofixMode,
     forkPolicy: value.forkPolicy, configRevisionId: v.optional(v.id("configRevisions")),
     indexState: value.indexState, concurrencyLimit: v.number(), ...timestampFields,

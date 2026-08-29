@@ -65,6 +65,7 @@ export const eventType = v.union(
 );
 export const installationStatus = v.union(v.literal("active"), v.literal("suspended"), v.literal("removed"));
 export const accountType = v.union(v.literal("user"), v.literal("organization"));
+export const repositoryVisibility = v.union(v.literal("public"), v.literal("private"), v.literal("internal"), v.literal("unknown"));
 export const autofixMode = v.union(v.literal("disabled"), v.literal("stacked"), v.literal("direct_push"));
 export const forkPolicy = v.union(v.literal("manual_review_only"), v.literal("disabled"));
 export const indexState = v.union(v.literal("not_started"), v.literal("building"), v.literal("ready"), v.literal("stale"), v.literal("failed"));

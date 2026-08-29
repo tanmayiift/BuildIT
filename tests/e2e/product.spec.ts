@@ -48,3 +48,19 @@ test("public data handling states the current access boundary", async ({ page })
   await expect(page.getByText(/signing in shares your approved GitHub identity/i)).toBeVisible();
   await expect(page.getByText(/does not grant repository access/i)).toBeVisible();
 });
+
+test("repository and integration screens use truthful live connection states", async ({ page }, testInfo) => {
+  await page.goto("/repositories");
+  await expect(page.getByRole("heading", { name: "Repositories" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to see repository access" })).toBeVisible();
+  await expect(page.getByText("Not connected", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("None", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: `.local/ui-evidence/repositories-${testInfo.project.name}.png`, fullPage: true });
+  await page.goto("/integrations");
+  const github = page.getByRole("heading", { name: "GitHub", exact: true }).locator("..");
+  await expect(github.getByText("Setup needed")).toBeVisible();
+  const githubAction = github.getByRole("link", { name: "Sign in with GitHub" });
+  await expect(githubAction).toBeVisible();
+  await expect(githubAction).toHaveCSS("color", "rgb(255, 255, 255)");
+  await page.screenshot({ path: `.local/ui-evidence/integrations-${testInfo.project.name}.png`, fullPage: true });
+});

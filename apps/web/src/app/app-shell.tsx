@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { AccountStatus } from "./account-status";
 import { WorkspaceSwitcher } from "./workspace-switcher";
+import { ConnectionBanner, SetupProgress } from "./live-connections";
 
 const work = [
   { label: "Overview", href: "/", mark: "OV" },
@@ -34,7 +35,7 @@ function isCurrent(pathname: string, href: string) {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   return <>
-    <div className="preview-banner" role="status"><span className="preview-label">Preview</span><span>Sample evidence is clearly marked. GitHub sign-in works; repository execution and AI review remain disabled.</span><a href="/data-handling">Trust boundary</a></div>
+    <ConnectionBanner />
     <div className="shell">
       <aside className="side">
         <div className="brand-row"><span className="brand-glyph" aria-hidden="true">B</span><a className="brand" href="/">BuildIT<span>Evidence room</span></a></div>
@@ -44,7 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="account"><AccountStatus /></div>
       </aside>
       <main className="main">
-        <header className="top"><div><p className="top-kicker">Workspace</p><strong>{pathname.startsWith("/reviews/") ? "Review detail" : "BuildIT"}</strong></div><div className="top-actions"><a className="quiet-link" href="/data-handling">Data & privacy</a><a className="setup-state" href="/setup/install"><span className="setup-dot" />Setup 1 of 4</a><AccountStatus compact /></div><details className="mobile-nav"><summary>Menu</summary><nav>{[...work, ...operations, ...settings].map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} />)}</nav></details></header>
+        <header className="top"><div><p className="top-kicker">Workspace</p><strong>{pathname.startsWith("/reviews/") ? "Review detail" : "BuildIT"}</strong></div><div className="top-actions"><a className="quiet-link" href="/data-handling">Data & privacy</a><SetupProgress /><AccountStatus compact /></div><details className="mobile-nav"><summary>Menu</summary><nav>{[...work, ...operations, ...settings].map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} />)}</nav></details></header>
         {children}
       </main>
     </div>

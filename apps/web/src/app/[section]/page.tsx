@@ -1,4 +1,5 @@
 import { efficacy } from "../sample-data";
+import { GitHubIntegrationState, RepositoryConnectionView } from "../live-connections";
 
 const validSections = new Set(["repositories", "metrics", "usage", "integrations", "policies", "members", "audit"]);
 
@@ -19,7 +20,7 @@ function Header({ eyebrow, title, description, action }: { eyebrow: string; titl
 }
 
 function Repositories() {
-  return <div className="content"><Header eyebrow="Repository scope" title="Repositories" description="Every repository is isolated by organization, installation, and repository ID." action={<a className="button" href="/setup/install">Select in GitHub</a>} /><section className="context-strip"><span><small>Organization</small><strong>Sample workspace</strong></span><span><small>Installation</small><strong>Not connected</strong></span><span><small>Repository access</small><strong>None</strong></span><span><small>Model key</small><strong>Not required to browse</strong></span></section><section className="split-layout"><article className="empty-state"><span className="empty-mark">RE</span><h2>No repositories connected</h2><p>GitHub will show the exact permissions and let you choose specific public or private repositories. BuildIT cannot see repositories you do not select.</p><div className="button-row"><a className="button" href="/setup/install">Review permissions</a><a className="button secondary" href="/data-handling">How isolation works</a></div></article><aside className="explain-panel"><p className="eyebrow">Available before connection</p><ul className="check-list"><li>Inspect the product tour</li><li>Read permission and retention details</li><li>Configure organization policies</li><li>Estimate model and runner usage</li></ul><p className="eyebrow">Requires a selected repository</p><ul className="plain-list"><li>Read PRs and exact commits</li><li>Run checks or AI analysis</li><li>Publish evidence to GitHub</li></ul></aside></section></div>;
+  return <div className="content"><Header eyebrow="Repository scope" title="Repositories" description="Every repository is isolated by account, workspace, installation, and immutable GitHub repository ID." /><RepositoryConnectionView /></div>;
 }
 
 function Metrics() {
@@ -31,7 +32,7 @@ function Usage() {
 }
 
 function Integrations() {
-  return <div className="content"><Header eyebrow="Dependency-specific setup" title="Integrations" description="Connect only the service needed for the next action. No all-or-nothing setup wall." /><div className="integration-grid"><Integration name="GitHub" status="Ready to install" description="Identity, selected repositories, PR comments, and Checks." action="Review permissions" href="/setup/install" /><Integration name="Anthropic / OpenAI / Gemini" status="Connect when analyzing" description="Your key is used only for the provider request you authorize." action="Compare model setup" href="/setup/model" /><Integration name="Linear" status="Optional" description="Read linked issue intent from approved workspaces." action="See supported context" href="#linear" /><Integration name="Jira" status="Optional" description="Read linked tickets with the connecting user's permissions." action="See supported context" href="#jira" /></div></div>;
+  return <div className="content"><Header eyebrow="Dependency-specific setup" title="Integrations" description="Connect only the service needed for the next action. No all-or-nothing setup wall." /><div className="integration-grid"><GitHubIntegrationState /><Integration name="Anthropic / OpenAI / Gemini" status="Connect when analyzing" description="Your key is used only for the provider request you authorize." action="Compare model setup" href="/setup/model" /><Integration name="Linear" status="Optional" description="Read linked issue intent from approved workspaces." action="See supported context" href="#linear" /><Integration name="Jira" status="Optional" description="Read linked tickets with the connecting user's permissions." action="See supported context" href="#jira" /></div></div>;
 }
 function Integration({ name, status, description, action, href }: { name: string; status: string; description: string; action: string; href: string }) { return <article className="integration-card"><div><span className="integration-glyph">{name.slice(0, 2).toUpperCase()}</span><span className="status neutral">{status}</span></div><h2>{name}</h2><p>{description}</p><a href={href}>{action} →</a></article>; }
 
