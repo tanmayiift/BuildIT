@@ -1,0 +1,8 @@
+title = "BuildIT Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented placeholder configuration is allowed"
+paths = ['''(^|/)\.env\.example$''']
