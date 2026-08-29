@@ -69,6 +69,16 @@ async function seedTenant(t: ReturnType<typeof convexTest>, slug: string, userId
 }
 
 describe("Convex tenant isolation", () => {
+  it("authorizes a real Convex Auth subject by stable user ID, not session ID", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const signedIn = t.withIdentity({ subject: "alice|session-one" });
+    const organizations = await signedIn.query(api.organizations.listMine, {});
+    const reviews = await signedIn.query(api.reviews.list, { organizationId: alpha.organizationId });
+    expect(organizations.map((organization: { slug: string }) => organization.slug)).toEqual(["alpha"]);
+    expect(reviews.map((review) => review.id)).toEqual([alpha.reviewId]);
+  });
+
   it("allows one user to belong to multiple organizations without merging their records", async () => {
     const t = convexTest(schema, modules);
     const alpha = await seedTenant(t, "alpha", "alice");

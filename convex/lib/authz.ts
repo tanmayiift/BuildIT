@@ -1,4 +1,5 @@
 import { ConvexError } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import type { QueryCtx, MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 
@@ -7,9 +8,9 @@ type Ctx = QueryCtx | MutationCtx;
 const rank: Record<AppRole, number> = { viewer: 0, developer: 1, admin: 2, owner: 3 };
 
 export async function requireUserId(ctx: Ctx): Promise<string> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new ConvexError("authentication_required");
-  return identity.subject;
+  const userId = await getAuthUserId(ctx);
+  if (!userId) throw new ConvexError("authentication_required");
+  return userId;
 }
 
 export async function requireOrganizationRole(
