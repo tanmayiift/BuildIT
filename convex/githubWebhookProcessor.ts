@@ -23,3 +23,16 @@ export const processWebhook = internalAction({
     }
   },
 });
+
+export const processPullRequestWebhook = internalAction({
+  args: { deliveryId: v.string(), installationId: v.number(), githubRepositoryId: v.number(), prNumber: v.number(), headSha: v.string() },
+  handler: async (ctx, args): Promise<{ staleCount: number } | undefined> => {
+    try {
+      const result: { staleCount: number } = await ctx.runMutation(internal.githubWebhookData.reconcilePullRequestHead, { installationId: args.installationId, githubRepositoryId: args.githubRepositoryId, prNumber: args.prNumber, observedHeadSha: args.headSha, now: Date.now() });
+      await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "processed", status: "completed", now: Date.now() });
+      return result;
+    } catch {
+      await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "rejected", status: "failed", now: Date.now() });
+    }
+  },
+});
