@@ -45,6 +45,10 @@ code, .mono, time, .status { font-family: "JetBrains Mono Variable", monospace; 
 .workspace-switcher span:first-child { display: grid; gap: 2px; }
 .workspace-switcher strong { font-size: 13px; }
 .workspace-switcher small { color: var(--muted); }
+.workspace-select { display: grid; gap: 4px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
+.workspace-select select { width: 100%; min-height: 28px; color: var(--ink); background: transparent; border: 0; font-weight: 750; outline: 0; }
+.workspace-select small { color: var(--muted); font-size: 10px; }
+.workspace-error { margin: 5px 2px 0; color: var(--danger); font-size: 10px; }
 .nav-heading { margin: 20px 10px 6px; color: var(--faint); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .nav-link { min-height: 42px; display: flex; align-items: center; gap: 10px; margin: 2px 0; padding: 7px 10px; color: var(--ink-2); border-radius: 6px; font-size: 13px; font-weight: 600; }
 .nav-link:hover { background: #eceff3; color: var(--ink); }
@@ -189,6 +193,15 @@ code, .mono, time, .status { font-family: "JetBrains Mono Variable", monospace; 
 .panel, .detail-head { border: 1px solid var(--line); border-radius: 7px; }
 .next { padding: 13px 15px; background: var(--info-bg); border: 1px solid #bfd3ec; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.session-panel { display: grid; gap: 16px; margin: 28px 0; padding: 20px; background: var(--workbench); border: 1px solid var(--line); border-radius: 7px; }
+.session-panel h2, .session-panel p { margin: 0; }
+.session-panel p { color: var(--muted); }
+.session-list { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.session-list > div { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.session-list > div:last-child { border-bottom: 0; }
+.session-list span:first-child { display: grid; gap: 3px; }
+.session-list small { color: var(--muted); }
+.session-panel .button { width: max-content; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 11px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 th { color: var(--muted); font-size: 10px; text-transform: uppercase; }

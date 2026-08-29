@@ -79,6 +79,40 @@ describe("Convex tenant isolation", () => {
     expect(reviews.map((review) => review.id)).toEqual([alpha.reviewId]);
   });
 
+  it("treats an active organization as a preference and rechecks membership", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    const beta = await seedTenant(t, "beta", "bob");
+    const asAlice = t.withIdentity({ subject: "alice|session-one" });
+    await asAlice.mutation(api.organizations.selectActive, { organizationId: alpha.organizationId });
+    expect(await asAlice.query(api.organizations.active, {})).toMatchObject({ slug: "alpha", role: "owner" });
+    await expect(asAlice.mutation(api.organizations.selectActive, { organizationId: beta.organizationId }))
+      .rejects.toThrow("not_found_or_forbidden");
+    await t.run(async (ctx) => {
+      const membership = await ctx.db.query("memberships").withIndex("by_org_user", (q) =>
+        q.eq("organizationId", alpha.organizationId).eq("userId", "alice")).unique();
+      if (!membership) throw new Error("missing membership");
+      await ctx.db.patch(membership._id, { status: "removed", updatedAt: Date.now() });
+    });
+    expect(await asAlice.query(api.organizations.active, {})).toBeNull();
+  });
+
+  it("lists only the current user's sessions and identifies the current one", async () => {
+    const t = convexTest(schema, modules);
+    const identity = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", { name: "Alice" });
+      const current = await ctx.db.insert("authSessions", { userId, expirationTime: 300 });
+      const other = await ctx.db.insert("authSessions", { userId, expirationTime: 400 });
+      const outsiderId = await ctx.db.insert("users", { name: "Bob" });
+      await ctx.db.insert("authSessions", { userId: outsiderId, expirationTime: 500 });
+      return { userId, current, other };
+    });
+    const sessions = await t.withIdentity({ subject: `${identity.userId}|${identity.current}` }).query(api.users.sessions, {});
+    expect(sessions).toHaveLength(2);
+    expect(sessions.find((session) => session.id === identity.current)?.current).toBe(true);
+    expect(sessions.find((session) => session.id === identity.other)?.current).toBe(false);
+  });
+
   it("allows one user to belong to multiple organizations without merging their records", async () => {
     const t = convexTest(schema, modules);
     const alpha = await seedTenant(t, "alpha", "alice");

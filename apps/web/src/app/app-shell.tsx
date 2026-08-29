@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { AccountStatus } from "./account-status";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
 const work = [
   { label: "Overview", href: "/", mark: "OV" },
@@ -37,7 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="shell">
       <aside className="side">
         <div className="brand-row"><span className="brand-glyph" aria-hidden="true">B</span><a className="brand" href="/">BuildIT<span>Evidence room</span></a></div>
-        <button className="workspace-switcher" type="button" aria-label="Organization switcher" disabled><span><strong>Sample workspace</strong><small>Interactive product tour</small></span><span aria-hidden="true">⌄</span></button>
+        <WorkspaceSwitcher />
         <nav aria-label="Primary"><p className="nav-heading">Workspace</p>{work.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} />)}<p className="nav-heading">Operations</p>{operations.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} />)}</nav>
         <nav className="settings-nav" aria-label="Organization settings">{settings.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} />)}</nav>
         <div className="account"><AccountStatus /></div>
