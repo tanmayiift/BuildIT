@@ -1,6 +1,6 @@
-import {createHmac} from "node:crypto";
-import {describe,expect,it} from "vitest";
-import {authorizeTrigger,canCommitSensitiveWrite,deliverStackedPr,DeliveryLedger,trustedConfiguration,verifyWebhook} from "../src/index.js";
+import {createHmac,generateKeyPairSync} from "node:crypto";
+import {describe,expect,it,vi} from "vitest";
+import {authorizeTrigger,canCommitSensitiveWrite,deliverStackedPr,DeliveryLedger,GitHubAppClient,trustedConfiguration,verifyWebhook} from "../src/index.js";
 describe("GitHub boundary",()=>{
  it("verifies raw webhook bytes",()=>{const body=Buffer.from('{"x":1}'),sig="sha256="+createHmac("sha256","s").update(body).digest("hex");expect(verifyWebhook(body,sig,"s")).toBe(true);expect(verifyWebhook(Buffer.from("changed"),sig,"s")).toBe(false)});
  it("deduplicates deliveries",()=>{const l=new DeliveryLedger();expect(l.accept("d")).toBe(true);expect(l.accept("d")).toBe(false)});
@@ -8,4 +8,11 @@ describe("GitHub boundary",()=>{
  it("never trusts head configuration",()=>expect(()=>trustedConfiguration({defaultBranch:"main",headSha:"a",trustedSha:"a",protectionVerified:true,explicitlyApproved:false})).toThrow());
  it("guards commit-sensitive writes",()=>expect(canCommitSensitiveWrite("a","b")).toBe(false));
  it("delivers only a fully validated stacked PR",async()=>{const calls:string[]=[];const client={createBranch:async()=>{calls.push("branch")},createPullRequest:async(input:{base:string})=>{calls.push(input.base);return{number:2,url:"https://example/pr/2"}}};await expect(deliverStackedPr(client,{jobId:"j",prNumber:1,sourceBranch:"feature",pinnedHead:"a",currentHead:"a",candidateSha:"b",allRequiredChecksPassed:true})).resolves.toMatchObject({number:2});expect(calls).toEqual(["branch","feature"]);await expect(deliverStackedPr(client,{jobId:"j",prNumber:1,sourceBranch:"feature",pinnedHead:"a",currentHead:"c",candidateSha:"b",allRequiredChecksPassed:true})).rejects.toThrow("stale_head")});
+});
+
+describe("GitHub App tokens",()=>{
+ const privateKey=generateKeyPairSync("rsa",{modulusLength:2048}).privateKey.export({type:"pkcs8",format:"pem"}).toString();
+ it("mints and caches a review token for exactly one repository",async()=>{const requests:Array<{body:unknown}>=[];const http=vi.fn(async(_url:string|URL,init?:RequestInit)=>{requests.push({body:JSON.parse(String(init?.body))});return new Response(JSON.stringify({token:"installation-token",expires_at:"2030-01-01T00:00:00Z"}),{status:201})});const client=new GitHubAppClient({appId:"1",privateKey,http,now:()=>1_700_000_000_000});expect(await client.tokenFor({installationId:22,repositoryId:33,stage:"review"})).toBe("installation-token");expect(await client.tokenFor({installationId:22,repositoryId:33,stage:"review"})).toBe("installation-token");expect(http).toHaveBeenCalledTimes(1);expect(requests[0]?.body).toEqual({repository_ids:[33],permissions:{metadata:"read",contents:"read",pull_requests:"write",issues:"read",checks:"write"}})});
+ it("uses a separate write token for delivery and remints once after 401",async()=>{let mint=0;const http=vi.fn(async(_url:string|URL,init?:RequestInit)=>{const body=init?.body?JSON.parse(String(init.body)):undefined;if(body?.repository_ids)return new Response(JSON.stringify({token:`token-${++mint}`,expires_at:"2030-01-01T00:00:00Z"}),{status:201});return new Response("",{status:500})});const client=new GitHubAppClient({appId:"1",privateKey,http,now:()=>1_700_000_000_000});const operation=vi.fn(async(token:string)=>new Response("",{status:token==="token-1"?401:200}));const response=await client.withToken({installationId:22,repositoryId:33,stage:"autofix_delivery"},operation);expect(response.status).toBe(200);expect(operation).toHaveBeenNthCalledWith(1,"token-1");expect(operation).toHaveBeenNthCalledWith(2,"token-2")});
+ it("rejects suspended installations and removed repositories",async()=>{const suspended=new GitHubAppClient({appId:"1",privateKey,http:vi.fn(async()=>new Response(JSON.stringify({suspended_at:"2026-01-01"}),{status:200}))});await expect(suspended.assertInstallation(22)).rejects.toThrow("installation_suspended");const removed=new GitHubAppClient({appId:"1",privateKey,http:vi.fn(async()=>new Response(JSON.stringify({message:"Not Found"}),{status:404}))});await expect(removed.repository({installationToken:"token",repositoryId:33})).rejects.toThrow("repository_unavailable")});
 });
