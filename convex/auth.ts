@@ -1,11 +1,13 @@
 import GitHub from "@auth/core/providers/github";
 import { convexAuth } from "@convex-dev/auth/server";
 import type { MutationCtx } from "./_generated/server";
+import { normalizeGitHubProfile } from "./lib/githubProfile";
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [GitHub({
     clientId: process.env.AUTH_GITHUB_ID!,
     clientSecret: process.env.AUTH_GITHUB_SECRET!,
+    profile: normalizeGitHubProfile,
   })],
   session: { totalDurationMs: 1000 * 60 * 60 * 24 * 30, inactiveDurationMs: 1000 * 60 * 60 * 24 * 7 },
   callbacks: {
@@ -15,7 +17,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     },
     async afterUserCreatedOrUpdated(ctx,{userId,profile,type}) {
       if(type!=="oauth") return;
-      const rawId=profile.id,rawLogin=profile.login;
+      const rawId=profile.githubUserId??profile.id,rawLogin=profile.login;
       const githubUserId=typeof rawId==="number"?rawId:typeof rawId==="string"?Number(rawId):NaN;
       if(!Number.isSafeInteger(githubUserId)||typeof rawLogin!=="string"||!rawLogin) throw new Error("github_identity_incomplete");
       const db=ctx.db as unknown as MutationCtx["db"];
