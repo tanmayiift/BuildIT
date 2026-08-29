@@ -57,6 +57,15 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  packages/github:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   packages/security:
     devDependencies:
       '@types/node':
