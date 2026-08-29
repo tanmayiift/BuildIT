@@ -1,5 +1,7 @@
 @media (max-width: 900px) {
-  .preview-banner { justify-content: flex-start; overflow-x: auto; white-space: nowrap; }
+  .preview-banner { justify-content: flex-start; flex-wrap: wrap; gap: 4px 8px; padding: 7px 14px; white-space: normal; }
+  .preview-banner > span:not(.preview-label) { flex: 1 1 240px; }
+  .preview-banner a { margin-left: 0; }
   .shell { display: block; }
   .side { display: none; }
   .top { padding: 8px 14px; }
@@ -33,7 +35,7 @@
   .trust-list > div { grid-template-columns: 1fr; gap: 5px; }
 }
 @media (max-width: 560px) {
-  .preview-banner span:not(.preview-label) { display: none; }
+  .preview-banner { font-size: 11px; }
   .page-heading { margin-bottom: 20px; }
   .heading-actions { align-items: stretch; flex-direction: column; }
   .search-field input { width: 100%; }
