@@ -6,6 +6,25 @@ export function authorizeTrigger(input:TriggerInput){if(input.senderType==="Bot"
 export class DeliveryLedger{#ids=new Set<string>();accept(id:string){if(this.#ids.has(id))return false;this.#ids.add(id);return true}}
 export function trustedConfiguration(input:{defaultBranch:string;trustedRef?:string;headSha:string;trustedSha:string;protectionVerified:boolean;explicitlyApproved:boolean}){const ref=input.trustedRef??input.defaultBranch;if(input.headSha===input.trustedSha)throw new Error("configuration_must_not_come_from_pr_head");return{ref,sha:input.trustedSha,provenance:input.protectionVerified?"protected_ref_merge":input.explicitlyApproved?"explicit_admin_approval":"defaults_only" as const}}
 export function canCommitSensitiveWrite(pinned:string,current:string){return pinned===current}
+export type PullRequestSnapshot={number:number;headSha:string;baseSha:string;headRef:string;baseRef:string;isFork:boolean;fromMergeQueue:boolean};
+export function pinPullRequest(input:{number:number;head:{sha:string;ref:string;repoFullName:string|null};base:{sha:string;ref:string;repoFullName:string};mergeQueueRef?:string}):PullRequestSnapshot{
+ if(!/^[0-9a-f]{40}$/i.test(input.head.sha)||!/^[0-9a-f]{40}$/i.test(input.base.sha))throw new Error("invalid_commit_sha");
+ if(!input.head.repoFullName)throw new Error("head_repository_unavailable");
+ const fromMergeQueue=input.head.ref.startsWith("gh-readonly-queue/")||Boolean(input.mergeQueueRef);
+ return{number:input.number,headSha:input.head.sha.toLowerCase(),baseSha:input.base.sha.toLowerCase(),headRef:input.head.ref,baseRef:input.base.ref,isFork:input.head.repoFullName!==input.base.repoFullName,fromMergeQueue};
+}
+export function reviewPolicy(snapshot:PullRequestSnapshot,mode:"review"|"autofix",forkPolicy:"manual_review_only"|"disabled"){
+ if(snapshot.fromMergeQueue)return{allowed:false as const,reason:"merge_queue_refused"};
+ if(snapshot.isFork&&forkPolicy==="disabled")return{allowed:false as const,reason:"fork_disabled"};
+ if(snapshot.isFork&&mode==="autofix")return{allowed:false as const,reason:"fork_manual_review_only"};
+ return{allowed:true as const};
+}
+export class PushDebouncer{
+ #latest=new Map<string,{headSha:string;readyAt:number}>();
+ schedule(scope:string,headSha:string,now:number,delayMs:number){if(delayMs<0)throw new Error("invalid_debounce");const entry={headSha,readyAt:now+delayMs};this.#latest.set(scope,entry);return entry}
+ claim(scope:string,headSha:string,now:number){const entry=this.#latest.get(scope);if(!entry||entry.headSha!==headSha||now<entry.readyAt)return false;this.#latest.delete(scope);return true}
+}
+export function sideEffectKey(input:{repositoryId:number;prNumber:number;headSha:string;kind:"check"|"comment"|"branch"|"stacked_pr";slot?:string}){return`${input.repositoryId}:${input.prNumber}:${input.headSha}:${input.kind}:${input.slot??"primary"}`}
 export type StackedPrClient={createBranch(input:{name:string;sha:string}):Promise<void>;createPullRequest(input:{head:string;base:string;title:string;body:string}):Promise<{number:number;url:string}>};
 export async function deliverStackedPr(client:StackedPrClient,input:{jobId:string;prNumber:number;sourceBranch:string;pinnedHead:string;currentHead:string;candidateSha:string;allRequiredChecksPassed:boolean;existing?:{number:number;url:string}}){if(input.existing)return input.existing;if(!canCommitSensitiveWrite(input.pinnedHead,input.currentHead))throw new Error("stale_head");if(!input.allRequiredChecksPassed)throw new Error("final_validation_required");const branch=`buildit/pr-${input.prNumber}/${input.jobId}`;await client.createBranch({name:branch,sha:input.candidateSha});return client.createPullRequest({head:branch,base:input.sourceBranch,title:`BuildIT fixes for PR #${input.prNumber}`,body:`Validated candidate ${input.candidateSha}. Human approval and merge required.`})}
 
