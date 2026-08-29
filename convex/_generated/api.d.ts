@@ -14,6 +14,8 @@ import type * as dataClassification from "../dataClassification.js";
 import type * as durableReview from "../durableReview.js";
 import type * as githubInstallations from "../githubInstallations.js";
 import type * as githubInstallationsData from "../githubInstallationsData.js";
+import type * as githubWebhookData from "../githubWebhookData.js";
+import type * as githubWebhookProcessor from "../githubWebhookProcessor.js";
 import type * as http from "../http.js";
 import type * as integrations from "../integrations.js";
 import type * as lib_authz from "../lib/authz.js";
@@ -40,6 +42,8 @@ declare const fullApi: ApiFromModules<{
   durableReview: typeof durableReview;
   githubInstallations: typeof githubInstallations;
   githubInstallationsData: typeof githubInstallationsData;
+  githubWebhookData: typeof githubWebhookData;
+  githubWebhookProcessor: typeof githubWebhookProcessor;
   http: typeof http;
   integrations: typeof integrations;
   "lib/authz": typeof lib_authz;
