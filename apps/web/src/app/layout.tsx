@@ -10,7 +10,7 @@ const href = (name: string) => name === "Review Queue" ? "/" : "/" + name.toLowe
 
 export default function Layout({ children }: { children: ReactNode }) {
   return <html lang="en"><body><ConvexClientProvider>
-    <div className="preview-banner" role="status"><strong>Product preview</strong><span>All reviews, people, organizations, and usage shown here are sample data. Sign-in and repository access are not active yet.</span></div>
+    <div className="preview-banner" role="status"><strong>Product preview</strong><span>Review, organization, repository, and usage screens show sample data. GitHub sign-in is active; repository access and AI review are not.</span></div>
     <div className="shell">
       <aside className="side">
         <a className="brand" href="/">BuildIT<span className="org">Agentic review workspace</span></a>

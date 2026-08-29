@@ -16,7 +16,9 @@ export function AccountStatus({ compact = false }: { compact?: boolean }) {
   const viewer = useQuery(viewerQuery, isAuthenticated ? {} : "skip");
   const organizations = useQuery(organizationsQuery, isAuthenticated ? {} : "skip");
 
-  if (isLoading) return <span className="muted" aria-live="polite">Checking account…</span>;
+  if (isLoading) return compact
+    ? <a className="button compact" href="/sign-in">Sign in</a>
+    : <><span className="muted" aria-live="polite">Checking account…</span><br/><a className="account-link" href="/sign-in">Sign in with GitHub</a></>;
   if (!isAuthenticated) return compact
     ? <a className="button compact" href="/sign-in">Sign in</a>
     : <><span className="preview-dot" aria-hidden="true" />Not signed in<br/><a className="account-link" href="/sign-in">Sign in with GitHub</a></>;
