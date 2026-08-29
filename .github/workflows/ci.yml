@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NEXT_PUBLIC_CONVEX_URL: https://tacit-coyote-455.eu-west-1.convex.cloud
+
 concurrency:
   group: buildit-ci-${{ github.ref }}
   cancel-in-progress: true
