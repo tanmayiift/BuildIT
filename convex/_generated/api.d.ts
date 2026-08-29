@@ -10,6 +10,7 @@
 
 import type * as artifacts from "../artifacts.js";
 import type * as auth from "../auth.js";
+import type * as dataClassification from "../dataClassification.js";
 import type * as integrations from "../integrations.js";
 import type * as lib_authz from "../lib/authz.js";
 import type * as lib_lifecycle from "../lib/lifecycle.js";
@@ -27,6 +28,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   artifacts: typeof artifacts;
   auth: typeof auth;
+  dataClassification: typeof dataClassification;
   integrations: typeof integrations;
   "lib/authz": typeof lib_authz;
   "lib/lifecycle": typeof lib_lifecycle;
