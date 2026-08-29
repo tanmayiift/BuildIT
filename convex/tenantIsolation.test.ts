@@ -134,6 +134,21 @@ describe("Convex tenant isolation", () => {
     expect(result.map((organization: { slug: string }) => organization.slug)).toEqual(["alpha"]);
   });
 
+  it("returns a live connection snapshot only for the active authorized organization", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "alpha", "alice");
+    await seedTenant(t, "beta", "bob");
+    const asAlice = t.withIdentity({ subject: "alice|session-one" });
+    expect(await t.query(api.repositoryConnections.current, {})).toMatchObject({ state: "signed_out", repositories: [] });
+    await asAlice.mutation(api.organizations.selectActive, { organizationId: alpha.organizationId });
+    const result = await asAlice.query(api.repositoryConnections.current, {});
+    expect(result).toMatchObject({ state: "connected", organization: { slug: "alpha", role: "owner" } });
+    expect(result.repositories).toHaveLength(1);
+    expect(result.repositories[0]).toMatchObject({ owner: "alpha", name: "fixture" });
+    expect(JSON.stringify(result)).not.toContain("permissionSnapshot");
+    expect(JSON.stringify(result)).not.toContain("ciphertext");
+  });
+
   it("rejects guessed organization and review IDs from another tenant", async () => {
     const t = convexTest(schema, modules);
     await seedTenant(t, "alpha", "alice");
