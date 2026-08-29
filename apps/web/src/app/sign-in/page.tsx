@@ -12,7 +12,8 @@ export default function SignIn() {
     setPending(true);
     setError("");
     try {
-      await signIn("github", { redirectTo: "/" });
+      const requested=new URLSearchParams(window.location.search).get("returnTo"),redirectTo=requested?.startsWith("/")&&!requested.startsWith("//")?requested:"/";
+      await signIn("github", { redirectTo });
     } catch {
       setError("GitHub sign-in could not start. No repository access was granted. Please try again.");
       setPending(false);

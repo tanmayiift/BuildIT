@@ -19,7 +19,7 @@ export const storedTextClassifications = {
   encryptedCiphertext: "encrypted_secret", encryptedRefreshToken: "encrypted_secret",
   evalSetVersion: "metadata", event: "metadata", eventHash: "hashed_metadata",
   externalId: "operational_identifier", externalIdHash: "hashed_metadata",
-  fetchedVersion: "metadata", fingerprintHmac: "hashed_metadata", headSha: "operational_identifier",
+  fetchedVersion: "metadata", fingerprintHmac: "hashed_metadata", githubLogin: "metadata", headSha: "operational_identifier",
   internalCode: "metadata", leaseOwner: "operational_identifier", maskedSuffix: "metadata",
   model: "metadata", modelVersion: "metadata", name: "metadata", nameHash: "hashed_metadata",
   networkPolicyVersion: "metadata", nonce: "encrypted_secret", observedHeadSha: "operational_identifier",

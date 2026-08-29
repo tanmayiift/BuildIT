@@ -202,6 +202,12 @@ code, .mono, time, .status { font-family: "JetBrains Mono Variable", monospace; 
 .session-list span:first-child { display: grid; gap: 3px; }
 .session-list small { color: var(--muted); }
 .session-panel .button { width: max-content; }
+.claim-result { display: grid; gap: 12px; margin-top: 14px; padding: 16px; background: var(--workbench); border: 1px solid var(--line); border-radius: 7px; }
+.claim-result > div, .claim-result.success-state { gap: 5px; }
+.claim-result > div { display: grid; }
+.claim-result span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.claim-result .button { width: max-content; }
+.success-state { background: var(--success-bg); border-color: #acd5bd; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 11px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 th { color: var(--muted); font-size: 10px; text-transform: uppercase; }

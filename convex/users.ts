@@ -1,5 +1,5 @@
 import { getAuthSessionId, getAuthUserId, invalidateSessions } from "@convex-dev/auth/server";
-import { action, query } from "./_generated/server";
+import { action, internalQuery, query } from "./_generated/server";
 
 export const viewer = query({
   args: {},
@@ -8,9 +8,12 @@ export const viewer = query({
     if (!userId) return null;
     const user = await ctx.db.get(userId);
     if (!user) return null;
-    return { id: user._id, name: user.name ?? null, email: user.email ?? null, image: user.image ?? null };
+    const profile=await ctx.db.query("userProfiles").withIndex("by_user",q=>q.eq("userId",userId)).unique();
+    return { id: user._id, name: user.name ?? null, email: user.email ?? null, image: user.image ?? null, githubLogin: profile?.githubLogin ?? null };
   },
 });
+
+export const installationIdentity=internalQuery({args:{},handler:async(ctx)=>{const userId=await getAuthUserId(ctx);if(!userId)throw new Error("authentication_required");const profile=await ctx.db.query("userProfiles").withIndex("by_user",q=>q.eq("userId",userId)).unique();if(!profile)throw new Error("github_identity_incomplete");return{userId,githubUserId:profile.githubUserId,githubLogin:profile.githubLogin}}});
 
 export const sessions = query({
   args: {},
