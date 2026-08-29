@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
+import { normalizeGitHubProfile } from "./lib/githubProfile";
 
 const modules = import.meta.glob("./**/*.ts");
 
@@ -69,6 +70,17 @@ async function seedTenant(t: ReturnType<typeof convexTest>, slug: string, userId
 }
 
 describe("Convex tenant isolation", () => {
+  it("stores a normalized GitHub profile when the account email is private", async () => {
+    const t = convexTest(schema, modules);
+    const profile = normalizeGitHubProfile({ id: 42, login: "rohan", name: null, email: null, avatar_url: "https://avatars.example/42" });
+    const { id: providerAccountId, ...storedProfile } = profile;
+    expect(providerAccountId).toBe("42");
+    const userId = await t.run((ctx) => ctx.db.insert("users", storedProfile));
+    const user = await t.run((ctx) => ctx.db.get(userId));
+    expect(user).toMatchObject({ githubUserId: 42, login: "rohan", name: "rohan" });
+    expect(user).not.toHaveProperty("email");
+  });
+
   it("authorizes a real Convex Auth subject by stable user ID, not session ID", async () => {
     const t = convexTest(schema, modules);
     const alpha = await seedTenant(t, "alpha", "alice");

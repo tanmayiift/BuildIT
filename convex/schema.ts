@@ -7,6 +7,12 @@ const timestampFields = { createdAt: v.number(), updatedAt: v.number() };
 
 export default defineSchema({
   ...authTables,
+  users: defineTable({
+    name: v.optional(v.string()), image: v.optional(v.string()), email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()), phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()), isAnonymous: v.optional(v.boolean()),
+    githubUserId: v.optional(v.number()), githubLogin: v.optional(v.string()), login: v.optional(v.string()),
+  }).index("email", ["email"]).index("phone", ["phone"]).index("githubUserId", ["githubUserId"]),
   organizations: defineTable({
     name: v.string(), slug: v.string(), timezone: v.string(), region: v.literal("eu-west-1"),
     retentionHours: v.number(), monthlyBudget: v.number(), concurrencyLimit: v.number(),
