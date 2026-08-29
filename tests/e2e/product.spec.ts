@@ -1,6 +1,48 @@
-import {expect,test} from "@playwright/test";
-test("review queue leads to exact-commit evidence",async({page})=>{await page.goto("/");await expect(page.getByRole("heading",{name:"Review Queue"})).toBeVisible();await page.getByText("nexus/api #418").click();await expect(page.getByText("Commit a3f91c2")).toBeVisible();await expect(page.getByText("BuildIT never merges")).toHaveCount(0);await expect(page.locator("body")).not.toHaveCSS("overflow-x","scroll")});
-test("setup protects the model key",async({page})=>{await page.goto("/setup/model");const key=page.getByLabel("Provider API key");await expect(key).toHaveAttribute("type","password");await expect(page.getByText(/never sent to a repository sandbox/i)).toBeVisible()});
-test("navigation exposes all promised product areas",async({page})=>{await page.goto("/");const menu=page.getByText("Menu",{exact:true});if(await menu.isVisible())await menu.click();for(const name of ["Repositories","Metrics","Usage","Integrations","Policies","Members","Audit Log"])await expect(page.getByRole("link",{name})).toBeVisible()});
-test("preview never impersonates a signed-in customer",async({page})=>{await page.goto("/");await expect(page.getByText("Product preview")).toBeVisible();await expect(page.getByText("Fixture data")).toBeVisible();await expect(page.getByText("Rohan Bhatia")).toHaveCount(0);await page.getByRole("link",{name:"Sign in",exact:true}).click();await expect(page.getByRole("button",{name:"Continue with GitHub"})).toBeEnabled();await expect(page.getByText(/does not give BuildIT access to a repository/i)).toBeVisible()});
-test("public data handling states the current access boundary",async({page})=>{await page.goto("/data-handling");await expect(page.getByRole("heading",{name:"What happens to your data"})).toBeVisible();await expect(page.getByText(/signing in shares your approved GitHub identity/i)).toBeVisible();await expect(page.getByText(/does not grant repository access/i)).toBeVisible()});
+import { expect, test } from "@playwright/test";
+
+test("overview leads through the review queue to exact-commit evidence", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Engineering review, with proof" })).toBeVisible();
+  await page.getByRole("link", { name: /open review queue/i }).click();
+  await expect(page.getByRole("heading", { name: "Review queue" })).toBeVisible();
+  await page.getByText("nexus/api #418").click();
+  const pinnedContext = page.getByRole("region", { name: "Pinned review context" });
+  await expect(pinnedContext.getByText("a3f91c2", { exact: true })).toBeVisible();
+  await expect(pinnedContext.getByText("main @ 7b2e004", { exact: true })).toBeVisible();
+  await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
+});
+
+test("setup protects the model key and permits skipping it", async ({ page }) => {
+  await page.goto("/setup/model");
+  const key = page.getByLabel("API key");
+  await expect(key).toHaveAttribute("type", "password");
+  await expect(key).toBeDisabled();
+  await expect(page.getByText(/will not pretend a key was saved/i)).toBeVisible();
+  await expect(page.getByText("Optional now")).toBeVisible();
+});
+
+test("navigation exposes all promised product areas", async ({ page }) => {
+  await page.goto("/");
+  const menu = page.getByText("Menu", { exact: true });
+  if (await menu.isVisible()) await menu.click();
+  for (const name of ["Review queue", "Repositories", "Metrics", "Usage", "Integrations", "Policies", "Members", "Audit log"]) {
+    await expect(page.getByRole("link", { name, exact: true }).last()).toBeVisible();
+  }
+});
+
+test("preview never impersonates a signed-in customer", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("Preview", { exact: true })).toBeVisible();
+  await expect(page.getByText(/sample workspace · product tour/i)).toBeVisible();
+  await expect(page.getByText("Rohan Bhatia")).toHaveCount(0);
+  await page.getByRole("link", { name: "Sign in", exact: true }).first().click();
+  await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
+  await expect(page.getByText(/does not give BuildIT access to a repository/i)).toBeVisible();
+});
+
+test("public data handling states the current access boundary", async ({ page }) => {
+  await page.goto("/data-handling");
+  await expect(page.getByRole("heading", { name: "What happens to your data" })).toBeVisible();
+  await expect(page.getByText(/signing in shares your approved GitHub identity/i)).toBeVisible();
+  await expect(page.getByText(/does not grant repository access/i)).toBeVisible();
+});
