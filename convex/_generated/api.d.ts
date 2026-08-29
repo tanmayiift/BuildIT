@@ -20,6 +20,7 @@ import type * as lib_lifecycle from "../lib/lifecycle.js";
 import type * as organizations from "../organizations.js";
 import type * as reviewState from "../reviewState.js";
 import type * as reviews from "../reviews.js";
+import type * as users from "../users.js";
 import type * as validators from "../validators.js";
 import type * as workflowManager from "../workflowManager.js";
 
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   organizations: typeof organizations;
   reviewState: typeof reviewState;
   reviews: typeof reviews;
+  users: typeof users;
   validators: typeof validators;
   workflowManager: typeof workflowManager;
 }>;

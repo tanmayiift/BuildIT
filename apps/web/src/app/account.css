@@ -1,0 +1,1 @@
+.account-actions{display:flex;align-items:center;gap:12px;margin-top:7px}.account-actions .account-link{margin:0}.link-button{min-height:44px;padding:0;border:0;background:transparent;color:var(--navy);text-decoration:underline;text-underline-offset:3px;cursor:pointer}.auth-error{color:var(--red);background:var(--red-bg);border:1px solid #efb7b2;padding:12px}
