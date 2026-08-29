@@ -1,3 +1,27 @@
-import "./globals.css";import "./mobile.css";import type {ReactNode} from "react";
-const nav=["Review Queue","Repositories","Metrics","Usage","Integrations","Policies","Members","Audit Log"];
-export default function Layout({children}:{children:ReactNode}){const href=(n:string)=>n==="Review Queue"?"/":"/"+n.toLowerCase().replace(" log","").replaceAll(" ","-");return <html lang="en"><body><div className="shell"><aside className="side"><div className="brand">BuildIT<span className="org">Nexus Fintech</span></div><nav className="nav" aria-label="Primary">{nav.map(n=><a key={n} href={href(n)}>{n}</a>)}</nav><div className="account">Rohan Bhatia<br/><span className="muted">Owner</span></div></aside><main className="main"><header className="top"><strong>Evidence-backed PR verification</strong><details className="mobile-nav" open><summary>Menu</summary><nav aria-label="Mobile primary">{nav.map(n=><a key={n} href={href(n)}>{n}</a>)}</nav></details><span className="budget">₹4,120 of ₹15,000 · resets 1 Sep</span></header>{children}</main></div></body></html>}
+import "./globals.css";
+import "./mobile.css";
+import type { ReactNode } from "react";
+
+const nav = ["Review Queue", "Repositories", "Metrics", "Usage", "Integrations", "Policies", "Members", "Audit Log"];
+const href = (name: string) => name === "Review Queue" ? "/" : "/" + name.toLowerCase().replace(" log", "").replaceAll(" ", "-");
+
+export default function Layout({ children }: { children: ReactNode }) {
+  return <html lang="en"><body>
+    <div className="preview-banner" role="status"><strong>Product preview</strong><span>All reviews, people, organizations, and usage shown here are sample data. Sign-in and repository access are not active yet.</span></div>
+    <div className="shell">
+      <aside className="side">
+        <a className="brand" href="/">BuildIT<span className="org">Agentic review workspace</span></a>
+        <nav className="nav" aria-label="Primary">{nav.map(name => <a key={name} href={href(name)}>{name}</a>)}</nav>
+        <div className="account"><span className="preview-dot" aria-hidden="true" />Preview mode<br/><a className="account-link" href="/data-handling">How data is handled</a></div>
+      </aside>
+      <main className="main">
+        <header className="top">
+          <strong>Evidence-backed PR verification</strong>
+          <details className="mobile-nav"><summary>Menu</summary><nav aria-label="Mobile primary">{nav.map(name => <a key={name} href={href(name)}>{name}</a>)}</nav></details>
+          <div className="top-actions"><a className="text-link" href="/data-handling">Data & privacy</a><a className="button compact" href="/sign-in">Sign in</a></div>
+        </header>
+        {children}
+      </main>
+    </div>
+  </body></html>;
+}
