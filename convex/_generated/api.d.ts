@@ -8,7 +8,12 @@
  * @module
  */
 
+import type * as artifacts from "../artifacts.js";
 import type * as auth from "../auth.js";
+import type * as integrations from "../integrations.js";
+import type * as lib_authz from "../lib/authz.js";
+import type * as organizations from "../organizations.js";
+import type * as reviews from "../reviews.js";
 import type * as validators from "../validators.js";
 
 import type {
@@ -18,7 +23,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  artifacts: typeof artifacts;
   auth: typeof auth;
+  integrations: typeof integrations;
+  "lib/authz": typeof lib_authz;
+  organizations: typeof organizations;
+  reviews: typeof reviews;
   validators: typeof validators;
 }>;
 
