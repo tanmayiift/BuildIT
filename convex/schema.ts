@@ -1,26 +1,227 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { artifactType, eventType, membershipStatus, reviewMode, reviewStatus, role, triggerSource } from "./validators";
+import * as value from "./validators";
+
+const timestampFields = { createdAt: v.number(), updatedAt: v.number() };
 
 export default defineSchema({
   organizations: defineTable({
-    name: v.string(), slug: v.string(), timezone: v.string(), retentionHours: v.number(), createdAt: v.number(),
-  }).index("by_slug", ["slug"]),
+    name: v.string(), slug: v.string(), timezone: v.string(), region: v.literal("eu-west-1"),
+    retentionHours: v.number(), monthlyBudget: v.number(), concurrencyLimit: v.number(),
+    planId: v.string(), fingerprintKeyVersion: v.number(), createdAt: v.number(),
+    deletedAt: v.optional(v.number()),
+  }).index("by_slug", ["slug"]).index("by_deleted", ["deletedAt"]),
+
   memberships: defineTable({
-    organizationId: v.id("organizations"), userId: v.string(), role, status: membershipStatus,
-  }).index("by_org_user", ["organizationId", "userId"]),
-  reviews: defineTable({
-    organizationId: v.id("organizations"), repositoryId: v.string(), prNumber: v.number(),
-    headSha: v.string(), mode: reviewMode, trigger: triggerSource, status: reviewStatus,
-    isStale: v.boolean(), artifactIds: v.array(v.id("artifacts")), createdAt: v.number(),
-  }).index("by_repo_pr_head", ["repositoryId", "prNumber", "headSha"])
+    organizationId: v.id("organizations"), userId: v.string(), role: value.role,
+    status: value.membershipStatus, createdAt: v.number(), updatedAt: v.number(),
+  }).index("by_org_user", ["organizationId", "userId"])
+    .index("by_user_status", ["userId", "status"]),
+
+  githubInstallations: defineTable({
+    organizationId: v.id("organizations"), installationId: v.number(), accountLogin: v.string(),
+    accountType: value.accountType,
+    permissionSnapshot: v.object({
+      metadata: v.literal("read"), contents: v.union(v.literal("read"), v.literal("write")),
+      pullRequests: v.literal("write"), issues: v.literal("write"),
+      checks: v.union(v.literal("read"), v.literal("write")),
+    }),
+    status: value.installationStatus, suspendedAt: v.optional(v.number()), ...timestampFields,
+  }).index("by_installation", ["installationId"])
     .index("by_org_status", ["organizationId", "status"]),
-  artifacts: defineTable({
-    organizationId: v.id("organizations"), reviewId: v.id("reviews"), type: artifactType,
-    storageKey: v.string(), expiresAt: v.number(), deletedAt: v.optional(v.number()),
-  }).index("by_expiry", ["expiresAt"]),
+
+  repositories: defineTable({
+    organizationId: v.id("organizations"), installationId: v.id("githubInstallations"),
+    githubRepositoryId: v.number(), owner: v.string(), name: v.string(), defaultBranch: v.string(),
+    enabled: v.boolean(), pausedAt: v.optional(v.number()), autofixMode: value.autofixMode,
+    forkPolicy: value.forkPolicy, configRevisionId: v.optional(v.id("configRevisions")),
+    indexState: value.indexState, concurrencyLimit: v.number(), ...timestampFields,
+  }).index("by_github_id", ["githubRepositoryId"])
+    .index("by_installation", ["installationId"])
+    .index("by_org_enabled", ["organizationId", "enabled"]),
+
+  configRevisions: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"),
+    sourceCommitSha: v.string(), sourceRef: v.string(), configArtifactId: v.id("artifacts"),
+    contentHash: v.string(), rulesDigest: v.string(), schemaVersion: v.string(),
+    validationState: value.configValidationState, provenance: value.configProvenance,
+    refProtectionState: value.refProtectionState, approvedBy: v.optional(v.string()),
+    approvedAt: v.optional(v.number()), createdAt: v.number(),
+  }).index("by_repository_hash", ["repositoryId", "contentHash"])
+    .index("by_repository_created", ["repositoryId", "createdAt"]),
+
+  providerCredentials: defineTable({
+    organizationId: v.id("organizations"), provider: value.provider,
+    encryptedCiphertext: v.string(), nonce: v.string(), authTag: v.string(), aadDigest: v.string(),
+    keyVersion: v.number(), maskedSuffix: v.string(), status: value.credentialStatus,
+    createdBy: v.string(), createdAt: v.number(), lastValidatedAt: v.optional(v.number()),
+    lastUsedAt: v.optional(v.number()), revokedAt: v.optional(v.number()),
+  }).index("by_org_provider", ["organizationId", "provider"])
+    .index("by_org_status", ["organizationId", "status"]),
+
+  trackerConnections: defineTable({
+    organizationId: v.id("organizations"), provider: value.trackerProvider,
+    encryptedAccessToken: v.string(), encryptedRefreshToken: v.optional(v.string()),
+    nonce: v.string(), authTag: v.string(), aadDigest: v.string(), keyVersion: v.number(),
+    scopes: v.array(v.string()), workspaceId: v.string(), status: value.trackerStatus,
+    createdBy: v.string(), expiresAt: v.optional(v.number()), ...timestampFields,
+  }).index("by_org_provider", ["organizationId", "provider"])
+    .index("by_status", ["status"]),
+
+  reviews: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"),
+    githubRepositoryId: v.number(), prNumber: v.number(), isFork: v.boolean(),
+    baseRef: v.string(), baseSha: v.string(), headSha: v.string(),
+    githubCheckConclusion: v.optional(value.githubConclusion), requiredCheckPolicy: value.requiredCheckPolicy,
+    completedRoundCount: v.number(), patchAttemptCount: v.number(), diagnosticRunCount: v.number(),
+    providerRetryCount: v.number(), commandRetryCount: v.number(), trigger: value.triggerSource,
+    triggerVerb: value.triggerVerb, triggerActor: v.string(), triggerActorPermission: value.actorPermission,
+    mode: value.reviewMode, status: value.reviewStatus,
+    terminationBound: v.optional(value.terminationBound), budgetCeilingId: v.optional(v.string()),
+    budgetLimit: v.number(), budgetConsumed: v.number(), statusReasonCode: v.optional(value.statusReasonCode),
+    nextActionCode: value.nextActionCode, isStale: v.boolean(), staleSince: v.optional(v.number()),
+    observedHeadSha: v.optional(v.string()), trustedRef: v.string(), trustedRefSha: v.string(),
+    configRevisionId: v.id("configRevisions"), configProvenance: value.configProvenance,
+    provider: value.provider, model: v.string(), modelVersion: v.string(), promptVersion: v.string(),
+    evalSetVersion: v.string(), coverageLevel: value.coverageLevel, currentStage: value.reviewStage,
+    blockedReason: v.optional(v.string()), blockedSince: v.optional(v.number()),
+    blockedExpiresAt: v.optional(v.number()), parentReviewId: v.optional(v.id("reviews")),
+    attemptOfReviewId: v.optional(v.id("reviews")), cancelledBy: v.optional(v.string()),
+    sandboxId: v.optional(v.string()), runnerImageVersion: v.string(), startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()), expiresAt: v.number(), createdAt: v.number(), updatedAt: v.number(),
+  }).index("by_org_status", ["organizationId", "status"])
+    .index("by_repo_pr_head_mode", ["repositoryId", "prNumber", "headSha", "mode"])
+    .index("by_expiry", ["expiresAt"])
+    .index("by_queue", ["organizationId", "status", "createdAt"])
+    .index("by_blocked_expiry", ["status", "blockedExpiresAt"]),
+
   reviewEvents: defineTable({
-    reviewId: v.id("reviews"), sequence: v.number(), type: eventType,
-    messageArtifactId: v.optional(v.id("artifacts")), createdAt: v.number(),
-  }).index("by_review", ["reviewId", "sequence"]),
+    organizationId: v.id("organizations"), reviewId: v.id("reviews"), sequence: v.number(),
+    type: value.eventType, stage: value.reviewStage,
+    publicMessageArtifactId: v.optional(v.id("artifacts")), internalCode: v.string(),
+    metadata: v.object({ count: v.optional(v.number()), durationMs: v.optional(v.number()),
+      reasonCode: v.optional(v.string()), externalIdHash: v.optional(v.string()) }),
+    createdAt: v.number(),
+  }).index("by_review", ["reviewId", "sequence"])
+    .index("by_org_created", ["organizationId", "createdAt"]),
+
+  requirements: defineTable({
+    organizationId: v.id("organizations"), reviewId: v.id("reviews"), sourceType: value.sourceType,
+    sourceUrlHash: v.optional(v.string()), externalIdHash: v.optional(v.string()),
+    contentArtifactId: v.optional(v.id("artifacts")), fetchedVersion: v.optional(v.string()),
+    fetchedAt: v.optional(v.number()), status: value.requirementStatus, confidence: v.number(),
+    createdAt: v.number(), updatedAt: v.number(), expiresAt: v.number(),
+  }).index("by_review", ["reviewId"]),
+
+  findings: defineTable({
+    organizationId: v.id("organizations"), reviewId: v.id("reviews"), fingerprintHmac: v.string(),
+    category: value.findingCategory, severity: value.severity, confidence: v.number(), blocking: v.boolean(),
+    contentArtifactId: v.id("artifacts"), evidenceIds: v.array(v.id("artifacts")), pathHmac: v.string(),
+    startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()),
+    requirementId: v.optional(v.id("requirements")), resolution: value.findingResolution,
+    createdAt: v.number(), updatedAt: v.number(), expiresAt: v.number(),
+  }).index("by_review_severity", ["reviewId", "severity"])
+    .index("by_review_fingerprint", ["reviewId", "fingerprintHmac"]),
+
+  findingSuppressions: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"),
+    fingerprintHmac: v.string(), hmacKeyVersion: v.number(), scope: value.suppressionScope,
+    scopeValueHmac: v.string(), reasonCode: v.string(), dismissedBy: v.string(),
+    dismissedAt: v.number(), expiresAt: v.optional(v.number()),
+  }).index("by_repo_fingerprint", ["repositoryId", "fingerprintHmac"])
+    .index("by_expiry", ["expiresAt"]),
+
+  checkRuns: defineTable({
+    organizationId: v.id("organizations"), reviewId: v.id("reviews"),
+    roundId: v.optional(v.id("autofixRounds")), kind: value.checkKind, nameHash: v.string(),
+    required: v.boolean(), status: v.union(v.literal("queued"), v.literal("running"), v.literal("completed")),
+    conclusion: value.checkConclusion, commandFingerprint: v.string(), commitSha: v.string(),
+    exitCode: v.optional(v.number()), durationMs: v.number(), artifactId: v.optional(v.id("artifacts")),
+    failureClass: v.optional(value.failureClass), startedAt: v.number(), completedAt: v.optional(v.number()),
+  }).index("by_review", ["reviewId"])
+    .index("by_review_round", ["reviewId", "roundId"]),
+
+  baseResults: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"), baseSha: v.string(),
+    commandFingerprint: v.string(), configRevisionId: v.id("configRevisions"), runnerImageVersion: v.string(),
+    toolVersions: v.array(v.object({ name: v.string(), version: v.string() })), architecture: v.string(),
+    networkPolicyVersion: v.string(), conclusion: value.checkConclusion,
+    artifactId: v.optional(v.id("artifacts")), computedAt: v.number(), expiresAt: v.number(),
+  }).index("by_full_cache_key", ["repositoryId", "baseSha", "commandFingerprint", "configRevisionId", "runnerImageVersion", "architecture", "networkPolicyVersion"])
+    .index("by_expiry", ["expiresAt"]),
+
+  autofixAttempts: defineTable({
+    organizationId: v.id("organizations"), reviewId: v.id("reviews"), attemptNumber: v.number(),
+    patchFingerprint: v.string(), patchArtifactId: v.optional(v.id("artifacts")), outcome: value.patchOutcome,
+    rejectionReasonCode: v.optional(v.string()), promptVersion: v.string(), startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  }).index("by_review_attempt", ["reviewId", "attemptNumber"])
+    .index("by_review_fingerprint", ["reviewId", "patchFingerprint"]),
+
+  autofixRounds: defineTable({
+    organizationId: v.id("organizations"), reviewId: v.id("reviews"), roundNumber: v.number(),
+    attemptId: v.id("autofixAttempts"), candidateCommitSha: v.string(), validationScope: value.validationScope,
+    validationOutcome: value.validationOutcome, completedValidation: v.boolean(),
+    startedAt: v.number(), completedAt: v.optional(v.number()),
+  }).index("by_review_round", ["reviewId", "roundNumber"])
+    .index("by_attempt", ["attemptId"]),
+
+  artifacts: defineTable({
+    organizationId: v.id("organizations"), reviewId: v.optional(v.id("reviews")), type: value.artifactType,
+    storageKey: v.string(), encrypted: v.literal(true), checksum: v.string(), size: v.number(),
+    redactionStatus: value.redactionStatus, expiresAt: v.number(), deletedAt: v.optional(v.number()),
+    deletionAttempts: v.number(),
+  }).index("by_expiry", ["expiresAt"])
+    .index("by_review", ["reviewId"]),
+
+  usageLedger: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.id("reviews"),
+    roundId: v.optional(v.id("autofixRounds")), kind: value.usageKind, quantity: v.number(),
+    unitCost: v.number(), currency: v.string(), occurredAt: v.number(),
+  }).index("by_org_time", ["organizationId", "occurredAt"])
+    .index("by_review", ["reviewId"]),
+
+  githubSideEffects: defineTable({
+    organizationId: v.id("organizations"), reviewId: v.id("reviews"), operationKey: v.string(),
+    type: value.sideEffectType, externalId: v.optional(v.string()), requestHash: v.string(),
+    status: value.sideEffectStatus, createdAt: v.number(), updatedAt: v.number(),
+  }).index("by_operation_key", ["operationKey"])
+    .index("by_review", ["reviewId"]),
+
+  deliveries: defineTable({
+    organizationId: v.id("organizations"), reviewId: v.id("reviews"),
+    sourceHeadSha: v.string(), candidateCommitSha: v.string(), branchNameHash: v.string(),
+    pullRequestNumber: v.optional(v.number()), pullRequestId: v.optional(v.number()),
+    status: v.union(v.literal("reserved"), v.literal("branch_created"), v.literal("pr_created"), v.literal("failed")),
+    createdAt: v.number(), updatedAt: v.number(),
+  }).index("by_review", ["reviewId"])
+    .index("by_candidate", ["candidateCommitSha"]),
+
+  webhookDeliveries: defineTable({
+    deliveryId: v.string(), event: v.string(), action: v.string(), installationId: v.optional(v.number()),
+    signatureValid: v.boolean(), disposition: value.webhookDisposition, status: value.webhookStatus,
+    reviewId: v.optional(v.id("reviews")), receivedAt: v.number(), completedAt: v.optional(v.number()),
+  }).index("by_delivery_id", ["deliveryId"])
+    .index("by_status_received", ["status", "receivedAt"]),
+
+  notifications: defineTable({
+    organizationId: v.id("organizations"), userId: v.string(), type: value.notificationType,
+    channel: value.notificationChannel, reviewId: v.optional(v.id("reviews")), sentAt: v.optional(v.number()),
+    deliveryStatus: value.notificationStatus, dedupeKey: v.string(), createdAt: v.number(),
+  }).index("by_dedupe_key", ["dedupeKey"])
+    .index("by_user_created", ["userId", "createdAt"]),
+
+  auditEvents: defineTable({
+    organizationId: v.id("organizations"), actorId: v.string(), action: v.string(),
+    resourceType: v.string(), resourceIdHash: v.string(), result: value.auditResult,
+    requestId: v.string(), previousHash: v.optional(v.string()), eventHash: v.string(), createdAt: v.number(),
+  }).index("by_org_created", ["organizationId", "createdAt"])
+    .index("by_request", ["requestId"]),
+
+  metricEvents: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.optional(v.id("repositories")),
+    reviewId: v.optional(v.id("reviews")), roundId: v.optional(v.id("autofixRounds")),
+    name: value.metricName, value: v.number(), organizationTimezone: v.string(), occurredAt: v.number(),
+  }).index("by_org_time", ["organizationId", "occurredAt"])
+    .index("by_name_time", ["name", "occurredAt"]),
 });
