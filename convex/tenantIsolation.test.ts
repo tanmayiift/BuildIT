@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -51,6 +51,7 @@ async function seedTenant(t: ReturnType<typeof convexTest>, slug: string, userId
       configProvenance: "defaults_only", provider: "anthropic", model: "test-model",
       modelVersion: "test", promptVersion: "test", evalSetVersion: "test",
       coverageLevel: "limited", currentStage: "queue", runnerImageVersion: "test",
+      executionGeneration: 0, queuePriority: 0,
       expiresAt: now + 60_000, createdAt: now, updatedAt: now,
     });
     const artifactId = await ctx.db.insert("artifacts", {
@@ -108,5 +109,116 @@ describe("Convex tenant isolation", () => {
       });
     });
     await expect(t.withIdentity({ subject: "viewer" }).query(api.integrations.listProviderCredentials, { organizationId: alpha.organizationId })).rejects.toThrow("not_found_or_forbidden");
+  });
+});
+
+describe("Convex review state integrity", () => {
+  it("preserves terminal status while allowing an independent stale marker", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedTenant(t, "alpha", "alice");
+    await t.mutation(internal.reviewState.transition, {
+      reviewId: seeded.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0,
+      to: "gathering_context", nextActionCode: "none", now: 2,
+    });
+    await t.mutation(internal.reviewState.transition, {
+      reviewId: seeded.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0,
+      to: "analyzing", nextActionCode: "none", now: 3,
+    });
+    await t.mutation(internal.reviewState.transition, {
+      reviewId: seeded.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0,
+      to: "validating", nextActionCode: "none", now: 4,
+    });
+    await t.mutation(internal.reviewState.transition, {
+      reviewId: seeded.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0,
+      to: "checks_passed", statusReasonCode: "checks_complete", nextActionCode: "none", now: 5,
+    });
+    await expect(t.mutation(internal.reviewState.transition, {
+      reviewId: seeded.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0,
+      to: "analyzing", nextActionCode: "none", now: 6,
+    })).rejects.toThrow("invalid_transition");
+    await t.mutation(internal.reviewState.markStale, {
+      reviewId: seeded.reviewId, observedHeadSha: "c".repeat(40), now: 7,
+    });
+    const stored = await t.run((ctx) => ctx.db.get(seeded.reviewId));
+    expect(stored).toMatchObject({ status: "checks_passed", isStale: true, observedHeadSha: "c".repeat(40) });
+  });
+
+  it("fences a worker immediately when cancellation is requested", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedTenant(t, "alpha", "alice");
+    const lease = await t.mutation(internal.reviewState.acquireLease, {
+      reviewId: seeded.reviewId, workerId: "worker-1", now: 1, leaseMs: 100,
+    });
+    expect(lease.generation).toBe(0);
+    await t.mutation(internal.reviewState.requestCancellation, {
+      reviewId: seeded.reviewId, actorId: "alice", now: 2,
+    });
+    await expect(t.mutation(internal.reviewState.transition, {
+      reviewId: seeded.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0,
+      to: "gathering_context", nextActionCode: "none", now: 3,
+    })).rejects.toThrow("cancelled_or_replaced");
+  });
+
+  it("enforces append-only event sequence numbers", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedTenant(t, "alpha", "alice");
+    await t.mutation(internal.reviewState.appendEvent, {
+      organizationId: seeded.organizationId, reviewId: seeded.reviewId, sequence: 1,
+      type: "review_created", stage: "queue", internalCode: "created", now: 1,
+    });
+    await expect(t.mutation(internal.reviewState.appendEvent, {
+      organizationId: seeded.organizationId, reviewId: seeded.reviewId, sequence: 3,
+      type: "stage_started", stage: "context", internalCode: "context", now: 2,
+    })).rejects.toThrow("invalid_event_sequence");
+  });
+
+  it("allows only one active review per repository, PR, head, and mode", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedTenant(t, "alpha", "alice");
+    const duplicateReviewId = await t.run(async (ctx) => {
+      const original = await ctx.db.get(seeded.reviewId);
+      if (!original) throw new Error("missing fixture");
+      const { _id: _ignoredId, _creationTime: _ignoredTime, ...copy } = original;
+      return ctx.db.insert("reviews", copy);
+    });
+    await t.mutation(internal.reviewState.claimActiveReview, { reviewId: seeded.reviewId, now: 1 });
+    await expect(t.mutation(internal.reviewState.claimActiveReview, { reviewId: duplicateReviewId, now: 2 })).rejects.toThrow("active_review_exists");
+  });
+
+  it("deduplicates identical side effects and rejects key reuse with new content", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedTenant(t, "alpha", "alice");
+    const args = {
+      organizationId: seeded.organizationId, reviewId: seeded.reviewId,
+      operationKey: "review:summary", type: "comment_update" as const, requestHash: "hash-1", now: 1,
+    };
+    const first = await t.mutation(internal.reviewState.reserveSideEffect, args);
+    const replay = await t.mutation(internal.reviewState.reserveSideEffect, { ...args, now: 2 });
+    expect(replay).toBe(first);
+    await expect(t.mutation(internal.reviewState.reserveSideEffect, { ...args, requestHash: "hash-2", now: 3 })).rejects.toThrow("idempotency_key_conflict");
+  });
+
+  it("counts applied patches and validated rounds independently within hard bounds", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await seedTenant(t, "alpha", "alice");
+    await t.run((ctx) => ctx.db.patch(seeded.reviewId, { mode: "autofix", status: "autofix_queued" }));
+    const attemptId = await t.mutation(internal.reviewState.recordAutofixAttempt, {
+      organizationId: seeded.organizationId, reviewId: seeded.reviewId, attemptNumber: 1,
+      patchFingerprint: "patch-1", outcome: "applied", promptVersion: "test", startedAt: 1, completedAt: 2,
+    });
+    await expect(t.mutation(internal.reviewState.recordAutofixRound, {
+      organizationId: seeded.organizationId, reviewId: seeded.reviewId, roundNumber: 1,
+      attemptId, candidateCommitSha: "d".repeat(40), validationScope: "affected_subset",
+      validationOutcome: "passed", completedValidation: false, startedAt: 2,
+    })).rejects.toThrow("round_requires_validation");
+    await t.mutation(internal.reviewState.recordAutofixRound, {
+      organizationId: seeded.organizationId, reviewId: seeded.reviewId, roundNumber: 1,
+      attemptId, candidateCommitSha: "d".repeat(40), validationScope: "affected_subset",
+      validationOutcome: "passed", completedValidation: true, startedAt: 2, completedAt: 3,
+    });
+    await expect(t.mutation(internal.reviewState.recordAutofixAttempt, {
+      organizationId: seeded.organizationId, reviewId: seeded.reviewId, attemptNumber: 7,
+      patchFingerprint: "patch-7", outcome: "empty", promptVersion: "test", startedAt: 4,
+    })).rejects.toThrow("attempt_out_of_bounds");
   });
 });

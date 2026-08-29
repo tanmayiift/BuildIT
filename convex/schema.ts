@@ -87,6 +87,8 @@ export default defineSchema({
     blockedReason: v.optional(v.string()), blockedSince: v.optional(v.number()),
     blockedExpiresAt: v.optional(v.number()), parentReviewId: v.optional(v.id("reviews")),
     attemptOfReviewId: v.optional(v.id("reviews")), cancelledBy: v.optional(v.string()),
+    cancellationRequestedAt: v.optional(v.number()), executionGeneration: v.number(),
+    queuePriority: v.number(), leaseOwner: v.optional(v.string()), leaseExpiresAt: v.optional(v.number()),
     sandboxId: v.optional(v.string()), runnerImageVersion: v.string(), startedAt: v.optional(v.number()),
     completedAt: v.optional(v.number()), expiresAt: v.number(), createdAt: v.number(), updatedAt: v.number(),
   }).index("by_org_status", ["organizationId", "status"])
@@ -224,4 +226,10 @@ export default defineSchema({
     name: value.metricName, value: v.number(), organizationTimezone: v.string(), occurredAt: v.number(),
   }).index("by_org_time", ["organizationId", "occurredAt"])
     .index("by_name_time", ["name", "occurredAt"]),
+
+  reviewLocks: defineTable({
+    repositoryId: v.id("repositories"), prNumber: v.number(), headSha: v.string(),
+    mode: value.reviewMode, reviewId: v.id("reviews"), createdAt: v.number(),
+  }).index("by_scope", ["repositoryId", "prNumber", "headSha", "mode"])
+    .index("by_review", ["reviewId"]),
 });

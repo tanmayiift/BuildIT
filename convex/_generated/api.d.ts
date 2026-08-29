@@ -12,7 +12,9 @@ import type * as artifacts from "../artifacts.js";
 import type * as auth from "../auth.js";
 import type * as integrations from "../integrations.js";
 import type * as lib_authz from "../lib/authz.js";
+import type * as lib_lifecycle from "../lib/lifecycle.js";
 import type * as organizations from "../organizations.js";
+import type * as reviewState from "../reviewState.js";
 import type * as reviews from "../reviews.js";
 import type * as validators from "../validators.js";
 
@@ -27,7 +29,9 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   integrations: typeof integrations;
   "lib/authz": typeof lib_authz;
+  "lib/lifecycle": typeof lib_lifecycle;
   organizations: typeof organizations;
+  reviewState: typeof reviewState;
   reviews: typeof reviews;
   validators: typeof validators;
 }>;
