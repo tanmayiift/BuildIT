@@ -21,6 +21,9 @@ describe("validation evidence", () => {
     expect(summarizeExecution(output, baseSha, headSha).at(-1)).toMatchObject({ revision: "head", kind: "static_analysis", conclusion: "failed" });
     output.head.credentialTeardownProved = false;
     expect(() => summarizeExecution(output, baseSha, headSha)).toThrow("credential_teardown_unproved");
+    output.head.credentialTeardownProved = true;
+    output.head.stopped = false;
+    expect(() => summarizeExecution(output, baseSha, headSha)).toThrow("sandbox_stop_unproved");
   });
 
   it("records combined scanner runs as separate required checks", () => {
@@ -32,6 +35,7 @@ describe("validation evidence", () => {
       findings: [{ scanner: "gitleaks", severity: "critical" as const }] });
     const response = { base: run(baseSha), head: run(headSha), scanners: { base: scanner(baseSha), head: scanner(headSha) } } as unknown as ExecutionResponse;
     const summaries = summarizeExecution(response, baseSha, headSha);
+    expect(summaries.every(item => item.credentialTeardownProved && item.sandboxStopped)).toBe(true);
     expect(summaries.filter(item => item.revision === "head" && ["buildit-rules", "gitleaks"].includes(item.planId)).map(item => [item.planId, item.kind, item.conclusion])).toEqual([
       ["buildit-rules", "static_analysis", "passed"], ["gitleaks", "secret_scan", "failed"],
     ]);

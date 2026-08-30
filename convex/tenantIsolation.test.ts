@@ -2087,6 +2087,8 @@ describe("durable validation evidence", () => {
         durationMs: 5,
         commandFingerprint: "d".repeat(64),
         nameHash: "e".repeat(64),
+        credentialTeardownProved: true as const,
+        sandboxStopped: true as const,
       },
       args = {
         organizationId: tenant.organizationId,
@@ -2121,6 +2123,7 @@ describe("durable validation evidence", () => {
     }));
     expect(stored.artifact?.redactionStatus).toBe("redacted");
     expect(stored.checks).toHaveLength(2);
+    expect(stored.checks.every((item) => item.credentialTeardownProved && item.sandboxStopped)).toBe(true);
     expect(stored.base).toHaveLength(1);
     expect(
       stored.usage.filter((item) => item.kind === "sandbox_seconds"),
@@ -2178,6 +2181,8 @@ describe("durable validation evidence", () => {
         exitCode: 0,
         durationMs: 1,
         artifactId,
+        credentialTeardownProved: true,
+        sandboxStopped: true,
         startedAt: now - 1,
         completedAt: now,
       }),
@@ -2212,6 +2217,18 @@ describe("durable validation evidence", () => {
         .unique(),
     );
     expect(reviewEvent?.publicMessageArtifactId).toBe(reportArtifactId);
+  });
+
+  it("refuses a green decision without durable credential teardown and sandbox stop proof", async () => {
+    const t = convexTest(schema, modules), tenant = await seedTenant(t, "decision-no-teardown", "alice"), now = Date.now();
+    const { reportArtifactId } = await t.run(async (ctx) => {
+      await ctx.db.patch(tenant.reviewId, { coverageLevel: "full", status: "validating", currentStage: "analysis" });
+      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "decision-no-teardown/validation.json", encrypted: true, checksum: "a".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "decision-no-teardown/report.md", encrypted: true, checksum: "d".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      await ctx.db.insert("checkRuns", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, kind: "test", nameHash: "b".repeat(64), required: true, status: "completed", conclusion: "passed", commandFingerprint: "c".repeat(64), commitSha: "a".repeat(40), exitCode: 0, durationMs: 1, artifactId, startedAt: now - 1, completedAt: now });
+      return { reportArtifactId };
+    });
+    await expect(t.mutation(internal.reviewValidationData.finalizeDecision, { organizationId: tenant.organizationId, reviewId: tenant.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0, reportArtifactId, now })).resolves.toMatchObject({ status: "inconclusive", statusReasonCode: "required_check_missing" });
   });
 
   it("rejects another tenant's final report artifact", async () => {
@@ -2283,6 +2300,8 @@ describe("durable validation evidence", () => {
         durationMs: 1,
         commandFingerprint: "d".repeat(64),
         nameHash: "e".repeat(64),
+        credentialTeardownProved: true as const,
+        sandboxStopped: true as const,
       };
     await expect(
       t.mutation(internal.reviewValidationData.completeValidation, {

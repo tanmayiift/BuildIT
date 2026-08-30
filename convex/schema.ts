@@ -166,6 +166,7 @@ export default defineSchema({
     required: v.boolean(), status: v.union(v.literal("queued"), v.literal("running"), v.literal("completed")),
     conclusion: value.checkConclusion, commandFingerprint: v.string(), commitSha: v.string(),
     exitCode: v.optional(v.number()), durationMs: v.number(), artifactId: v.optional(v.id("artifacts")),
+    credentialTeardownProved: v.optional(v.boolean()), sandboxStopped: v.optional(v.boolean()),
     failureClass: v.optional(value.failureClass), startedAt: v.number(), completedAt: v.optional(v.number()),
   }).index("by_review", ["reviewId"])
     .index("by_review_round", ["reviewId", "roundId"]),

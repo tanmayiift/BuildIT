@@ -30,11 +30,13 @@ export function detectPackageManager(pathsByRevision: { base: Set<string>; head:
 
 export function summarizeExecution(output: ExecutionResponse, baseSha: string, headSha: string) {
   if (!output.base.credentialTeardownProved || !output.head.credentialTeardownProved) throw new Error("credential_teardown_unproved");
-  const summarize = (revision: "base" | "head", commitSha: string, result: ExecutionResult) => result.results.map(item => ({ revision, commitSha, planId: item.planId, kind: item.kind, required: item.required, conclusion: item.conclusion, ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }), durationMs: item.durationMs, commandFingerprint: sha256Json({ planId: item.planId, origin: item.origin, executable: item.executable, args: item.args, limits: { timeoutMs: item.timeoutMs, cpuLimit: item.cpuLimit, memoryMb: item.memoryMb, outputBytes: item.outputBytes, fileBytes: item.fileBytes, network: item.network } }) }));
+  if (!output.base.stopped || !output.head.stopped) throw new Error("sandbox_stop_unproved");
+  const proof = { credentialTeardownProved: true as const, sandboxStopped: true as const };
+  const summarize = (revision: "base" | "head", commitSha: string, result: ExecutionResult) => result.results.map(item => ({ revision, commitSha, ...proof, planId: item.planId, kind: item.kind, required: item.required, conclusion: item.conclusion, ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }), durationMs: item.durationMs, commandFingerprint: sha256Json({ planId: item.planId, origin: item.origin, executable: item.executable, args: item.args, limits: { timeoutMs: item.timeoutMs, cpuLimit: item.cpuLimit, memoryMb: item.memoryMb, outputBytes: item.outputBytes, fileBytes: item.fileBytes, network: item.network } }) }));
   const scanner = (revision: "base" | "head", commitSha: string, run: ScannerSummary) => {
     if (!run.complete || run.commitSha !== commitSha) throw new Error("scanner_evidence_incomplete");
     const runs = run.runs?.length ? run.runs : [{ scanner: run.scanner, scannerVersion: run.scannerVersion }];
-    return runs.map(item => ({ revision, commitSha, planId: item.scanner === "gitleaks" ? "gitleaks" : item.scanner === "osvScanner" ? "osv-scanner" : "buildit-rules",
+    return runs.map(item => ({ revision, commitSha, ...proof, planId: item.scanner === "gitleaks" ? "gitleaks" : item.scanner === "osvScanner" ? "osv-scanner" : "buildit-rules",
       kind: item.scanner === "gitleaks" ? "secret_scan" as const : item.scanner === "osvScanner" ? "dependency_audit" as const : "static_analysis" as const,
       required: true, conclusion: run.findings.some(finding => (!finding.scanner || finding.scanner === item.scanner) && finding.severity === "critical") ? "failed" as const : "passed" as const,
       durationMs: 0, commandFingerprint: sha256Json({ scanner: item.scanner, version: item.scannerVersion }) }));

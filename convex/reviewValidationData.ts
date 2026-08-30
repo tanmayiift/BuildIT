@@ -40,7 +40,8 @@ export const reserveOutput = internalMutation({
 });
 
 const summary = v.object({ revision: v.union(v.literal("base"), v.literal("head")), commitSha: v.string(), planId: v.string(), kind: checkKind,
-  required: v.boolean(), conclusion: checkConclusion, exitCode: v.optional(v.number()), durationMs: v.number(), commandFingerprint: hash, nameHash: hash });
+  required: v.boolean(), conclusion: checkConclusion, exitCode: v.optional(v.number()), durationMs: v.number(), commandFingerprint: hash, nameHash: hash,
+  credentialTeardownProved: v.literal(true), sandboxStopped: v.literal(true) });
 export const completeValidation = internalMutation({
   args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: hash, size: v.number(), summaries: v.array(summary), manager: v.union(v.literal("npm"), v.literal("pnpm"), v.literal("yarn")), now: v.number() },
   handler: async (ctx, args) => {
@@ -58,6 +59,7 @@ export const completeValidation = internalMutation({
       await ctx.db.insert("checkRuns", { organizationId: args.organizationId, reviewId: review._id, kind: item.kind, nameHash: item.nameHash,
         required: item.required, status: "completed", conclusion: item.conclusion, commandFingerprint: item.commandFingerprint, commitSha: item.commitSha,
         ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }), durationMs: item.durationMs, artifactId: artifact._id,
+        credentialTeardownProved: item.credentialTeardownProved, sandboxStopped: item.sandboxStopped,
         ...(item.conclusion === "failed" ? { failureClass: "code" as const } : {}), startedAt: Math.max(0, args.now - item.durationMs), completedAt: args.now });
       if (item.revision === "base") {
         const cached = await ctx.db.query("baseResults").withIndex("by_full_cache_key", q => q.eq("repositoryId", review.repositoryId).eq("baseSha", review.baseSha).eq("commandFingerprint", item.commandFingerprint).eq("configRevisionId", review.configRevisionId).eq("runnerImageVersion", review.runnerImageVersion).eq("architecture", "linux-x64").eq("networkPolicyVersion", "deny-all-v1")).unique();
@@ -89,7 +91,7 @@ export const finalizeDecision = internalMutation({
     let failed = false;
     for (const check of checks.filter(item => item.required)) {
       const artifact = check.artifactId ? await ctx.db.get(check.artifactId) : null;
-      if (!artifact || artifact.organizationId !== args.organizationId || artifact.reviewId !== review._id || artifact.redactionStatus !== "redacted" || artifact.deletedAt || !["passed", "failed"].includes(check.conclusion)) incomplete = true;
+      if (!artifact || artifact.organizationId !== args.organizationId || artifact.reviewId !== review._id || artifact.redactionStatus !== "redacted" || artifact.deletedAt || !check.credentialTeardownProved || !check.sandboxStopped || !["passed", "failed"].includes(check.conclusion)) incomplete = true;
       if (check.conclusion === "failed") failed = true;
     }
     const blocking = findings.some(item => item.resolution === "open" && item.blocking);
