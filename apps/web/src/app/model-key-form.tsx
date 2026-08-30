@@ -38,6 +38,7 @@ const names: Record<Provider, string> = {
   openai: "OpenAI",
   gemini: "Google Gemini",
 };
+const credentialContractVersion = "2026-08-30.1";
 export function ModelKeyForm() {
   const [hydrated, setHydrated] = useState(false),
     { isAuthenticated, isLoading } = useConvexAuth(),
@@ -113,6 +114,7 @@ export function ModelKeyForm() {
         error?: string;
         credential?: { maskedSuffix: string };
       };
+      if (response.headers.get("x-buildit-credential-contract") !== credentialContractVersion) throw new Error("service_update_required");
       if (!response.ok) throw new Error(body.error ?? "credential_save_failed");
       setReplacesCredentialId("");
       setResult({

@@ -30,4 +30,10 @@ describe("model-key recovery", () => {
     expect(code).toBe("credential_save_failed");
     expect(credentialErrorMessage(code)).not.toContain("leaked-secret-value");
   });
+
+  it("separates an existing key from a stale service deployment", () => {
+    expect(credentialErrorMessage("credential_scope_already_exists")).toContain("Use Replace");
+    expect(credentialErrorMessage("service_update_required")).toContain("being updated");
+    expect(credentialNeedsIdentityRecovery("service_update_required")).toBe(false);
+  });
 });

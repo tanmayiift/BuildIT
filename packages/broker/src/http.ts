@@ -3,6 +3,7 @@ import type { CredentialBroker } from "./index.js";
 
 const providers = new Set<ProviderName>(["anthropic", "openai", "gemini"]);
 const maxBodyBytes = 16 * 1024;
+export const credentialContractVersion = "2026-08-30.1";
 
 export type CredentialAuthorization = (input: {
   token: string; organizationId: string; repositoryId?: string;
@@ -11,7 +12,8 @@ export type CredentialAuthorization = (input: {
 function json(status: number, body: Record<string, unknown>, origin?: string) {
   return new Response(JSON.stringify(body), { status, headers: {
     "content-type": "application/json", "cache-control": "no-store",
-    "x-content-type-options": "nosniff", ...(origin ? { "access-control-allow-origin": origin, vary: "origin" } : {}),
+    "x-content-type-options": "nosniff", "x-buildit-credential-contract": credentialContractVersion,
+    ...(origin ? { "access-control-allow-origin": origin, "access-control-expose-headers": "x-buildit-credential-contract", vary: "origin" } : {}),
   } });
 }
 
@@ -22,7 +24,8 @@ export async function handleCredentialSave(request: Request, input: {
   if (origin !== input.allowedOrigin) return json(403, { error: "origin_not_allowed" });
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: {
     "access-control-allow-origin": origin, "access-control-allow-methods": "POST, OPTIONS",
-    "access-control-allow-headers": "authorization, content-type", "access-control-max-age": "600", vary: "origin",
+    "access-control-allow-headers": "authorization, content-type", "access-control-expose-headers": "x-buildit-credential-contract",
+    "x-buildit-credential-contract": credentialContractVersion, "access-control-max-age": "600", vary: "origin",
   } });
   if (request.method !== "POST") return json(405, { error: "method_not_allowed" }, origin);
   const declaredLength = Number(request.headers.get("content-length") ?? 0);
@@ -55,11 +58,11 @@ export async function handleCredentialSave(request: Request, input: {
     return json(201, { credential: saved }, origin);
   } catch (error) {
     const code = error instanceof Error ? error.message : "credential_save_failed";
-    const safe = code === "recent_reauthentication_required" || code === "rate_limited" ? code
+    const safe = code === "recent_reauthentication_required" || code === "rate_limited" || code === "credential_scope_already_exists" ? code
       : code === "invalid_key" ? code
         : code === "not_found_or_forbidden" || code === "authentication_required" ? "not_found_or_forbidden"
           : "credential_save_failed";
-    const status = safe === "invalid_key" ? 422 : safe === "rate_limited" ? 429 : safe === "recent_reauthentication_required" ? 401 : safe === "not_found_or_forbidden" ? 404 : 503;
+    const status = safe === "invalid_key" ? 422 : safe === "rate_limited" ? 429 : safe === "credential_scope_already_exists" ? 409 : safe === "recent_reauthentication_required" ? 401 : safe === "not_found_or_forbidden" ? 404 : 503;
     return json(status, { error: safe }, origin);
   }
 }

@@ -49,6 +49,15 @@ describe("credential broker HTTP boundary", () => {
     expect(f.broker.save).not.toHaveBeenCalled();
   });
 
+  it("exposes a version receipt and distinguishes an existing credential scope", async () => {
+    const f = fixture(); f.broker.save.mockRejectedValue(new Error("credential_scope_already_exists"));
+    const response = await handleCredentialSave(request({ organizationId: "organization-a", provider: "gemini", apiKey: "secret-provider-key-1234" }), { allowedOrigin: origin, authorize: f.authorize, broker: f.broker as never });
+    expect(response.status).toBe(409);
+    expect(response.headers.get("x-buildit-credential-contract")).toBe("2026-08-30.1");
+    expect(response.headers.get("access-control-expose-headers")).toContain("x-buildit-credential-contract");
+    expect(await response.json()).toEqual({ error: "credential_scope_already_exists" });
+  });
+
   it("forwards an explicit replacement ID without changing tenant authorization", async () => {
     const f = fixture();
     const response = await handleCredentialSave(request({ organizationId: "organization-a", provider: "openai", apiKey: "secret-provider-key-1234", replacesCredentialId: "credential-old" }), { allowedOrigin: origin, authorize: f.authorize, broker: f.broker as never });
