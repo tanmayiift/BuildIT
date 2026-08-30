@@ -20,6 +20,34 @@ export const scope = internalQuery({
   },
 });
 
+export const cancellationScope = internalQuery({
+  args: { reviewId: v.id("reviews") },
+  handler: async (ctx, args) => {
+    const review = await ctx.db.get(args.reviewId);
+    if (!review) throw new ConvexError("not_found_or_forbidden");
+    const access = await requireRepositoryRole(
+      ctx,
+      review.repositoryId,
+      "developer",
+      review.organizationId,
+    );
+    if (access.role === "viewer") throw new ConvexError("not_found_or_forbidden");
+    return {
+      actorId: access.userId,
+      workflowId: review.workflowId,
+      terminal: [
+        "passed",
+        "changes_requested",
+        "inconclusive",
+        "failed_after_bounds",
+        "budget_exhausted",
+        "cancelled",
+        "platform_failed",
+      ].includes(review.status),
+    };
+  },
+});
+
 export const create = internalMutation({
   args: { repositoryId: v.id("repositories"), prNumber: v.number(), headSha: v.string(), baseSha: v.string(),
     baseRef: v.string(), isFork: v.boolean(), actorId: v.string(), actorRole: v.union(v.literal("developer"), v.literal("admin"), v.literal("owner")), expectedCredentialScopeId: v.string(), now: v.number() },

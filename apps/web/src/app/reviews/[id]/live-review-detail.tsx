@@ -1,5 +1,6 @@
 "use client";
-import { useConvexAuth, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useQuery } from "convex/react";
+import { useState } from "react";
 import { makeFunctionReference } from "convex/server";
 type Evidence = {
   review: {
@@ -76,6 +77,11 @@ const evidenceQuery = makeFunctionReference<
     { reviewId: string },
     Evidence
   >("reviews:getEvidence"),
+  cancelAction = makeFunctionReference<
+    "action",
+    { reviewId: string },
+    { status: "cancelled" | "already_finished" }
+  >("dashboardReviews:cancel"),
   label = (value: string) =>
     value.replaceAll("_", " ").replace(/^./, (first) => first.toUpperCase()),
   tone = (value: string) =>
@@ -97,6 +103,9 @@ const evidenceQuery = makeFunctionReference<
           : "warning";
 export function LiveReviewDetail({ id }: { id: string }) {
   const { isAuthenticated, isLoading } = useConvexAuth(),
+    cancel = useAction(cancelAction),
+    [cancelling, setCancelling] = useState(false),
+    [cancelError, setCancelError] = useState(""),
     evidence = useQuery(
       evidenceQuery,
       isAuthenticated ? { reviewId: id } : "skip",
@@ -124,6 +133,26 @@ export function LiveReviewDetail({ id }: { id: string }) {
       />
     );
   const { review, repository } = evidence;
+  const canCancel = ![
+    "passed",
+    "changes_requested",
+    "inconclusive",
+    "failed_after_bounds",
+    "budget_exhausted",
+    "cancelled",
+    "platform_failed",
+  ].includes(review.status);
+  async function cancelReview() {
+    setCancelling(true);
+    setCancelError("");
+    try {
+      await cancel({ reviewId: id });
+    } catch {
+      setCancelError("The review could not be cancelled. Refresh its status before trying again.");
+    } finally {
+      setCancelling(false);
+    }
+  }
   return (
     <div className="content review-detail">
       <div className="crumbs">
@@ -150,9 +179,15 @@ export function LiveReviewDetail({ id }: { id: string }) {
           </p>
         </div>
         <div className="verdict-actions">
+          {canCancel ? (
+            <button className="button danger" type="button" disabled={cancelling} onClick={cancelReview}>
+              {cancelling ? "Cancelling…" : "Cancel review"}
+            </button>
+          ) : null}
           <a className="button secondary" href={`/reviews`}>
             Back to queue
           </a>
+          {cancelError ? <p role="alert">{cancelError}</p> : null}
         </div>
       </section>
       <section className="commit-strip">

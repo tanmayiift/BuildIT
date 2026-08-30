@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { makeFunctionReference } from "convex/server";
+import type { WorkflowId } from "@convex-dev/workflow";
 import { GitHubAppClient, pinPullRequest, reviewPolicy } from "@buildit/github";
 import { requireExecutionEnabled } from "./lib/executionGate";
 
@@ -53,3 +54,27 @@ export const start = action({ args: { ...args, expectedHeadSha: v.string(), expe
     expectedHeadSha: review.headSha, expectedGeneration: review.executionGeneration, now: Date.now() });
   return { reviewId: String(review.reviewId) };
 } });
+
+export const cancel = action({
+  args: { reviewId: v.id("reviews") },
+  handler: async (ctx, input): Promise<{ status: "cancelled" | "already_finished" }> => {
+    const scope = await ctx.runQuery(internal.dashboardReviewData.cancellationScope, input);
+    if (scope.terminal) return { status: "already_finished" };
+    const now = Date.now();
+    if (scope.workflowId) {
+      await ctx.runMutation(internal.durableReview.cancel, {
+        reviewId: input.reviewId,
+        workflowId: scope.workflowId as WorkflowId,
+        actorId: scope.actorId,
+        now,
+      });
+    } else {
+      await ctx.runMutation(internal.reviewState.requestCancellation, {
+        reviewId: input.reviewId,
+        actorId: scope.actorId,
+        now,
+      });
+    }
+    return { status: "cancelled" };
+  },
+});

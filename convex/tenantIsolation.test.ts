@@ -9,6 +9,7 @@ import { makeFunctionReference } from "convex/server";
 const modules = import.meta.glob("./**/*.ts");
 const activationFunnel = makeFunctionReference<"query", { organizationId: string }, { repositoryConnected: boolean; modelKeyReady: boolean; pullRequestPreviewed: boolean; reviewStarted: boolean; firstEvidenceReady: boolean }>("activation:funnel");
 const recordPreview = makeFunctionReference<"mutation", { repositoryId: string; actorId: string; headSha: string; now: number }, string>("dashboardReviewData:recordPreview");
+const cancellationScope = makeFunctionReference<"query", { reviewId: string }, { actorId: string; workflowId?: string; terminal: boolean }>("dashboardReviewData:cancellationScope");
 
 async function seedTenant(
   t: ReturnType<typeof convexTest>,
@@ -1857,6 +1858,21 @@ describe("Convex review state integrity", () => {
     expect(targets.map((target) => target.reviewId)).not.toContain(
       beta.reviewId,
     );
+  });
+
+  it("authorizes dashboard cancellation only inside the caller's repository", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "dashboard-cancel-alpha", "alice");
+    await seedTenant(t, "dashboard-cancel-beta", "bob");
+    const own = await t.withIdentity({ subject: "alice" }).query(cancellationScope, {
+      reviewId: alpha.reviewId,
+    });
+    expect(own).toMatchObject({ actorId: "alice", terminal: false });
+    await expect(
+      t.withIdentity({ subject: "bob" }).query(cancellationScope, {
+        reviewId: alpha.reviewId,
+      }),
+    ).rejects.toThrow("not_found_or_forbidden");
   });
 
   it("enforces append-only event sequence numbers", async () => {

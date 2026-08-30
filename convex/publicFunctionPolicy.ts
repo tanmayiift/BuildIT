@@ -14,6 +14,7 @@ export const publicFunctionPolicies = {
   "audit:list": { authorization: "active_organization_viewer", response: "metadata" },
   "artifacts:getMetadata": { authorization: "active_organization_viewer", response: "metadata" },
   "dashboardReviews:prepare": { authorization: "active_organization_developer", response: "metadata" },
+  "dashboardReviews:cancel": { authorization: "active_organization_developer", response: "metadata" },
   "dashboardReviews:start": { authorization: "active_organization_developer", response: "metadata" },
   "githubInstallations:claim": { authorization: "authenticated_user", response: "metadata" },
   "integrations:listProviderCredentials": { authorization: "active_organization_admin", response: "metadata" },
