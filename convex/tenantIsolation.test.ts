@@ -258,7 +258,7 @@ describe("Convex tenant isolation", () => {
     expect(stored).toMatchObject({ organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, createdBy: userId, encryptedCiphertext: "encrypted" });
     const rotated = await signedIn.mutation(api.integrations.storeEncryptedCredential, {
       organizationId: alpha.organizationId, repositoryId: alpha.repositoryId,
-      credentialScopeId: "223e4567-e89b-12d3-a456-426614174000", provider: "gemini",
+      credentialScopeId: "223e4567-e89b-12d3-a456-426614174000", provider: "gemini", // gitleaks:allow — inert UUID fixture
       encryptedCiphertext: "replacement", nonce: "nonce-2", authTag: "tag-2", aadDigest: "b".repeat(64),
       wrappedDataKey: "wrapped-2", kmsKeyId: "arn:aws:kms:eu-west-1:123:key/test", envelopeVersion: 1,
       keyVersion: 1, maskedSuffix: "5678", lastValidatedAt: Date.now(), requestId: "credential-rotate-0001",
