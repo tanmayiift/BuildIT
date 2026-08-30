@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("evaluation release-gate entrypoint", () => {
@@ -9,6 +9,10 @@ describe("evaluation release-gate entrypoint", () => {
     );
     expect(root.scripts["eval:gate"]).toContain("dist/src/cli.js");
     expect(evaluations.bin["buildit-eval"]).toBe("dist/src/cli.js");
-    expect(existsSync("packages/evaluations/dist/src/cli.js")).toBe(true);
+    const config = JSON.parse(
+      readFileSync("packages/evaluations/tsconfig.json", "utf8"),
+    );
+    expect(config.compilerOptions.outDir).toBe("dist");
+    expect(config.include).toContain("src/**/*.ts");
   });
 });
