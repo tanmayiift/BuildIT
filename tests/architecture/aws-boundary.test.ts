@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const template = readFileSync(fileURLToPath(new URL("../../infra/aws/artifacts.yaml", import.meta.url)), "utf8");
+const verifier = readFileSync(fileURLToPath(new URL("../../scripts/verify-aws-boundary.mjs", import.meta.url)), "utf8");
 
 describe("AWS artifact and key boundary", () => {
   it("fails deployment outside Ireland and never creates a multi-region key", () => {
@@ -48,5 +49,12 @@ describe("AWS artifact and key boundary", () => {
     expect(template.match(/SSEAlgorithm: aws:kms/g)).toHaveLength(2);
     expect(template).toContain("Id: ExpireDeletionInventory");
     expect(template).toContain("ExpirationInDays: 14");
+  });
+
+  it("keeps the repeatable live verifier read-only and aligned with the stack", () => {
+    for (const check of ["get-bucket-encryption", "get-public-access-block", "get-bucket-policy-status", "get-bucket-versioning", "list-object-versions", "get-bucket-lifecycle-configuration", "describe-key", "get-key-rotation-status", "ExpungeEphemeralArtifacts", "ExpungeReplayMarkers"]) expect(verifier).toContain(check);
+    for (const write of ["put-object", "delete-object", "update-stack", "schedule-key-deletion"]) expect(verifier).not.toContain(write);
+    expect(verifier).toContain('region !== "eu-west-1"');
+    expect(verifier).toContain('item.VersionId === "null"');
   });
 });
