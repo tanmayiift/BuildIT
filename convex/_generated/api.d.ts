@@ -33,6 +33,8 @@ import type * as publicFunctionPolicy from "../publicFunctionPolicy.js";
 import type * as repositoryConnections from "../repositoryConnections.js";
 import type * as reviewAnalysisWorker from "../reviewAnalysisWorker.js";
 import type * as reviewArtifactData from "../reviewArtifactData.js";
+import type * as reviewAutofixData from "../reviewAutofixData.js";
+import type * as reviewAutofixWorker from "../reviewAutofixWorker.js";
 import type * as reviewContextWorker from "../reviewContextWorker.js";
 import type * as reviewModelData from "../reviewModelData.js";
 import type * as reviewPublicationData from "../reviewPublicationData.js";
@@ -80,6 +82,8 @@ declare const fullApi: ApiFromModules<{
   repositoryConnections: typeof repositoryConnections;
   reviewAnalysisWorker: typeof reviewAnalysisWorker;
   reviewArtifactData: typeof reviewArtifactData;
+  reviewAutofixData: typeof reviewAutofixData;
+  reviewAutofixWorker: typeof reviewAutofixWorker;
   reviewContextWorker: typeof reviewContextWorker;
   reviewModelData: typeof reviewModelData;
   reviewPublicationData: typeof reviewPublicationData;
