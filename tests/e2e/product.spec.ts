@@ -63,6 +63,10 @@ test("repository and integration screens use truthful live connection states", a
   await expect(page.getByRole("heading", { name: "Sign in to see repository access" })).toBeVisible();
   await expect(page.getByText("Not connected", { exact: true })).toHaveCount(0);
   await expect(page.getByText("None", { exact: true })).toHaveCount(0);
+  const signIn = page.getByRole("main").getByRole("link", { name: "Sign in with GitHub" });
+  await expect(signIn).toHaveClass(/action-primary/);
+  await expect(signIn).toHaveCSS("min-height", "44px");
+  await expect(page.getByRole("link", { name: "How isolation works" })).toHaveClass(/action-tertiary/);
   await page.screenshot({ path: `.local/ui-evidence/repositories-${testInfo.project.name}.png`, fullPage: true });
   await page.goto("/integrations");
   const github = page.getByRole("heading", { name: "GitHub", exact: true }).locator("..");

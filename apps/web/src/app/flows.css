@@ -7,10 +7,10 @@
 .live-empty{margin-top:24px}.connection-state-name{text-transform:capitalize;font-size:20px}
 .repository-list{display:grid;margin-top:16px;border-top:1px solid var(--line)}
 .repository-row{display:grid;grid-template-columns:44px minmax(220px,1fr) minmax(110px,auto) minmax(110px,auto) auto;align-items:center;gap:16px;padding:18px 4px;border-bottom:1px solid var(--line)}
-.repository-row h2{font-size:16px;margin:0 0 4px}.repository-row p{margin:0;color:var(--muted);font-size:13px}.repository-row>a{min-height:44px;display:flex;align-items:center;color:var(--navy);font-weight:650}
+.repository-row h2{font-size:16px;margin:0 0 4px}.repository-row p{margin:0;color:var(--muted);font-size:13px}.repository-row>.action{white-space:nowrap}
 .repository-mark{width:40px;height:40px;display:grid;place-items:center;border:1px solid var(--line);font:600 11px/1 "JetBrains Mono Variable",monospace;color:var(--navy);background:var(--surface-inset)}
 .repository-policy{display:grid;gap:4px}.repository-policy span{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.repository-policy strong{font-size:13px;text-transform:capitalize}
 .access-row small{margin-left:auto;color:var(--muted);font-size:10px;text-align:right}
 .integration-card[data-connected]{box-shadow:inset 3px 0 0 var(--success)}
-.integration-card a.button{color:#fff}.integration-card a.button.secondary{color:var(--navy)}
+.integration-card .action-primary{color:#fff}.integration-card .action-secondary,.integration-card .action-tertiary{color:var(--navy)}
 @media(max-width:800px){.connection-hero{align-items:flex-start;flex-direction:column}.repository-row{grid-template-columns:40px 1fr}.repository-policy,.repository-row>a{grid-column:2}.repository-row>a{justify-self:start}}

@@ -2,6 +2,7 @@
 
 import { useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
+import { ActionLink } from "./action";
 
 type Connection = {
   state: "signed_out" | "no_workspace" | "installation_required" | "installation_unavailable" | "no_repositories_selected" | "connected";
@@ -29,22 +30,27 @@ const stateCopy: Record<Connection["state"], { title: string; body: string }> = 
 };
 
 function ConnectionAction({ connection, returnTo = "/repositories" }: { connection: Connection; returnTo?: string }) {
-  if (connection.state === "signed_out") return <a className="button" href={`/sign-in?returnTo=${encodeURIComponent(returnTo)}`}>Sign in with GitHub</a>;
+  if (connection.state === "signed_out") return <ActionLink href={`/sign-in?returnTo=${encodeURIComponent(returnTo)}`}>Sign in with GitHub</ActionLink>;
   const installation = connection.installations[0];
-  if (installation) return <a className="button" href={`https://github.com/settings/installations/${installation.installationId}`}>Manage repository selection</a>;
-  return <a className="button" href="https://github.com/apps/buildit-agentic-review/installations/new">Choose repositories in GitHub</a>;
+  if (installation) {
+    const href = installation.accountType === "organization"
+      ? `https://github.com/organizations/${encodeURIComponent(installation.accountLogin)}/settings/installations/${installation.installationId}`
+      : `https://github.com/settings/installations/${installation.installationId}`;
+    return <ActionLink priority="secondary" href={href} external>Manage access</ActionLink>;
+  }
+  return <ActionLink href="https://github.com/apps/buildit-agentic-review/installations/new" external>Choose repositories</ActionLink>;
 }
 
 export function RepositoryConnectionView() {
   const connection = useConnection();
   if (!connection) return <section className="live-state" aria-live="polite"><span className="state-pulse" /><div><strong>Loading repository access…</strong><p>Checking your active workspace on the server.</p></div></section>;
   const copy = stateCopy[connection.state];
-  if (connection.state !== "connected") return <section className="split-layout"><article className="empty-state live-empty"><span className="empty-mark">GH</span><h2>{copy.title}</h2><p>{copy.body}</p><div className="button-row"><ConnectionAction connection={connection} /><a className="button secondary" href="/data-handling">How isolation works</a></div></article><aside className="explain-panel"><p className="eyebrow">Current state</p><strong className="connection-state-name">{connection.state.replaceAll("_", " ")}</strong><p>Repository content is never inferred from public visibility. BuildIT requires the selected GitHub installation for both public and private repositories.</p></aside></section>;
+  if (connection.state !== "connected") return <section className="split-layout"><article className="empty-state live-empty"><span className="empty-mark">GH</span><h2>{copy.title}</h2><p>{copy.body}</p><div className="button-row"><ConnectionAction connection={connection} /><ActionLink priority="tertiary" href="/data-handling">How isolation works</ActionLink></div></article><aside className="explain-panel"><p className="eyebrow">Current state</p><strong className="connection-state-name">{connection.state.replaceAll("_", " ")}</strong><p>Repository content is never inferred from public visibility. BuildIT requires the selected GitHub installation for both public and private repositories.</p></aside></section>;
   const installation = connection.installations.find(item => item.status === "active")!;
   return <>
     <section className="connection-hero" aria-live="polite"><div><span className="status success">Connected</span><h2>{copy.title}</h2><p>{connection.organization?.name} · GitHub account {installation.accountLogin}</p></div><ConnectionAction connection={connection} /></section>
     <section className="context-strip"><span><small>Workspace</small><strong>{connection.organization?.name}</strong></span><span><small>Installation</small><strong>#{installation.installationId}</strong></span><span><small>Repository access</small><strong>{connection.repositories.length} selected</strong></span><span><small>Data region</small><strong>Ireland</strong></span></section>
-    <section className="repository-list" aria-label="Connected repositories">{connection.repositories.map(repository => <article className="repository-row" key={repository.id}><span className="repository-mark">{repository.visibility === "private" ? "PR" : repository.visibility === "public" ? "PU" : "RE"}</span><div><h2>{repository.owner}/{repository.name}</h2><p>{repository.visibility} repository · default branch <code>{repository.defaultBranch}</code></p></div><div className="repository-policy"><span>Autofix</span><strong>{repository.autofixMode === "stacked" ? "Stacked PR" : repository.autofixMode.replaceAll("_", " ")}</strong></div><div className="repository-policy"><span>Index</span><strong>{repository.indexState.replaceAll("_", " ")}</strong></div><a href={`https://github.com/${repository.owner}/${repository.name}`} aria-label={`Open ${repository.owner}/${repository.name} on GitHub`}>Open ↗</a></article>)}</section>
+    <section className="repository-list" aria-label="Connected repositories">{connection.repositories.map(repository => <article className="repository-row" key={repository.id}><span className="repository-mark">{repository.visibility === "private" ? "PR" : repository.visibility === "public" ? "PU" : "RE"}</span><div><h2>{repository.owner}/{repository.name}</h2><p>{repository.visibility} repository · default branch <code>{repository.defaultBranch}</code></p></div><div className="repository-policy"><span>Autofix</span><strong>{repository.autofixMode === "stacked" ? "Stacked PR" : repository.autofixMode.replaceAll("_", " ")}</strong></div><div className="repository-policy"><span>Index</span><strong>{repository.indexState.replaceAll("_", " ")}</strong></div><ActionLink priority="secondary" size="compact" external href={`https://github.com/${repository.owner}/${repository.name}`} label={`View ${repository.owner}/${repository.name} on GitHub`}>View on GitHub</ActionLink></article>)}</section>
   </>;
 }
 
