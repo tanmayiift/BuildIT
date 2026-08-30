@@ -9,7 +9,9 @@ export class ProviderError extends Error {
 }
 
 export function assertAllowedModel(model: string, allowlist: ReadonlySet<string>) { if (!allowlist.has(model)) throw new ProviderError("malformed_response"); }
-function retryAfter(response: Response) { const seconds = Number(response.headers.get("retry-after")); return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1_000 : undefined; }
+export function assertStrictSchema(schema:JsonSchema){const visit=(node:unknown)=>{if(!node||typeof node!=="object"||Array.isArray(node))return;const value=node as Record<string,unknown>;if(value.type==="object"&&value.additionalProperties!==false)throw new ProviderError("malformed_response");if(value.properties&&typeof value.properties==="object")for(const child of Object.values(value.properties))visit(child);if(value.items)visit(value.items)};visit(schema)}
+export function validateSchemaValue(value:unknown,schema:JsonSchema):boolean{const type=schema.type;if(type==="object"){if(!value||typeof value!=="object"||Array.isArray(value))return false;const record=value as Record<string,unknown>,properties=(schema.properties??{}) as Record<string,JsonSchema>,required=Array.isArray(schema.required)?schema.required:[];if(required.some(key=>typeof key!=="string"||!(key in record)))return false;if(schema.additionalProperties===false&&Object.keys(record).some(key=>!(key in properties)))return false;return Object.entries(record).every(([key,item])=>!properties[key]||validateSchemaValue(item,properties[key]!))}if(type==="array")return Array.isArray(value)&&value.every(item=>validateSchemaValue(item,(schema.items??{}) as JsonSchema));if(type==="string"&&typeof value!=="string"||type==="boolean"&&typeof value!=="boolean"||type==="number"&&(typeof value!=="number"||!Number.isFinite(value))||type==="integer"&&(typeof value!=="number"||!Number.isInteger(value)))return false;if(Array.isArray(schema.enum)&&!schema.enum.includes(value))return false;return true}
+function retryAfter(response: Response) { const header=response.headers.get("retry-after");if(header===null)return undefined;const seconds = Number(header); return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1_000 : undefined; }
 async function checked(response: Response) {
   if (response.status === 401 || response.status === 403) throw new ProviderError("invalid_key", response.status);
   if (response.status === 429) throw new ProviderError("rate_limited", 429, retryAfter(response));
@@ -35,14 +37,15 @@ export class ProviderClient {
   }
 
   async generate(provider: ProviderName, apiKey: string, request: ProviderRequest, allowlist: ReadonlySet<string>): Promise<ProviderResult> {
-    assertAllowedModel(request.model, allowlist);
-    if (provider === "anthropic") return this.anthropic(apiKey, request);
-    if (provider === "openai") return this.openai(apiKey, request);
-    return this.gemini(apiKey, request);
+    assertAllowedModel(request.model, allowlist);assertStrictSchema(request.schema);
+    const result=provider === "anthropic"?await this.anthropic(apiKey, request):provider === "openai"?await this.openai(apiKey, request):await this.gemini(apiKey, request);
+    if(!validateSchemaValue(result.value,request.schema))throw new ProviderError("malformed_response");return result;
   }
 
+  async generateWithRetry(provider:ProviderName,apiKey:string,request:ProviderRequest,allowlist:ReadonlySet<string>,options={maxRetries:3,baseMs:250},wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))){let last:unknown;for(let attempt=0;attempt<=options.maxRetries;attempt++){try{return await this.generate(provider,apiKey,request,allowlist)}catch(error){last=error;if(!(error instanceof ProviderError)||!["rate_limited","provider_unavailable"].includes(error.code)||attempt===options.maxRetries)throw error;await wait(error.retryAfterMs??options.baseMs*2**attempt)}}throw last}
+
   private async anthropic(apiKey: string, request: ProviderRequest): Promise<ProviderResult> {
-    const response = await this.http("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model: request.model, max_tokens: request.maxOutputTokens, system: request.system, messages: [{ role: "user", content: request.input }], tools: [{ name: request.schemaName, description: "Return the validated stage result", input_schema: request.schema, strict: true }], tool_choice: { type: "tool", name: request.schemaName } }) });
+    const response = await this.http("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model: request.model, max_tokens: request.maxOutputTokens, temperature:0, system: request.system, messages: [{ role: "user", content: request.input }], tools: [{ name: request.schemaName, description: "Return the validated stage result", input_schema: request.schema, strict: true }], tool_choice: { type: "tool", name: request.schemaName } }) });
     const body = await checked(response), stop = String(body.stop_reason ?? "unknown");
     if (stop === "max_tokens") throw new ProviderError("truncated");
     const content = Array.isArray(body.content) ? body.content : [], tool = content.find((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && (item as Record<string, unknown>).type === "tool_use" && (item as Record<string, unknown>).name === request.schemaName));
@@ -62,7 +65,7 @@ export class ProviderClient {
   }
 
   private async gemini(apiKey: string, request: ProviderRequest): Promise<ProviderResult> {
-    const response = await this.http(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": apiKey }, body: JSON.stringify({ systemInstruction: { parts: [{ text: request.system }] }, contents: [{ role: "user", parts: [{ text: request.input }] }], generationConfig: { maxOutputTokens: request.maxOutputTokens, responseMimeType: "application/json", responseSchema: request.schema } }) });
+    const response = await this.http(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": apiKey }, body: JSON.stringify({ systemInstruction: { parts: [{ text: request.system }] }, contents: [{ role: "user", parts: [{ text: request.input }] }], generationConfig: { temperature:0,maxOutputTokens: request.maxOutputTokens, responseMimeType: "application/json", responseSchema: request.schema } }) });
     const body = await checked(response), feedback = body.promptFeedback as Record<string, unknown> | undefined;
     if (feedback?.blockReason) throw new ProviderError("refused");
     const candidates = Array.isArray(body.candidates) ? body.candidates : [], candidate = candidates[0] as Record<string, unknown> | undefined, finish = String(candidate?.finishReason ?? "unknown");
