@@ -7,6 +7,7 @@ const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("r
 const hash = v.string();
 
 export const mode = internalQuery({args:executionArgs,handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale)throw new ConvexError("stale_or_replaced_review");return review.mode}});
+export const assertActive = internalQuery({args:executionArgs,handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||review.mode!=="autofix"||review.cancellationRequestedAt||!["validating","autofixing"].includes(review.status))throw new ConvexError("autofix_cancelled_or_replaced");return true}});
 
 export const scope = internalQuery({
   args: executionArgs,

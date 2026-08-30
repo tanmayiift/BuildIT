@@ -2323,6 +2323,37 @@ describe("durable validation evidence", () => {
 });
 
 describe("durable Autofix evidence", () => {
+  it("rejects every cached Autofix generation after cancellation", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "autofix-cancel", "alice");
+    await t.run((ctx) =>
+      ctx.db.patch(tenant.reviewId, {
+        mode: "autofix",
+        status: "validating",
+        currentStage: "analysis",
+      }),
+    );
+    const execution = {
+      organizationId: tenant.organizationId,
+      reviewId: tenant.reviewId,
+      expectedHeadSha: "a".repeat(40),
+      expectedGeneration: 0,
+    };
+    await expect(
+      t.query(internal.reviewAutofixData.assertActive, execution),
+    ).resolves.toBe(true);
+
+    await t.mutation(internal.reviewState.requestCancellation, {
+      reviewId: tenant.reviewId,
+      actorId: "alice",
+      now: 2,
+    });
+
+    await expect(
+      t.query(internal.reviewAutofixData.assertActive, execution),
+    ).rejects.toThrow("autofix_cancelled_or_replaced");
+  });
+
   it("records one exact candidate round idempotently and rejects foreign artifacts", async () => {
     const t = convexTest(schema, modules),
       alpha = await seedTenant(t, "autofix-alpha", "alice"),
