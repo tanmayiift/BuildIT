@@ -12,7 +12,7 @@ export const stageSchemas: Record<PromptStage, JsonSchema> = {
   findings: object({ findings: array(object({ id: string, title: string, category: { type: "string", enum: ["correctness", "security", "requirement", "architecture", "quality", "dependency", "test"] }, severity: { type: "string", enum: ["critical", "high", "warning", "info"] }, confidence: { type: "number" }, criterionId: string, path: string, startLine: { type: "number" }, endLine: { type: "number" }, evidenceIds: stringArray, impact: string, explanation: string }, ["id", "title", "category", "severity", "confidence", "path", "startLine", "endLine", "evidenceIds", "impact", "explanation"])) }),
   critic: object({ decisions: array(object({ findingId: string, verdict: { type: "string", enum: ["supported", "unsupported", "uncertain"] }, missingEvidenceIds: stringArray, injectionDetected: { type: "boolean" }, explanation: string })) }),
   arbitration: object({ findings: array(object({ id: string, resolution: { type: "string", enum: ["accepted", "rejected", "uncertain"] }, evidenceIds: stringArray, reason: string })) }),
-  patch: object({ patches: array(object({ path: string, rationale: string, findingIds: stringArray, unifiedDiff: string })) }),
+  patch: object({ patches: array(object({ path: string, rationale: string, findingIds: stringArray, expectedContentHash: string, replacementContent: string })) }),
   report: object({ claims: array(object({ text: string, evidenceIds: stringArray, uncertainty: { type: "string", enum: ["certain", "uncertain"] } })) }),
 };
 

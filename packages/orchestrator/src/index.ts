@@ -5,6 +5,7 @@ export * from "./contextIndex.js";
 export * from "./findings.js";
 export * from "./report.js";
 export * from "./modelChain.js";
+export * from "./patchPolicy.js";
 export type Evidence={id:string;path?:string;line?:number;searchScope?:string};
 export type Finding={title:string;severity:"critical"|"warning"|"info";verdict:"covered"|"not_covered"|"unclear";evidenceId:string};
 export function validateFindings(findings:Finding[],evidence:Evidence[]){const ids=new Set(evidence.map(e=>e.id));return findings.filter(f=>ids.has(f.evidenceId))}
