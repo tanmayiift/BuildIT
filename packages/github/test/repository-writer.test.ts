@@ -26,4 +26,11 @@ describe("GitHub candidate writer", () => {
     await expect(writer.createPullRequest({ head: "buildit/pr-2/proof", base: "feature", title: "Fix", body: "Human merge required" })).resolves.toEqual({ number: 4, url: "https://github.test/pr/4" });
     expect(http).toHaveBeenCalledTimes(2);
   });
+  it("publishes an exact-commit completed check without merge authority", async () => {
+    const http = vi.fn(async (_url: string | URL, init?: RequestInit) => new Response(JSON.stringify({ id: 9, html_url: "https://github.test/check/9", body: init?.body }), { status: 201 }));
+    const writer = new GitHubRepositoryWriter({ repositoryId: 7, installationToken: "token", http });
+    await expect(writer.createCheckRun({ name: "BuildIT / candidate", headSha: candidate, conclusion: "success", title: "Candidate validated", summary: "Install, test, and lint passed." })).resolves.toEqual({ id: 9, url: "https://github.test/check/9" });
+    const body = JSON.parse(String((http.mock.calls[0]![1] as RequestInit).body));
+    expect(body).toMatchObject({ head_sha: candidate, status: "completed", conclusion: "success" });
+  });
 });

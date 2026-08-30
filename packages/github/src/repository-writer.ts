@@ -46,4 +46,10 @@ export class GitHubRepositoryWriter {
     if (typeof value.number !== "number" || typeof value.html_url !== "string") throw new Error("github_pull_request_malformed");
     return { number: value.number, url: value.html_url };
   }
+  async createCheckRun(input: { name: string; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; title: string; summary: string }) {
+    if (!/^[0-9a-f]{40}$/i.test(input.headSha) || !input.name.trim() || !input.title.trim() || !input.summary.trim()) throw new Error("check_run_input_invalid");
+    const value = await this.request("/check-runs", { method: "POST", body: JSON.stringify({ name: input.name, head_sha: input.headSha, status: "completed", conclusion: input.conclusion, output: { title: input.title, summary: input.summary } }) });
+    if (typeof value.id !== "number" || typeof value.html_url !== "string") throw new Error("github_check_run_malformed");
+    return { id: value.id, url: value.html_url };
+  }
 }
