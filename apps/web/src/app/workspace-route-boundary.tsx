@@ -2,7 +2,7 @@
 
 import { useConvexAuth } from "convex/react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 const SampleTourContext = createContext(false);
 
@@ -17,17 +17,19 @@ function requiresWorkspace(pathname: string) {
 }
 
 export function WorkspaceRouteBoundary({ children }: { children: ReactNode }) {
+  const [hydrated, setHydrated] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const sampleTour = searchParams.get("tour") === "1";
+  useEffect(() => setHydrated(true), []);
 
   if (!requiresWorkspace(pathname)) return <SampleTourContext.Provider value={false}>{children}</SampleTourContext.Provider>;
   if (sampleTour) return <SampleTourContext.Provider value>
     <p className="sample-route-note">Sample tour · no live workspace data</p>
     {children}
   </SampleTourContext.Provider>;
-  if (isLoading) return <section className="content route-gate" aria-live="polite"><span className="state-pulse" /><h1>Checking your session…</h1><p>BuildIT is confirming access before requesting workspace data.</p></section>;
+  if (!hydrated || isLoading) return <section className="content route-gate" aria-live="polite"><span className="state-pulse" /><h1>Checking your session…</h1><p>BuildIT is confirming access before requesting workspace data.</p></section>;
   if (isAuthenticated) return <SampleTourContext.Provider value={false}>{children}</SampleTourContext.Provider>;
 
   const returnTo = encodeURIComponent(pathname);

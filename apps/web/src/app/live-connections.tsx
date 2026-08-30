@@ -4,6 +4,7 @@ import { useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { ActionLink } from "./action";
 import { useSampleTour } from "./workspace-route-boundary";
+import { useEffect, useState } from "react";
 
 type Connection = {
   state: "signed_out" | "no_workspace" | "installation_required" | "installation_unavailable" | "no_repositories_selected" | "connected";
@@ -15,10 +16,13 @@ const connectionQuery = makeFunctionReference<"query", Record<string, never>, Co
 
 const signedOutConnection: Connection = { state: "signed_out", organization: null, installations: [], repositories: [] };
 function useConnection() {
+  const [hydrated, setHydrated] = useState(false);
   const { isAuthenticated, isLoading } = useConvexAuth();
   const sampleTour = useSampleTour();
-  const connection = useQuery(connectionQuery, isAuthenticated && !sampleTour ? {} : "skip");
+  const connection = useQuery(connectionQuery, hydrated && isAuthenticated && !sampleTour ? {} : "skip");
+  useEffect(() => setHydrated(true), []);
   if (sampleTour) return signedOutConnection;
+  if (!hydrated) return undefined;
   if (!isLoading && !isAuthenticated) return signedOutConnection;
   return connection;
 }

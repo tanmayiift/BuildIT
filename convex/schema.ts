@@ -24,6 +24,7 @@ export default defineSchema({
     organizationId: v.id("organizations"), userId: v.string(), role: value.role,
     status: value.membershipStatus, createdAt: v.number(), updatedAt: v.number(),
   }).index("by_org_user", ["organizationId", "userId"])
+    .index("by_org_status", ["organizationId", "status"])
     .index("by_user_status", ["userId", "status"]),
 
   userPreferences: defineTable({
@@ -31,7 +32,8 @@ export default defineSchema({
   }).index("by_user", ["userId"]),
 
   userProfiles: defineTable({
-    userId: v.id("users"), githubUserId: v.number(), githubLogin: v.string(), updatedAt: v.number(),
+    userId: v.id("users"), githubUserId: v.number(), githubLogin: v.string(),
+    lastAuthenticatedAt: v.optional(v.number()), updatedAt: v.number(),
   }).index("by_user", ["userId"]).index("by_github_user", ["githubUserId"]),
 
   githubInstallations: defineTable({

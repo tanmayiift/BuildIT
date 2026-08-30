@@ -350,6 +350,50 @@ describe("Convex tenant isolation", () => {
   });
 });
 
+describe("audited membership administration", () => {
+  async function seedMembershipWorkspace(t: ReturnType<typeof convexTest>) {
+    return t.run(async ctx => {
+      const now = Date.now();
+      const ownerId = await ctx.db.insert("users", { name: "Owner" });
+      const memberId = await ctx.db.insert("users", { name: "Member" });
+      const outsiderId = await ctx.db.insert("users", { name: "Outsider" });
+      const organizationId = await ctx.db.insert("organizations", { name: "Acme", slug: "acme-members", timezone: "Asia/Kolkata", region: "eu-west-1", retentionHours: 24, monthlyBudget: 100, concurrencyLimit: 2, planId: "test", fingerprintKeyVersion: 1, createdAt: now });
+      const ownerMembershipId = await ctx.db.insert("memberships", { organizationId, userId: ownerId, role: "owner", status: "active", createdAt: now, updatedAt: now });
+      await ctx.db.insert("userProfiles", { userId: ownerId, githubUserId: 1, githubLogin: "owner", lastAuthenticatedAt: now, updatedAt: now });
+      return { now, ownerId, memberId, outsiderId, organizationId, ownerMembershipId };
+    });
+  }
+
+  it("invites the intended user, requires their acceptance, and chains audit records", async () => {
+    const t = convexTest(schema, modules); const seeded = await seedMembershipWorkspace(t);
+    const owner = t.withIdentity({ subject: `${seeded.ownerId}|owner-session` });
+    const membershipId = await owner.mutation(api.memberships.invite, { organizationId: seeded.organizationId, targetUserId: seeded.memberId, role: "developer", requestId: "membership-invite-0001" });
+    await expect(t.withIdentity({ subject: `${seeded.outsiderId}|outsider-session` }).mutation(api.memberships.accept, { organizationId: seeded.organizationId, requestId: "membership-accept-wrong" })).rejects.toThrow("invitation_not_found");
+    await t.withIdentity({ subject: `${seeded.memberId}|member-session` }).mutation(api.memberships.accept, { organizationId: seeded.organizationId, requestId: "membership-accept-0001" });
+    expect(await t.run(ctx => ctx.db.get(membershipId))).toMatchObject({ role: "developer", status: "active" });
+    const events = await t.run(ctx => ctx.db.query("auditEvents").withIndex("by_org_created", q => q.eq("organizationId", seeded.organizationId)).collect());
+    expect(events.map(event => event.action)).toEqual(["membership.invited", "membership.accepted"]);
+    expect(events[1].previousHash).toBe(events[0].eventHash);
+    expect(events[0].resourceIdHash).not.toContain(membershipId);
+  });
+
+  it("requires recent GitHub authentication and preserves the final owner", async () => {
+    const t = convexTest(schema, modules); const seeded = await seedMembershipWorkspace(t);
+    const owner = t.withIdentity({ subject: `${seeded.ownerId}|owner-session` });
+    await expect(owner.mutation(api.memberships.changeRole, { organizationId: seeded.organizationId, membershipId: seeded.ownerMembershipId, role: "admin", requestId: "membership-demote-0001" })).rejects.toThrow("last_owner_required");
+    await t.run(async ctx => { const profile = await ctx.db.query("userProfiles").withIndex("by_user", q => q.eq("userId", seeded.ownerId)).unique(); await ctx.db.patch(profile!._id, { lastAuthenticatedAt: seeded.now - 11 * 60 * 1000 }); });
+    await expect(owner.mutation(api.memberships.invite, { organizationId: seeded.organizationId, targetUserId: seeded.memberId, role: "viewer", requestId: "membership-stale-0001" })).rejects.toThrow("recent_reauthentication_required");
+  });
+
+  it("prevents an administrator from granting admin or owner access", async () => {
+    const t = convexTest(schema, modules); const seeded = await seedMembershipWorkspace(t);
+    const adminMembershipId = await t.run(async ctx => { await ctx.db.insert("userProfiles", { userId: seeded.memberId, githubUserId: 2, githubLogin: "admin", lastAuthenticatedAt: Date.now(), updatedAt: Date.now() }); return ctx.db.insert("memberships", { organizationId: seeded.organizationId, userId: seeded.memberId, role: "admin", status: "active", createdAt: Date.now(), updatedAt: Date.now() }); });
+    const admin = t.withIdentity({ subject: `${seeded.memberId}|admin-session` });
+    await expect(admin.mutation(api.memberships.changeRole, { organizationId: seeded.organizationId, membershipId: adminMembershipId, role: "owner", requestId: "membership-escalate-01" })).rejects.toThrow("not_found_or_forbidden");
+    await expect(admin.mutation(api.memberships.invite, { organizationId: seeded.organizationId, targetUserId: seeded.outsiderId, role: "admin", requestId: "membership-escalate-02" })).rejects.toThrow("not_found_or_forbidden");
+  });
+});
+
 describe("Convex review state integrity", () => {
   it("replays a persisted workflow checkpoint idempotently", async () => {
     const t = convexTest(schema, modules);

@@ -24,8 +24,9 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       const existing=await db.query("userProfiles").withIndex("by_user",q=>q.eq("userId",userId)).unique();
       const other=await db.query("userProfiles").withIndex("by_github_user",q=>q.eq("githubUserId",githubUserId)).unique();
       if(other&&other.userId!==userId) throw new Error("github_identity_already_linked");
-      if(existing) await db.patch(existing._id,{githubUserId,githubLogin:rawLogin,updatedAt:Date.now()});
-      else await db.insert("userProfiles",{userId,githubUserId,githubLogin:rawLogin,updatedAt:Date.now()});
+      const authenticatedAt=Date.now();
+      if(existing) await db.patch(existing._id,{githubUserId,githubLogin:rawLogin,lastAuthenticatedAt:authenticatedAt,updatedAt:authenticatedAt});
+      else await db.insert("userProfiles",{userId,githubUserId,githubLogin:rawLogin,lastAuthenticatedAt:authenticatedAt,updatedAt:authenticatedAt});
     },
   },
 });

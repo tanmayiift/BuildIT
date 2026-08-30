@@ -3,6 +3,7 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
+import { useEffect, useState } from "react";
 
 type Viewer = { id: string; name: string | null; email: string | null; image: string | null } | null;
 type Organization = { id: string; name: string; slug: string; timezone: string; region: "eu-west-1" };
@@ -11,12 +12,14 @@ const viewerQuery = makeFunctionReference<"query", Record<string, never>, Viewer
 const organizationsQuery = makeFunctionReference<"query", Record<string, never>, Organization[]>("organizations:listMine");
 
 export function AccountStatus({ compact = false }: { compact?: boolean }) {
+  const [hydrated, setHydrated] = useState(false);
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { signOut } = useAuthActions();
-  const viewer = useQuery(viewerQuery, isAuthenticated ? {} : "skip");
-  const organizations = useQuery(organizationsQuery, isAuthenticated ? {} : "skip");
+  const viewer = useQuery(viewerQuery, hydrated && isAuthenticated ? {} : "skip");
+  const organizations = useQuery(organizationsQuery, hydrated && isAuthenticated ? {} : "skip");
+  useEffect(() => setHydrated(true), []);
 
-  if (isLoading) return compact
+  if (!hydrated || isLoading) return compact
     ? <a className="button compact" href="/sign-in">Sign in</a>
     : <><span className="muted" aria-live="polite">Checking account…</span><br/><a className="account-link" href="/sign-in">Sign in with GitHub</a></>;
   if (!isAuthenticated) return compact
