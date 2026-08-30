@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { publicFunctionPolicies } from "../../convex/publicFunctionPolicy";
 import { tablePolicies } from "../../convex/tablePolicy";
+import { parentConsistencyPolicies } from "../../convex/lib/parentConsistency";
 
 const convexDir = fileURLToPath(new URL("../../convex", import.meta.url));
 const declaration = /export const\s+([A-Za-z0-9_]+)\s*=\s*(?:query|mutation|action)\s*\(/g;
@@ -41,5 +42,15 @@ describe("product table security inventory", () => {
       policy.scope === "repository" && name !== "repositories" && !policy.parents.includes("repositoryId" as never)
       || policy.scope === "review" && name !== "reviews" && !policy.parents.includes("reviewId" as never));
     expect(incomplete).toEqual([]);
+  });
+
+  it("requires a runtime parent-consistency policy for every cross-record tenant table", () => {
+    const expected = Object.entries(tablePolicies)
+      .filter(([name, policy]) => name === "repositories"
+        || policy.parents.includes("repositoryId" as never)
+        || policy.parents.includes("reviewId" as never))
+      .map(([name]) => name)
+      .sort();
+    expect(Object.keys(parentConsistencyPolicies).sort()).toEqual(expected);
   });
 });

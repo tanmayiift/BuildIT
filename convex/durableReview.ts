@@ -5,6 +5,7 @@ import { internalMutation } from "./_generated/server";
 import { durableReviewStages } from "./lib/durableStages";
 import { terminalStatuses } from "./lib/lifecycle";
 import { reviewWorkflowManager } from "./workflowManager";
+import { assertReviewParent } from "./lib/parentConsistency";
 
 export const checkpoint = internalMutation({
   args: {
@@ -14,8 +15,7 @@ export const checkpoint = internalMutation({
     sequence: v.number(), now: v.number(),
   },
   handler: async (ctx, args): Promise<string> => {
-    const review = await ctx.db.get(args.reviewId);
-    if (!review || review.organizationId !== args.organizationId) throw new ConvexError("not_found_or_forbidden");
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
     if (review.headSha !== args.expectedHeadSha) throw new ConvexError("stale_head");
     if (review.executionGeneration !== args.expectedGeneration || review.status === "cancelling" || review.status === "cancelled") throw new ConvexError("cancelled_or_replaced");
     if (terminalStatuses.has(review.status)) throw new ConvexError("review_is_terminal");
@@ -55,8 +55,7 @@ export const start = internalMutation({
     expectedHeadSha: v.string(), expectedGeneration: v.number(), now: v.number(),
   },
   handler: async (ctx, args): Promise<string> => {
-    const review = await ctx.db.get(args.reviewId);
-    if (!review || review.organizationId !== args.organizationId) throw new ConvexError("not_found_or_forbidden");
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
     if (review.workflowId) return review.workflowId;
     const workflowId: WorkflowId = await reviewWorkflowManager.start(ctx, internal.durableReview.execute, {
       organizationId: args.organizationId, reviewId: args.reviewId,

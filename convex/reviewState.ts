@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import * as value from "./validators";
 import { terminalStatuses, transitionAllowed } from "./lib/lifecycle";
+import { assertAttemptParent, assertRepositoryParent, assertReviewParent } from "./lib/parentConsistency";
 
 export const transition = internalMutation({
   args: {
@@ -49,8 +50,7 @@ export const appendEvent = internalMutation({
     type: value.eventType, stage: value.reviewStage, internalCode: v.string(), now: v.number(),
   },
   handler: async (ctx, args) => {
-    const review = await ctx.db.get(args.reviewId);
-    if (!review || review.organizationId !== args.organizationId) throw new ConvexError("not_found_or_forbidden");
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
     const previous = await ctx.db.query("reviewEvents").withIndex("by_review", (q) => q.eq("reviewId", args.reviewId)).order("desc").first();
     if (args.sequence !== (previous?.sequence ?? 0) + 1) throw new ConvexError("invalid_event_sequence");
     return ctx.db.insert("reviewEvents", {
@@ -105,6 +105,7 @@ export const claimActiveReview = internalMutation({
   handler: async (ctx, args) => {
     const review = await ctx.db.get(args.reviewId);
     if (!review || terminalStatuses.has(review.status)) throw new ConvexError("review_not_active");
+    await assertRepositoryParent(ctx.db, review.organizationId, review.repositoryId);
     const existing = await ctx.db.query("reviewLocks").withIndex("by_scope", (q) =>
       q.eq("repositoryId", review.repositoryId).eq("prNumber", review.prNumber)
         .eq("headSha", review.headSha).eq("mode", review.mode)).unique();
@@ -123,8 +124,7 @@ export const reserveSideEffect = internalMutation({
     operationKey: v.string(), type: value.sideEffectType, requestHash: v.string(), now: v.number(),
   },
   handler: async (ctx, args) => {
-    const review = await ctx.db.get(args.reviewId);
-    if (!review || review.organizationId !== args.organizationId) throw new ConvexError("not_found_or_forbidden");
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
     const existing = await ctx.db.query("githubSideEffects").withIndex("by_repo_operation_key", (q) => q.eq("repositoryId", review.repositoryId).eq("operationKey", args.operationKey)).unique();
     if (existing) {
       if (existing.requestHash !== args.requestHash || existing.reviewId !== args.reviewId) throw new ConvexError("idempotency_key_conflict");
@@ -147,8 +147,8 @@ export const recordAutofixAttempt = internalMutation({
   },
   handler: async (ctx, args) => {
     if (!Number.isInteger(args.attemptNumber) || args.attemptNumber < 1 || args.attemptNumber > 6) throw new ConvexError("attempt_out_of_bounds");
-    const review = await ctx.db.get(args.reviewId);
-    if (!review || review.organizationId !== args.organizationId || review.mode !== "autofix") throw new ConvexError("invalid_autofix_review");
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
+    if (review.mode !== "autofix") throw new ConvexError("invalid_autofix_review");
     const existing = await ctx.db.query("autofixAttempts").withIndex("by_review_attempt", (q) => q.eq("reviewId", args.reviewId).eq("attemptNumber", args.attemptNumber)).unique();
     if (existing) throw new ConvexError("attempt_already_recorded");
     const id = await ctx.db.insert("autofixAttempts", args);
@@ -166,8 +166,11 @@ export const recordAutofixRound = internalMutation({
   },
   handler: async (ctx, args) => {
     if (!Number.isInteger(args.roundNumber) || args.roundNumber < 1 || args.roundNumber > 3) throw new ConvexError("round_out_of_bounds");
-    const [review, attempt] = await Promise.all([ctx.db.get(args.reviewId), ctx.db.get(args.attemptId)]);
-    if (!review || review.organizationId !== args.organizationId || !attempt || attempt.reviewId !== args.reviewId || attempt.outcome !== "applied") throw new ConvexError("round_requires_applied_attempt");
+    const [review, attempt] = await Promise.all([
+      assertReviewParent(ctx.db, args.organizationId, args.reviewId),
+      assertAttemptParent(ctx.db, args.organizationId, args.reviewId, args.attemptId),
+    ]);
+    if (attempt.outcome !== "applied") throw new ConvexError("round_requires_applied_attempt");
     if (!args.completedValidation) throw new ConvexError("round_requires_validation");
     const existing = await ctx.db.query("autofixRounds").withIndex("by_review_round", (q) => q.eq("reviewId", args.reviewId).eq("roundNumber", args.roundNumber)).unique();
     if (existing) throw new ConvexError("round_already_recorded");
