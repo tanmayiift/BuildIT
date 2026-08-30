@@ -244,7 +244,7 @@ describe("Convex tenant isolation", () => {
     const alpha = await seedTenant(t, "credential-alpha", userId);
     await t.run(ctx => ctx.db.insert("userProfiles", { userId, githubUserId: 42, githubLogin: "alice", lastAuthenticatedAt: Date.now(), updatedAt: Date.now() }));
     const signedIn = t.withIdentity({ subject: `${userId}|credential-session` });
-    await expect(signedIn.query(api.integrations.authorizeCredentialWrite, { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId }))
+    await expect(signedIn.mutation(api.integrations.authorizeCredentialWrite, { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId }))
       .resolves.toEqual({ actorId: userId });
     const result = await signedIn.mutation(api.integrations.storeEncryptedCredential, {
       organizationId: alpha.organizationId, repositoryId: alpha.repositoryId,
@@ -264,9 +264,19 @@ describe("Convex tenant isolation", () => {
     const alpha = await seedTenant(t, "credential-owner", userId);
     const beta = await seedTenant(t, "credential-other", "bob");
     await t.run(ctx => ctx.db.insert("userProfiles", { userId, githubUserId: 43, githubLogin: "alice", lastAuthenticatedAt: Date.now(), updatedAt: Date.now() }));
-    await expect(t.withIdentity({ subject: `${userId}|credential-session` }).query(api.integrations.authorizeCredentialWrite, {
+    await expect(t.withIdentity({ subject: `${userId}|credential-session` }).mutation(api.integrations.authorizeCredentialWrite, {
       organizationId: alpha.organizationId, repositoryId: beta.repositoryId,
     })).rejects.toThrow("not_found_or_forbidden");
+  });
+
+  it("stops credential validation before the eleventh provider attempt in one window", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId: 45, githubLogin: "alice" }));
+    const alpha = await seedTenant(t, "credential-rate", userId);
+    await t.run(ctx => ctx.db.insert("userProfiles", { userId, githubUserId: 45, githubLogin: "alice", lastAuthenticatedAt: Date.now(), updatedAt: Date.now() }));
+    const signedIn = t.withIdentity({ subject: `${userId}|credential-session` });
+    for (let attempt = 0; attempt < 10; attempt += 1) await expect(signedIn.mutation(api.integrations.authorizeCredentialWrite, { organizationId: alpha.organizationId })).resolves.toEqual({ actorId: userId });
+    await expect(signedIn.mutation(api.integrations.authorizeCredentialWrite, { organizationId: alpha.organizationId })).rejects.toThrow("rate_limited");
   });
 
   it("revokes only a credential in the active admin's organization and records no plaintext", async () => {

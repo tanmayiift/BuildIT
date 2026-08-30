@@ -6,7 +6,7 @@ type ConvexResult = { status?: unknown; value?: unknown; errorMessage?: unknown;
 
 function stableConvexError(result: ConvexResult): Error {
   const text = `${String(result.errorMessage ?? "")} ${JSON.stringify(result.errorData ?? "")}`;
-  for (const code of ["authentication_required", "not_found_or_forbidden", "recent_reauthentication_required", "credential_scope_already_exists"])
+  for (const code of ["authentication_required", "not_found_or_forbidden", "recent_reauthentication_required", "credential_scope_already_exists", "rate_limited"])
     if (text.includes(code)) return new Error(code);
   return new Error("credential_store_unavailable");
 }
@@ -29,7 +29,7 @@ export class ConvexCredentialGateway implements CredentialStore {
     if (!/^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.convex\.cloud$/.test(convexUrl) || !token) throw new Error("credential_gateway_configuration_invalid");
     this.authorize = async input => {
       if (input.token !== this.token) throw new Error("authentication_required");
-      const value = await callConvex(this.convexUrl, this.token, "query", "integrations:authorizeCredentialWrite", {
+      const value = await callConvex(this.convexUrl, this.token, "mutation", "integrations:authorizeCredentialWrite", {
         organizationId: input.organizationId, ...(input.repositoryId ? { repositoryId: input.repositoryId } : {}),
       });
       if (!value || typeof value !== "object" || typeof (value as { actorId?: unknown }).actorId !== "string") throw new Error("credential_store_unavailable");

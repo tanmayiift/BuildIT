@@ -19,13 +19,21 @@ export const listProviderCredentials = query({
   },
 });
 
-export const authorizeCredentialWrite = query({
+export const authorizeCredentialWrite = mutation({
   args: { organizationId: v.id("organizations"), repositoryId: v.optional(v.id("repositories")) },
   handler: async (ctx, args) => {
     const access = args.repositoryId
       ? await requireRepositoryRole(ctx, args.repositoryId, "admin", args.organizationId)
       : await requireOrganizationRole(ctx, args.organizationId, "admin");
     await requireRecentGitHubLogin(ctx, access.userId);
+    const now = Date.now(), windowStart = Math.floor(now / 900_000) * 900_000;
+    const limit = await ctx.db.query("credentialRateLimits").withIndex("by_org_user_action_window", q => q
+      .eq("organizationId", args.organizationId).eq("userId", access.userId)
+      .eq("action", "credential_validate").eq("windowStart", windowStart)).unique();
+    if (limit && limit.attemptCount >= 10) throw new Error("rate_limited");
+    if (limit) await ctx.db.patch(limit._id, { attemptCount: limit.attemptCount + 1, updatedAt: now });
+    else await ctx.db.insert("credentialRateLimits", { organizationId: args.organizationId, userId: access.userId,
+      action: "credential_validate", windowStart, attemptCount: 1, updatedAt: now });
     return { actorId: access.userId };
   },
 });

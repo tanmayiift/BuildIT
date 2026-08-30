@@ -53,11 +53,11 @@ export async function handleCredentialSave(request: Request, input: {
     return json(201, { credential: saved }, origin);
   } catch (error) {
     const code = error instanceof Error ? error.message : "credential_save_failed";
-    const safe = code === "recent_reauthentication_required" ? code
+    const safe = code === "recent_reauthentication_required" || code === "rate_limited" ? code
       : code === "invalid_key" ? code
         : code === "not_found_or_forbidden" || code === "authentication_required" ? "not_found_or_forbidden"
           : "credential_save_failed";
-    const status = safe === "invalid_key" ? 422 : safe === "recent_reauthentication_required" ? 401 : safe === "not_found_or_forbidden" ? 404 : 503;
+    const status = safe === "invalid_key" ? 422 : safe === "rate_limited" ? 429 : safe === "recent_reauthentication_required" ? 401 : safe === "not_found_or_forbidden" ? 404 : 503;
     return json(status, { error: safe }, origin);
   }
 }

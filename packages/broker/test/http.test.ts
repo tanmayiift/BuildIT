@@ -40,4 +40,12 @@ describe("credential broker HTTP boundary", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: "credential_save_failed" });
   });
+
+  it("returns a stable 429 before provider validation when the tenant limit is reached", async () => {
+    const f = fixture(); f.authorize.mockRejectedValue(new Error("rate_limited"));
+    const response = await handleCredentialSave(request({ organizationId: "organization-a", provider: "gemini", apiKey: "secret-provider-key-1234" }), { allowedOrigin: origin, authorize: f.authorize, broker: f.broker as never });
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: "rate_limited" });
+    expect(f.broker.save).not.toHaveBeenCalled();
+  });
 });

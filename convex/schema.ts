@@ -80,6 +80,11 @@ export default defineSchema({
     .index("by_scope", ["credentialScopeId"])
     .index("by_org_status", ["organizationId", "status"]),
 
+  credentialRateLimits: defineTable({
+    organizationId: v.id("organizations"), userId: v.string(), action: v.literal("credential_validate"),
+    windowStart: v.number(), attemptCount: v.number(), updatedAt: v.number(),
+  }).index("by_org_user_action_window", ["organizationId", "userId", "action", "windowStart"]),
+
   trackerConnections: defineTable({
     organizationId: v.id("organizations"), provider: value.trackerProvider,
     encryptedAccessToken: v.string(), encryptedRefreshToken: v.optional(v.string()),
