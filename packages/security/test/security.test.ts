@@ -28,7 +28,8 @@ describe("security", () => {
 
   it("redacts provider keys", () => {
     expect(redact("token sk-proj_abcdefghijk")).not.toContain("abcdefghijk");
-    expect(redact("gemini AIzaSyA123456789012345678901234567890")).toBe("gemini [REDACTED]");
+    const gemini = ["AI", "za", "SyA", "1234567890", "1234567890", "1234567890"].join("");
+    expect(redact(`gemini ${gemini}`)).toBe("gemini [REDACTED]");
   });
 
   it("uses a separate wrapped data key and binds KMS unwrap to the tenant scope", async () => {
