@@ -1,6 +1,7 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import { fromWebToken } from "@aws-sdk/credential-providers";
-import { ArtifactBroker, handleExecution, S3GrantConsumer } from "../src/index.js";
+import { ArtifactBroker, S3GrantConsumer } from "../src/artifacts.js";
+import { handleExecution } from "../src/execution-http.js";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error("execution_broker_configuration_missing"); return value; }
 async function route(request: Request) {

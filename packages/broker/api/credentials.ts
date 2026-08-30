@@ -1,6 +1,8 @@
 import { fromWebToken } from "@aws-sdk/credential-providers";
 import { AwsKmsClient } from "@buildit/security";
-import { ConvexCredentialGateway, CredentialBroker, handleCredentialSave } from "../src/index.js";
+import { ConvexCredentialGateway } from "../src/convex-gateway.js";
+import { CredentialBroker } from "../src/index.js";
+import { handleCredentialSave } from "../src/http.js";
 
 function required(name: string) {
   const value = process.env[name];

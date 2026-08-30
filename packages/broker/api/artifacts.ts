@@ -1,6 +1,7 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import { fromWebToken } from "@aws-sdk/credential-providers";
-import { ArtifactBroker, handleArtifactRequest, S3GrantConsumer } from "../src/index.js";
+import { ArtifactBroker, S3GrantConsumer } from "../src/artifacts.js";
+import { handleArtifactRequest } from "../src/artifact-http.js";
 
 function required(name: string) {
   const value = process.env[name];
