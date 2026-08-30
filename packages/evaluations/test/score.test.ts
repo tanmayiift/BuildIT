@@ -12,4 +12,6 @@ describe("accuracy release scorecard", () => {
   it("rejects duplicate repetitions that could fake stability",()=>{const run=passing();run.findings[1]={...run.findings[1]!,repetition:0};expect(releaseGate(run).failures).toContain("duplicate_repetition")});
   it("rejects label changes within repeated runs of one frozen case",()=>{const run=passing();run.findings[1]={...run.findings[1]!,expected:!run.findings[1]!.expected};expect(releaseGate(run).failures).toContain("repeat_label_inconsistent")});
   it("rejects invalid latency or cost evidence",()=>{const run=passing();run.costUsd=[Number.NaN];expect(releaseGate(run).failures).toContain("measurement_invalid")});
+  it("rejects missing or extra repetitions instead of weighting selected cases",()=>{const run=passing();run.findings=run.findings.slice(1);expect(releaseGate(run).failures).toContain("repetition_sequence_invalid")});
+  it("rejects one frozen case split across multiple repeat groups",()=>{const run=passing();run.findings[1]={...run.findings[1]!,repeatGroup:"manufactured-group"};const failures=releaseGate(run).failures;expect(failures).toContain("case_repeat_group_inconsistent");expect(failures).toContain("repetition_sequence_invalid")});
 });
