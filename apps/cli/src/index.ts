@@ -15,6 +15,7 @@ import {
   requestRemoteCommand,
   watchRemoteStatus,
 } from "./remote-review.js";
+import {doctorChecks} from "./doctor.js";
 
 const args = process.argv.slice(2),
   command = args[0] ?? "help",
@@ -63,19 +64,21 @@ async function main() {
     return 0;
   }
   if (command === "doctor") {
+    const checks=doctorChecks();
     const providers = (["anthropic", "openai", "gemini"] as Provider[]).map(
         (provider) => ({ provider, status: credentialStatus(provider) }),
       ),
       result = {
-        node: process.version,
-        git: true,
+        node: checks.node,
+        git: checks.git,
+        github:checks.github,
         providers,
         note: "Keys remain in the environment or OS keychain. Deterministic local checks do not require one.",
       };
     process.stdout.write(
-      `${json ? JSON.stringify(result) : `node: ${result.node}\ngit: true\n${providers.map((item) => `${item.provider}: ${item.status}`).join("\n")}\n${result.note}`}\n`,
+      `${json ? JSON.stringify(result) : `node: ${result.node.version} (${result.node.ok?"ok":"unsupported"})\ngit: ${result.git.ok?"ok":"missing"}\ngithub: ${result.github.authenticated?(result.github.repositoryAvailable?"connected":"signed in; no repository here"):"not signed in"}\n${providers.map((item) => `${item.provider}: ${item.status}`).join("\n")}\n${result.note}`}\n`,
     );
-    return 0;
+    return checks.node.ok&&checks.git.ok?0:3;
   }
   if (command === "review") {
     if (args.includes("--remote"))

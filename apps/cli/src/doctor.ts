@@ -1,0 +1,3 @@
+import {spawnSync} from "node:child_process";
+type Run=(file:string,args:string[])=>{status:number|null;stdout?:string|Buffer};
+export function doctorChecks(run:Run=(file,args)=>spawnSync(file,args,{encoding:"utf8",timeout:10_000,env:{HOME:process.env.HOME,PATH:process.env.PATH,GH_HOST:process.env.GH_HOST}})){const git=run("git",["--version"]),gh=run("gh",["auth","status"]),repo=run("gh",["repo","view","--json","nameWithOwner"]);return{node:{ok:Number(process.versions.node.split(".")[0])>=22,version:process.version},git:{ok:git.status===0},github:{authenticated:gh.status===0,repositoryAvailable:repo.status===0}}}
