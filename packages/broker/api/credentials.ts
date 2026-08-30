@@ -16,7 +16,7 @@ export default async function handler(request: Request) {
     const gateway = new ConvexCredentialGateway(required("CONVEX_URL"), token);
     const credentials = fromWebToken({ roleArn: required("AWS_ROLE_ARN"), webIdentityToken: required("VERCEL_OIDC_TOKEN"),
       roleSessionName: `buildit-broker-${Date.now()}`, clientConfig: { region } });
-    const broker = new CredentialBroker(gateway, new AwsKmsClient({ region, credentials }), required("AWS_KMS_KEY_ID"));
+    const broker = new CredentialBroker(gateway, new AwsKmsClient({ config: { region, credentials } }), required("AWS_KMS_KEY_ID"));
     return await handleCredentialSave(request, { allowedOrigin: required("BUILDIT_WEB_ORIGIN"), authorize: gateway.authorize, broker });
   } catch {
     return Response.json({ error: "broker_unavailable" }, { status: 503, headers: { "cache-control": "no-store" } });

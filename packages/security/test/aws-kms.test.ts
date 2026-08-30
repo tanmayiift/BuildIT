@@ -12,7 +12,7 @@ const context: KmsContext = {
 describe("AWS KMS adapter", () => {
   it("generates an AES-256 data key with the complete tenant context", async () => {
     const send = vi.fn().mockResolvedValue({ Plaintext: new Uint8Array(32).fill(1), CiphertextBlob: new Uint8Array([2]) });
-    const kms = new AwsKmsClient({ send } as never);
+    const kms = new AwsKmsClient({ client: { send } });
     await expect(kms.generateDataKey({ keyId: "key-a", encryptionContext: context })).resolves.toMatchObject({ encryptedKey: new Uint8Array([2]) });
     const command = send.mock.calls[0]![0] as GenerateDataKeyCommand;
     expect(command).toBeInstanceOf(GenerateDataKeyCommand);
@@ -21,7 +21,7 @@ describe("AWS KMS adapter", () => {
 
   it("decrypts only with the original key and tenant context", async () => {
     const send = vi.fn().mockResolvedValue({ Plaintext: new Uint8Array(32).fill(3) });
-    const kms = new AwsKmsClient({ send } as never);
+    const kms = new AwsKmsClient({ client: { send } });
     await kms.decryptDataKey({ keyId: "key-a", encryptedKey: new Uint8Array([2]), encryptionContext: context });
     const command = send.mock.calls[0]![0] as DecryptCommand;
     expect(command.input.KeyId).toBe("key-a");
@@ -31,7 +31,7 @@ describe("AWS KMS adapter", () => {
 
   it("rewraps without requesting the plaintext data key", async () => {
     const send = vi.fn().mockResolvedValue({ CiphertextBlob: new Uint8Array([4]) });
-    const kms = new AwsKmsClient({ send } as never);
+    const kms = new AwsKmsClient({ client: { send } });
     await expect(kms.rewrapDataKey({ sourceKeyId: "key-a", destinationKeyId: "key-b", encryptedKey: new Uint8Array([2]), encryptionContext: context })).resolves.toEqual(new Uint8Array([4]));
     const command = send.mock.calls[0]![0] as ReEncryptCommand;
     expect(command.input.SourceEncryptionContext).toEqual(context);
@@ -39,7 +39,7 @@ describe("AWS KMS adapter", () => {
   });
 
   it("fails closed when KMS omits key material", async () => {
-    const kms = new AwsKmsClient({ send: vi.fn().mockResolvedValue({}) } as never);
+    const kms = new AwsKmsClient({ client: { send: vi.fn().mockResolvedValue({}) } });
     await expect(kms.generateDataKey({ keyId: "key-a", encryptionContext: context })).rejects.toThrow("kms_missing_plaintext_key");
     await expect(kms.decryptDataKey({ keyId: "key-a", encryptedKey: new Uint8Array([2]), encryptionContext: context })).rejects.toThrow("kms_missing_plaintext_key");
   });
