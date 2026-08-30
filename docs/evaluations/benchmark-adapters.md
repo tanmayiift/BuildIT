@@ -12,3 +12,5 @@ The immutable release population is declared in `packages/evaluations/src/releas
 Official benchmark labels prove benchmark performance, not BuildIT customer accuracy. A production accuracy claim additionally requires hidden, pre-model human labels. Critical cases require two independent reviewers; disagreements require a separate adjudicator. Synthetic labels, labels created after the model run, gold exposed to model input, missing cases, and uncalibrated model judges fail the release evidence gate.
 
 SWE-bench Verified is Python-only and measures issue-to-patch execution. It cannot substitute for multilingual review-finding accuracy. AACR-Bench supplies ten-language review coverage and true negative examples. BuildIT reports the two results separately.
+
+Run `pnpm eval:populations` to download the pinned artifacts into ignored `.local/benchmarks`, verify every checksum, and parse all 351 AACR rows plus all 500 SWE-bench Verified rows through their official-schema adapters. The command emits counts and provenance only; it never prints benchmark source, comments, patches, or test gold.

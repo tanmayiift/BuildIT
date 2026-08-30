@@ -41,17 +41,18 @@ const tests = (value: unknown, code: string): string[] => {
 };
 
 export function adaptAacrReview(value: unknown, provenance: BenchmarkSource) {
-  const row = object(value, "aacr_row_invalid"), repo = repository(row.repo), baseSha = sha(row.base_commit, "aacr_base_invalid"), headSha = sha(row.head_commit, "aacr_head_invalid");
+  const row = object(value, "aacr_row_invalid"), prUrl = text(row.githubPrUrl, "aacr_pr_url_invalid"), match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/pull\/(\d+)$/.exec(prUrl);
+  if (!match) throw new Error("aacr_pr_url_invalid");
+  const repo = repository(match[1]), baseSha = sha(row.source_commit, "aacr_base_invalid"), headSha = sha(row.target_commit, "aacr_head_invalid");
   if (baseSha === headSha) throw new Error("aacr_commit_range_invalid");
-  const cloneUrl = row.clone_url === undefined ? `https://github.com/${repo}.git` : text(row.clone_url, "aacr_clone_url_invalid");
-  if (cloneUrl !== `https://github.com/${repo}.git`) throw new Error("aacr_clone_url_invalid");
-  if (!Array.isArray(row.reference_comments) || row.reference_comments.length === 0) throw new Error("aacr_gold_invalid");
-  const comments = row.reference_comments.map(value => {
-    const item = object(value, "aacr_comment_invalid"), startLine = item.start_line, endLine = item.end_line;
-    if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || Number(startLine) < 1 || Number(endLine) < Number(startLine) || !["left", "right"].includes(String(item.side))) throw new Error("aacr_comment_invalid");
-    return { path: text(item.path, "aacr_comment_invalid"), startLine: Number(startLine), endLine: Number(endLine), side: item.side as "left" | "right", text: text(item.text, "aacr_comment_invalid") };
+  const cloneUrl = `https://github.com/${repo}.git`;
+  if (!Array.isArray(row.comments) || row.comments.length === 0) throw new Error("aacr_gold_invalid");
+  const comments = row.comments.map(value => {
+    const item = object(value, "aacr_comment_invalid"), fromLine = item.from_line, toLine = item.to_line;
+    if (!Number.isInteger(fromLine) || !Number.isInteger(toLine) || Number(fromLine) < 1 || Number(toLine) < 1 || !["left", "right"].includes(String(item.side))) throw new Error("aacr_comment_invalid");
+    return { path: text(item.path, "aacr_comment_invalid"), startLine: Math.min(Number(fromLine), Number(toLine)), endLine: Math.max(Number(fromLine), Number(toLine)), side: item.side as "left" | "right", text: text(item.note, "aacr_comment_invalid") };
   });
-  return { source: source(provenance, "AACR-Bench", "Apache-2.0"), task: Object.freeze({ id: text(row.instance_id, "aacr_id_invalid"), repository: repo, baseSha, headSha, cloneUrl }), gold: Object.freeze({ comments }) };
+  return { source: source(provenance, "AACR-Bench", "Apache-2.0"), task: Object.freeze({ id: `${repo}#${match[2]}`, repository: repo, baseSha, headSha, cloneUrl }), gold: Object.freeze({ comments }) };
 }
 
 export function adaptSweBenchAutofix(value: unknown, provenance: BenchmarkSource) {
