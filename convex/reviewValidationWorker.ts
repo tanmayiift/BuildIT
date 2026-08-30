@@ -34,6 +34,7 @@ export const validate = internalAction({
       readGrant: issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(context.id), storageKey: context.storageKey, operation: "read" }, artifactSecret) }));
     const artifactsHash = sha256Json(descriptors.map(({ readGrant: _, ...item }) => item)), plansHash = sha256Json({ runnerImageVersion: scope.runnerImageVersion, runtime, install, checks });
     const executionGrant = issueExecutionGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), baseSha: scope.baseSha, headSha: scope.headSha, artifactsHash, plansHash, ttlMs: 120_000 }, executionSecret);
+    await ctx.runQuery(internal.durableReview.assertActive, args);
     const response = await fetch(`${brokerUrl}/api/execute`, { method: "POST", headers: { authorization: `Bearer ${executionGrant}`, "content-type": "application/json" }, body: JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), baseSha: scope.baseSha, headSha: scope.headSha, runnerImageVersion: scope.runnerImageVersion, runtime, artifacts: descriptors, install, checks }) });
     const output = await response.json() as ExecutionResponse & { error?: string };
     if (!response.ok) throw new Error(output.error ?? `validation_execution_${response.status}`);
@@ -43,6 +44,7 @@ export const validate = internalAction({
     const checksum = createHash("sha256").update(outputBody).digest("hex"), now = Date.now();
     const reserved: { artifactId: Id<"artifacts">; storageKey: string } = await ctx.runMutation(internal.reviewValidationData.reserveOutput, { ...args, checksum, size: outputBody.byteLength, now });
     const writeGrant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(reserved.artifactId), storageKey: reserved.storageKey, operation: "write" }, artifactSecret, now);
+    await ctx.runQuery(internal.durableReview.assertActive, args);
     const upload = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${writeGrant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body: outputBody });
     if (!upload.ok) throw new Error(`validation_artifact_upload_${upload.status}`);
     await ctx.runMutation(internal.reviewValidationData.completeValidation, { ...args, artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, summaries, manager, now: Date.now() });

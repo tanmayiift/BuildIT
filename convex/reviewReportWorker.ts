@@ -58,6 +58,7 @@ export const compose = internalAction({
     const checksum = createHash("sha256").update(body).digest("hex"), now = Date.now();
     const reserved: { artifactId: Id<"artifacts">; storageKey: string } = await ctx.runMutation(internal.reviewReportData.reserveOutput, { ...args, checksum, size: body.byteLength, now });
     const grant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(reserved.artifactId), storageKey: reserved.storageKey, operation: "write" }, secret, now);
+    await ctx.runQuery(internal.durableReview.assertActive, args);
     const upload = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${grant}`, "content-type": "text/markdown", "x-buildit-sha256": checksum }, body });
     if (!upload.ok) throw new Error(`report_artifact_upload_${upload.status}`);
     await ctx.runMutation(internal.reviewReportData.completeOutput, { ...args, artifactId: reserved.artifactId, checksum, size: body.byteLength });

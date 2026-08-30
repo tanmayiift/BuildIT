@@ -3,6 +3,20 @@ import { describe, expect, it } from "vitest";
 
 const source = readFileSync("convex/reviewAutofixWorker.ts", "utf8");
 
+function expectReviewFence(file: string, marker: string) {
+  const worker = readFileSync(file, "utf8");
+  const markerIndex = worker.indexOf(marker);
+  expect(markerIndex, `${file}: ${marker}`).toBeGreaterThan(-1);
+  const fenceIndex = worker.lastIndexOf(
+    "ctx.runQuery(internal.durableReview.assertActive, args)",
+    markerIndex,
+  );
+  expect(fenceIndex, `${file}: ${marker} has a fence`).toBeGreaterThan(-1);
+  expect(markerIndex - fenceIndex, `${file}: ${marker} uses a fresh fence`).toBeLessThan(
+    350,
+  );
+}
+
 function expectFreshFenceBefore(marker: string, occurrence = 1) {
   let markerIndex = -1;
   for (let index = 0; index < occurrence; index += 1) {
@@ -27,5 +41,18 @@ describe("Autofix cancellation boundary", () => {
     expectFreshFenceBefore("writer.upsertCheckRun(");
     expectFreshFenceBefore("writer.upsertIssueComment(", 1);
     expectFreshFenceBefore("writer.upsertIssueComment(", 2);
+  });
+});
+
+describe("normal review cancellation boundary", () => {
+  it("fences costly and write-capable external stages", () => {
+    expectReviewFence("convex/reviewContextWorker.ts", "github.tokenFor(");
+    expectReviewFence("convex/reviewContextWorker.ts", "Promise.all([");
+    expectReviewFence("convex/reviewContextWorker.ts", "fetch(`${brokerUrl}/api/artifacts`");
+    expectReviewFence("convex/reviewValidationWorker.ts", "fetch(`${brokerUrl}/api/execute`");
+    expectReviewFence("convex/reviewValidationWorker.ts", "method: \"PUT\"");
+    expectReviewFence("convex/reviewAnalysisWorker.ts", "fetch(`${brokerUrl}/api/model`");
+    expectReviewFence("convex/reviewAnalysisWorker.ts", "method: \"PUT\"");
+    expectReviewFence("convex/reviewReportWorker.ts", "method: \"PUT\"");
   });
 });

@@ -15,8 +15,10 @@ export const gather = internalAction({
     const scope: { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; baseSha: string; executionGeneration: number; expiresAt: number } = await ctx.runQuery(internal.reviewArtifactData.contextScope, args);
     const github = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
     const tokenScope = { installationId: scope.installationId, repositoryId: scope.githubRepositoryId, stage: "review" as const };
+    await ctx.runQuery(internal.durableReview.assertActive, args);
     const token = await github.tokenFor(tokenScope);
     try {
+      await ctx.runQuery(internal.durableReview.assertActive, args);
       const [headSnapshot, baseSnapshot, pullContext]: [RepositorySnapshot, RepositorySnapshot, PullRequestContext] = await Promise.all([
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
           commitSha: scope.headSha, limits: { maxFiles: 10_000, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
@@ -42,6 +44,7 @@ export const gather = internalAction({
           const reserved: { artifactId: Id<"artifacts">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; storageKey: string; expiresAt: number } = await ctx.runMutation(internal.reviewArtifactData.reserve, { ...args, checksum, size: body.byteLength, chunkIndex: chunk.chunkIndex, revision, now });
           const grant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
             artifactId: String(reserved.artifactId), storageKey: reserved.storageKey, operation: "write" }, secret, now);
+          await ctx.runQuery(internal.durableReview.assertActive, args);
           const response = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${grant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body });
           if (!response.ok) throw new Error(`artifact_upload_${response.status}`);
           const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" ? "full" as const : "partial" as const;

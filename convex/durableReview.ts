@@ -1,11 +1,40 @@
 import { vWorkflowId, type WorkflowId } from "@convex-dev/workflow";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { durableReviewStages } from "./lib/durableStages";
 import { terminalStatuses } from "./lib/lifecycle";
 import { reviewWorkflowManager } from "./workflowManager";
 import { assertReviewParent } from "./lib/parentConsistency";
+
+const executionArgs = {
+  organizationId: v.id("organizations"),
+  reviewId: v.id("reviews"),
+  expectedHeadSha: v.string(),
+  expectedGeneration: v.number(),
+};
+
+export const assertActive = internalQuery({
+  args: executionArgs,
+  handler: async (ctx, args) => {
+    const review = await assertReviewParent(
+      ctx.db,
+      args.organizationId,
+      args.reviewId,
+    );
+    if (
+      review.headSha !== args.expectedHeadSha ||
+      review.executionGeneration !== args.expectedGeneration ||
+      review.isStale ||
+      review.cancellationRequestedAt ||
+      review.status === "cancelling" ||
+      review.status === "cancelled" ||
+      terminalStatuses.has(review.status)
+    )
+      throw new ConvexError("review_cancelled_or_replaced");
+    return true;
+  },
+});
 
 export const checkpoint = internalMutation({
   args: {

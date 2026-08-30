@@ -1777,6 +1777,15 @@ describe("Convex review state integrity", () => {
       leaseMs: 100,
     });
     expect(lease.generation).toBe(0);
+    const execution = {
+      organizationId: seeded.organizationId,
+      reviewId: seeded.reviewId,
+      expectedHeadSha: "a".repeat(40),
+      expectedGeneration: 0,
+    };
+    await expect(
+      t.query(internal.durableReview.assertActive, execution),
+    ).resolves.toBe(true);
     await t.mutation(internal.reviewState.requestCancellation, {
       reviewId: seeded.reviewId,
       actorId: "alice",
@@ -1798,6 +1807,9 @@ describe("Convex review state integrity", () => {
         now: 3,
       }),
     ).rejects.toThrow("cancelled_or_replaced");
+    await expect(
+      t.query(internal.durableReview.assertActive, execution),
+    ).rejects.toThrow("review_cancelled_or_replaced");
   });
 
   it("resolves cancellation targets only inside the verified repository and pull request", async () => {

@@ -89,6 +89,7 @@ export const analyze = internalAction({
         const body = JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), stage, credential: scope.credential, request });
         const grant = issueModelInvocationGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), credentialScopeId: scope.credential.id,
           provider: scope.provider, model, stage, requestHash: createHash("sha256").update(body).digest("hex") }, modelSecret);
+        await ctx.runQuery(internal.durableReview.assertActive, args);
         const response = await fetch(`${brokerUrl}/api/model`, { method: "POST", headers: { authorization: `Bearer ${grant}`, "content-type": "application/json" }, body });
         const output = await response.json() as { result?: ProviderResult; error?: string };
         if (!response.ok || !output.result) throw new Error(output.error ?? `model_stage_${response.status}`);
@@ -119,6 +120,7 @@ export const analyze = internalAction({
     const checksum = createHash("sha256").update(outputBody).digest("hex"), now = Date.now();
     const reserved: { artifactId: Id<"artifacts">; storageKey: string } = await ctx.runMutation(internal.reviewModelData.reserveOutput, { ...args, checksum, size: outputBody.byteLength, now });
     const writeGrant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(reserved.artifactId), storageKey: reserved.storageKey, operation: "write" }, artifactSecret, now);
+    await ctx.runQuery(internal.durableReview.assertActive, args);
     const upload = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${writeGrant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body: outputBody });
     if (!upload.ok) throw new Error(`analysis_artifact_upload_${upload.status}`);
     const inputTokens = usage.reduce((sum, item) => sum + item.inputTokens, 0), outputTokens = usage.reduce((sum, item) => sum + item.outputTokens, 0);
