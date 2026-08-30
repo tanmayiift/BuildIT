@@ -1,10 +1,11 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { AccountStatus } from "./account-status";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { ConnectionBanner, SetupProgress } from "./live-connections";
+import { WorkspaceRouteBoundary } from "./workspace-route-boundary";
 
 const work = [
   { label: "Overview", href: "/", mark: "OV" },
@@ -22,8 +23,9 @@ const settings = [
   { label: "Audit log", href: "/audit" },
 ];
 
-function NavLink({ item, current }: { item: { label: string; href: string; mark?: string }; current: boolean }) {
-  return <a className="nav-link" data-current={current || undefined} href={item.href} aria-current={current ? "page" : undefined}>
+function NavLink({ item, current, sampleTour }: { item: { label: string; href: string; mark?: string }; current: boolean; sampleTour: boolean }) {
+  const href = sampleTour ? `${item.href}?tour=1` : item.href;
+  return <a className="nav-link" data-current={current || undefined} href={href} aria-current={current ? "page" : undefined}>
     {item.mark ? <span className="nav-mark" aria-hidden="true">{item.mark}</span> : null}<span>{item.label}</span>
   </a>;
 }
@@ -34,19 +36,20 @@ function isCurrent(pathname: string, href: string) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const sampleTour = useSearchParams().get("tour") === "1";
   return <>
     <ConnectionBanner />
     <div className="shell">
       <aside className="side">
         <div className="brand-row"><span className="brand-glyph" aria-hidden="true">B</span><a className="brand" href="/">BuildIT<span>Evidence room</span></a></div>
         <WorkspaceSwitcher />
-        <nav aria-label="Primary"><p className="nav-heading">Workspace</p>{work.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} />)}<p className="nav-heading">Operations</p>{operations.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} />)}</nav>
-        <nav className="settings-nav" aria-label="Organization settings">{settings.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} />)}</nav>
+        <nav aria-label="Primary"><p className="nav-heading">Workspace</p>{work.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} sampleTour={sampleTour} />)}<p className="nav-heading">Operations</p>{operations.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} sampleTour={sampleTour} />)}</nav>
+        <nav className="settings-nav" aria-label="Organization settings">{settings.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} sampleTour={sampleTour} />)}</nav>
         <div className="account"><AccountStatus /></div>
       </aside>
       <main className="main">
-        <header className="top"><div><p className="top-kicker">Workspace</p><strong>{pathname.startsWith("/reviews/") ? "Review detail" : "BuildIT"}</strong></div><div className="top-actions"><a className="quiet-link" href="/data-handling">Data & privacy</a><SetupProgress /><AccountStatus compact /></div><details className="mobile-nav"><summary>Menu</summary><nav>{[...work, ...operations, ...settings].map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} />)}</nav></details></header>
-        {children}
+        <header className="top"><div><p className="top-kicker">Workspace</p><strong>{pathname.startsWith("/reviews/") ? "Review detail" : "BuildIT"}</strong></div><div className="top-actions"><a className="quiet-link" href="/data-handling">Data & privacy</a><SetupProgress /><AccountStatus compact /></div><details className="mobile-nav"><summary>Menu</summary><nav>{[...work, ...operations, ...settings].map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} sampleTour={sampleTour} />)}</nav></details></header>
+        <WorkspaceRouteBoundary>{children}</WorkspaceRouteBoundary>
       </main>
     </div>
   </>;

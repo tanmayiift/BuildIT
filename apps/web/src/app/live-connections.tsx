@@ -3,6 +3,7 @@
 import { useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { ActionLink } from "./action";
+import { useSampleTour } from "./workspace-route-boundary";
 
 type Connection = {
   state: "signed_out" | "no_workspace" | "installation_required" | "installation_unavailable" | "no_repositories_selected" | "connected";
@@ -15,7 +16,9 @@ const connectionQuery = makeFunctionReference<"query", Record<string, never>, Co
 const signedOutConnection: Connection = { state: "signed_out", organization: null, installations: [], repositories: [] };
 function useConnection() {
   const { isAuthenticated, isLoading } = useConvexAuth();
-  const connection = useQuery(connectionQuery, isAuthenticated ? {} : "skip");
+  const sampleTour = useSampleTour();
+  const connection = useQuery(connectionQuery, isAuthenticated && !sampleTour ? {} : "skip");
+  if (sampleTour) return signedOutConnection;
   if (!isLoading && !isAuthenticated) return signedOutConnection;
   return connection;
 }

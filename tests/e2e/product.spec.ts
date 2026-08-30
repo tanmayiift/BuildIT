@@ -58,7 +58,7 @@ test("public data handling states the current access boundary", async ({ page })
 });
 
 test("repository and integration screens use truthful live connection states", async ({ page }, testInfo) => {
-  await page.goto("/repositories");
+  await page.goto("/repositories?tour=1");
   await expect(page.getByRole("heading", { name: "Repositories" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Sign in to see repository access" })).toBeVisible();
   await expect(page.getByText("Not connected", { exact: true })).toHaveCount(0);
@@ -68,13 +68,25 @@ test("repository and integration screens use truthful live connection states", a
   await expect(signIn).toHaveCSS("min-height", "44px");
   await expect(page.getByRole("link", { name: "How isolation works" })).toHaveClass(/action-tertiary/);
   await page.screenshot({ path: `.local/ui-evidence/repositories-${testInfo.project.name}.png`, fullPage: true });
-  await page.goto("/integrations");
+  await page.goto("/integrations?tour=1");
   const github = page.getByRole("heading", { name: "GitHub", exact: true }).locator("..");
   await expect(github.getByText("Setup needed")).toBeVisible();
   const githubAction = github.getByRole("link", { name: "Sign in with GitHub" });
   await expect(githubAction).toBeVisible();
   await expect(githubAction).toHaveCSS("color", "rgb(255, 255, 255)");
   await page.screenshot({ path: `.local/ui-evidence/integrations-${testInfo.project.name}.png`, fullPage: true });
+});
+
+test("workspace routes require authentication unless sample tour is explicit", async ({ page }) => {
+  await page.goto("/repositories");
+  await expect(page.getByRole("heading", { name: "Sign in to open your workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Repositories" })).toHaveCount(0);
+  await expect(page.getByRole("main").getByRole("link", { name: "Sign in with GitHub" })).toHaveAttribute("href", "/sign-in?returnTo=%2Frepositories");
+
+  await page.getByRole("link", { name: "View the sample tour" }).click();
+  await expect(page).toHaveURL(/\/repositories\?tour=1$/);
+  await expect(page.getByRole("heading", { name: "Repositories" })).toBeVisible();
+  await expect(page.getByText("Sample tour · no live workspace data", { exact: true })).toBeVisible();
 });
 
 test("the complete signed-out journey reports access and safety honestly", async ({ page }, testInfo) => {
@@ -93,7 +105,7 @@ test("the complete signed-out journey reports access and safety honestly", async
   await page.screenshot({ path: `.local/ui-evidence/setup-health-${testInfo.project.name}.png`, fullPage: true });
 
   await page.goto("/members");
-  await expect(page.getByRole("heading", { name: "Sign in to manage members" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to open your workspace" })).toBeVisible();
   const signIn = page.getByRole("main").getByRole("link", { name: "Sign in with GitHub" });
   await expect(signIn).toHaveAttribute("href", "/sign-in?returnTo=%2Fmembers");
   await page.screenshot({ path: `.local/ui-evidence/members-${testInfo.project.name}.png`, fullPage: true });

@@ -1,7 +1,7 @@
 export default async function Review({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return <div className="content review-detail">
-    <div className="crumbs"><a href="/reviews">Review queue</a><span>›</span><strong>nexus/api #{id}</strong><span className="sample-badge">Sample evidence</span></div>
+    <div className="crumbs"><a href="/reviews?tour=1">Review queue</a><span>›</span><strong>nexus/api #{id}</strong><span className="sample-badge">Sample evidence</span></div>
     <section className="verdict-card"><div><span className="status danger">Changes requested</span><h1>One requirement is unsupported</h1><p>The required test suite also fails at the exact reviewed commit. No fix candidate was delivered.</p></div><div className="verdict-actions"><button className="button secondary" type="button" disabled>Re-run after repository connection</button><a className="button" href="/setup/install">Connect repository</a></div></section>
     <section className="commit-strip" aria-label="Pinned review context"><span><small>Repository</small><strong>nexus/api</strong></span><span><small>Pull request</small><strong>#{id}</strong></span><span><small>Head commit</small><code>a3f91c2</code></span><span><small>Base commit</small><code>7b2e004</code></span><span><small>Configuration</small><code>main @ 7b2e004</code></span><span><small>Coverage</small><strong>Partial</strong></span></section>
     <div className="next-action"><span className="next-mark">!</span><div><strong>Next action: human decision</strong><p>Ask the author to cover criterion 3, or connect this repository to run a fresh evidence-backed review.</p></div></div>

@@ -14,3 +14,27 @@
 .integration-card[data-connected]{box-shadow:inset 3px 0 0 var(--success)}
 .integration-card .action-primary{color:#fff}.integration-card .action-secondary,.integration-card .action-tertiary{color:var(--navy)}
 @media(max-width:800px){.connection-hero{align-items:flex-start;flex-direction:column}.repository-row{grid-template-columns:40px 1fr}.repository-policy,.repository-row>a{grid-column:2}.repository-row>a{justify-self:start}}
+.sample-route-note {
+  margin: 18px 40px 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.route-gate {
+  max-width: 720px;
+  padding-top: 72px;
+}
+
+.route-gate h1 {
+  margin: 18px 0 10px;
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.route-gate > p {
+  max-width: 620px;
+  color: var(--muted);
+  line-height: 1.7;
+}

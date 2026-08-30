@@ -4,12 +4,12 @@ import "./globals.css";
 import "./mobile.css";
 import "./account.css";
 import "./flows.css";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { ConvexClientProvider } from "./convex-client-provider";
 import { AppShell } from "./app-shell";
 
 export const metadata = { title: "BuildIT — Evidence-backed code review", description: "Autonomous pull request review with deterministic evidence and human merge authority." };
 
 export default function Layout({ children }: { children: ReactNode }) {
-  return <html lang="en"><body><ConvexClientProvider><AppShell>{children}</AppShell></ConvexClientProvider></body></html>;
+  return <html lang="en"><body><ConvexClientProvider><Suspense fallback={<main className="content route-gate" aria-live="polite"><h1>Loading BuildIT…</h1></main>}><AppShell>{children}</AppShell></Suspense></ConvexClientProvider></body></html>;
 }
