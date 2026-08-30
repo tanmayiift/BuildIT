@@ -13,6 +13,8 @@ import {
   chunkRepositorySnapshot,
 } from "@buildit/github";
 import {
+  assertAutofixBounds,
+  conservativeModelCost,
   contentHash,
   runModelPatchChain,
   stageSchemas,
@@ -56,6 +58,9 @@ type Scope = {
   headSha: string;
   baseSha: string;
   createdAt: number;
+  startedAt:number;
+  budgetLimit:number;
+  budgetConsumed:number;
   configRevisionId: Id<"configRevisions">;
   runnerImageVersion: string;
   provider: "anthropic" | "openai" | "gemini";
@@ -337,12 +342,13 @@ export const runConvergence = internalAction({
             ?.candidateCommitSha ?? scope.headSha,
         lastOutcome: "failed" | "incomplete" = "incomplete",
         lastValidation: ExecutionResponse | undefined;
-      const seenFingerprints = new Set(scope.patchFingerprints);
+      const seenFingerprints = new Set(scope.patchFingerprints);let budgetConsumed=scope.budgetConsumed;
       for (
         let roundNumber = scope.rounds.length + 1;
         roundNumber <= 3;
         roundNumber++
       ) {
+        assertAutofixBounds({completedRounds:roundNumber-1,modelAttempts:(roundNumber-1)*2,startedAt:scope.startedAt,now:Date.now(),budgetConsumed,budgetLimit:scope.budgetLimit});
         await assertActive(ctx, args);
         const pullResponse = await fetch(
           `https://api.github.com/repositories/${scope.githubRepositoryId}/pulls/${scope.prNumber}`,
@@ -439,7 +445,7 @@ export const runConvergence = internalAction({
             inputTokens: result.inputTokens,
             outputTokens: result.outputTokens,
             now: Date.now(),
-              }); },
+              });budgetConsumed+=conservativeModelCost(result.inputTokens,result.outputTokens); },
             }),
             proposals = (patchRecords[0]?.value.patches as PatchProposal[] | undefined);
         if (!Array.isArray(proposals) || !proposals.length)
