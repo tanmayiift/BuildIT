@@ -4,6 +4,7 @@ import { AwsKmsClient } from "@buildit/security";
 import { CredentialBroker, handleModelInvocation, S3GrantConsumer, type StoredCredential } from "../src/index.js";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error("model_broker_configuration_missing"); return value; }
+function report(error: unknown) { const raw = error instanceof Error ? error.name : "Unknown", allowed = new Set(["CredentialsProviderError", "AccessDenied", "AccessDeniedException", "KMSInvalidStateException", "NoSuchBucket", "Error"]); const status = (error as { $metadata?: { httpStatusCode?: unknown } })?.$metadata?.httpStatusCode; console.error(JSON.stringify({ event: "model_broker_unavailable", errorClass: allowed.has(raw) ? raw : "Other", ...(typeof status === "number" ? { status } : {}) })); }
 
 async function route(request: Request) {
   try {
@@ -16,7 +17,8 @@ async function route(request: Request) {
     const broker = (supplied: StoredCredential) => new CredentialBroker({ insert: async () => undefined,
       get: async (id: string) => supplied.id === id ? supplied : null, markUsed: async () => undefined, revoke: async () => undefined }, kms, kmsKeyId);
     return await handleModelInvocation(request, { grantSecret: Buffer.from(required("MODEL_GRANT_SECRET"), "base64url"), consume: (id, expiresAt) => replay.consume(id, expiresAt), broker });
-  } catch {
+  } catch (error) {
+    report(error);
     return Response.json({ error: "model_broker_unavailable" }, { status: 503, headers: { "cache-control": "no-store" } });
   }
 }

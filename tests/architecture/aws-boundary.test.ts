@@ -18,12 +18,18 @@ describe("AWS artifact and key boundary", () => {
     for (const field of ["organizationId", "credentialId", "purpose"]) {
       expect(template).toContain(`kms:EncryptionContext:${field}`);
     }
+    expect(template).toContain("BrokerS3ArtifactEncryption");
+    expect(template).toContain('"kms:ViaService": s3.eu-west-1.amazonaws.com');
+    expect(template).toContain('"kms:EncryptionContext:aws:s3:arn"');
   });
 
   it("keeps the bucket private, non-versioned, encrypted, and short-lived", () => {
     for (const rule of ["BlockPublicAcls: true", "BlockPublicPolicy: true", "RestrictPublicBuckets: true", "Status: Suspended", "SSEAlgorithm: aws:kms", "MaxValue: 7", "ExpirationInDays: !Ref ArtifactRetentionDays"]) {
       expect(template).toContain(rule);
     }
+    expect(template).toContain("Id: ExpungeReplayMarkers");
+    expect(template).toContain("Prefix: grant-replay/");
+    expect(template).toContain("ExpirationInDays: 1");
   });
 
   it("denies plaintext transport and writes using the wrong key", () => {
@@ -31,6 +37,8 @@ describe("AWS artifact and key boundary", () => {
     expect(template).toContain('"Null":');
     expect(template).toContain("DenyUnencryptedObjectWrites");
     expect(template).toContain("DenyWrongEncryptionKey");
+    expect(template).toContain("BrokerCreatesReplayMarkersOnly");
+    expect(template).toContain("${ArtifactBucket.Arn}/grant-replay/*");
   });
 
   it("writes a daily encrypted deletion inventory and expires it after 14 days", () => {

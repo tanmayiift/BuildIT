@@ -7,6 +7,7 @@ function required(name: string) {
   if (!value) throw new Error("artifact_broker_configuration_missing");
   return value;
 }
+function report(error: unknown) { const raw = error instanceof Error ? error.name : "Unknown", allowed = new Set(["CredentialsProviderError", "AccessDenied", "AccessDeniedException", "KMSInvalidStateException", "NoSuchBucket", "Error"]); const status = (error as { $metadata?: { httpStatusCode?: unknown } })?.$metadata?.httpStatusCode; console.error(JSON.stringify({ event: "artifact_broker_unavailable", errorClass: allowed.has(raw) ? raw : "Other", ...(typeof status === "number" ? { status } : {}) })); }
 
 async function route(request: Request) {
   try {
@@ -22,7 +23,8 @@ async function route(request: Request) {
       grantSecret: Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url"),
       consumeGrant: (grantId, expiresAt) => replay.consume(grantId, expiresAt) });
     return await handleArtifactRequest(request, broker);
-  } catch {
+  } catch (error) {
+    report(error);
     return Response.json({ error: "artifact_broker_unavailable" }, { status: 503, headers: { "cache-control": "no-store" } });
   }
 }

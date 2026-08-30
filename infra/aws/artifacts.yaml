@@ -95,6 +95,22 @@ Resources:
                 "kms:EncryptionContext:organizationId": "false"
                 "kms:EncryptionContext:credentialId": "false"
                 "kms:EncryptionContext:purpose": "false"
+          - Sid: BrokerS3ArtifactEncryption
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt ContentBrokerRole.Arn
+            Action:
+              - kms:Decrypt
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:DescribeKey
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "aws:RequestedRegion": eu-west-1
+                "kms:ViaService": s3.eu-west-1.amazonaws.com
+              ArnLike:
+                "kms:EncryptionContext:aws:s3:arn": !Sub arn:${AWS::Partition}:s3:::buildit-${Environment}-${AWS::AccountId}-artifacts-eu-west-1/*
   BuildITKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
@@ -122,6 +138,10 @@ Resources:
             ExpirationInDays: !Ref ArtifactRetentionDays
             AbortIncompleteMultipartUpload:
               DaysAfterInitiation: 1
+          - Id: ExpungeReplayMarkers
+            Prefix: grant-replay/
+            Status: Enabled
+            ExpirationInDays: 1
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerEnforced
@@ -228,7 +248,9 @@ Resources:
             Effect: Deny
             Principal: "*"
             Action: s3:PutObject
-            Resource: !Sub ${ArtifactBucket.Arn}/artifacts/*
+            Resource:
+              - !Sub ${ArtifactBucket.Arn}/artifacts/*
+              - !Sub ${ArtifactBucket.Arn}/grant-replay/*
             Condition:
               StringNotEquals:
                 "s3:x-amz-server-side-encryption": aws:kms
@@ -236,7 +258,9 @@ Resources:
             Effect: Deny
             Principal: "*"
             Action: s3:PutObject
-            Resource: !Sub ${ArtifactBucket.Arn}/artifacts/*
+            Resource:
+              - !Sub ${ArtifactBucket.Arn}/artifacts/*
+              - !Sub ${ArtifactBucket.Arn}/grant-replay/*
             Condition:
               StringNotEquals:
                 "s3:x-amz-server-side-encryption-aws-kms-key-id": !GetAtt BuildITKey.Arn
@@ -258,6 +282,12 @@ Resources:
             Condition:
               StringLike:
                 "s3:prefix": artifacts/*
+          - Sid: BrokerCreatesReplayMarkersOnly
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt ContentBrokerRole.Arn
+            Action: s3:PutObject
+            Resource: !Sub ${ArtifactBucket.Arn}/grant-replay/*
 
 Outputs:
   ContentBrokerRoleArn:
