@@ -112,3 +112,4 @@ export * from "./artifact-http.js";
 export * from "./http.js";
 export * from "./model-http.js";
 export * from "./convex-gateway.js";
+export * from "./tracker-http.js";

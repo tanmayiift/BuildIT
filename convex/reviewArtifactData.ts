@@ -9,10 +9,11 @@ export const contextScope = internalQuery({
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
     const repository = await ctx.db.get(review.repositoryId), installation = repository ? await ctx.db.get(repository.installationId) : null;
     if (!repository || !repository.enabled || !installation || installation.status !== "active" || installation.organizationId !== args.organizationId) throw new ConvexError("repository_unavailable");
+    const trackers=(await ctx.db.query("trackerConnections").withIndex("by_status",q=>q.eq("status","active")).collect()).filter(item=>item.organizationId===args.organizationId);
     return { organizationId: args.organizationId, repositoryId: repository._id, reviewId: review._id,
       installationId: installation.installationId, githubRepositoryId: repository.githubRepositoryId,
       prNumber: review.prNumber, headSha: review.headSha, baseSha: review.baseSha,
-      executionGeneration: review.executionGeneration, expiresAt: review.expiresAt };
+      executionGeneration: review.executionGeneration, expiresAt: review.expiresAt,trackers:trackers.map(item=>({id:item.credentialScopeId,organizationId:String(item.organizationId),provider:item.provider,workspaceId:item.workspaceId,ciphertext:item.encryptedAccessToken,nonce:item.nonce,tag:item.authTag,wrappedDataKey:item.wrappedDataKey,kmsKeyId:item.kmsKeyId,envelopeVersion:item.envelopeVersion,keyVersion:item.keyVersion,aadDigest:item.aadDigest,status:"active" as const,createdBy:item.createdBy,createdAt:item.createdAt})) };
   },
 });
 

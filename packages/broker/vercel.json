@@ -13,6 +13,9 @@
     "api/model.ts": {
       "maxDuration": 60
     },
+    "api/tracker.ts": {
+      "maxDuration": 60
+    },
     "api/execute.ts": {
       "maxDuration": 300
     }

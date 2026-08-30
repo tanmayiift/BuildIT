@@ -87,6 +87,7 @@ export default defineSchema({
 
   trackerConnections: defineTable({
     organizationId: v.id("organizations"), provider: value.trackerProvider,
+    credentialScopeId:v.string(),wrappedDataKey:v.string(),kmsKeyId:v.string(),envelopeVersion:v.literal(1),
     encryptedAccessToken: v.string(), encryptedRefreshToken: v.optional(v.string()),
     nonce: v.string(), authTag: v.string(), aadDigest: v.string(), keyVersion: v.number(),
     scopes: v.array(v.string()), workspaceId: v.string(), status: value.trackerStatus,

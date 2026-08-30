@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { chunkRepositorySnapshot, GitHubAppClient, GitHubIssueContextClient, PullRequestContextClient, RepositoryContentClient, type PullRequestContext, type RepositorySnapshot } from "@buildit/github";
 import { acquireRequirements,repositoryRequirementSources } from "@buildit/orchestrator";
-import { issueArtifactGrant } from "@buildit/security";
+import { issueArtifactGrant,issueTrackerGrant } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 export function sameRepositoryIssueNumber(url: string, repositoryUrl: string) {
@@ -21,7 +21,7 @@ export function sameRepositoryIssueNumber(url: string, repositoryUrl: string) {
 export const gather = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
   handler: async (ctx, args): Promise<{ artifactIds: string[]; chunkCount: number; fileCount: number; omittedCount: number; coverage: "full" | "partial" }> => {
-    const scope: { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; baseSha: string; executionGeneration: number; expiresAt: number } = await ctx.runQuery(internal.reviewArtifactData.contextScope, args);
+    const scope: { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; baseSha: string; executionGeneration: number; expiresAt: number;trackers:Array<{id:string;organizationId:string;provider:"github"|"linear"|"jira";workspaceId:string;ciphertext:string;nonce:string;tag:string;wrappedDataKey:string;kmsKeyId:string;envelopeVersion:1;keyVersion:number;aadDigest:string;status:"active";createdBy:string;createdAt:number}> } = await ctx.runQuery(internal.reviewArtifactData.contextScope, args);
     const github = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
     const tokenScope = { installationId: scope.installationId, repositoryId: scope.githubRepositoryId, stage: "review" as const };
     await ctx.runQuery(internal.durableReview.assertActive, args);
@@ -38,9 +38,9 @@ export const gather = internalAction({
       ]);
       const repositoryMatch = pullContext.htmlUrl.match(/^(https:\/\/github\.com\/[^/]+\/[^/]+)\/pull\/\d+$/i);
       if (!repositoryMatch) throw new Error("pull_request_url_invalid");
-      const repositoryUrl = repositoryMatch[1]!, issueClient = new GitHubIssueContextClient(),repositoryIntent=repositoryRequirementSources({files:headSnapshot.files,headSha:scope.headSha,now:Date.now()});
+      const repositoryUrl = repositoryMatch[1]!, issueClient = new GitHubIssueContextClient(),repositoryIntent=repositoryRequirementSources({files:headSnapshot.files,headSha:scope.headSha,now:Date.now()}),brokerUrl=required("BUILDIT_BROKER_URL").replace(/\/$/,""),trackerSecret=Buffer.from(required("TRACKER_GRANT_SECRET"),"base64url");
       const intent = await acquireRequirements({ prBody: pullContext.body, prUrl: pullContext.htmlUrl, repositoryUrl, headSha: scope.headSha, now: Date.now(), maxSourceBytes: 250_000, fetch: async link => {
-        if (link.type !== "github_issue") return { status: "inaccessible", version: "connection_unavailable" };
+        if (link.type!=="github_issue"){const credential=scope.trackers.find(item=>item.provider===link.type);if(!credential)return{status:"inaccessible",version:"connection_unavailable"};const grant=issueTrackerGrant({organizationId:String(scope.organizationId),repositoryId:String(scope.repositoryId),reviewId:String(scope.reviewId),credentialScopeId:credential.id,provider:link.type,workspaceId:credential.workspaceId,urlHash:createHash("sha256").update(link.url).digest("hex")},trackerSecret),body=JSON.stringify({organizationId:String(scope.organizationId),repositoryId:String(scope.repositoryId),reviewId:String(scope.reviewId),url:link.url,credential}),response=await fetch(`${brokerUrl}/api/tracker`,{method:"POST",headers:{authorization:`Bearer ${grant}`,"content-type":"application/json"},body}),output=await response.json()as{result?:{status:"available"|"missing"|"inaccessible"|"image_only"|"oversized";version:string;content?:string}};if(!response.ok||!output.result)throw new Error(`tracker_context_${response.status}`);return output.result}
         const issueNumber = sameRepositoryIssueNumber(link.url, repositoryUrl);
         if (!issueNumber) return { status: "inaccessible", version: "repository_scope_mismatch" };
         return issueClient.fetch({ installationToken: token, repositoryId: scope.githubRepositoryId, issueNumber, maxBytes: 250_000 });
@@ -53,7 +53,7 @@ export const gather = internalAction({
         requirements: intent.requirements };
       const pullBytes = Buffer.byteLength(JSON.stringify(pull));
       if (pullBytes > 2_500_000) throw new Error("pull_request_context_too_large");
-      const artifactIds: string[] = [], brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""),
+      const artifactIds: string[] = [],
         secret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url");
       let chunkCount = 0;
       for (const [revision, snapshot] of [["head", headSnapshot], ["base", baseSnapshot]] as const) {
