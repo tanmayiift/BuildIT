@@ -10,6 +10,7 @@ export type AuthorizationPolicy =
 export type ResponseClassification = "none" | "metadata" | "personal_identity";
 
 export const publicFunctionPolicies = {
+  "audit:list": { authorization: "active_organization_viewer", response: "metadata" },
   "artifacts:getMetadata": { authorization: "active_organization_viewer", response: "metadata" },
   "dashboardReviews:prepare": { authorization: "active_organization_developer", response: "metadata" },
   "dashboardReviews:start": { authorization: "active_organization_developer", response: "metadata" },

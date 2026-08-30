@@ -9,6 +9,7 @@
  */
 
 import type * as artifacts from "../artifacts.js";
+import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
 import type * as dashboardReviewData from "../dashboardReviewData.js";
 import type * as dashboardReviews from "../dashboardReviews.js";
@@ -61,6 +62,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   artifacts: typeof artifacts;
+  audit: typeof audit;
   auth: typeof auth;
   dashboardReviewData: typeof dashboardReviewData;
   dashboardReviews: typeof dashboardReviews;

@@ -236,6 +236,19 @@ describe("Convex tenant isolation", () => {
     await expect(t.withIdentity({ subject: "bob|session" }).query(api.usage.summarize, { organizationId: alpha.organizationId, since: now - 1 })).rejects.toThrow("not_found_or_forbidden");
   });
 
+  it("returns only tenant audit metadata and detects a modified chain", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "audit-alpha", "alice"), beta = await seedTenant(t, "audit-beta", "bob"), now = Date.now();
+    await t.mutation(internal.dashboardReviewData.create, { repositoryId: alpha.repositoryId, prNumber: 2, headSha: "c".repeat(40), baseSha: "b".repeat(40), baseRef: "main", isFork: false, actorId: "alice", actorRole: "admin", now });
+    const asAlice = t.withIdentity({ subject: "alice|session" });
+    const first = await asAlice.query(api.audit.list, { organizationId: alpha.organizationId, limit: 10 });
+    expect(first).toMatchObject({ chainValid: true, events: [expect.objectContaining({ action: "review.created", resourceType: "review", result: "allowed" })] });
+    expect(JSON.stringify(first)).not.toContain(String(beta.organizationId));
+    const eventId = first.events[0]!.id;
+    await t.run(ctx => ctx.db.patch(eventId, { action: "tampered.action" }));
+    expect(await asAlice.query(api.audit.list, { organizationId: alpha.organizationId, limit: 10 })).toMatchObject({ chainValid: false });
+    await expect(t.withIdentity({ subject: "bob|session" }).query(api.audit.list, { organizationId: alpha.organizationId, limit: 10 })).rejects.toThrow("not_found_or_forbidden");
+  });
+
   it("creates a dashboard review only inside the authorized repository and records consent", async () => {
     const t = convexTest(schema, modules), alpha = await seedTenant(t, "dashboard-alpha", "alice"), beta = await seedTenant(t, "dashboard-beta", "bob");
     const asAlice = t.withIdentity({ subject: "alice|dashboard-session" });

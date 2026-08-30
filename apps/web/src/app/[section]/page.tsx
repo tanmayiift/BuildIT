@@ -1,5 +1,6 @@
 import { GitHubIntegrationState, MembersWorkspaceState, RepositoryConnectionView } from "../live-connections";
 import { WorkspaceMetrics, WorkspaceUsage } from "../live-metrics-usage";
+import { WorkspaceAudit } from "../live-audit";
 
 const validSections = new Set(["repositories", "metrics", "usage", "integrations", "policies", "members", "audit"]);
 
@@ -41,4 +42,4 @@ function Setting({ title, value, detail }: { title: string; value: string; detai
 
 function Members() { return <div className="content"><Header eyebrow="Organization access" title="Members & roles" description="One person can belong to multiple organizations with a separate role in each." /><MembersWorkspaceState /></div>; }
 
-function Audit() { return <div className="content"><Header eyebrow="Source-free evidence" title="Audit log" description="Security-relevant actions are append-only and contain identifiers, decisions, and hashes—not repository source." /><section className="audit-preview"><div className="audit-row"><time>10:42:18</time><code>review.created</code><span>Sample review pinned to <code>d9f2e1a</code></span><span className="status neutral">Recorded</span></div><div className="audit-row"><time>10:43:02</time><code>evidence.rejected</code><span>Unknown evidence ID removed before publish</span><span className="status warning">Guardrail</span></div><div className="audit-row"><time>10:47:11</time><code>autofix.stopped</code><span>Round ceiling reached; no branch delivered</span><span className="status danger">Bound</span></div></section><p className="sample-note">Sample events illustrate the format. Live events appear only inside their authorized organization and repository scope.</p></div>; }
+function Audit() { return <div className="content"><Header eyebrow="Source-free evidence" title="Audit log" description="Security-relevant actions are append-only and contain identifiers, decisions, and hashes—not repository source." /><WorkspaceAudit/></div>; }
