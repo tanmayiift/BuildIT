@@ -9,6 +9,7 @@ import {
   saveCredential,
   type Provider,
 } from "./credential-store.js";
+import { remoteStatus, requestRemoteCommand } from "./remote-review.js";
 
 const args = process.argv.slice(2),
   command = args[0] ?? "help",
@@ -72,6 +73,7 @@ async function main() {
     return 0;
   }
   if (command === "review") {
+    if (args.includes("--remote")) return requestRemoteCommand({ pr: value("--pr"), ...(value("--repo") ? { repo: value("--repo") } : {}), command: "review", emit });
     const directory = value("--dir"),
       result = await runLocalReview({
         cwd: process.cwd(),
@@ -80,9 +82,11 @@ async function main() {
       });
     return result.exitCode;
   }
+  if (command === "status") return remoteStatus({ pr: value("--pr"), ...(value("--repo") ? { repo: value("--repo") } : {}), emit });
+  if (command === "cancel") return requestRemoteCommand({ pr: value("--pr"), ...(value("--repo") ? { repo: value("--repo") } : {}), command: "cancel", emit });
   if (command === "autofix") throw new Error("autofix_requires_hosted_consent");
   process.stdout.write(
-    "BuildIT CLI\n\nCommands:\n  buildit configure --provider <anthropic|openai|gemini> [--from-env|--revoke]\n  buildit review [--dir path] [--json]\n  buildit doctor [--json]\n\nNever pass a key as a command argument. Local review runs deterministic checks only. Hosted AI review and Autofix require GitHub consent.\n",
+    "BuildIT CLI\n\nCommands:\n  buildit configure --provider <anthropic|openai|gemini> [--from-env|--revoke]\n  buildit review [--dir path] [--json]\n  buildit review --remote --pr <number> [--repo owner/name] [--json]\n  buildit status --pr <number> [--repo owner/name] [--json]\n  buildit cancel --pr <number> [--repo owner/name] [--json]\n  buildit doctor [--json]\n\nNever pass a key as a command argument. Remote commands use your existing GitHub CLI login; BuildIT rechecks collaborator permission. Local review runs deterministic checks only. Autofix requires separate hosted consent.\n",
   );
   return command === "help" || command === "--help" ? 0 : 4;
 }
