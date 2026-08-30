@@ -28,6 +28,7 @@ import type * as lib_validationEvidence from "../lib/validationEvidence.js";
 import type * as memberships from "../memberships.js";
 import type * as metrics from "../metrics.js";
 import type * as organizations from "../organizations.js";
+import type * as permissionReceipts from "../permissionReceipts.js";
 import type * as publicFunctionPolicy from "../publicFunctionPolicy.js";
 import type * as repositoryConnections from "../repositoryConnections.js";
 import type * as reviewAnalysisWorker from "../reviewAnalysisWorker.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   memberships: typeof memberships;
   metrics: typeof metrics;
   organizations: typeof organizations;
+  permissionReceipts: typeof permissionReceipts;
   publicFunctionPolicy: typeof publicFunctionPolicy;
   repositoryConnections: typeof repositoryConnections;
   reviewAnalysisWorker: typeof reviewAnalysisWorker;

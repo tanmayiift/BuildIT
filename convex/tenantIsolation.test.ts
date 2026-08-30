@@ -161,6 +161,8 @@ describe("Convex tenant isolation", () => {
     expect(JSON.stringify(result)).not.toContain("ciphertext");
   });
 
+  it("returns a server-backed permission receipt without leaking another workspace or viewer credential metadata",async()=>{const t=convexTest(schema,modules),alpha=await seedTenant(t,"receipt-alpha","alice"),beta=await seedTenant(t,"receipt-beta","bob"),asAlice=t.withIdentity({subject:"alice|session-one"});await asAlice.mutation(api.organizations.selectActive,{organizationId:alpha.organizationId});const ownerReceipt=await asAlice.query(api.permissionReceipts.current,{});expect(ownerReceipt).toMatchObject({identity:{login:"verified GitHub user"},organization:{name:"receipt-alpha",role:"owner",region:"eu-west-1"},boundaries:{mergeAuthority:false,workflowWrite:false,repositoryAdministration:false}});expect(ownerReceipt?.repositories.map(item=>item.owner)).toEqual(["receipt-alpha"]);expect(JSON.stringify(ownerReceipt)).not.toContain("receipt-beta");await t.run(async ctx=>{const membership=await ctx.db.query("memberships").withIndex("by_org_user",q=>q.eq("organizationId",alpha.organizationId).eq("userId","alice")).unique();if(!membership)throw new Error("membership_missing");await ctx.db.patch(membership._id,{role:"viewer"})});const viewerReceipt=await asAlice.query(api.permissionReceipts.current,{});expect(viewerReceipt?.credentials).toEqual([]);expect(await t.withIdentity({subject:"bob"}).query(api.permissionReceipts.current,{})).toBeNull();expect(beta.organizationId).not.toBe(alpha.organizationId)});
+
   it("reports an active installation with no selected repositories without inventing access", async () => {
     const t = convexTest(schema, modules);
     const alpha = await seedTenant(t, "alpha", "alice");

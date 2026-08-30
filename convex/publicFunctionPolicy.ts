@@ -25,6 +25,7 @@ export const publicFunctionPolicies = {
   "organizations:active": { authorization: "authenticated_user", response: "metadata" },
   "organizations:selectActive": { authorization: "active_organization_viewer", response: "metadata" },
   "organizations:clearActive": { authorization: "authenticated_user", response: "none" },
+  "permissionReceipts:current": { authorization: "active_organization_viewer", response: "personal_identity" },
   "repositoryConnections:current": { authorization: "authenticated_user", response: "metadata" },
   "reviews:list": { authorization: "active_organization_viewer", response: "metadata" },
   "reviews:get": { authorization: "active_organization_viewer", response: "metadata" },
