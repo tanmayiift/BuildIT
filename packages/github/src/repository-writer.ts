@@ -50,15 +50,15 @@ export class GitHubRepositoryWriter {
   }
   async deleteBranchIfExact(input: { name: string; sha: string }) {
     if (!/^[A-Za-z0-9._/-]+$/.test(input.name) || input.name.startsWith("/") || input.name.includes("..") || !/^[0-9a-f]{40}$/i.test(input.sha)) throw new Error("branch_input_invalid");
-    const path = `/git/ref/heads/${input.name.split("/").map(encodeURIComponent).join("/")}`;
-    const current = await this.http(`https://api.github.com/repositories/${this.input.repositoryId}${path}`, { headers: this.headers });
+    const encoded = input.name.split("/").map(encodeURIComponent).join("/"), getPath = `/git/ref/heads/${encoded}`, deletePath = `/git/refs/heads/${encoded}`;
+    const current = await this.http(`https://api.github.com/repositories/${this.input.repositoryId}${getPath}`, { headers: this.headers });
     if (current.status === 404) return { operation: "missing" as const };
     if (current.status === 401) throw new Error("installation_token_expired");
     if (current.status === 403) throw new Error("repository_write_unavailable");
     if (!current.ok) throw new Error(`github_write_${current.status}`);
     const value = await current.json() as { object?: { sha?: unknown } };
     if (typeof value.object?.sha !== "string" || value.object.sha.toLowerCase() !== input.sha.toLowerCase()) throw new Error("branch_cleanup_sha_mismatch");
-    const removed = await this.http(`https://api.github.com/repositories/${this.input.repositoryId}${path}`, { method: "DELETE", headers: this.headers });
+    const removed = await this.http(`https://api.github.com/repositories/${this.input.repositoryId}${deletePath}`, { method: "DELETE", headers: this.headers });
     if (removed.status === 404) return { operation: "missing" as const };
     if (removed.status === 401) throw new Error("installation_token_expired");
     if (removed.status === 403) throw new Error("repository_write_unavailable");

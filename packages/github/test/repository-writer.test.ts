@@ -32,6 +32,8 @@ describe("GitHub candidate writer", () => {
     const http = vi.fn(async (_url: string | URL, init?: RequestInit) => init?.method === "DELETE" ? new Response(null, { status: 204 }) : new Response(JSON.stringify({ object: { sha: candidate } })));
     const writer = new GitHubRepositoryWriter({ repositoryId: 7, installationToken: "token", http });
     await expect(writer.deleteBranchIfExact({ name: "buildit/pr-2/job", sha: candidate })).resolves.toEqual({ operation: "deleted" });
+    expect(String(http.mock.calls[0]?.[0])).toContain("/git/ref/heads/buildit/pr-2/job");
+    expect(String(http.mock.calls[1]?.[0])).toContain("/git/refs/heads/buildit/pr-2/job");
     expect(http.mock.calls[1]?.[1]?.method).toBe("DELETE");
   });
   it("refuses cleanup when the branch moved and accepts an already-missing branch", async () => {
