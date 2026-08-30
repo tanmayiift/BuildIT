@@ -105,3 +105,4 @@ export class CredentialBroker {
     await this.store.revoke(credential.id, access.organizationId, access.actorId, this.now());
   }
 }
+export * from "./artifacts";
