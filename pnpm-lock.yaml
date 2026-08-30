@@ -148,6 +148,9 @@ importers:
       '@buildit/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@buildit/providers':
+        specifier: workspace:*
+        version: link:../providers
       '@buildit/runner':
         specifier: workspace:*
         version: link:../runner
