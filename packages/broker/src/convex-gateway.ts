@@ -26,7 +26,7 @@ export class ConvexCredentialGateway implements CredentialStore {
   readonly authorize: CredentialAuthorization;
 
   constructor(private readonly convexUrl: string, private readonly token: string) {
-    if (!/^https:\/\/[a-z0-9-]+\.convex\.cloud$/.test(convexUrl) || !token) throw new Error("credential_gateway_configuration_invalid");
+    if (!/^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.convex\.cloud$/.test(convexUrl) || !token) throw new Error("credential_gateway_configuration_invalid");
     this.authorize = async input => {
       if (input.token !== this.token) throw new Error("authentication_required");
       const value = await callConvex(this.convexUrl, this.token, "query", "integrations:authorizeCredentialWrite", {

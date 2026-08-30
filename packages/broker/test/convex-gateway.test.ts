@@ -28,4 +28,9 @@ describe("user-authorized Convex credential gateway", () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ status: "error", errorMessage: "database secret detail" }, { status: 400 })));
     await expect(gateway.authorize({ token: "signed-user-token", organizationId: "org-a" })).rejects.toThrow("credential_store_unavailable");
   });
+
+  it("accepts Ireland deployment URLs but rejects lookalike hosts", () => {
+    expect(() => new ConvexCredentialGateway("https://tacit-coyote-455.eu-west-1.convex.cloud", "token")).not.toThrow();
+    expect(() => new ConvexCredentialGateway("https://convex.cloud.evil.example", "token")).toThrow("credential_gateway_configuration_invalid");
+  });
 });
