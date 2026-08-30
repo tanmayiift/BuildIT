@@ -125,10 +125,18 @@ export const claimActiveReview = internalMutation({
 export const reserveSideEffect = internalMutation({
   args: {
     organizationId: v.id("organizations"), reviewId: v.id("reviews"),
+    expectedHeadSha: v.string(), expectedGeneration: v.number(),
     operationKey: v.string(), type: value.sideEffectType, requestHash: v.string(), now: v.number(),
   },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
+    if (
+      review.headSha !== args.expectedHeadSha ||
+      review.executionGeneration !== args.expectedGeneration ||
+      review.isStale ||
+      review.cancellationRequestedAt ||
+      review.status === "cancelled"
+    ) throw new ConvexError("side_effect_cancelled_or_replaced");
     const existing = await ctx.db.query("githubSideEffects").withIndex("by_repo_operation_key", (q) => q.eq("repositoryId", review.repositoryId).eq("operationKey", args.operationKey)).unique();
     if (existing) {
       if (existing.requestHash !== args.requestHash || existing.reviewId !== args.reviewId) throw new ConvexError("idempotency_key_conflict");

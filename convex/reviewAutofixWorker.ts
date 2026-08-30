@@ -813,6 +813,8 @@ export const deliverPassed = internalAction({
           {
             organizationId: scope.organizationId,
             reviewId: scope.reviewId,
+            expectedHeadSha: args.expectedHeadSha,
+            expectedGeneration: args.expectedGeneration,
             operationKey: branchKey,
             type: "branch_create",
             requestHash: branchHash,
@@ -841,6 +843,8 @@ export const deliverPassed = internalAction({
           {
             organizationId: scope.organizationId,
             reviewId: scope.reviewId,
+            expectedHeadSha: args.expectedHeadSha,
+            expectedGeneration: args.expectedGeneration,
             operationKey: prKey,
             type: "stacked_pr_create",
             requestHash: prHash,
@@ -901,6 +905,8 @@ export const deliverPassed = internalAction({
           {
             organizationId: scope.organizationId,
             reviewId: scope.reviewId,
+            expectedHeadSha: args.expectedHeadSha,
+            expectedGeneration: args.expectedGeneration,
             operationKey: checkKey,
             type: "check_update",
             requestHash: publicationHash,
@@ -929,6 +935,8 @@ export const deliverPassed = internalAction({
           {
             organizationId: scope.organizationId,
             reviewId: scope.reviewId,
+            expectedHeadSha: args.expectedHeadSha,
+            expectedGeneration: args.expectedGeneration,
             operationKey: commentKey,
             type: "comment_update",
             requestHash: publicationHash,
@@ -1064,6 +1072,8 @@ export const publishFailure = internalAction({
           {
             organizationId: scope.organizationId,
             reviewId: scope.reviewId,
+            expectedHeadSha: args.expectedHeadSha,
+            expectedGeneration: args.expectedGeneration,
             operationKey,
             type: "comment_update",
             requestHash,

@@ -1881,6 +1881,8 @@ describe("Convex review state integrity", () => {
     const args = {
       organizationId: seeded.organizationId,
       reviewId: seeded.reviewId,
+      expectedHeadSha: "a".repeat(40),
+      expectedGeneration: 0,
       operationKey: "review:summary",
       type: "comment_update" as const,
       requestHash: "hash-1",
@@ -1912,6 +1914,8 @@ describe("Convex review state integrity", () => {
       sideEffectId = await t.mutation(internal.reviewState.reserveSideEffect, {
         organizationId: alpha.organizationId,
         reviewId: alpha.reviewId,
+        expectedHeadSha: "a".repeat(40),
+        expectedGeneration: 0,
         operationKey: "effect-alpha",
         type: "check_update",
         requestHash,
@@ -1981,6 +1985,8 @@ describe("Convex review state integrity", () => {
     });
     const common = {
       organizationId: alpha.organizationId,
+      expectedHeadSha: "a".repeat(40),
+      expectedGeneration: 0,
       operationKey: "review:summary",
       type: "comment_update" as const,
       requestHash: "hash",
@@ -2352,6 +2358,15 @@ describe("durable Autofix evidence", () => {
     await expect(
       t.query(internal.reviewAutofixData.assertActive, execution),
     ).rejects.toThrow("autofix_cancelled_or_replaced");
+    await expect(
+      t.mutation(internal.reviewState.reserveSideEffect, {
+        ...execution,
+        operationKey: "cancelled:must-not-publish",
+        type: "comment_update",
+        requestHash: "f".repeat(64),
+        now: 3,
+      }),
+    ).rejects.toThrow("side_effect_cancelled_or_replaced");
   });
 
   it("records one exact candidate round idempotently and rejects foreign artifacts", async () => {
