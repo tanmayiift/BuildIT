@@ -7,7 +7,7 @@ Parameters:
     AllowedValues: [production, staging]
   VercelProjectName:
     Type: String
-    Default: buildit-agentic-review
+    Default: buildit-content-broker
     AllowedPattern: '^[a-zA-Z0-9._-]+$'
   ArtifactRetentionDays:
     Type: Number

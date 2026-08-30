@@ -4,7 +4,7 @@ This stack belongs in a dedicated **BuildIT Production** AWS account. Do not dep
 
 Deploy the production stack only in `eu-west-1`. The web app and Convex deployment are already in Ireland, so this keeps key operations and temporary source-derived artifacts close to both services. S3 Standard provides regional redundancy; source-derived data is deliberately not copied to another region.
 
-The template creates a dedicated content-broker role and a team-scoped Vercel identity provider. Its trust policy accepts only the named Vercel project's production environment. That role is the only application identity granted object and envelope-key operations, and it can be used only through short-lived workload credentials; do not create an IAM access key.
+The template creates a dedicated content-broker role and a team-scoped Vercel identity provider. Its trust policy accepts only the separate `buildit-content-broker` project's production environment—not the user-facing web project. That role is the only application identity granted object and envelope-key operations, and it can be used only through short-lived workload credentials; do not create an IAM access key.
 
 Before deployment:
 
