@@ -1,6 +1,6 @@
 import { validateSchemaValue, type JsonSchema, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { redactForModel } from "@buildit/security";
-import { promptStages, runPromptChain, type PromptStage, type StageDefinition } from "./promptChain.js";
+import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type PromptStage, type StageDefinition } from "./promptChain.js";
 
 const string = { type: "string" } as const;
 const stringArray = { type: "array", items: string } as const;
@@ -51,7 +51,8 @@ function strictDefinition(stage: PromptStage): StageDefinition {
   };
 }
 
-export const strictModelChain = promptStages.map(strictDefinition);
+export const strictModelChain = reviewPromptStages.map(strictDefinition);
+export const strictPatchChain = autofixPromptStages.map(strictDefinition);
 
 export async function runModelReviewChain(input: {
   invoke: ModelStageInvoker;
@@ -61,6 +62,7 @@ export async function runModelReviewChain(input: {
 }) {
   return runPromptChain({
     definitions: strictModelChain,
+    expectedStages: reviewPromptStages,
     pinned: input.pinned,
     untrusted: input.untrusted,
     maxSchemaRepairs: 1,
@@ -82,6 +84,27 @@ export async function runModelReviewChain(input: {
         outputTokens: result.outputTokens,
         ...(result.requestId ? { requestId: result.requestId } : {}),
       });
+      return result.value;
+    },
+  });
+}
+
+export async function runModelPatchChain(input: {
+  invoke: ModelStageInvoker;
+  pinned: { headSha: string; baseSha: string; configRevision: string };
+  untrusted: Record<string, unknown>;
+  onUsage?: (usage: StageUsage) => Promise<void> | void;
+}) {
+  return runPromptChain({
+    definitions: strictPatchChain,
+    expectedStages: autofixPromptStages,
+    pinned: input.pinned,
+    untrusted: input.untrusted,
+    maxSchemaRepairs: 1,
+    executor: async request => {
+      const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);
+      const result = await input.invoke({ ...request, input: providerInput, schemaName: "buildit_patch_v1", schema: stageSchemas.patch, maxOutputTokens: 8_000 });
+      await input.onUsage?.({ stage: "patch", provider: result.provider, model: result.model, finishReason: result.finishReason, inputTokens: result.inputTokens, outputTokens: result.outputTokens, ...(result.requestId ? { requestId: result.requestId } : {}) });
       return result.value;
     },
   });

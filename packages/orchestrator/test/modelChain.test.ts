@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { promptStages } from "../src/promptChain";
-import { runModelReviewChain, stageSchemas, validateRoutes } from "../src/modelChain";
+import { promptStages, reviewPromptStages } from "../src/promptChain";
+import { runModelPatchChain, runModelReviewChain, stageSchemas, validateRoutes } from "../src/modelChain";
 
 const values: Record<string, Record<string, unknown>> = {
   requirements: { requirements: [] }, review_plan: { checks: [], evidenceOperations: [], riskAreas: [], exclusions: [] }, findings: { findings: [] },
@@ -9,15 +9,22 @@ const values: Record<string, Record<string, unknown>> = {
 const pinned = { headSha: "a".repeat(40), baseSha: "b".repeat(40), configRevision: "cfg" };
 
 describe("executable model review chain", () => {
-  it("invokes all seven strict stages and records metadata-only usage", async () => {
+  it("invokes six strict review stages and never requests a patch", async () => {
     const usage: unknown[] = [];
     const invoke = vi.fn(async request => ({ value: values[request.stage], provider: "gemini" as const, model: "gemini-test", finishReason: "STOP", inputTokens: 10, outputTokens: 2, requestId: "request-1" }));
     const records = await runModelReviewChain({ invoke, pinned, untrusted: { source: "untrusted" }, onUsage: item => { usage.push(item); } });
-    expect(invoke.mock.calls.map(([request]) => request.stage)).toEqual(promptStages);
-    expect(records).toHaveLength(7);
-    expect(usage).toHaveLength(7);
+    expect(invoke.mock.calls.map(([request]) => request.stage)).toEqual(reviewPromptStages);
+    expect(records).toHaveLength(6);
+    expect(usage).toHaveLength(6);
     expect(JSON.stringify(usage)).not.toContain("untrusted");
     expect(invoke.mock.calls[0]![0].schema).toEqual(stageSchemas.requirements);
+  });
+
+  it("runs the patch stage only through the separate Autofix chain", async () => {
+    const invoke = vi.fn(async request => ({ value: values[request.stage], provider: "gemini" as const, model: "gemini-test", finishReason: "STOP", inputTokens: 3, outputTokens: 2 }));
+    const records = await runModelPatchChain({ invoke, pinned, untrusted: { authorized: true, acceptedFindings: [], files: [], latestChecks: [] } });
+    expect(invoke.mock.calls.map(([request]) => request.stage)).toEqual(["patch"]);
+    expect(records).toHaveLength(1);
   });
 
   it("repairs one malformed provider response and then fails closed", async () => {

@@ -120,7 +120,7 @@ export const analyze = internalAction({
     const candidates = validateFindingCandidates({ findings: [...modelFindings, ...scannerFindings], criteriaIds: new Set(requirements.map(item => item.id)), allowedPaths: new Set([...headEvidence.values()].flatMap(item => item.record.path ? [item.record.path] : [])), evidence: [...headEvidence.values()].map(item => item.record), pinnedCommit: scope.headSha });
     const arbitration = ((stage("arbitration").findings ?? []) as ArbitrationDecision[]), arbitrated = reconcileArbitration(arbitrateFindings(candidates, critic), arbitration), fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
     if (fingerprintKey.byteLength < 32) throw new Error("finding_fingerprint_secret_invalid");
-    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, coverage: untrusted.coverage, records, arbitrated }));
+    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, coverage: untrusted.coverage, validation: untrusted.validation, records, arbitrated }));
     if (outputBody.byteLength > 4_000_000) throw new Error("analysis_output_too_large");
     const checksum = createHash("sha256").update(outputBody).digest("hex"), now = Date.now();
     const reserved: { artifactId: Id<"artifacts">; storageKey: string } = await ctx.runMutation(internal.reviewModelData.reserveOutput, { ...args, checksum, size: outputBody.byteLength, now });

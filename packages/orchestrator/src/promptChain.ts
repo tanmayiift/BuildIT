@@ -1,5 +1,7 @@
 export const promptStages=["requirements","review_plan","findings","critic","arbitration","patch","report"] as const;
 export type PromptStage=typeof promptStages[number];
+export const reviewPromptStages=["requirements","review_plan","findings","critic","arbitration","report"] as const satisfies readonly PromptStage[];
+export const autofixPromptStages=["patch"] as const satisfies readonly PromptStage[];
 export type ValidatedStage={stage:PromptStage;promptVersion:string;schemaVersion:string;value:Record<string,unknown>;attempts:number};
 export type StageDefinition={stage:PromptStage;promptVersion:string;schemaVersion:string;maxInputBytes:number;validate(value:unknown):Record<string,unknown>};
 export type StageExecutor=(request:{stage:PromptStage;system:string;input:string;repairOf?:unknown})=>Promise<unknown>;
@@ -52,8 +54,9 @@ function stable(value:unknown){return JSON.stringify(value,(_key,item)=>item&&ty
 function delimited(label:string,value:unknown){const json=stable(value);return `<buildit:${label}>\n${json}\n</buildit:${label}>`}
 export function renderStageInput(stage:PromptStage,context:{pinned:{headSha:string;baseSha:string;configRevision:string};untrusted:Record<string,unknown>;prior:ValidatedStage[]}){const signals=detectInjectionSignals(context.untrusted);return [`stage=${stage}`,delimited("pinned",context.pinned),delimited("untrusted",context.untrusted),delimited("injection-signals",signals),delimited("validated-prior",context.prior.map(record=>({stage:record.stage,promptVersion:record.promptVersion,schemaVersion:record.schemaVersion,value:record.value})))].join("\n")}
 
-export async function runPromptChain(input:{definitions:StageDefinition[];executor:StageExecutor;pinned:{headSha:string;baseSha:string;configRevision:string};untrusted:Record<string,unknown>;maxSchemaRepairs?:number}){
- if(input.definitions.length!==promptStages.length||input.definitions.some((definition,index)=>definition.stage!==promptStages[index]))throw new Error("invalid_prompt_chain_definition");
+export async function runPromptChain(input:{definitions:StageDefinition[];expectedStages?:readonly PromptStage[];executor:StageExecutor;pinned:{headSha:string;baseSha:string;configRevision:string};untrusted:Record<string,unknown>;maxSchemaRepairs?:number}){
+ const expected=input.expectedStages??promptStages;
+ if(input.definitions.length!==expected.length||input.definitions.some((definition,index)=>definition.stage!==expected[index]))throw new Error("invalid_prompt_chain_definition");
  const records:ValidatedStage[]=[];
  const injectionSignals=detectInjectionSignals(input.untrusted);
  for(const definition of input.definitions){
@@ -72,4 +75,4 @@ export async function runPromptChain(input:{definitions:StageDefinition[];execut
 }
 
 export function objectStage(stage:PromptStage,required:string[],maxInputBytes=250_000):StageDefinition{return{stage,promptVersion:`${stage}-v1`,schemaVersion:`${stage}-schema-v1`,maxInputBytes,validate(value){if(!value||typeof value!=="object"||Array.isArray(value))throw new Error("object_required");const record=value as Record<string,unknown>;for(const key of required)if(!(key in record))throw new Error(`missing:${key}`);return structuredClone(record)}}}
-export const defaultPromptChain:StageDefinition[]=[objectStage("requirements",["requirements"]),objectStage("review_plan",["checks"]),objectStage("findings",["findings"]),objectStage("critic",["accepted","rejected"]),objectStage("arbitration",["findings"]),objectStage("patch",["patches"]),objectStage("report",["claims"] )];
+export const defaultPromptChain:StageDefinition[]=reviewPromptStages.map(stage=>objectStage(stage,stage==="requirements"?["requirements"]:stage==="review_plan"?["checks"]:stage==="findings"||stage==="arbitration"?["findings"]:stage==="critic"?["accepted","rejected"]:["claims"]));

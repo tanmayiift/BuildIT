@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autofixScannerLines, redactAutofixSources } from "./reviewAutofixWorker";
+import { autofixScannerLines, buildAutofixPromptContext, redactAutofixSources } from "./reviewAutofixWorker";
 
 const run = (runs: Array<{ scanner: string; scannerVersion: string }>, findings: Array<{ scanner?: string; severity: "critical" | "warning" | "info" }> = []) => ({ scanner: "combined", scannerVersion: "v1", commitSha: "a".repeat(40), complete: true as const, runs, findings });
 const inventory = [{ scanner: "builditRules", scannerVersion: "1.0.0" }, { scanner: "gitleaks", scannerVersion: "8.28.0" }, { scanner: "osvScanner", scannerVersion: "2.2.3" }];
@@ -27,5 +27,9 @@ describe("Autofix retry privacy", () => {
     expect(source?.content).not.toContain(secret);
     expect(source?.content.split("\n")).toHaveLength(2);
     expect(source?.contentHash).toBe(hash);
+  });
+  it("binds every consented patch request to exact files, accepted findings, and latest checks", () => {
+    const hash = "b".repeat(64), context = buildAutofixPromptContext({ originalHeadSha: "a".repeat(40), parentCandidateSha: "c".repeat(40), acceptedFindings: [{ id: "f-1", path: "src/a.ts", resolution: "accepted" }], files: [{ path: "src/a.ts", content: "export const value = 1", contentHash: hash }], latestChecks: { results: [{ planId: "test", status: "failed" }], outputs: [{ planId: "test", text: "expected 2" }] } });
+    expect(context).toMatchObject({ authorizedAutofix: true, originalHeadSha: "a".repeat(40), parentCandidateSha: "c".repeat(40), acceptedFindings: [{ id: "f-1", resolution: "accepted" }], files: [{ path: "src/a.ts", contentHash: hash }], latestChecks: { results: [{ status: "failed" }], outputs: [{ text: "expected 2" }] } });
   });
 });
