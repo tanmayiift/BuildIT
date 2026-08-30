@@ -1,6 +1,101 @@
 #!/usr/bin/env node
 import { runLocalReview, type CliEvent } from "./local-review.js";
+import {
+  credentialStatus,
+  environmentKey,
+  providerFrom,
+  readHidden,
+  revokeCredential,
+  saveCredential,
+  type Provider,
+} from "./credential-store.js";
 
-const args=process.argv.slice(2),command=args[0]??"help",value=(name:string)=>{const index=args.indexOf(name);return index>=0?args[index+1]:undefined},json=args.includes("--json"),emit=(item:CliEvent)=>{process.stdout.write(json?`${JSON.stringify(item)}\n`:`${item.type.replaceAll("_"," ")}: ${JSON.stringify(item.data)}\n`)};
-async function main(){if(command==="doctor"){const result={node:process.version,git:true,modelKeyPresent:Boolean(process.env.GEMINI_API_KEY||process.env.OPENAI_API_KEY||process.env.ANTHROPIC_API_KEY),note:"A model key is not required for deterministic local checks."};process.stdout.write(`${json?JSON.stringify(result):Object.entries(result).map(([key,item])=>`${key}: ${item}`).join("\n")}\n`);return 0}if(command==="review"){const directory=value("--dir"),result=await runLocalReview({cwd:process.cwd(),...(directory?{directory}:{}),emit});return result.exitCode}if(command==="autofix")throw new Error("autofix_requires_hosted_consent");process.stdout.write("BuildIT CLI\n\nCommands:\n  buildit review [--dir path] [--json]\n  buildit doctor [--json]\n\nLocal review runs deterministic checks only. Hosted AI review and Autofix require GitHub consent.\n");return command==="help"||command==="--help"?0:4}
-main().then(code=>{process.exitCode=code}).catch(error=>{emit({version:1,type:"error",at:new Date().toISOString(),data:{code:error instanceof Error?error.message:"cli_failed"}});process.exitCode=4});
+const args = process.argv.slice(2),
+  command = args[0] ?? "help",
+  value = (name: string) => {
+    const index = args.indexOf(name);
+    return index >= 0 ? args[index + 1] : undefined;
+  },
+  json = args.includes("--json"),
+  emit = (item: CliEvent) => {
+    process.stdout.write(
+      json
+        ? `${JSON.stringify(item)}\n`
+        : `${item.type.replaceAll("_", " ")}: ${JSON.stringify(item.data)}\n`,
+    );
+  };
+async function main() {
+  if (command === "configure") {
+    const provider = providerFrom(value("--provider"));
+    if (args.includes("--revoke")) {
+      revokeCredential(provider);
+      emit({
+        version: 1,
+        type: "credential_revoked",
+        at: new Date().toISOString(),
+        data: { provider },
+      });
+      return 0;
+    }
+    const fromEnvironment = args.includes("--from-env"),
+      key = fromEnvironment
+        ? environmentKey(provider)
+        : await readHidden(`${provider} API key (input hidden): `);
+    if (!key)
+      throw new Error(
+        fromEnvironment
+          ? "provider_environment_key_missing"
+          : "invalid_key_format",
+      );
+    saveCredential(provider, key);
+    emit({
+      version: 1,
+      type: "credential_saved",
+      at: new Date().toISOString(),
+      data: { provider, storage: "os_keychain" },
+    });
+    return 0;
+  }
+  if (command === "doctor") {
+    const providers = (["anthropic", "openai", "gemini"] as Provider[]).map(
+        (provider) => ({ provider, status: credentialStatus(provider) }),
+      ),
+      result = {
+        node: process.version,
+        git: true,
+        providers,
+        note: "Keys remain in the environment or OS keychain. Deterministic local checks do not require one.",
+      };
+    process.stdout.write(
+      `${json ? JSON.stringify(result) : `node: ${result.node}\ngit: true\n${providers.map((item) => `${item.provider}: ${item.status}`).join("\n")}\n${result.note}`}\n`,
+    );
+    return 0;
+  }
+  if (command === "review") {
+    const directory = value("--dir"),
+      result = await runLocalReview({
+        cwd: process.cwd(),
+        ...(directory ? { directory } : {}),
+        emit,
+      });
+    return result.exitCode;
+  }
+  if (command === "autofix") throw new Error("autofix_requires_hosted_consent");
+  process.stdout.write(
+    "BuildIT CLI\n\nCommands:\n  buildit configure --provider <anthropic|openai|gemini> [--from-env|--revoke]\n  buildit review [--dir path] [--json]\n  buildit doctor [--json]\n\nNever pass a key as a command argument. Local review runs deterministic checks only. Hosted AI review and Autofix require GitHub consent.\n",
+  );
+  return command === "help" || command === "--help" ? 0 : 4;
+}
+main()
+  .then((code) => {
+    process.exitCode = code;
+  })
+  .catch((error) => {
+    emit({
+      version: 1,
+      type: "error",
+      at: new Date().toISOString(),
+      data: { code: error instanceof Error ? error.message : "cli_failed" },
+    });
+    process.exitCode = 4;
+  });
