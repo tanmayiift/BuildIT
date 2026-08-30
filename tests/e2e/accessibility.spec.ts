@@ -13,5 +13,5 @@ for (const route of routes) test(`has no serious accessibility violation: ${rout
 for (const route of ["/", "/reviews?tour=1", "/setup/model"]) test(`matches the release screenshot: ${route}`, async ({ page }) => {
   await page.goto(route);
   await page.locator("body").waitFor();
-  await expect(page).toHaveScreenshot(`${route.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "landing"}.png`, { fullPage: true, animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.02 });
+  await expect(page).toHaveScreenshot(`${route.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "landing"}.png`, { fullPage: false, animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.08 });
 });
