@@ -13,6 +13,7 @@ type Connection = {
   repositories: Array<{ id: string; installationId: string; githubRepositoryId: number; owner: string; name: string; defaultBranch: string; visibility: "public" | "private" | "internal" | "unknown"; autofixMode: "disabled" | "stacked" | "direct_push"; indexState: string; updatedAt: number }>;
 };
 const connectionQuery = makeFunctionReference<"query", Record<string, never>, Connection>("repositoryConnections:current");
+const credentialQuery = makeFunctionReference<"query", { organizationId: string }, Array<{ status: string }>>("integrations:listProviderCredentials");
 
 const signedOutConnection: Connection = { state: "signed_out", organization: null, installations: [], repositories: [] };
 function useConnection() {
@@ -25,6 +26,13 @@ function useConnection() {
   if (!hydrated) return undefined;
   if (!isLoading && !isAuthenticated) return signedOutConnection;
   return connection;
+}
+
+function useCredentialReadiness(connection: Connection | undefined) {
+  const role = connection?.organization?.role;
+  const canManage = role === "owner" || role === "admin";
+  const credentials = useQuery(credentialQuery, canManage && connection?.organization ? { organizationId: connection.organization.id } : "skip");
+  return { canManage, ready: credentials?.some(item => item.status === "valid") ?? false };
 }
 
 const stateCopy: Record<Connection["state"], { title: string; body: string }> = {
@@ -89,17 +97,20 @@ export function OverviewReadiness() {
 
 export function SetupAccessSummary({ stepIndex }: { stepIndex: number }) {
   const connection = useConnection();
+  const credential = useCredentialReadiness(connection);
   const signedIn = Boolean(connection && connection.state !== "signed_out");
   const connected = connection?.state === "connected";
-  return <><p className="eyebrow">Access at this step</p><AccessRow label="GitHub identity" active={signedIn} detail={signedIn ? "Verified" : "Required"} /><AccessRow label="Selected repositories" active={connected} detail={connected ? `${connection.repositories.length} connected` : "Not connected"} /><AccessRow label="Provider API key" active={false} detail={stepIndex > 1 ? "Optional" : "Not requested"} /><AccessRow label="Repository execution" active={false} detail="Safety blocked" /><p className="aside-note">These states come from your active workspace. A check mark means the connection is verified now.</p></>;
+  const providerDetail = credential.ready ? "Encrypted and valid" : signedIn && !credential.canManage ? "Managed by Admin" : stepIndex > 1 ? "Optional" : "Not requested";
+  return <><p className="eyebrow">Access at this step</p><AccessRow label="GitHub identity" active={signedIn} detail={signedIn ? "Verified" : "Required"} /><AccessRow label="Selected repositories" active={connected} detail={connected ? `${connection.repositories.length} connected` : "Not connected"} /><AccessRow label="Provider API key" active={credential.ready} detail={providerDetail} /><AccessRow label="Repository execution" active={false} detail="Safety blocked" /><p className="aside-note">These states come from your active workspace. A check mark means the connection is verified now.</p></>;
 }
 
 function AccessRow({ label, active, detail }: { label: string; active: boolean; detail: string }) { return <div className="access-row" data-active={active || undefined}><span>{active ? "✓" : "—"}</span><strong>{label}</strong><small>{detail}</small></div>; }
 
 export function SetupHealthState() {
   const connection = useConnection();
+  const credential = useCredentialReadiness(connection);
   const connected = connection?.state === "connected";
-  return <section className="setup-card"><h2>Readiness checks</h2><div className="health-list"><Health ready title="GitHub App registration" detail="Verified App identity and least-privilege permissions" result="ready" /><Health ready={connected} title="Repository installation" detail={connected ? `${connection.repositories.length} selected repositories in ${connection.organization?.name}` : connection ? stateCopy[connection.state].body : "Checking active workspace"} result={connected ? "ready" : "required"} /><Health ready={false} title="Sandbox boundary" detail="Execution remains disabled until adversarial tests pass" result="blocked" /><Health ready={false} title="Model provider" detail="Optional until AI analysis" result="optional" /></div></section>;
+  return <section className="setup-card"><h2>Readiness checks</h2><div className="health-list"><Health ready title="GitHub App registration" detail="Verified App identity and least-privilege permissions" result="ready" /><Health ready={connected} title="Repository installation" detail={connected ? `${connection.repositories.length} selected repositories in ${connection.organization?.name}` : connection ? stateCopy[connection.state].body : "Checking active workspace"} result={connected ? "ready" : "required"} /><Health ready={false} title="Sandbox boundary" detail="Execution remains disabled until adversarial tests pass" result="blocked" /><Health ready={credential.ready} title="Model provider" detail={credential.ready ? "A valid encrypted organization credential is available" : credential.canManage ? "Optional until AI analysis" : "Managed by an organization Admin or Owner"} result={credential.ready ? "ready" : "optional"} /></div></section>;
 }
 function Health({ ready, title, detail, result }: { ready: boolean; title: string; detail: string; result: string }) { return <div><span className={`health-dot${ready ? " ready" : ""}`} /><span><strong>{title}</strong><small>{detail}</small></span><code>{result}</code></div>; }
 

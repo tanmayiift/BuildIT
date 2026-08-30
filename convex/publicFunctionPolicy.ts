@@ -2,6 +2,7 @@ export type AuthorizationPolicy =
   | "public_webhook"
   | "authenticated_user"
   | "active_organization_viewer"
+  | "active_organization_admin"
   | "active_organization_admin_recent_auth"
   | "invited_user";
 
@@ -10,7 +11,7 @@ export type ResponseClassification = "none" | "metadata" | "personal_identity";
 export const publicFunctionPolicies = {
   "artifacts:getMetadata": { authorization: "active_organization_viewer", response: "metadata" },
   "githubInstallations:claim": { authorization: "authenticated_user", response: "metadata" },
-  "integrations:listProviderCredentials": { authorization: "active_organization_viewer", response: "metadata" },
+  "integrations:listProviderCredentials": { authorization: "active_organization_admin", response: "metadata" },
   "integrations:authorizeCredentialWrite": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
   "integrations:storeEncryptedCredential": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
   "memberships:list": { authorization: "active_organization_viewer", response: "metadata" },
