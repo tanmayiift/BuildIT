@@ -16,10 +16,14 @@ describe("release evidence governance", () => {
     expect(humanLabelFailures(disagreement, run)).toContain("label_disagreement_unadjudicated");
     expect(humanLabelFailures({ ...disagreement, cases: [{ ...disagreement.cases[0]!, adjudicatorHash: adjudicator }] }, run)).not.toContain("label_disagreement_unadjudicated");
   });
-  it("cannot pass release merely because governance is valid when population metrics are weak", () => expect(releaseEvidenceGate({ run, population: officialPopulation, labels, modelGrader: { used: false, humanLabelledCases: 0, falseAccepts: 0, falseRejects: 0, maximumFalseAcceptRate: 0 } })).toMatchObject({ passed: false, deterministicGrader: { passed: true } }));
-  it("rejects an uncalibrated model judge instead of letting it overrule deterministic evidence", () => { const result = releaseEvidenceGate({ run, population: officialPopulation, labels, modelGrader: { used: true, humanLabelledCases: 10, falseAccepts: 1, falseRejects: 0, maximumFalseAcceptRate: .01 } }); expect(result.failures).toContain("model_grader_uncalibrated"); });
+  it("cannot pass release merely because governance is valid when population metrics are weak", () => expect(releaseEvidenceGate({ run, population: officialPopulation, labels, modelGrader: { used: false, humanLabelledCases: 0, falseAccepts: 0, falseRejects: 0, maximumFalseAcceptRate: 0, maximumFalseRejectRate: 0 } })).toMatchObject({ passed: false, deterministicGrader: { passed: true }, humanReviewerAgreement: { percentAgreement: 1 } }));
+  it("rejects an uncalibrated model judge instead of letting it overrule deterministic evidence", () => { const result = releaseEvidenceGate({ run, population: officialPopulation, labels, modelGrader: { used: true, humanLabelledCases: 10, falseAccepts: 1, falseRejects: 0, maximumFalseAcceptRate: .01, maximumFalseRejectRate: .1 } }); expect(result.failures).toContain("model_grader_uncalibrated"); });
   it("parses only source-free, genuinely human-labelled release evidence", () => {
-    expect(parseReleaseEvidenceInput({ run, labels, modelGrader: { used: false, humanLabelledCases: 0, falseAccepts: 0, falseRejects: 0, maximumFalseAcceptRate: 0 } }).labels.version).toBe("labels-v1");
-    expect(() => parseReleaseEvidenceInput({ run, labels: { ...labels, cases: [{ ...labels.cases[0], synthetic: true }] }, modelGrader: { used: false, humanLabelledCases: 0, falseAccepts: 0, falseRejects: 0, maximumFalseAcceptRate: 0 } })).toThrow("human_label_case_invalid");
+    expect(parseReleaseEvidenceInput({ run, labels, modelGrader: { used: false, humanLabelledCases: 0, falseAccepts: 0, falseRejects: 0, maximumFalseAcceptRate: 0, maximumFalseRejectRate: 0 } }).labels.version).toBe("labels-v1");
+    expect(() => parseReleaseEvidenceInput({ run, labels: { ...labels, cases: [{ ...labels.cases[0], synthetic: true }] }, modelGrader: { used: false, humanLabelledCases: 0, falseAccepts: 0, falseRejects: 0, maximumFalseAcceptRate: 0, maximumFalseRejectRate: 0 } })).toThrow("human_label_case_invalid");
+  });
+  it("rejects weak agreement between independent Critical reviewers", () => {
+    const disputed = { ...labels, cases: [{ ...labels.cases[0]!, finalExpected: true, votes: [{ reviewerHash: reviewer, expected: true }, { reviewerHash: second, expected: false }], adjudicatorHash: adjudicator }] };
+    expect(releaseEvidenceGate({ run, population: officialPopulation, labels: disputed, modelGrader: { used: false, humanLabelledCases: 0, falseAccepts: 0, falseRejects: 0, maximumFalseAcceptRate: 0, maximumFalseRejectRate: 0 } }).failures).toContain("human_reviewer_agreement_below_threshold");
   });
 });
