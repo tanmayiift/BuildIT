@@ -66,8 +66,11 @@ test("preview never impersonates a signed-in customer", async ({ page }) => {
 test("public data handling states the current access boundary", async ({ page }) => {
   await page.goto("/data-handling");
   await expect(page.getByRole("heading", { name: "What happens to your data" })).toBeVisible();
-  await expect(page.getByText(/signing in shares your approved GitHub identity/i)).toBeVisible();
-  await expect(page.getByText(/does not grant repository access/i)).toBeVisible();
+  await expect(page.getByText(/sign-in grants identity only/i)).toBeVisible();
+  await expect(page.getByText(/does not grant source-code access/i)).toBeVisible();
+  await expect(page.getByText(/BuildIT does not promise that AI makes code bug-free/i)).toBeVisible();
+  await expect(page.getByText(/still being production-validated/i)).toBeVisible();
+  await expect(page.getByText(/review screens remain sample data/i)).toHaveCount(0);
 });
 
 test("repository and integration screens use truthful live connection states", async ({ page }, testInfo) => {

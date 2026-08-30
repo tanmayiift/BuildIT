@@ -1,18 +1,22 @@
 const facts = [
-  ["Current preview", "GitHub sign-in is active. If you approve it, BuildIT stores the identity fields GitHub returns so it can maintain your session. Review screens remain sample data; no repository, source code, pull request, model key, or payment detail is collected through them."],
-  ["Hosting", "The web preview runs on Vercel. Standard infrastructure request logs may include technical details such as time, browser type, and IP address under Vercel's terms."],
-  ["Database", "GitHub identity and session records are stored in the BuildIT development Convex deployment in Ireland after sign-in. Tenant tables require server-side organization membership; repository data is not active yet."],
-  ["GitHub access", "BuildIT shows live repository metadata only after you sign in, install the GitHub App, and select repositories. Public and private repositories use the same explicit installation boundary; unselected repositories are not imported."],
-  ["AI providers", "No AI review runs from this preview. Future BYOK requests will use the key you provide and will be sent to the provider you select, after the product shows its data terms and asks for consent."],
-  ["Before launch", "Account export, deletion, repository revocation, retention status, active sessions, audit history, and subprocessor details are release blockers—not optional follow-up work."],
+  ["Public tour versus your workspace", "The public tour is labelled sample data and needs no account. After sign-in, workspace pages request tenant-scoped data from the server; they do not silently replace missing or forbidden data with samples."],
+  ["GitHub identity", "GitHub sign-in proves who you are and creates a BuildIT session. It does not grant source-code access. BuildIT stores only the identity fields GitHub returns and rechecks organization membership for protected operations."],
+  ["Repository access", "Source and pull-request access starts only after you install the BuildIT GitHub App and select repositories. Public and private repositories use the same installation boundary. Unselected repositories remain unavailable, and removing an installation stops new access."],
+  ["GitHub writes", "A review may maintain one BuildIT Check and one summary comment on the reviewed commit. BuildIT may open a separate stacked pull request only after Autofix consent. It has no merge authority and does not edit workflows or repository settings."],
+  ["Model-provider key", "This is an Anthropic, OpenAI, or Gemini key—not a GitHub key. The browser sends it to BuildIT's separate credential broker for provider validation and AWS KMS encryption. BuildIT returns masked metadata, not the raw key, and does not store plaintext in Convex. An Owner or Admin can rotate or revoke it."],
+  ["What reaches the model provider", "When you start AI analysis, BuildIT sends the selected review prompt and bounded evidence to the provider you chose, along with your provider key for authentication. Deterministic checks can run without a model key. BuildIT does not send unrelated repositories."],
+  ["Source artifacts", "Review source is transported as short-lived encrypted artifacts in AWS Ireland and bound to one organization, repository, review, and stage. Convex stores references and source-free review metadata rather than plaintext source. The configured maximum source retention is seven days; repository policy may be shorter."],
+  ["Hosting and operational logs", "The web app and isolated broker run on Vercel; durable application state runs in Convex Ireland; encrypted artifacts and keys use AWS in Ireland. Infrastructure providers may retain request metadata such as time, IP address, and browser details under their own terms. Product logs must not contain source or raw provider keys."],
+  ["Accuracy boundary", "BuildIT does not promise that AI makes code bug-free. Required test, scanner, commit, citation, and staleness evidence decides the result. Missing or conflicting proof must end as inconclusive or action required—not ready to merge."],
+  ["Current release status", "The web journey and core review components are still being production-validated. Native scanner timing, a complete real-model review, key rotation proof, cross-tenant browser proof, and one human-inspected stacked pull request remain release blockers."],
 ];
 
 export default function DataHandling() {
   return <div className="content trust-page">
     <p className="eyebrow">Trust boundary</p>
     <h1 className="title">What happens to your data</h1>
-    <p className="lede">This page describes the deployment you are viewing now. It will change only when the corresponding product capability is built and verified.</p>
+    <p className="lede">What BuildIT can read, where it goes, what it may write, and what remains unproven in this deployment.</p>
     <dl className="trust-list">{facts.map(([term, detail]) => <div key={term}><dt>{term}</dt><dd>{detail}</dd></div>)}</dl>
-    <div className="next"><strong>Plain answer:</strong> signing in shares your approved GitHub identity with BuildIT, but does not grant repository access. The visible review queue is sample data.</div>
+    <div className="next"><strong>Plain answer:</strong> sign-in grants identity only. Repository access needs a separate GitHub App installation. AI needs a separate model-provider key. Autofix needs separate consent. Merge always stays with a human.</div>
   </div>;
 }
