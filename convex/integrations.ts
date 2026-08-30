@@ -59,3 +59,20 @@ export const storeEncryptedCredential = mutation({
     return { id: credentialId, provider: args.provider, maskedSuffix: args.maskedSuffix, status: "valid" as const, lastValidatedAt: args.lastValidatedAt };
   },
 });
+
+export const revokeProviderCredential = mutation({
+  args: { organizationId: v.id("organizations"), credentialId: v.id("providerCredentials"), requestId: v.string() },
+  handler: async (ctx, args) => {
+    const access = await requireOrganizationRole(ctx, args.organizationId, "admin");
+    await requireRecentGitHubLogin(ctx, access.userId);
+    const credential = await ctx.db.get(args.credentialId);
+    if (!credential || credential.organizationId !== args.organizationId) throw new Error("not_found_or_forbidden");
+    if (credential.status === "revoked") return { id: credential._id, status: "revoked" as const };
+    const now = Date.now();
+    await ctx.db.patch(credential._id, { status: "revoked", revokedAt: now });
+    await appendAuditEvent(ctx, { organizationId: args.organizationId, actorId: access.userId,
+      action: "credential.revoked", resourceType: "provider_credential", resourceId: credential._id,
+      requestId: args.requestId, result: "allowed", createdAt: now });
+    return { id: credential._id, status: "revoked" as const };
+  },
+});

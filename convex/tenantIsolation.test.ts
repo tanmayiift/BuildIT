@@ -269,6 +269,28 @@ describe("Convex tenant isolation", () => {
     })).rejects.toThrow("not_found_or_forbidden");
   });
 
+  it("revokes only a credential in the active admin's organization and records no plaintext", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId: 44, githubLogin: "alice" }));
+    const alpha = await seedTenant(t, "credential-revoke", userId);
+    const beta = await seedTenant(t, "credential-foreign", "bob");
+    await t.run(ctx => ctx.db.insert("userProfiles", { userId, githubUserId: 44, githubLogin: "alice", lastAuthenticatedAt: Date.now(), updatedAt: Date.now() }));
+    const signedIn = t.withIdentity({ subject: `${userId}|credential-session` });
+    const [credential] = await signedIn.query(api.integrations.listProviderCredentials, { organizationId: alpha.organizationId });
+    const [foreign] = await t.withIdentity({ subject: "bob" }).query(api.integrations.listProviderCredentials, { organizationId: beta.organizationId });
+    await expect(signedIn.mutation(api.integrations.revokeProviderCredential, {
+      organizationId: alpha.organizationId, credentialId: foreign!.id, requestId: "credential-revoke-foreign-0001",
+    })).rejects.toThrow("not_found_or_forbidden");
+    await expect(signedIn.mutation(api.integrations.revokeProviderCredential, {
+      organizationId: alpha.organizationId, credentialId: credential!.id, requestId: "credential-revoke-valid-0001",
+    })).resolves.toEqual({ id: credential!.id, status: "revoked" });
+    const stored = await t.run(ctx => ctx.db.get(credential!.id));
+    expect(stored).toMatchObject({ status: "revoked" });
+    expect(stored?.revokedAt).toEqual(expect.any(Number));
+    const audit = await t.run(ctx => ctx.db.query("auditEvents").withIndex("by_org_created", q => q.eq("organizationId", alpha.organizationId)).collect());
+    expect(audit.at(-1)).toMatchObject({ action: "credential.revoked", result: "allowed" });
+  });
+
   it("rejects an artifact whose review and repository parents do not match", async () => {
     const t = convexTest(schema, modules);
     const alpha = await seedTenant(t, "alpha", "alice");

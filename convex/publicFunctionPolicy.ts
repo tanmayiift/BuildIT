@@ -14,6 +14,7 @@ export const publicFunctionPolicies = {
   "integrations:listProviderCredentials": { authorization: "active_organization_admin", response: "metadata" },
   "integrations:authorizeCredentialWrite": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
   "integrations:storeEncryptedCredential": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
+  "integrations:revokeProviderCredential": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
   "memberships:list": { authorization: "active_organization_viewer", response: "metadata" },
   "memberships:invite": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
   "memberships:accept": { authorization: "invited_user", response: "metadata" },
