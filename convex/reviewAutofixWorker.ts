@@ -15,6 +15,7 @@ import {
 import {
   assertAutofixBounds,
   conservativeModelCost,
+  candidateWorsened,
   contentHash,
   runModelPatchChain,
   stageSchemas,
@@ -106,7 +107,7 @@ type Analysis = {
   version?: number;
   pinned?: { headSha?: string; baseSha?: string };
   records?: Array<{ stage?: string; value?: { patches?: PatchProposal[] } }>;
-  validation?: { head?: { results?: unknown[]; outputs?: Array<{ planId?: string; text?: string }> } };
+  validation?: { head?: { results?: unknown[]; outputs?: Array<{ planId?: string; text?: string }> };scanners?:{head?:{findings?:Array<{severity?:string}>}} };
   arbitrated?: Array<{
     id?: string;
     resolution?: string;
@@ -656,6 +657,8 @@ export const runConvergence = internalAction({
             : requiredRuns.some((item) => item.conclusion === "failed")
               ? ("failed" as const)
               : ("passed" as const);
+        const parentChecks=((failure?.head.results??analysis.validation?.head?.results??[]) as Array<{planId:string;required:boolean;conclusion:"passed"|"failed"|"not_run"|"timed_out"|"truncated"|"flaky"}>),parentCritical=(failure?.scanners.head.findings??analysis.validation?.scanners?.head?.findings??[]).filter(item=>item.severity==="critical").length,candidateCritical=output.scanners.head.findings.filter(item=>item.severity==="critical").length,worsening=candidateWorsened({parent:parentChecks,candidate:headSummaries,parentCriticalFindings:parentCritical,candidateCriticalFindings:candidateCritical});
+        if(worsening.worsened)throw new Error(`autofix_worsened:${worsening.reason}`);
         const validationBody = Buffer.from(
             JSON.stringify({
               version: 1,
