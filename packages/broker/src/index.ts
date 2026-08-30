@@ -106,3 +106,4 @@ export class CredentialBroker {
   }
 }
 export * from "./artifacts.js";
+export * from "./http.js";
