@@ -60,4 +60,5 @@ export * from "./repository-content.js";
 export * from "./repository-chunks.js";
 export * from "./pull-request-context.js";
 export * from "./issue-context.js";
+export * from "./tracker-context.js";
 export * from "./repository-writer.js";
