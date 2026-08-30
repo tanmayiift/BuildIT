@@ -6,6 +6,7 @@ import type { Id } from "../_generated/dataModel";
 export type AppRole = "owner" | "admin" | "developer" | "viewer";
 type Ctx = QueryCtx | MutationCtx;
 const rank: Record<AppRole, number> = { viewer: 0, developer: 1, admin: 2, owner: 3 };
+const recentWindowMs = 10 * 60 * 1000;
 
 export async function requireUserId(ctx: Ctx): Promise<string> {
   const userId = await getAuthUserId(ctx);
@@ -45,4 +46,11 @@ export async function requireRepositoryRole(
   }
   const access = await requireOrganizationRole(ctx, repository.organizationId, minimum);
   return { ...access, repository, installation };
+}
+
+export async function requireRecentGitHubLogin(ctx: Ctx, userId: string, now = Date.now()) {
+  const profile = await ctx.db.query("userProfiles").withIndex("by_user", q => q.eq("userId", userId as Id<"users">)).unique();
+  if (!profile?.lastAuthenticatedAt || profile.lastAuthenticatedAt > now + 5_000 || now - profile.lastAuthenticatedAt > recentWindowMs) {
+    throw new ConvexError("recent_reauthentication_required");
+  }
 }

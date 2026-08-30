@@ -11,6 +11,8 @@ export const publicFunctionPolicies = {
   "artifacts:getMetadata": { authorization: "active_organization_viewer", response: "metadata" },
   "githubInstallations:claim": { authorization: "authenticated_user", response: "metadata" },
   "integrations:listProviderCredentials": { authorization: "active_organization_viewer", response: "metadata" },
+  "integrations:authorizeCredentialWrite": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
+  "integrations:storeEncryptedCredential": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
   "memberships:list": { authorization: "active_organization_viewer", response: "metadata" },
   "memberships:invite": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
   "memberships:accept": { authorization: "invited_user", response: "metadata" },

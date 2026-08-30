@@ -238,6 +238,37 @@ describe("Convex tenant isolation", () => {
     await expect(t.withIdentity({ subject: "viewer" }).query(api.integrations.listProviderCredentials, { organizationId: alpha.organizationId })).rejects.toThrow("not_found_or_forbidden");
   });
 
+  it("stores only encrypted credential material for a recently authenticated admin", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId: 42, githubLogin: "alice" }));
+    const alpha = await seedTenant(t, "credential-alpha", userId);
+    await t.run(ctx => ctx.db.insert("userProfiles", { userId, githubUserId: 42, githubLogin: "alice", lastAuthenticatedAt: Date.now(), updatedAt: Date.now() }));
+    const signedIn = t.withIdentity({ subject: `${userId}|credential-session` });
+    await expect(signedIn.query(api.integrations.authorizeCredentialWrite, { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId }))
+      .resolves.toEqual({ actorId: userId });
+    const result = await signedIn.mutation(api.integrations.storeEncryptedCredential, {
+      organizationId: alpha.organizationId, repositoryId: alpha.repositoryId,
+      credentialScopeId: "123e4567-e89b-12d3-a456-426614174000", provider: "gemini",
+      encryptedCiphertext: "encrypted", nonce: "nonce", authTag: "tag", aadDigest: "a".repeat(64),
+      wrappedDataKey: "wrapped", kmsKeyId: "arn:aws:kms:eu-west-1:123:key/test", envelopeVersion: 1,
+      keyVersion: 1, maskedSuffix: "1234", lastValidatedAt: Date.now(), requestId: "credential-create-0001",
+    });
+    expect(result).toMatchObject({ provider: "gemini", maskedSuffix: "1234", status: "valid" });
+    const stored = await t.run(ctx => ctx.db.get(result.id));
+    expect(stored).toMatchObject({ organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, createdBy: userId, encryptedCiphertext: "encrypted" });
+  });
+
+  it("rejects a model credential bound to another tenant's repository", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId: 43, githubLogin: "alice" }));
+    const alpha = await seedTenant(t, "credential-owner", userId);
+    const beta = await seedTenant(t, "credential-other", "bob");
+    await t.run(ctx => ctx.db.insert("userProfiles", { userId, githubUserId: 43, githubLogin: "alice", lastAuthenticatedAt: Date.now(), updatedAt: Date.now() }));
+    await expect(t.withIdentity({ subject: `${userId}|credential-session` }).query(api.integrations.authorizeCredentialWrite, {
+      organizationId: alpha.organizationId, repositoryId: beta.repositoryId,
+    })).rejects.toThrow("not_found_or_forbidden");
+  });
+
   it("rejects an artifact whose review and repository parents do not match", async () => {
     const t = convexTest(schema, modules);
     const alpha = await seedTenant(t, "alpha", "alice");

@@ -1,19 +1,11 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireOrganizationRole, requireUserId, type AppRole } from "./lib/authz";
+import { requireOrganizationRole, requireRecentGitHubLogin, requireUserId, type AppRole } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
 import { role } from "./validators";
 import type { Id } from "./_generated/dataModel";
 
-const recentWindowMs = 10 * 60 * 1000;
 const rank: Record<AppRole, number> = { viewer: 0, developer: 1, admin: 2, owner: 3 };
-
-async function requireRecentGitHubLogin(ctx: Parameters<typeof requireUserId>[0], userId: string, now: number) {
-  const profile = await ctx.db.query("userProfiles").withIndex("by_user", q => q.eq("userId", userId as Id<"users">)).unique();
-  if (!profile?.lastAuthenticatedAt || profile.lastAuthenticatedAt > now + 5_000 || now - profile.lastAuthenticatedAt > recentWindowMs) {
-    throw new ConvexError("recent_reauthentication_required");
-  }
-}
 
 async function assertCanManage(actorRole: AppRole, targetRole: AppRole) {
   if (actorRole === "owner") return;

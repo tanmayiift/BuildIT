@@ -77,6 +77,7 @@ export default defineSchema({
     lastUsedAt: v.optional(v.number()), revokedAt: v.optional(v.number()),
   }).index("by_org_provider", ["organizationId", "provider"])
     .index("by_repository_provider", ["repositoryId", "provider"])
+    .index("by_scope", ["credentialScopeId"])
     .index("by_org_status", ["organizationId", "status"]),
 
   trackerConnections: defineTable({
