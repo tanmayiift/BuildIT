@@ -8,6 +8,9 @@
     },
     "api/artifacts.ts": {
       "maxDuration": 30
+    },
+    "api/model.ts": {
+      "maxDuration": 60
     }
   }
 }

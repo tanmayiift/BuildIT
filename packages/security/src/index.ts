@@ -28,3 +28,4 @@ export function fingerprint(value:string,key:Buffer){return createHmac("sha256",
 export function sanitizeGitHub(input:string){return redact(input).replace(/@/g,"＠").replace(/<img[^>]*>/gi,"").replace(/<script[\s\S]*?<\/script>/gi,"")}
 export { AwsKmsClient } from "./aws-kms.js";
 export * from "./artifact-grant.js";
+export * from "./model-grant.js";
