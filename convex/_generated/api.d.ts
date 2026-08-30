@@ -48,6 +48,7 @@ import type * as reviewValidationData from "../reviewValidationData.js";
 import type * as reviewValidationWorker from "../reviewValidationWorker.js";
 import type * as reviews from "../reviews.js";
 import type * as tablePolicy from "../tablePolicy.js";
+import type * as usage from "../usage.js";
 import type * as users from "../users.js";
 import type * as validators from "../validators.js";
 import type * as workflowManager from "../workflowManager.js";
@@ -99,6 +100,7 @@ declare const fullApi: ApiFromModules<{
   reviewValidationWorker: typeof reviewValidationWorker;
   reviews: typeof reviews;
   tablePolicy: typeof tablePolicy;
+  usage: typeof usage;
   users: typeof users;
   validators: typeof validators;
   workflowManager: typeof workflowManager;

@@ -226,6 +226,16 @@ describe("Convex tenant isolation", () => {
     expect(JSON.stringify(evidence)).not.toContain("sourceCommitSha");
   });
 
+  it("aggregates usage only after validating every organization, repository, and review parent", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "usage-alpha", "alice"), beta = await seedTenant(t, "usage-beta", "bob"), now = Date.now();
+    await t.run(ctx => ctx.db.insert("usageLedger", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId,
+      reviewId: alpha.reviewId, kind: "model_tokens", quantity: 120, unitCost: 0, currency: "provider_billed", occurredAt: now }));
+    const result = await t.withIdentity({ subject: "alice|session" }).query(api.usage.summarize, { organizationId: alpha.organizationId, since: now - 1 });
+    expect(result).toMatchObject({ quantities: { model_tokens: 120 }, costs: { provider_billed: 0 }, recordCount: 1, monthlyBudget: 100 });
+    expect(JSON.stringify(result)).not.toContain(String(beta.reviewId));
+    await expect(t.withIdentity({ subject: "bob|session" }).query(api.usage.summarize, { organizationId: alpha.organizationId, since: now - 1 })).rejects.toThrow("not_found_or_forbidden");
+  });
+
   it("creates a dashboard review only inside the authorized repository and records consent", async () => {
     const t = convexTest(schema, modules), alpha = await seedTenant(t, "dashboard-alpha", "alice"), beta = await seedTenant(t, "dashboard-beta", "bob");
     const asAlice = t.withIdentity({ subject: "alice|dashboard-session" });

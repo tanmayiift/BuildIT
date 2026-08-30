@@ -36,4 +36,5 @@ export const publicFunctionPolicies = {
   "users:viewer": { authorization: "authenticated_user", response: "personal_identity" },
   "users:sessions": { authorization: "authenticated_user", response: "metadata" },
   "users:revokeOtherSessions": { authorization: "authenticated_user", response: "metadata" },
+  "usage:summarize": { authorization: "active_organization_viewer", response: "metadata" },
 } as const satisfies Record<string, { authorization: AuthorizationPolicy; response: ResponseClassification }>;
