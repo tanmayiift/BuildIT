@@ -3,6 +3,7 @@ import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 import { GitHubAppClient, pinPullRequest, reviewPolicy } from "@buildit/github";
 
 const args = { repositoryId: v.id("repositories"), prNumber: v.number() };
@@ -10,6 +11,7 @@ type DashboardScope = { actorId: string; actorRole: "developer" | "admin" | "own
   repositoryId: Id<"repositories">; githubRepositoryId: number; installationId: number; owner: string; name: string; forkPolicy: "manual_review_only" | "disabled";
   credentialScopeId: string; provider: "anthropic" | "openai" | "gemini"; model: string };
 type PreparedReview = { repository: string; pull: Awaited<ReturnType<typeof snapshot>>; credentialScopeId: string; consent: { reads: string[]; runs: string[]; provider: string; model: string; maximumProviderCostUsd: number; writes: string[]; cannot: string[] } };
+const recordPreview = makeFunctionReference<"mutation", { repositoryId: Id<"repositories">; actorId: string; headSha: string; now: number }, string>("dashboardReviewData:recordPreview");
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 async function snapshot(scope: { installationId: number; githubRepositoryId: number; forkPolicy: "manual_review_only" | "disabled" }, prNumber: number) {
   if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error("invalid_pull_request_number");
@@ -29,6 +31,7 @@ async function snapshot(scope: { installationId: number; githubRepositoryId: num
 export const prepare = action({ args, handler: async (ctx, input): Promise<PreparedReview> => {
   const scope: DashboardScope = await ctx.runQuery(internal.dashboardReviewData.scope, { repositoryId: input.repositoryId });
   const pull = await snapshot(scope, input.prNumber);
+  await ctx.runMutation(recordPreview, { repositoryId: input.repositoryId, actorId: scope.actorId, headSha: pull.headSha, now: Date.now() });
   return { repository: `${scope.owner}/${scope.name}`, pull, credentialScopeId: scope.credentialScopeId,
     consent: { reads: ["PR description and diff", "linked GitHub Issues", "repository files needed for impact analysis"],
       runs: ["dependency install with scripts disabled", "test", "lint", "typecheck", "Gitleaks 8.28.0", "OSV-Scanner 2.2.3", "BuildIT static rules 1.0.0"],

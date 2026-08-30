@@ -62,3 +62,17 @@ export const create = internalMutation({
     return { reviewId, status: "queued" as const, headSha: args.headSha, executionGeneration: 0 };
   },
 });
+
+export const recordPreview = internalMutation({
+  args: { repositoryId: v.id("repositories"), actorId: v.string(), headSha: v.string(), now: v.number() },
+  handler: async (ctx, args) => {
+    const repository = await ctx.db.get(args.repositoryId);
+    if (!repository || !repository.enabled || !/^[0-9a-f]{40}$/.test(args.headSha)) throw new ConvexError("not_found_or_forbidden");
+    const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", repository.organizationId).eq("userId", args.actorId)).unique();
+    if (!membership || membership.status !== "active" || membership.role === "viewer") throw new ConvexError("not_found_or_forbidden");
+    const requestId = `review-preview:${repository._id}:${args.headSha.slice(0, 16)}`;
+    const existing = await ctx.db.query("auditEvents").withIndex("by_request", q => q.eq("requestId", requestId)).unique();
+    if (existing) return existing._id;
+    return appendAuditEvent(ctx, { organizationId: repository.organizationId, actorId: args.actorId, action: "review.previewed", resourceType: "repository_commit", resourceId: `${repository._id}:${args.headSha}`, requestId, result: "allowed", createdAt: args.now });
+  },
+});

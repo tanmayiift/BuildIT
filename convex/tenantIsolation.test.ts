@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 import { normalizeGitHubProfile } from "./lib/githubProfile";
+import { makeFunctionReference } from "convex/server";
 
 const modules = import.meta.glob("./**/*.ts");
+const activationFunnel = makeFunctionReference<"query", { organizationId: string }, { repositoryConnected: boolean; modelKeyReady: boolean; pullRequestPreviewed: boolean; reviewStarted: boolean; firstEvidenceReady: boolean }>("activation:funnel");
+const recordPreview = makeFunctionReference<"mutation", { repositoryId: string; actorId: string; headSha: string; now: number }, string>("dashboardReviewData:recordPreview");
 
 async function seedTenant(
   t: ReturnType<typeof convexTest>,
@@ -176,6 +179,16 @@ async function seedTenant(
 }
 
 describe("Convex tenant isolation", () => {
+  it("derives source-free activation only inside the active organization", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "activation-alpha", "alice"), beta = await seedTenant(t, "activation-beta", "bob"), asAlice = t.withIdentity({ subject: "alice" });
+    await expect(asAlice.query(activationFunnel, { organizationId: beta.organizationId })).rejects.toThrow("not_found_or_forbidden");
+    expect(await asAlice.query(activationFunnel, { organizationId: alpha.organizationId })).toEqual({ repositoryConnected: true, modelKeyReady: true, pullRequestPreviewed: false, reviewStarted: true, firstEvidenceReady: false });
+    await t.mutation(recordPreview, { repositoryId: alpha.repositoryId, actorId: "alice", headSha: "a".repeat(40), now: 10 });
+    await t.run(ctx => ctx.db.insert("reviewEvents", { organizationId: alpha.organizationId, reviewId: alpha.reviewId, sequence: 2, type: "stage_completed", stage: "analysis", internalCode: "analysis_complete", metadata: {}, createdAt: 11 }));
+    const progressed = await asAlice.query(activationFunnel, { organizationId: alpha.organizationId });
+    expect(progressed).toMatchObject({ pullRequestPreviewed: true, firstEvidenceReady: true });
+    expect(JSON.stringify(progressed)).not.toContain("activation-alpha");
+  });
   it("stores a normalized GitHub profile when the account email is private", async () => {
     const t = convexTest(schema, modules);
     const profile = normalizeGitHubProfile({
