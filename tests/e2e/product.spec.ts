@@ -74,6 +74,30 @@ test("permission requests explain benefit, limits, retention, and revocation", a
   await expect(page.getByRole("link", { name: "Review access in GitHub" })).toBeVisible();
 });
 
+test("production repository control reaches the registered GitHub App", async ({
+  page,
+}) => {
+  test.skip(
+    !process.env.BUILDIT_E2E_BASE_URL,
+    "Production GitHub App proof requires an explicit deployed base URL",
+  );
+  await page.goto("/setup/install");
+  await page.getByRole("link", { name: "Review access in GitHub" }).click();
+  await page.waitForURL((url) => url.hostname === "github.com", {
+    timeout: 15_000,
+  });
+  const github = new URL(page.url());
+  expect(github.protocol).toBe("https:");
+  const installationTarget =
+    github.pathname === "/login"
+      ? new URL(github.searchParams.get("return_to") ?? "", github)
+      : github;
+  expect(installationTarget.hostname).toBe("github.com");
+  expect(installationTarget.pathname).toBe(
+    "/apps/buildit-agentic-review/installations/new",
+  );
+});
+
 test("navigation exposes all promised product areas", async ({ page }) => {
   await page.goto("/");
   const menu = page.getByText("Menu", { exact: true });
