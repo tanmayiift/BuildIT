@@ -101,6 +101,7 @@ export const notificationStatus = v.union(v.literal("pending"), v.literal("sent"
 export const auditResult = v.union(v.literal("allowed"), v.literal("denied"), v.literal("failed"));
 export const statusReasonCode = v.union(
   v.literal("checks_complete"), v.literal("blocking_findings"),
+  v.literal("required_check_failed"),
   v.literal("required_check_missing"), v.literal("unsupported_check"),
   v.literal("environment_unavailable"), v.literal("review_timeout"),
   v.literal("final_validation_incomplete"), v.literal("provider_credential_invalid"),

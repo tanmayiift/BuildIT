@@ -63,6 +63,13 @@ export const execute = reviewWorkflowManager.define({
     await step.runMutation(internal.durableReview.checkpoint, {
       ...args, stage, sequence: index + 2, now: args.startedAt + index + 1,
     });
+    if (stage === "analysis") {
+      await step.runMutation(internal.reviewValidationData.finalizeDecision, {
+        organizationId: args.organizationId, reviewId: args.reviewId,
+        expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
+        now: args.startedAt + index + 2,
+      });
+    }
   }
   return null;
 });

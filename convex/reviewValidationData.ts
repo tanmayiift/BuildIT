@@ -9,7 +9,8 @@ const hash = v.string();
 export const validationScope = internalQuery({
   args: executionArgs,
   handler: async (ctx, args) => {
-    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), organization = await ctx.db.get(args.organizationId);
+    if (!organization || organization.deletedAt) throw new ConvexError("organization_unavailable");
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
     const artifacts = (await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect());
     const contexts = artifacts.filter(item => item.type === "repository_snapshot" && item.redactionStatus === "redacted" && !item.deletedAt).sort((a, b) => a.storageKey.localeCompare(b.storageKey));
@@ -70,5 +71,34 @@ export const completeValidation = internalMutation({
     await ctx.db.insert("usageLedger", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, kind: "sandbox_seconds", quantity: Math.ceil(durationMs / 1000), unitCost: 0, currency: "platform", occurredAt: args.now });
     await ctx.db.patch(review._id, { status: "validating", currentStage: "validation", updatedAt: args.now });
     return artifact._id;
+  },
+});
+
+export const finalizeDecision = internalMutation({
+  args: { ...executionArgs, now: v.number() },
+  handler: async (ctx, args) => {
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), organization = await ctx.db.get(args.organizationId);
+    if (!organization || organization.deletedAt) throw new ConvexError("organization_unavailable");
+    if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
+    if (["checks_passed", "changes_requested", "inconclusive"].includes(review.status) && review.statusReasonCode && review.completedAt) return { status: review.status, statusReasonCode: review.statusReasonCode, nextActionCode: review.nextActionCode };
+    if (review.status !== "validating" || review.currentStage !== "analysis") throw new ConvexError("review_not_ready_for_decision");
+    const checks = (await ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect()).filter(item => item.commitSha === review.headSha);
+    const findings = await ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).collect();
+    let incomplete = review.coverageLevel !== "full" || !checks.some(item => item.required);
+    let failed = false;
+    for (const check of checks.filter(item => item.required)) {
+      const artifact = check.artifactId ? await ctx.db.get(check.artifactId) : null;
+      if (!artifact || artifact.organizationId !== args.organizationId || artifact.reviewId !== review._id || artifact.redactionStatus !== "redacted" || artifact.deletedAt || !["passed", "failed"].includes(check.conclusion)) incomplete = true;
+      if (check.conclusion === "failed") failed = true;
+    }
+    const blocking = findings.some(item => item.resolution === "open" && item.blocking);
+    const status = incomplete ? "inconclusive" as const : failed || blocking ? "changes_requested" as const : "checks_passed" as const;
+    const statusReasonCode = incomplete ? "required_check_missing" as const : failed ? "required_check_failed" as const : blocking ? "blocking_findings" as const : "checks_complete" as const;
+    const nextActionCode = incomplete ? "retry_review" as const : failed || blocking ? "inspect_findings" as const : "none" as const;
+    const githubCheckConclusion = status === "checks_passed" ? "success" as const : status === "changes_requested" ? "failure" as const : "neutral" as const;
+    await ctx.db.patch(review._id, { status, statusReasonCode, nextActionCode, githubCheckConclusion, currentStage: "complete", completedAt: args.now, updatedAt: args.now });
+    await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", internalCode: `decision_${statusReasonCode}`, metadata: { count: findings.length }, createdAt: args.now });
+    await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, name: "review_completed", value: 1, organizationTimezone: organization.timezone, occurredAt: args.now });
+    return { status, statusReasonCode, nextActionCode };
   },
 });
