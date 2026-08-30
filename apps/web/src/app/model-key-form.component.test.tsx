@@ -22,7 +22,7 @@ vi.mock("convex/server", () => ({ makeFunctionReference: (name: string) => name 
 import { ModelKeyForm } from "./model-key-form.js";
 
 const connection = { organization: { id: "org-a", name: "Acme", role: "owner" }, credentialReauthenticationExpiresAt: Date.now() + 60_000, repositories: [{ id: "repo-a", owner: "acme", name: "api" }] };
-const credential = { id: "cred-a", provider: "gemini", maskedSuffix: "nmiQ", status: "valid", lastValidatedAt: Date.UTC(2026, 7, 30), repositoryId: "repo-a" };
+const credential = { id: "cred-a", provider: "gemini", maskedSuffix: "nmiQ", status: "valid", lastValidatedAt: Date.UTC(2026, 7, 30), lastUsedAt: Date.UTC(2026, 7, 31), repositoryId: "repo-a" };
 
 describe("authenticated model-key controls", () => {
   beforeEach(() => {
@@ -40,11 +40,18 @@ describe("authenticated model-key controls", () => {
     render(<ModelKeyForm />);
     expect((await screen.findAllByText("acme/api")).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Key ending in nmiQ").textContent).toContain("•••• nmiQ");
+    expect(screen.getByText(/Validated .*last used/)).not.toBeNull();
     expect(document.body.textContent).not.toContain("session-token");
     const replace = screen.getByRole("button", { name: "Replace" }), revoke = screen.getByRole("button", { name: "Revoke" });
     expect(replace.compareDocumentPosition(revoke) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     await user.tab();
     expect(document.activeElement?.tagName).toBe("SELECT");
+  });
+
+  it("truthfully distinguishes a valid key that has never been used", async () => {
+    state.credentials = [{ ...credential, lastUsedAt: undefined }];
+    render(<ModelKeyForm />);
+    expect(await screen.findByText(/Validated .*never used/)).not.toBeNull();
   });
 
   it("requires a reversible confirmation before revocation", async () => {

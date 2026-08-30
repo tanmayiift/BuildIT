@@ -17,6 +17,7 @@ type SavedCredential = {
   maskedSuffix: string;
   status: string;
   lastValidatedAt: number;
+  lastUsedAt?: number;
 };
 const connectionQuery = makeFunctionReference<
   "query",
@@ -342,7 +343,7 @@ export function ModelKeyForm() {
               </span>
               <span className="credential-scope">
                 <span>{credential.repositoryId ? (() => { const repository = connection?.repositories.find(item => item.id === credential.repositoryId); return repository ? `${repository.owner}/${repository.name}` : "Removed repository"; })() : "All connected repositories"}</span>
-                <small>{credential.status === "revoked" ? "Revoked" : `Validated ${new Date(credential.lastValidatedAt).toLocaleDateString()}`}</small>
+                <small>{credential.status === "revoked" ? "Revoked" : `Validated ${new Date(credential.lastValidatedAt).toLocaleDateString()} · ${credential.lastUsedAt ? `last used ${new Date(credential.lastUsedAt).toLocaleDateString()}` : "never used"}`}</small>
               </span>
               {confirmRevokeId === credential.id ? <span className="credential-confirm"><small>Stop BuildIT from using this key?</small><button className="button tertiary compact" type="button" disabled={working} onClick={() => setConfirmRevokeId("")}>Cancel</button><button className="button destructive compact" type="button" disabled={working} onClick={() => void revoke(credential)}>Confirm revoke</button></span> : <span className="credential-actions"><button className="button secondary compact" type="button" disabled={working || credential.status === "revoked"} onClick={() => beginRotation(credential)}>Replace</button><button className="button destructive compact" type="button" disabled={working || credential.status === "revoked"} onClick={() => setConfirmRevokeId(credential.id)}>{credential.status === "revoked" ? "Revoked" : "Revoke"}</button></span>}
             </div>
