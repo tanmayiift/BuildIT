@@ -22,4 +22,18 @@ describe("validation evidence", () => {
     output.head.credentialTeardownProved = false;
     expect(() => summarizeExecution(output, baseSha, headSha)).toThrow("credential_teardown_unproved");
   });
+
+  it("records combined scanner runs as separate required checks", () => {
+    const plan = { planId: "test", origin: "built_in", kind: "test", executable: "npm", args: ["run", "test"], required: true, timeoutMs: 45_000, cpuLimit: 2, memoryMb: 4096, outputBytes: 10_000_000, fileBytes: 1_000_000_000, network: "none", conclusion: "passed", exitCode: 0, durationMs: 5 } as const;
+    const baseSha = "a".repeat(40), headSha = "b".repeat(40);
+    const run = (commitSha: string) => ({ credentialTeardownProved: true, stopped: true, results: [plan], outputs: [] });
+    const scanner = (commitSha: string) => ({ scanner: "builditRules", scannerVersion: "combined", commitSha, complete: true as const,
+      runs: [{ scanner: "builditRules", scannerVersion: "1.0.0" }, { scanner: "gitleaks", scannerVersion: "8.28.0" }],
+      findings: [{ scanner: "gitleaks", severity: "critical" as const }] });
+    const response = { base: run(baseSha), head: run(headSha), scanners: { base: scanner(baseSha), head: scanner(headSha) } } as unknown as ExecutionResponse;
+    const summaries = summarizeExecution(response, baseSha, headSha);
+    expect(summaries.filter(item => item.revision === "head" && ["buildit-rules", "gitleaks"].includes(item.planId)).map(item => [item.planId, item.kind, item.conclusion])).toEqual([
+      ["buildit-rules", "static_analysis", "passed"], ["gitleaks", "secret_scan", "failed"],
+    ]);
+  });
 });

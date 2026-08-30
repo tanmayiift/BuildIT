@@ -5,6 +5,7 @@ type Finished = { exitCode: number; durationMs?: number; stdout(): Promise<strin
 type SandboxCommand = { cmd: string; args: string[]; cwd?: string; timeoutMs: number };
 export type SandboxLike = {
   writeFiles(files: Array<{ path: string; content: Uint8Array }>): Promise<void>;
+  readFileToBuffer(file: { path: string; cwd?: string }): Promise<Buffer | null>;
   runCommand(command: SandboxCommand): Promise<Finished>;
   updateNetworkPolicy(policy: "deny-all" | { allow: string[] }): Promise<unknown>;
   stop(): Promise<unknown>;
@@ -13,7 +14,7 @@ export type SandboxFactory = (input: { runtime?: "node22" | "node24"; image?: st
 
 const registryDomains = ["registry.npmjs.org", "registry.yarnpkg.com"];
 const sensitive = /(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|GITHUB_|VERCEL_|CONVEX_|ANTHROPIC_|OPENAI_|GEMINI_|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)/i;
-const unsafeInstallControl = /(^|\/)(?:\.git|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfile\.cjs|pnpmfile\.cjs|\.pnp\.(?:cjs|js)|\.yarn\/plugins)(\/|$)/i;
+const unsafeInstallControl = /(^|\/)(?:\.git|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfile\.cjs|pnpmfile\.cjs|\.pnp\.(?:cjs|js)|\.yarn\/plugins|\.gitleaks\.toml|\.gitleaksignore)(\/|$)/i;
 
 async function output(result: Finished, limit: number) {
   const [stdout, stderr] = await Promise.all([result.stdout(), result.stderr()]);
@@ -53,12 +54,17 @@ export class VercelSandboxRunner {
       const environmentText = await environment.stdout();
       if (environmentText.split("\n").some(line => sensitive.test(line.split("=", 1)[0] ?? ""))) throw new Error("credential_teardown_failed");
 
+      const gitleaks = await sandbox.runCommand({ cmd: "gitleaks", args: ["dir", "--no-banner", "--no-color", "--redact=100", "--exit-code", "0", "--report-format", "json", "--report-path", "/tmp/buildit-gitleaks.json", "--max-target-megabytes", "10", "/vercel/sandbox/repo"], timeoutMs: 120_000 });
+      if (gitleaks.exitCode !== 0) throw new Error("gitleaks_execution_failed");
+      const gitleaksReport = await sandbox.readFileToBuffer({ path: "/tmp/buildit-gitleaks.json" });
+      if (!gitleaksReport || gitleaksReport.byteLength > 2_000_000) throw new Error("gitleaks_report_invalid");
+
       await sandbox.updateNetworkPolicy({ allow: registryDomains });
       const installResult = await sandbox.runCommand({ cmd: input.install.executable, args: input.install.args, cwd: "/vercel/sandbox/repo", timeoutMs: input.install.timeoutMs });
       const installOutput = await output(installResult, input.install.outputBytes);
       outputs.push({ planId: input.install.planId, ...installOutput });
       results.push({ ...input.install, conclusion: installOutput.truncated ? "truncated" : installResult.exitCode === 0 ? "passed" : "failed", exitCode: installResult.exitCode, durationMs: installResult.durationMs ?? 0, ...(installResult.exitCode === 0 ? {} : { failureClass: "code" as const }) });
-      if (installResult.exitCode !== 0 || installOutput.truncated) return { credentialTeardownProved: true, results, outputs, stopped: true };
+      if (installResult.exitCode !== 0 || installOutput.truncated) return { credentialTeardownProved: true, results, outputs, gitleaksReport: gitleaksReport.toString("utf8"), stopped: true };
 
       await sandbox.updateNetworkPolicy("deny-all");
       for (const plan of input.checks) {
@@ -67,7 +73,7 @@ export class VercelSandboxRunner {
         outputs.push({ planId: plan.planId, ...captured });
         results.push({ ...plan, conclusion: captured.truncated ? "truncated" : result.exitCode === 0 ? "passed" : "failed", exitCode: result.exitCode, durationMs: result.durationMs ?? 0, ...(result.exitCode === 0 ? {} : { failureClass: "code" as const }) });
       }
-      return { credentialTeardownProved: true, results, outputs, stopped: true };
+      return { credentialTeardownProved: true, results, outputs, gitleaksReport: gitleaksReport.toString("utf8"), stopped: true };
     } finally {
       await sandbox.stop();
     }

@@ -24,6 +24,15 @@ export type ScannerRun = {
   findings: ScannerFinding[];
 };
 
+export type CombinedScannerRun = ScannerRun & { runs: Array<{ scanner: ScannerRun["scanner"]; scannerVersion: string }> };
+
+export function combineScannerRuns(commitSha: string, runs: ScannerRun[]): CombinedScannerRun {
+  const commit = pinnedCommit(commitSha);
+  if (!runs.length || runs.some(run => !run.complete || run.commitSha !== commit)) throw new Error("scanner_evidence_incomplete");
+  return { scanner: "builditRules", scannerVersion: runs.map(run => `${run.scanner}@${run.scannerVersion}`).join("+"), commitSha: commit, complete: true,
+    runs: runs.map(run => ({ scanner: run.scanner, scannerVersion: run.scannerVersion })), findings: runs.flatMap(run => run.findings) };
+}
+
 function pinnedCommit(commitSha: string) {
   if (!/^[0-9a-f]{40}$/i.test(commitSha)) throw new Error("invalid_scanner_commit");
   return commitSha.toLowerCase();

@@ -15,7 +15,7 @@ function fixture(changes: Record<string, unknown> = {}) {
 }
 function dependencies() {
   const artifactBroker = { get: vi.fn(async (readGrant: string) => { const revision = readGrant.startsWith("base") ? "base" as const : "head" as const, body = artifactBody(revision); return { artifactId: `${revision}-artifact`, body, checksum: createHash("sha256").update(body).digest("hex") }; }) };
-  const runner = { run: vi.fn(async () => ({ credentialTeardownProved: true, stopped: true, results: [{ ...plans.checks[0]!, conclusion: "passed" as const, exitCode: 0, durationMs: 2 }], outputs: [{ planId: "test" as const, text: "passed", truncated: false }] })) };
+  const runner = { run: vi.fn(async () => ({ credentialTeardownProved: true, stopped: true, gitleaksReport: "[]", results: [{ ...plans.checks[0]!, conclusion: "passed" as const, exitCode: 0, durationMs: 2 }], outputs: [{ planId: "test" as const, text: "passed", truncated: false }] })) };
   return { artifactBroker, runner };
 }
 
@@ -31,7 +31,7 @@ describe("native base/head execution boundary", () => {
     expect(response.status).toBe(200);
     const output = await response.json();
     expect(deps.runner.run).toHaveBeenCalledTimes(2);
-    expect(output).toMatchObject({ base: { credentialTeardownProved: true }, head: { credentialTeardownProved: true }, scanners: { head: { findings: [expect.objectContaining({ ruleId: "buildit-js-eval" })] } } });
+    expect(output).toMatchObject({ base: { credentialTeardownProved: true }, head: { credentialTeardownProved: true }, scanners: { head: { runs: [{ scanner: "builditRules", scannerVersion: "1.0.0" }, { scanner: "gitleaks", scannerVersion: "8.28.0" }], findings: [expect.objectContaining({ ruleId: "buildit-js-eval" })] } } });
   });
 
   it("rejects tenant, plan, and artifact changes before sandbox execution", async () => {

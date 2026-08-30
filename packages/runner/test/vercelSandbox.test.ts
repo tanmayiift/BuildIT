@@ -6,6 +6,7 @@ function fixture(options: { env?: string; installExit?: number } = {}) {
   const calls: Array<unknown> = [], stop = vi.fn(async () => ({}));
   const sandbox: SandboxLike = {
     writeFiles: vi.fn(async files => { calls.push(["files", files]); }),
+    readFileToBuffer: vi.fn(async () => Buffer.from("[]")),
     updateNetworkPolicy: vi.fn(async policy => { calls.push(["network", policy]); }),
     runCommand: vi.fn(async command => {
       calls.push(["command", command]);
@@ -25,6 +26,7 @@ describe("Vercel sandbox runner", () => {
     const f = fixture(), runner = new VercelSandboxRunner(f.create);
     const result = await runner.run({ runtime: "node22", files: [{ path: "package.json", content: "{}" }], install, checks: [test] });
     expect(result.credentialTeardownProved).toBe(true);
+    expect(result.gitleaksReport).toBe("[]");
     expect(result.outputs).toEqual([{ planId: "install", text: "ok", truncated: false }, { planId: "test", text: "ok", truncated: false }]);
     expect(f.calls).toContainEqual(["network", { allow: ["registry.npmjs.org", "registry.yarnpkg.com"] }]);
     expect(f.calls).toContainEqual(["network", "deny-all"]);
@@ -50,7 +52,7 @@ describe("Vercel sandbox runner", () => {
     const result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files: [], install, checks: [test] });
     expect(result.results).toHaveLength(1);
     expect(result.results[0]!.conclusion).toBe("failed");
-    expect(f.calls.filter(call => Array.isArray(call) && call[0] === "command")).toHaveLength(2);
+    expect(f.calls.filter(call => Array.isArray(call) && call[0] === "command")).toHaveLength(3);
     expect(f.stop).toHaveBeenCalledOnce();
   });
 
@@ -70,7 +72,7 @@ describe("Vercel sandbox runner", () => {
   });
 
   it("rejects repository-owned package-manager hooks and credential configuration", async () => {
-    for (const path of [".git/config", ".npmrc", ".yarnrc.yml", ".yarn/plugins/attack.cjs", ".pnpmfile.cjs"]) {
+    for (const path of [".git/config", ".npmrc", ".yarnrc.yml", ".yarn/plugins/attack.cjs", ".pnpmfile.cjs", ".gitleaks.toml", ".gitleaksignore"]) {
       const f = fixture();
       await expect(new VercelSandboxRunner(f.create).run({ runtime: "node22", files: [{ path, content: "attack" }], install, checks: [test] })).rejects.toThrow("sandbox_untrusted_install_control");
       expect(f.stop).toHaveBeenCalledOnce();

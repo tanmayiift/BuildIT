@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseGitleaks, parseOsv, scanBuildITRules, scannerInventory } from "../src/index";
+import { combineScannerRuns, parseGitleaks, parseOsv, scanBuildITRules, scannerInventory } from "../src/index";
 
 const sha = "a".repeat(40);
 
@@ -30,5 +30,15 @@ describe("deterministic scanner evidence", () => {
     expect(() => parseOsv("{}", sha, scannerInventory.osvScanner)).toThrow("scanner_output_malformed");
     expect(() => scanBuildITRules([{ path: "../escape.ts", content: "eval(x)" }], sha)).toThrow("scanner_unsafe_path");
     expect(() => scanBuildITRules([], "branch-name")).toThrow("invalid_scanner_commit");
+  });
+
+  it("preserves every scanner name and version in combined evidence", () => {
+    const authored = scanBuildITRules([], sha), gitleaks = parseGitleaks("[]", sha, scannerInventory.gitleaks);
+    expect(combineScannerRuns(sha, [authored, gitleaks])).toMatchObject({
+      complete: true,
+      runs: [{ scanner: "builditRules", scannerVersion: "1.0.0" }, { scanner: "gitleaks", scannerVersion: "8.28.0" }],
+      findings: [],
+    });
+    expect(() => combineScannerRuns(sha, [{ ...gitleaks, commitSha: "b".repeat(40) }])).toThrow("scanner_evidence_incomplete");
   });
 });

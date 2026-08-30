@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { defaultExecutionPlans, validatePlan, VercelSandboxRunner, type CommandPlan } from "@buildit/runner";
-import { scanBuildITRules } from "@buildit/scanners";
+import { combineScannerRuns, parseGitleaks, scanBuildITRules, scannerInventory } from "@buildit/scanners";
 import { verifyExecutionGrant } from "@buildit/security";
 import type { ArtifactBroker } from "./artifacts.js";
 
@@ -40,6 +40,10 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     const runner = input.runner ?? new VercelSandboxRunner(), image = input.runner ? undefined : pinnedSandboxImage(process.env.BUILDIT_SANDBOX_IMAGE), execute = async (revision: "base" | "head") => runner.run({ runtime: body.runtime, ...(image ? { image } : {}), files: [...files[revision]].map(([path, content]) => ({ path, content })), install, checks });
     const [baseResult, headResult] = await Promise.all([execute("base"), execute("head")]);
     const bounded = (result: Awaited<ReturnType<Runner["run"]>>) => ({ credentialTeardownProved: result.credentialTeardownProved, stopped: result.stopped, results: result.results, outputs: result.outputs.map(output => ({ ...output, evidenceTruncated: output.text.length > 250_000, text: output.text.slice(0, 250_000) })) });
-    return json(200, { base: bounded(baseResult), head: bounded(headResult), scanners: { base: scanBuildITRules([...files.base].map(([path, content]) => ({ path, content })), body.baseSha), head: scanBuildITRules([...files.head].map(([path, content]) => ({ path, content })), body.headSha) } });
+    const scanner = (revision: "base" | "head", commitSha: string, result: Awaited<ReturnType<Runner["run"]>>) => combineScannerRuns(commitSha, [
+      scanBuildITRules([...files[revision]].map(([path, content]) => ({ path, content })), commitSha),
+      parseGitleaks(result.gitleaksReport, commitSha, scannerInventory.gitleaks),
+    ]);
+    return json(200, { base: bounded(baseResult), head: bounded(headResult), scanners: { base: scanner("base", body.baseSha, baseResult), head: scanner("head", body.headSha, headResult) } });
   } catch (error) { const mapped = safe(error); return json(mapped.status, { error: mapped.code }); }
 }
