@@ -19,7 +19,7 @@ export class GitHubRepositoryWriter {
     if (typeof sha !== "string" || !/^[0-9a-f]{40}$/i.test(sha)) throw new Error("github_ref_malformed");
     return sha.toLowerCase();
   }
-  async createCandidateCommit(input: { pinnedHead: string; currentHead: string; message: string; patches: Array<{ path: string; content: string }> }) {
+  async createCandidateCommit(input: { pinnedHead: string; currentHead: string; message: string; patches: Array<{ path: string; content: string }>; identity?: { name: string; email: string; date: string } }) {
     if (input.pinnedHead !== input.currentHead) throw new Error("stale_head");
     if (!/^[0-9a-f]{40}$/i.test(input.pinnedHead) || !input.message.trim() || input.patches.length < 1 || input.patches.length > 100) throw new Error("candidate_input_invalid");
     let bytes = 0;
@@ -34,17 +34,31 @@ export class GitHubRepositoryWriter {
     }));
     const createdTree = await this.request("/git/trees", { method: "POST", body: JSON.stringify({ base_tree: baseTree, tree }) });
     if (typeof createdTree.sha !== "string") throw new Error("github_tree_malformed");
-    const commit = await this.request("/git/commits", { method: "POST", body: JSON.stringify({ message: input.message, tree: createdTree.sha, parents: [input.pinnedHead] }) });
+    if (input.identity && (!input.identity.name.trim() || !/^\S+@\S+$/.test(input.identity.email) || !Number.isFinite(Date.parse(input.identity.date)))) throw new Error("candidate_identity_invalid");
+    const commit = await this.request("/git/commits", { method: "POST", body: JSON.stringify({ message: input.message, tree: createdTree.sha, parents: [input.pinnedHead], ...(input.identity ? { author: input.identity, committer: input.identity } : {}) }) });
     if (typeof commit.sha !== "string" || !/^[0-9a-f]{40}$/i.test(commit.sha)) throw new Error("github_commit_malformed");
     return commit.sha.toLowerCase();
   }
   async createBranch(input: { name: string; sha: string }) {
     await this.request("/git/refs", { method: "POST", body: JSON.stringify({ ref: `refs/heads/${input.name}`, sha: input.sha }) });
   }
+  async upsertBranch(input: { name: string; sha: string }) {
+    if (!/^[A-Za-z0-9._/-]+$/.test(input.name) || input.name.startsWith("/") || input.name.includes("..") || !/^[0-9a-f]{40}$/i.test(input.sha)) throw new Error("branch_input_invalid");
+    try { const existing = await this.branchHead(input.name); if (existing !== input.sha.toLowerCase()) throw new Error("branch_conflict"); return { operation: "reused" as const }; }
+    catch (error) { if (error instanceof Error && error.message !== "repository_write_unavailable") throw error; }
+    await this.createBranch(input); return { operation: "created" as const };
+  }
   async createPullRequest(input: { head: string; base: string; title: string; body: string }) {
     const value = await this.request("/pulls", { method: "POST", body: JSON.stringify(input) });
     if (typeof value.number !== "number" || typeof value.html_url !== "string") throw new Error("github_pull_request_malformed");
     return { number: value.number, url: value.html_url };
+  }
+  async upsertStackedPullRequest(input: { head: string; base: string; title: string; body: string }) {
+    if (!input.head.trim() || !input.base.trim() || !input.title.trim() || !input.body.trim()) throw new Error("pull_request_input_invalid");
+    const listed = await this.request(`/pulls?state=open&base=${encodeURIComponent(input.base)}&per_page=100`), items = Array.isArray(listed) ? listed : [];
+    const existing = (items as Array<{ number?: unknown; html_url?: unknown; head?: { ref?: unknown }; base?: { ref?: unknown } }>).find(item => item.head?.ref === input.head && item.base?.ref === input.base);
+    if (existing && typeof existing.number === "number" && typeof existing.html_url === "string") return { number: existing.number, url: existing.html_url, operation: "reused" as const };
+    return { ...await this.createPullRequest(input), operation: "created" as const };
   }
   async createCheckRun(input: { name: string; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; title: string; summary: string }) {
     if (!/^[0-9a-f]{40}$/i.test(input.headSha) || !input.name.trim() || !input.title.trim() || !input.summary.trim() || Buffer.byteLength(input.summary) > 60_000) throw new Error("check_run_input_invalid");
