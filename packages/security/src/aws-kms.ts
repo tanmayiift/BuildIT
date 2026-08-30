@@ -18,7 +18,7 @@ export class AwsKmsClient implements KmsClient {
   readonly #send: CommandSender["send"];
 
   constructor(options: { config?: KMSClientConfig; client?: CommandSender } = {}) {
-    const client = options.client ?? new KMSClient({ region: "eu-west-1", ...options.config });
+    const client: CommandSender = options.client ?? (new KMSClient({ region: "eu-west-1", ...options.config }) as unknown as CommandSender);
     this.#send = command => client.send(command as never);
   }
 
