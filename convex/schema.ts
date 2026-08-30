@@ -69,6 +69,7 @@ export default defineSchema({
   providerCredentials: defineTable({
     organizationId: v.id("organizations"), provider: value.provider,
     encryptedCiphertext: v.string(), nonce: v.string(), authTag: v.string(), aadDigest: v.string(),
+    wrappedDataKey: v.string(), kmsKeyId: v.string(), envelopeVersion: v.literal(1),
     keyVersion: v.number(), maskedSuffix: v.string(), status: value.credentialStatus,
     createdBy: v.string(), createdAt: v.number(), lastValidatedAt: v.optional(v.number()),
     lastUsedAt: v.optional(v.number()), revokedAt: v.optional(v.number()),

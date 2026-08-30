@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
-import { credentialAad, decryptSecret, encryptSecret, fingerprint, redact, sanitizeGitHub } from "../src/index.js";
+import { credentialAad, decryptSecret, encryptSecret, envelopeDecryptSecret, envelopeEncryptSecret, fingerprint, type KmsClient, redact, rotateEnvelope, sanitizeGitHub } from "../src/index.js";
 
 describe("security", () => {
   it("binds ciphertext to the exact organization, repository, credential, and purpose", () => {
@@ -27,4 +27,21 @@ describe("security", () => {
   });
 
   it("redacts provider keys", () => expect(redact("token sk-proj_abcdefghijk")).not.toContain("abcdefghijk"));
+
+  it("uses a separate wrapped data key and binds KMS unwrap to the tenant scope", async () => {
+    const wrappingKeys=new Map([["kms-v1",randomBytes(32)],["kms-v2",randomBytes(32)]]),contexts=new Map<string,string>();
+    const kms:KmsClient={
+      async generateDataKey({keyId,encryptionContext}){const plaintextKey=randomBytes(32),id=randomBytes(16).toString("hex"),mask=wrappingKeys.get(keyId)!;contexts.set(id,JSON.stringify(encryptionContext));return{plaintextKey,encryptedKey:Buffer.concat([Buffer.from(id),Buffer.from(plaintextKey.map((byte,index)=>byte^mask[index]!))])}},
+      async decryptDataKey({keyId,encryptedKey,encryptionContext}){const id=Buffer.from(encryptedKey).subarray(0,32).toString(),wrapped=Buffer.from(encryptedKey).subarray(32),mask=wrappingKeys.get(keyId)!;if(contexts.get(id)!==JSON.stringify(encryptionContext))throw new Error("kms_context_mismatch");return Buffer.from(wrapped.map((byte,index)=>byte^mask[index]!))},
+      async rewrapDataKey({sourceKeyId,destinationKeyId,encryptedKey,encryptionContext}){const plain=await this.decryptDataKey({keyId:sourceKeyId,encryptedKey,encryptionContext}),id=Buffer.from(encryptedKey).subarray(0,32),mask=wrappingKeys.get(destinationKeyId)!;return Buffer.concat([id,Buffer.from(plain.map((byte,index)=>byte^mask[index]!))])},
+    };
+    const scope={organizationId:"org-a",repositoryId:"repo-a",credentialId:"cred-a",purpose:"model-provider"} as const;
+    const encrypted=await envelopeEncryptSecret("provider-secret",scope,kms,"kms-v1",1);
+    expect(await envelopeDecryptSecret(encrypted,scope,kms)).toBe("provider-secret");
+    await expect(envelopeDecryptSecret(encrypted,{...scope,organizationId:"org-b"},kms)).rejects.toThrow("kms_context_mismatch");
+    const rotated=await rotateEnvelope(encrypted,scope,kms,"kms-v2",2);
+    expect(rotated).toMatchObject({kmsKeyId:"kms-v2",keyVersion:2,ciphertext:encrypted.ciphertext});
+    expect(await envelopeDecryptSecret(rotated,scope,kms)).toBe("provider-secret");
+    await expect(rotateEnvelope(rotated,scope,kms,"kms-v2",2)).rejects.toThrow("key_version_must_increase");
+  });
 });

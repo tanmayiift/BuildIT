@@ -62,7 +62,7 @@ async function seedTenant(t: ReturnType<typeof convexTest>, slug: string, userId
     });
     await ctx.db.insert("providerCredentials", {
       organizationId, provider: "anthropic", encryptedCiphertext: "ciphertext",
-      nonce: "nonce", authTag: "tag", aadDigest: "aad", keyVersion: 1,
+      nonce: "nonce", authTag: "tag", aadDigest: "aad", wrappedDataKey: "wrapped", kmsKeyId: "kms-test", envelopeVersion: 1, keyVersion: 1,
       maskedSuffix: "…1234", status: "valid", createdBy: userId, createdAt: now,
     });
     return { organizationId, installationId, repositoryId, reviewId, artifactId };
