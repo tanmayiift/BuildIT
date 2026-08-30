@@ -20,6 +20,9 @@ importers:
       '@buildit/providers':
         specifier: workspace:*
         version: link:packages/providers
+      '@buildit/runner':
+        specifier: workspace:*
+        version: link:packages/runner
       '@buildit/security':
         specifier: workspace:*
         version: link:packages/security

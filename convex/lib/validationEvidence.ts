@@ -1,3 +1,4 @@
+"use node";
 import { createHash } from "node:crypto";
 import type { CheckResult, PackageManager } from "@buildit/runner";
 
