@@ -58,4 +58,12 @@ describe("Vercel sandbox runner", () => {
     await expect(runner.run({ runtime: "node22", files: [{ path: "../escape", content: "x" }], install, checks: [test] })).rejects.toThrow("sandbox_unsafe_path");
     await expect(runner.run({ runtime: "node22", files: [], install, checks: [{ ...test, network: "registry_only" }] })).rejects.toThrow("sandbox_check_network_must_be_denied");
   });
+
+  it("rejects repository-owned package-manager hooks and credential configuration", async () => {
+    for (const path of [".git/config", ".npmrc", ".yarnrc.yml", ".yarn/plugins/attack.cjs", ".pnpmfile.cjs"]) {
+      const f = fixture();
+      await expect(new VercelSandboxRunner(f.create).run({ runtime: "node22", files: [{ path, content: "attack" }], install, checks: [test] })).rejects.toThrow("sandbox_untrusted_install_control");
+      expect(f.stop).toHaveBeenCalledOnce();
+    }
+  });
 });
