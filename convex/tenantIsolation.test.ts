@@ -3064,7 +3064,7 @@ describe("expired artifact cleanup", () => {
     await expect(t.mutation(internal.artifactCleanupData.completeDeletion,{artifactId:validId,leaseId:"22222222-2222-4222-8222-222222222222",now:now+2})).rejects.toThrow("artifact_cleanup_lease_invalid");
     await t.mutation(internal.artifactCleanupData.completeDeletion,{artifactId:validId,leaseId,now:now+2});
     const stored=await t.run(async ctx=>({valid:await ctx.db.get(validId),forged:await ctx.db.get(forgedId),future:await ctx.db.get(futureId)}));
-    expect(stored.valid).toMatchObject({deletedAt:now+2,deletionAttempts:1});expect(stored.valid?.deletionLeaseId).toBeUndefined();expect(stored.forged?.deletedAt).toBeUndefined();expect(stored.future?.deletedAt).toBeUndefined();
+    expect(stored.valid).toMatchObject({deletedAt:now+2,deletionAttempts:1});expect(stored.valid?.deletionLeaseId).toBeUndefined();expect(stored.forged).toMatchObject({deletionTerminalAt:now,lastDeletionErrorCode:"artifact_parent_invalid"});expect(stored.forged?.deletedAt).toBeUndefined();expect(stored.future?.deletedAt).toBeUndefined();
   });
 
   it("releases a failed lease for a bounded retry",async()=>{
@@ -3082,5 +3082,25 @@ describe("expired artifact cleanup", () => {
     vi.stubEnv("BUILDIT_BROKER_URL","https://broker.example");vi.stubEnv("ARTIFACT_GRANT_SECRET",Buffer.alloc(32,7).toString("base64url"));
     const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{expect(String(input)).toBe("https://broker.example/api/artifacts");expect(init?.method).toBe("DELETE");expect(String((init?.headers as Record<string,string>).authorization)).toMatch(/^Bearer [^.]+\.[^.]+$/);return Response.json({deleted:true})});vi.stubGlobal("fetch",fetchMock);
     try{await expect(t.action(internal.artifactCleanupWorker.cleanup,{})).resolves.toEqual({claimed:1,deleted:1,failed:0});expect(fetchMock).toHaveBeenCalledTimes(1);expect(await t.run(ctx=>ctx.db.get(artifactId))).toMatchObject({deletedAt:expect.any(Number),deletionAttempts:1})}finally{vi.unstubAllGlobals();vi.unstubAllEnvs()}
+  });
+
+  it("quarantines the tenth failure and exposes only source-free operations evidence",async()=>{
+    const t=convexTest(schema,modules),tenant=await seedTenant(t,"cleanup-terminal","alice"),now=300_000,leaseId="55555555-5555-4555-8555-555555555555";
+    const artifactId=await t.run(async ctx=>{const id=await ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"command_output",storageKey:"pending",encrypted:true,checksum:"d".repeat(64),size:10,redactionStatus:"redacted",expiresAt:now-1,deletionAttempts:9});await ctx.db.patch(id,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/validation.json`});return id});
+    expect(await t.mutation(internal.artifactCleanupData.claimExpired,{now,leaseId,limit:1})).toHaveLength(1);
+    await t.mutation(internal.artifactCleanupData.failDeletion,{artifactId,leaseId,errorCode:"broker_delete_failed",now:now+1});
+    const terminal=await t.query(internal.artifactCleanupData.listTerminal,{limit:10});
+    expect(terminal).toEqual([{artifactId,organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,deletionAttempts:10,errorCode:"deletion_attempts_exhausted",terminalAt:now+1}]);
+    expect(JSON.stringify(terminal)).not.toContain("validation.json");expect(JSON.stringify(terminal)).not.toContain("dddddddd");
+    expect(await t.mutation(internal.artifactCleanupData.claimExpired,{now:now+2,leaseId:"66666666-6666-4666-8666-666666666666",limit:1})).toEqual([]);
+  });
+
+  it("allows explicit retry only after rechecking the complete artifact parent scope",async()=>{
+    const t=convexTest(schema,modules),tenant=await seedTenant(t,"cleanup-terminal-retry","alice"),now=400_000;
+    const {validId,forgedId}=await t.run(async ctx=>{const insert=async()=>ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"command_output",storageKey:"pending",encrypted:true,checksum:"e".repeat(64),size:10,redactionStatus:"redacted",expiresAt:now-1,deletionAttempts:10,deletionTerminalAt:now-2,lastDeletionErrorCode:"deletion_attempts_exhausted"});const validId=await insert(),forgedId=await insert();await ctx.db.patch(validId,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${validId}/validation.json`});await ctx.db.patch(forgedId,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/other/validation.json`});return{validId,forgedId}});
+    await expect(t.mutation(internal.artifactCleanupData.retryTerminal,{artifactId:forgedId,now})).rejects.toThrow("artifact_cleanup_retry_invalid");
+    await expect(t.mutation(internal.artifactCleanupData.retryTerminal,{artifactId:validId,now})).resolves.toBe(validId);
+    const retried=await t.run(ctx=>ctx.db.get(validId));expect(retried).toMatchObject({deletionAttempts:0});expect(retried?.lastDeletionErrorCode).toBeUndefined();expect(retried?.deletionTerminalAt).toBeUndefined();
+    expect(await t.mutation(internal.artifactCleanupData.claimExpired,{now:now+1,leaseId:"77777777-7777-4777-8777-777777777777",limit:1})).toHaveLength(1);
   });
 });

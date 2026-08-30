@@ -201,8 +201,9 @@ export default defineSchema({
     storageKey: v.string(), encrypted: v.literal(true), checksum: v.string(), size: v.number(),
     redactionStatus: value.redactionStatus, expiresAt: v.number(), deletedAt: v.optional(v.number()),
     deletionAttempts: v.number(), deletionLeaseId: v.optional(v.string()), deletionLeaseExpiresAt: v.optional(v.number()),
-    lastDeletionErrorCode: v.optional(v.string()),
+    lastDeletionErrorCode: v.optional(v.string()), deletionTerminalAt: v.optional(v.number()),
   }).index("by_expiry", ["expiresAt"])
+    .index("by_deletion_terminal", ["deletionTerminalAt"])
     .index("by_repository", ["repositoryId"])
     .index("by_review", ["reviewId"]),
 
