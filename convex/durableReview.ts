@@ -74,6 +74,10 @@ export const execute = reviewWorkflowManager.define({
         reportArtifactId: report.artifactId,
         now: args.startedAt + index + 2,
       });
+      await step.runAction(internal.reviewPublicationWorker.publish, {
+        organizationId: args.organizationId, reviewId: args.reviewId,
+        expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
+      });
     }
   }
   return null;

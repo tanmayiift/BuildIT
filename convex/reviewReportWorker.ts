@@ -45,6 +45,7 @@ export const compose = internalAction({
     const body = Buffer.from(composeVerifiedReport({ repository: scope.repository, prNumber: scope.prNumber, headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision,
       coverage: scope.coverage, checks: reportChecks(validation, scope.headSha), findings: analysis.arbitrated, claims: [], evidence: [], environmentAvailable: scope.environmentAvailable, isStale: scope.isStale,
       costUsd: scope.costUsd, retentionExpiresAt: scope.expiresAt }).body, "utf8");
+    if (body.byteLength > 60_000) throw new Error("report_output_too_large");
     const checksum = createHash("sha256").update(body).digest("hex"), now = Date.now();
     const reserved: { artifactId: Id<"artifacts">; storageKey: string } = await ctx.runMutation(internal.reviewReportData.reserveOutput, { ...args, checksum, size: body.byteLength, now });
     const grant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(reserved.artifactId), storageKey: reserved.storageKey, operation: "write" }, secret, now);

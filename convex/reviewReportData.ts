@@ -31,7 +31,7 @@ export const reserveOutput = internalMutation({
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
-    if (!/^[0-9a-f]{64}$/.test(args.checksum) || !Number.isInteger(args.size) || args.size < 1 || args.size > 1_000_000) throw new ConvexError("invalid_report_artifact");
+    if (!/^[0-9a-f]{64}$/.test(args.checksum) || !Number.isInteger(args.size) || args.size < 1 || args.size > 60_000) throw new ConvexError("invalid_report_artifact");
     const prior = (await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect()).find(item => item.type === "review_message" && item.storageKey.endsWith("/report.md"));
     if (prior) { if (prior.checksum !== args.checksum || prior.size !== args.size) throw new ConvexError("report_artifact_conflict"); return { artifactId: prior._id, storageKey: prior.storageKey }; }
     const artifactId = await ctx.db.insert("artifacts", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, type: "review_message", storageKey: "pending", encrypted: true,

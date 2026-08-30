@@ -34,6 +34,8 @@ import type * as reviewAnalysisWorker from "../reviewAnalysisWorker.js";
 import type * as reviewArtifactData from "../reviewArtifactData.js";
 import type * as reviewContextWorker from "../reviewContextWorker.js";
 import type * as reviewModelData from "../reviewModelData.js";
+import type * as reviewPublicationData from "../reviewPublicationData.js";
+import type * as reviewPublicationWorker from "../reviewPublicationWorker.js";
 import type * as reviewReportData from "../reviewReportData.js";
 import type * as reviewReportWorker from "../reviewReportWorker.js";
 import type * as reviewState from "../reviewState.js";
@@ -78,6 +80,8 @@ declare const fullApi: ApiFromModules<{
   reviewArtifactData: typeof reviewArtifactData;
   reviewContextWorker: typeof reviewContextWorker;
   reviewModelData: typeof reviewModelData;
+  reviewPublicationData: typeof reviewPublicationData;
+  reviewPublicationWorker: typeof reviewPublicationWorker;
   reviewReportData: typeof reviewReportData;
   reviewReportWorker: typeof reviewReportWorker;
   reviewState: typeof reviewState;

@@ -628,6 +628,8 @@ describe("Convex review state integrity", () => {
     await expect(t.mutation(internal.reviewState.reserveSideEffect, { ...args, requestHash: "hash-2", now: 3 })).rejects.toThrow("idempotency_key_conflict");
   });
 
+  it("completes a side effect only inside its review and tenant",async()=>{const t=convexTest(schema,modules),alpha=await seedTenant(t,"effect-alpha","alice"),beta=await seedTenant(t,"effect-beta","bob"),requestHash="e".repeat(64),sideEffectId=await t.mutation(internal.reviewState.reserveSideEffect,{organizationId:alpha.organizationId,reviewId:alpha.reviewId,operationKey:"effect-alpha",type:"check_update",requestHash,now:1}),base={reviewId:alpha.reviewId,expectedHeadSha:"a".repeat(40),expectedGeneration:0,sideEffectId,requestHash,externalId:"99",status:"completed" as const,now:2};await expect(t.mutation(internal.reviewPublicationData.completeSideEffect,{...base,organizationId:beta.organizationId})).rejects.toThrow("parent_scope_mismatch");await expect(t.mutation(internal.reviewPublicationData.completeSideEffect,{...base,organizationId:alpha.organizationId})).resolves.toBe(sideEffectId);await expect(t.mutation(internal.reviewPublicationData.completeSideEffect,{...base,organizationId:alpha.organizationId,externalId:"100",now:3})).rejects.toThrow("side_effect_completion_conflict")});
+
   it("allows identical idempotency labels in different repositories without collision", async () => {
     const t = convexTest(schema, modules);
     const alpha = await seedTenant(t, "alpha", "alice");
