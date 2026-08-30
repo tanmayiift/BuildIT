@@ -5,9 +5,10 @@ import { internal } from "./_generated/api";
 import { authorizeTrigger, GitHubAppClient } from "@buildit/github";
 
 export const processWebhook = internalAction({
-  args: { deliveryId: v.string(), installationId: v.number(), githubRepositoryId: v.number(), senderLogin: v.string(), senderType: v.string(), commentAction: v.string(), command: v.string() },
+  args: { deliveryId: v.string(), installationId: v.number(), githubRepositoryId: v.number(), prNumber: v.number(), senderLogin: v.string(), senderType: v.string(), commentAction: v.string(), command: v.string() },
   handler: async (ctx, args) => {
     try {
+      if (!Number.isInteger(args.prNumber) || args.prNumber < 1) throw new Error("invalid_pull_request_number");
       const scope = await ctx.runQuery(internal.githubWebhookData.scope, { installationId: args.installationId, githubRepositoryId: args.githubRepositoryId });
       const appId = process.env.GITHUB_APP_ID, privateKey = process.env.GITHUB_APP_PRIVATE_KEY;
       if (!appId || !privateKey) throw new Error("github_app_not_configured");
