@@ -27,3 +27,4 @@ export function redact(input:string){return patterns.reduce((v,p)=>v.replace(p,"
 export function fingerprint(value:string,key:Buffer){return createHmac("sha256",key).update(value).digest("hex")}
 export function sanitizeGitHub(input:string){return redact(input).replace(/@/g,"＠").replace(/<img[^>]*>/gi,"").replace(/<script[\s\S]*?<\/script>/gi,"")}
 export { AwsKmsClient } from "./aws-kms";
+export * from "./artifact-grant";
