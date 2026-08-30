@@ -17,8 +17,8 @@ async function route(request: Request) {
       roleSessionName: `buildit-artifact-${Date.now()}`, clientConfig: { region } });
     const s3 = new S3Client({ region, credentials });
     const bucket = required("AWS_ARTIFACT_BUCKET"), kmsKeyId = required("AWS_KMS_KEY_ID");
-    const replay = new S3GrantConsumer({ bucket, kmsKeyId, s3 });
-    const broker = new ArtifactBroker({ bucket, kmsKeyId, region, s3,
+    const replay = new S3GrantConsumer({ bucket, kmsKeyId, s3: s3 as never });
+    const broker = new ArtifactBroker({ bucket, kmsKeyId, region, s3: s3 as never,
       grantSecret: Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url"),
       consumeGrant: (grantId, expiresAt) => replay.consume(grantId, expiresAt) });
     return await handleArtifactRequest(request, broker);

@@ -29,3 +29,4 @@ export function sanitizeGitHub(input:string){return redact(input).replace(/@/g,"
 export { AwsKmsClient } from "./aws-kms.js";
 export * from "./artifact-grant.js";
 export * from "./model-grant.js";
+export * from "./execution-grant.js";
