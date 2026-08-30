@@ -11,7 +11,7 @@ function required(name: string) { const value = process.env[name]; if (!value) t
 type ArtifactRef = { id: Id<"artifacts">; storageKey: string; checksum: string; size: number };
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; environmentAvailable: boolean; isStale: boolean; expiresAt: number; costUsd: number; analysis: ArtifactRef; validation: ArtifactRef; completedArtifactId?: Id<"artifacts"> };
 type RunResult = { planId: string; required: boolean; conclusion: ReviewCheckDecision["conclusion"] };
-type Validation = { version?: number; pinned?: { headSha?: string; baseSha?: string }; output?: { head?: { results?: RunResult[]; outputs?: Array<{ planId: string; text?: string; truncated?: boolean; evidenceTruncated?: boolean }> }; scanners?: { head?: { complete?: boolean; commitSha?: string; findings?: Array<{ severity?: string }> } } } };
+type Validation = { version?: number; pinned?: { headSha?: string; baseSha?: string }; output?: { head?: { results?: RunResult[]; outputs?: Array<{ planId: string; text?: string; truncated?: boolean; evidenceTruncated?: boolean }> }; scanners?: { head?: { scanner?: string; complete?: boolean; commitSha?: string; runs?: Array<{ scanner?: string; scannerVersion?: string }>; findings?: Array<{ scanner?: string; severity?: string }> } } } };
 type Finding = { title: string; severity: "critical" | "high" | "warning" | "info"; resolution: "accepted" | "rejected" | "uncertain"; blocking: boolean; evidenceIds: string[] };
 type Analysis = { version?: number; pinned?: { headSha?: string; baseSha?: string }; arbitrated?: Finding[] };
 
@@ -29,7 +29,16 @@ export function reportChecks(validation: Validation, headSha: string): ReviewChe
   const outputs = new Map((validation.output.head.outputs ?? []).map(item => [item.planId, item]));
   const checks = (validation.output.head.results ?? []).map(item => { const output = outputs.get(item.planId); return { name: item.planId, required: item.required, conclusion: item.conclusion, evidenceComplete: Boolean(output && typeof output.text === "string" && !output.truncated && !output.evidenceTruncated) }; });
   const scanner = validation.output.scanners?.head;
-  if (scanner) checks.push({ name: "buildit-rules", required: true, conclusion: scanner.findings?.some(item => item.severity === "critical") ? "failed" : "passed", evidenceComplete: scanner.complete === true && scanner.commitSha === headSha });
+  if (scanner) {
+    const names: Record<string, string> = { builditRules: "buildit-rules", gitleaks: "gitleaks", osvScanner: "osv-scanner" };
+    const runs = scanner.runs?.length ? scanner.runs : [{ scanner: scanner.scanner ?? "builditRules" }], seen = new Set<string>();
+    for (const run of runs) {
+      const id = run.scanner, name = id ? names[id] : undefined;
+      if (!id || !name || seen.has(id)) throw new Error("report_scanner_inventory_invalid");
+      seen.add(id);
+      checks.push({ name, required: true, conclusion: scanner.findings?.some(item => (!item.scanner || item.scanner === id) && item.severity === "critical") ? "failed" : "passed", evidenceComplete: scanner.complete === true && scanner.commitSha === headSha });
+    }
+  }
   return checks;
 }
 
