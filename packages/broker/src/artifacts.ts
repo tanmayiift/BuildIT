@@ -26,7 +26,7 @@ export class S3GrantConsumer {
       const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
       const name = (error as { name?: string }).name;
       if (status === 412 || name === "PreconditionFailed") return false;
-      throw new Error("artifact_grant_store_unavailable");
+      throw new Error("artifact_grant_store_unavailable", { cause: error });
     }
   }
 }

@@ -7,7 +7,7 @@ function required(name: string) {
   if (!value) throw new Error("artifact_broker_configuration_missing");
   return value;
 }
-function report(error: unknown) { const raw = error instanceof Error ? error.name : "Unknown", allowed = new Set(["CredentialsProviderError", "AccessDenied", "AccessDeniedException", "KMSInvalidStateException", "NoSuchBucket", "Error"]); const status = (error as { $metadata?: { httpStatusCode?: unknown } })?.$metadata?.httpStatusCode; console.error(JSON.stringify({ event: "artifact_broker_unavailable", errorClass: allowed.has(raw) ? raw : "Other", ...(typeof status === "number" ? { status } : {}) })); }
+function report(error: unknown) { const cause = error instanceof Error && error.cause ? error.cause : error, raw = cause instanceof Error ? cause.name : typeof (cause as { name?: unknown })?.name === "string" ? String((cause as { name: string }).name) : "Unknown", allowed = new Set(["CredentialsProviderError", "AccessDenied", "AccessDeniedException", "KMSInvalidStateException", "NoSuchBucket", "PreconditionFailed", "Error"]); const status = (cause as { $metadata?: { httpStatusCode?: unknown } })?.$metadata?.httpStatusCode; console.error(JSON.stringify({ event: "artifact_broker_unavailable", errorClass: allowed.has(raw) ? raw : "Other", ...(typeof status === "number" ? { status } : {}) })); }
 
 async function route(request: Request) {
   try {
