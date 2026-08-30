@@ -1,4 +1,4 @@
-export type ExecutableFixtureGold={id:string;classification:"introduced"|"unchanged_pass";defectFamily:"requirement_boundary"|"authorization_bypass"|"false_positive_trap"};
+export type ExecutableFixtureGold={id:string;classification:"introduced"|"unchanged_pass";defectFamily:"requirement_boundary"|"authorization_bypass"|"input_validation"|"false_positive_trap"};
 export const executableFixtureGold:ReadonlyArray<ExecutableFixtureGold>=Object.freeze([
   {id:"exec-case-01",classification:"introduced",defectFamily:"requirement_boundary"},
   {id:"exec-case-02",classification:"unchanged_pass",defectFamily:"false_positive_trap"},
@@ -12,4 +12,10 @@ export const executableFixtureGold:ReadonlyArray<ExecutableFixtureGold>=Object.f
   {id:"exec-case-10",classification:"unchanged_pass",defectFamily:"false_positive_trap"},
   {id:"exec-case-11",classification:"introduced",defectFamily:"authorization_bypass"},
   {id:"exec-case-12",classification:"unchanged_pass",defectFamily:"false_positive_trap"},
+  {id:"exec-case-13",classification:"introduced",defectFamily:"input_validation"},
+  {id:"exec-case-14",classification:"unchanged_pass",defectFamily:"false_positive_trap"},
+  {id:"exec-case-15",classification:"introduced",defectFamily:"input_validation"},
+  {id:"exec-case-16",classification:"unchanged_pass",defectFamily:"false_positive_trap"},
+  {id:"exec-case-17",classification:"introduced",defectFamily:"input_validation"},
+  {id:"exec-case-18",classification:"unchanged_pass",defectFamily:"false_positive_trap"},
 ]);
