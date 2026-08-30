@@ -9,6 +9,7 @@ BuildIT uses GitHub OAuth to identify a human and GitHub App installation tokens
 - Client ID: `Iv23li1sYHKlcb0DfdI6`
 - Owner: `tanmayiift`
 - Homepage: `https://buildit-agentic-review.vercel.app`
+- Vercel project: `pulsetrade/buildit-agentic-review` with repository root `apps/web` and production branch `main`.
 - OAuth callback: `https://tacit-coyote-455.eu-west-1.convex.site/api/auth/callback/github`
 - Post-install setup: `https://buildit-agentic-review.vercel.app/setup/install`
 - Webhook: `https://buildit-agentic-review.vercel.app/api/github/webhooks`
