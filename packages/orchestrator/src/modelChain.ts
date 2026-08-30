@@ -1,5 +1,5 @@
 import { validateSchemaValue, type JsonSchema, type ProviderName, type ProviderResult } from "@buildit/providers";
-import { promptStages, runPromptChain, type PromptStage, type StageDefinition } from "./promptChain";
+import { promptStages, runPromptChain, type PromptStage, type StageDefinition } from "./promptChain.js";
 
 const string = { type: "string" } as const;
 const stringArray = { type: "array", items: string } as const;

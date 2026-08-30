@@ -1,5 +1,5 @@
 import { Sandbox } from "@vercel/sandbox";
-import { executionReady, type CheckResult, type CommandPlan, type Workspace } from "./index";
+import { executionReady, type CheckResult, type CommandPlan, type Workspace } from "./index.js";
 
 type Finished = { exitCode: number; durationMs?: number; stdout(): Promise<string>; stderr(): Promise<string> };
 type SandboxCommand = { cmd: string; args: string[]; cwd?: string; timeoutMs: number };

@@ -46,13 +46,20 @@ export class RepositoryContentClient {
     const limits = { ...defaults, ...input.limits };
     if (limits.maxFiles < 1 || limits.maxFileBytes < 1 || limits.maxTotalBytes < 1) throw new Error("invalid_repository_fetch_limits");
     const authHeaders = { ...headers, Authorization: `Bearer ${input.installationToken}` };
-    const treeResponse = await this.http(`https://api.github.com/repositories/${input.repositoryId}/git/trees/${input.commitSha}?recursive=1`, { headers: authHeaders });
+    const commitResponse = await this.http(`https://api.github.com/repositories/${input.repositoryId}/git/commits/${input.commitSha}`, { headers: authHeaders });
+    if (commitResponse.status === 401) throw new Error("installation_token_expired");
+    if (commitResponse.status === 403 || commitResponse.status === 404) throw new Error("commit_or_repository_unavailable");
+    if (!commitResponse.ok) throw new Error(`github_commit_${commitResponse.status}`);
+    const commitBody = await commitResponse.json() as { sha?: string; tree?: { sha?: string } };
+    if (commitBody.sha?.toLowerCase() !== input.commitSha.toLowerCase() || !commitBody.tree?.sha || !/^[0-9a-f]{40}$/i.test(commitBody.tree.sha)) throw new Error("github_commit_sha_mismatch");
+    const treeSha = commitBody.tree.sha.toLowerCase();
+    const treeResponse = await this.http(`https://api.github.com/repositories/${input.repositoryId}/git/trees/${treeSha}?recursive=1`, { headers: authHeaders });
     if (treeResponse.status === 401) throw new Error("installation_token_expired");
     if (treeResponse.status === 403 || treeResponse.status === 404) throw new Error("commit_or_repository_unavailable");
     if (!treeResponse.ok) throw new Error(`github_tree_${treeResponse.status}`);
     const treeBody = await treeResponse.json() as { truncated?: boolean; sha?: string; tree?: Array<{ path?: string; mode?: string; type?: string; sha?: string; size?: number }> };
     if (treeBody.truncated) throw new Error("github_tree_truncated");
-    if (treeBody.sha?.toLowerCase() !== input.commitSha.toLowerCase()) throw new Error("github_tree_sha_mismatch");
+    if (treeBody.sha?.toLowerCase() !== treeSha) throw new Error("github_tree_sha_mismatch");
     if (!Array.isArray(treeBody.tree)) throw new Error("github_tree_malformed");
 
     const omitted: RepositoryOmission[] = [];
