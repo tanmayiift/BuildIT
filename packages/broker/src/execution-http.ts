@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { defaultExecutionPlans, validatePlan, VercelSandboxRunner, type CommandPlan } from "@buildit/runner";
-import { combineScannerRuns, parseGitleaks, scanBuildITRules, scannerInventory } from "@buildit/scanners";
+import { combineScannerRuns, parseGitleaks, parseOsv, scanBuildITRules, scannerInventory } from "@buildit/scanners";
 import { verifyExecutionGrant } from "@buildit/security";
 import type { ArtifactBroker } from "./artifacts.js";
 
@@ -43,6 +43,7 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     const scanner = (revision: "base" | "head", commitSha: string, result: Awaited<ReturnType<Runner["run"]>>) => combineScannerRuns(commitSha, [
       scanBuildITRules([...files[revision]].map(([path, content]) => ({ path, content })), commitSha),
       parseGitleaks(result.gitleaksReport, commitSha, scannerInventory.gitleaks),
+      parseOsv(result.osvReport, commitSha, scannerInventory.osvScanner),
     ]);
     return json(200, { base: bounded(baseResult), head: bounded(headResult), scanners: { base: scanner("base", body.baseSha, baseResult), head: scanner("head", body.headSha, headResult) } });
   } catch (error) { const mapped = safe(error); return json(mapped.status, { error: mapped.code }); }

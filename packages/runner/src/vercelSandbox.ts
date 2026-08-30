@@ -14,7 +14,8 @@ export type SandboxFactory = (input: { runtime?: "node22" | "node24"; image?: st
 
 const registryDomains = ["registry.npmjs.org", "registry.yarnpkg.com"];
 const sensitive = /(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|GITHUB_|VERCEL_|CONVEX_|ANTHROPIC_|OPENAI_|GEMINI_|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)/i;
-const unsafeInstallControl = /(^|\/)(?:\.git|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfile\.cjs|pnpmfile\.cjs|\.pnp\.(?:cjs|js)|\.yarn\/plugins|\.gitleaks\.toml|\.gitleaksignore)(\/|$)/i;
+const unsafeInstallControl = /(^|\/)(?:\.git|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfile\.cjs|pnpmfile\.cjs|\.pnp\.(?:cjs|js)|\.yarn\/plugins|\.gitleaks\.toml|\.gitleaksignore|\.?osv-scanner\.(?:toml|json))(\/|$)/i;
+const nodeLockfile = /(^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock)$/;
 
 async function output(result: Finished, limit: number) {
   const [stdout, stderr] = await Promise.all([result.stdout(), result.stderr()]);
@@ -49,6 +50,8 @@ export class VercelSandboxRunner {
         if (!file.path || file.path.startsWith("/") || file.path.split("/").includes("..")) throw new Error("sandbox_unsafe_path");
         if (unsafeInstallControl.test(file.path)) throw new Error("sandbox_untrusted_install_control");
       }
+      const lockfiles = input.files.map(file => file.path).filter(path => nodeLockfile.test(path));
+      if (!lockfiles.length || lockfiles.length > 32) throw new Error("osv_lockfile_required");
       await sandbox.writeFiles(input.files.map(file => ({ path: `/vercel/sandbox/repo/${file.path}`, content: Buffer.from(file.content) })));
       const environment = await sandbox.runCommand({ cmd: "env", args: [], timeoutMs: 10_000 });
       const environmentText = await environment.stdout();
@@ -59,12 +62,17 @@ export class VercelSandboxRunner {
       const gitleaksReport = await sandbox.readFileToBuffer({ path: "/tmp/buildit-gitleaks.json" });
       if (!gitleaksReport || gitleaksReport.byteLength > 2_000_000) throw new Error("gitleaks_report_invalid");
 
+      const osv = await sandbox.runCommand({ cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", ...lockfiles.flatMap(path => ["--lockfile", path])], cwd: "/vercel/sandbox/repo", timeoutMs: 120_000 });
+      if (![0, 1].includes(osv.exitCode)) throw new Error("osv_execution_failed");
+      const osvReport = await sandbox.readFileToBuffer({ path: "/tmp/buildit-osv.json" });
+      if (!osvReport || osvReport.byteLength > 4_000_000) throw new Error("osv_report_invalid");
+
       await sandbox.updateNetworkPolicy({ allow: registryDomains });
       const installResult = await sandbox.runCommand({ cmd: input.install.executable, args: input.install.args, cwd: "/vercel/sandbox/repo", timeoutMs: input.install.timeoutMs });
       const installOutput = await output(installResult, input.install.outputBytes);
       outputs.push({ planId: input.install.planId, ...installOutput });
       results.push({ ...input.install, conclusion: installOutput.truncated ? "truncated" : installResult.exitCode === 0 ? "passed" : "failed", exitCode: installResult.exitCode, durationMs: installResult.durationMs ?? 0, ...(installResult.exitCode === 0 ? {} : { failureClass: "code" as const }) });
-      if (installResult.exitCode !== 0 || installOutput.truncated) return { credentialTeardownProved: true, results, outputs, gitleaksReport: gitleaksReport.toString("utf8"), stopped: true };
+      if (installResult.exitCode !== 0 || installOutput.truncated) return { credentialTeardownProved: true, results, outputs, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), stopped: true };
 
       await sandbox.updateNetworkPolicy("deny-all");
       for (const plan of input.checks) {
@@ -73,7 +81,7 @@ export class VercelSandboxRunner {
         outputs.push({ planId: plan.planId, ...captured });
         results.push({ ...plan, conclusion: captured.truncated ? "truncated" : result.exitCode === 0 ? "passed" : "failed", exitCode: result.exitCode, durationMs: result.durationMs ?? 0, ...(result.exitCode === 0 ? {} : { failureClass: "code" as const }) });
       }
-      return { credentialTeardownProved: true, results, outputs, gitleaksReport: gitleaksReport.toString("utf8"), stopped: true };
+      return { credentialTeardownProved: true, results, outputs, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), stopped: true };
     } finally {
       await sandbox.stop();
     }
