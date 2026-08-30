@@ -4,7 +4,7 @@ export type PatchProposal = { path: string; rationale: string; findingIds: strin
 export type PatchSource = { path: string; content: string; contentHash: string };
 export type ValidatedPatch = PatchProposal & { previousContent: string };
 
-const protectedPath = /^(?:\.github\/|\.gitlab\/|\.circleci\/|migrations?\/|db\/migrations?\/|terraform\/|infra\/)|(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|\.env(?:\..*)?)$/i;
+const protectedPath = /^(?:\.github\/|\.gitlab\/|\.circleci\/|\.vercel\/|migrations?\/|db\/migrations?\/|terraform\/|infra\/)|(?:^|\/)(?:CODEOWNERS|Dockerfile(?:\..*)?|vercel\.json|package(?:-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|pyproject\.toml|requirements(?:-[^.\/]+)?\.txt|poetry\.lock|pom\.xml|build\.gradle(?:\.kts)?|go\.(?:mod|sum)|Cargo\.(?:toml|lock)|\.env(?:\..*)?)$/i;
 const secretPattern = /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(?:api[_-]?key|secret|token|password)\s*[:=]\s*["'][A-Za-z0-9_\-/.+=]{16,}["']/i;
 const safePath = (path: string) => path.length > 0 && path.length <= 500 && !path.startsWith("/") && !path.includes("\0") && !path.split("/").includes("..") && !path.startsWith(".git/");
 export const contentHash = (content: string) => createHash("sha256").update(content).digest("hex");
@@ -23,6 +23,7 @@ export function validatePatchProposals(input: { proposals: PatchProposal[]; sour
     if (!source || !/^[0-9a-f]{64}$/.test(proposal.expectedContentHash) || source.contentHash !== proposal.expectedContentHash || contentHash(source.content) !== proposal.expectedContentHash) throw new Error("patch_source_mismatch");
     if (!proposal.rationale.trim() || !proposal.findingIds.length || proposal.findingIds.some(id => !input.acceptedFindingIds.has(id))) throw new Error("patch_finding_scope_invalid");
     if (proposal.replacementContent === source.content) throw new Error("patch_empty");
+    if (proposal.replacementContent.includes("\0")) throw new Error("patch_content_invalid");
     if (secretPattern.test(proposal.replacementContent)) throw new Error("patch_potential_secret");
     bytes += Buffer.byteLength(proposal.replacementContent);
     if (bytes > maxBytes) throw new Error("patch_byte_limit_exceeded");
