@@ -2,6 +2,7 @@
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import {
   authorizeTrigger,
   GitHubAppClient,
@@ -82,7 +83,7 @@ export const processWebhook = internalAction({
       if (decision.kind === "cancel") {
         const actorId = await sha256(args.senderLogin.toLowerCase()),
           now = Date.now();
-        const targets: Array<{ reviewId: string; workflowId?: string }> =
+        const targets: Array<{ reviewId: Id<"reviews">; workflowId?: string }> =
           await ctx.runQuery(internal.githubWebhookData.cancellationTargets, {
             organizationId: scope.organizationId,
             repositoryId: scope.repositoryId,
