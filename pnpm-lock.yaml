@@ -86,6 +86,22 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  packages/broker:
+    dependencies:
+      '@buildit/providers':
+        specifier: workspace:*
+        version: link:../providers
+      '@buildit/security':
+        specifier: workspace:*
+        version: link:../security
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   packages/contracts:
     dependencies:
       zod:

@@ -13,7 +13,7 @@ export const storedTextClassifications = {
   baseSha: "operational_identifier", blockedReason: "metadata", branchNameHash: "hashed_metadata",
   budgetCeilingId: "operational_identifier", cancelledBy: "operational_identifier",
   candidateCommitSha: "operational_identifier", checksum: "hashed_metadata",
-  commandFingerprint: "hashed_metadata", commitSha: "operational_identifier",
+  commandFingerprint: "hashed_metadata", commitSha: "operational_identifier", credentialScopeId: "operational_identifier",
   contentHash: "hashed_metadata", createdBy: "operational_identifier", currency: "metadata",
   dedupeKey: "operational_identifier", defaultBranch: "metadata", deliveryId: "operational_identifier",
   dismissedBy: "operational_identifier", encryptedAccessToken: "encrypted_secret",
