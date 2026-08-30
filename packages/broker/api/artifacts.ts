@@ -22,7 +22,7 @@ async function route(request: Request) {
     const broker = new ArtifactBroker({ bucket, kmsKeyId, region, s3: s3 as never,
       grantSecret: Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url"),
       consumeGrant: (grantId, expiresAt) => replay.consume(grantId, expiresAt) });
-    return await handleArtifactRequest(request, broker);
+    return await handleArtifactRequest(request, broker, 25_000_000, report);
   } catch (error) {
     report(error);
     return Response.json({ error: "artifact_broker_unavailable" }, { status: 503, headers: { "cache-control": "no-store" } });

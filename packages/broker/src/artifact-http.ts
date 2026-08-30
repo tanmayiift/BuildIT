@@ -48,7 +48,7 @@ async function boundedBody(request: Request, maxBytes: number) {
   return body;
 }
 
-export async function handleArtifactRequest(request: Request, broker: ArtifactBroker, maxArtifactBytes = 25_000_000) {
+export async function handleArtifactRequest(request: Request, broker: ArtifactBroker, maxArtifactBytes = 25_000_000, onError?: (error: unknown) => void) {
   try {
     const token = bearer(request);
     if (request.method === "PUT") {
@@ -73,6 +73,7 @@ export async function handleArtifactRequest(request: Request, broker: ArtifactBr
     }
     return json(405, "method_not_allowed");
   } catch (error) {
+    onError?.(error);
     const safe = safeError(error);
     return json(safe.status, safe.code);
   }

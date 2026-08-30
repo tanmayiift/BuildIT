@@ -41,6 +41,13 @@ describe("artifact HTTP boundary", () => {
     expect((await handleArtifactRequest(request("PATCH"), broker as never)).status).toBe(405);
   });
 
+  it("reports an internal error object while keeping the public response redacted", async () => {
+    const raw = new Error("private aws detail"), onError = vi.fn(), broker = { get: vi.fn(async () => { throw raw; }) };
+    const response = await handleArtifactRequest(request("GET"), broker as never, 25_000_000, onError);
+    expect(onError).toHaveBeenCalledWith(raw);
+    expect(await response.json()).toEqual({ error: "artifact_unavailable" });
+  });
+
   it("stops a chunked upload when the HTTP byte ceiling is crossed", async () => {
     const broker = { put: vi.fn() };
     const body = new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array([1, 2])); controller.enqueue(new Uint8Array([3, 4])); controller.close(); } });
