@@ -65,6 +65,25 @@ export async function requestRemoteCommand(input: {
     pr = validPr(input.pr),
     repo = await currentRepository(exec, input.repo),
     body = "@buildit " + input.command;
+  const preview = await exec("gh", [
+    "pr",
+    "view",
+    String(pr),
+    "--repo",
+    repo,
+    "--json",
+    "url,headRefOid",
+  ]);
+  if (preview.code !== 0) throw new Error("github_status_failed");
+  const pull = JSON.parse(preview.stdout) as {
+    url?: unknown;
+    headRefOid?: unknown;
+  };
+  if (
+    typeof pull.headRefOid !== "string" ||
+    !/^[0-9a-f]{40}$/.test(pull.headRefOid)
+  )
+    throw new Error("github_pull_request_invalid");
   const result = await exec("gh", [
     "api",
     "--method",
@@ -80,6 +99,8 @@ export async function requestRemoteCommand(input: {
       repository: repo,
       prNumber: pr,
       command: input.command,
+      pinnedHead: pull.headRefOid,
+      prUrl: pull.url,
       commentUrl:
         typeof response.html_url === "string" ? response.html_url : undefined,
       authorization: "GitHub collaborator permission is rechecked by BuildIT",

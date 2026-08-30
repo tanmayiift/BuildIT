@@ -32,6 +32,13 @@ describe("remote GitHub CLI review commands", () => {
       {
         code: 0,
         stdout: JSON.stringify({
+          url: "https://github.com/acme/service/pull/7",
+          headRefOid: "a".repeat(40),
+        }),
+      },
+      {
+        code: 0,
+        stdout: JSON.stringify({
           html_url: "https://github.com/acme/service/issues/7#comment",
         }),
       },
@@ -49,6 +56,18 @@ describe("remote GitHub CLI review commands", () => {
       [
         "gh",
         [
+          "pr",
+          "view",
+          "7",
+          "--repo",
+          "acme/service",
+          "--json",
+          "url,headRefOid",
+        ],
+      ],
+      [
+        "gh",
+        [
           "api",
           "--method",
           "POST",
@@ -62,7 +81,12 @@ describe("remote GitHub CLI review commands", () => {
     expect(f.emit).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "remote_requested",
-        data: expect.objectContaining({ command: "review", prNumber: 7 }),
+        data: expect.objectContaining({
+          command: "review",
+          prNumber: 7,
+          pinnedHead: "a".repeat(40),
+          prUrl: "https://github.com/acme/service/pull/7",
+        }),
       }),
     );
   });
@@ -70,6 +94,13 @@ describe("remote GitHub CLI review commands", () => {
   it("posts cancel through the same repository-scoped path", async () => {
     const f = fixture([
       { code: 0, stdout: JSON.stringify({ nameWithOwner: "acme/service" }) },
+      {
+        code: 0,
+        stdout: JSON.stringify({
+          url: "https://github.com/acme/service/pull/8",
+          headRefOid: "b".repeat(40),
+        }),
+      },
       { code: 0, stdout: "{}" },
     ]);
     await requestRemoteCommand({
@@ -78,11 +109,20 @@ describe("remote GitHub CLI review commands", () => {
       emit: f.emit,
       exec: f.exec,
     });
-    expect(f.calls[1]?.[1]).toContain("body=@buildit cancel");
+    expect(f.calls[2]?.[1]).toContain("body=@buildit cancel");
   });
 
   it("accepts a validated explicit repository without querying the current directory", async () => {
-    const f = fixture([{ code: 0, stdout: "{}" }]);
+    const f = fixture([
+      {
+        code: 0,
+        stdout: JSON.stringify({
+          url: "https://github.com/acme/service/pull/8",
+          headRefOid: "b".repeat(40),
+        }),
+      },
+      { code: 0, stdout: "{}" },
+    ]);
     await requestRemoteCommand({
       pr: "8",
       repo: "acme/service",
@@ -91,6 +131,18 @@ describe("remote GitHub CLI review commands", () => {
       exec: f.exec,
     });
     expect(f.calls).toEqual([
+      [
+        "gh",
+        [
+          "pr",
+          "view",
+          "8",
+          "--repo",
+          "acme/service",
+          "--json",
+          "url,headRefOid",
+        ],
+      ],
       [
         "gh",
         [
@@ -103,6 +155,29 @@ describe("remote GitHub CLI review commands", () => {
         ],
       ],
     ]);
+  });
+
+  it("does not post when GitHub cannot provide an exact PR head", async () => {
+    const f = fixture([
+      { code: 0, stdout: JSON.stringify({ nameWithOwner: "acme/service" }) },
+      {
+        code: 0,
+        stdout: JSON.stringify({
+          url: "https://github.com/acme/service/pull/8",
+          headRefOid: "not-a-commit",
+        }),
+      },
+    ]);
+    await expect(
+      requestRemoteCommand({
+        pr: "8",
+        command: "review",
+        emit: f.emit,
+        exec: f.exec,
+      }),
+    ).rejects.toThrow("github_pull_request_invalid");
+    expect(f.calls).toHaveLength(2);
+    expect(f.calls.some(([, args]) => args.includes("POST"))).toBe(false);
   });
 
   it("maps GitHub Check states to stable exit codes", async () => {
