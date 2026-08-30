@@ -7,6 +7,7 @@ export type HumanVote = { reviewerHash: string; expected: boolean };
 export type HumanLabelCase = { caseId: string; severity: "low" | "medium" | "high" | "critical"; finalExpected: boolean; votes: HumanVote[]; adjudicatorHash?: string; labelledAt: number; synthetic: false };
 export type HumanLabelManifest = { version: string; modelRunStartedAt: number; blindToModelOutput: true; hiddenHoldout: true; cases: HumanLabelCase[] };
 export type ModelGraderCalibration = { used: boolean; humanLabelledCases: number; falseAccepts: number; falseRejects: number; maximumFalseAcceptRate: number };
+export type ReleaseEvidenceInput = { run: EvaluationRun; labels: HumanLabelManifest; modelGrader: ModelGraderCalibration };
 
 export const officialPopulation: PopulationManifest = {
   version: "buildit-official-population-2026-08-30",
@@ -53,4 +54,18 @@ export function releaseEvidenceGate(input: { run: EvaluationRun; population: Pop
   if (input.modelGrader.used) { const rate = input.modelGrader.humanLabelledCases ? input.modelGrader.falseAccepts / input.modelGrader.humanLabelledCases : 1; if (input.modelGrader.humanLabelledCases < 50 || rate > input.modelGrader.maximumFalseAcceptRate || input.modelGrader.falseRejects < 0) failures.push("model_grader_uncalibrated"); }
   const evaluation = releaseGate(input.run); failures.push(...evaluation.failures);
   return { passed: failures.length === 0, failures: [...new Set(failures)].sort(), evaluation, deterministicGrader: deterministic };
+}
+
+const object = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+export function parseReleaseEvidenceInput(value: unknown): ReleaseEvidenceInput {
+  if (!object(value) || !object(value.run) || !object(value.labels) || !object(value.modelGrader)) throw new Error("release_evidence_input_invalid");
+  const labels = value.labels, grader = value.modelGrader;
+  if (typeof labels.version !== "string" || typeof labels.modelRunStartedAt !== "number" || labels.blindToModelOutput !== true || labels.hiddenHoldout !== true || !Array.isArray(labels.cases)) throw new Error("human_label_manifest_invalid");
+  for (const item of labels.cases) {
+    if (!object(item) || typeof item.caseId !== "string" || !["low", "medium", "high", "critical"].includes(String(item.severity)) || typeof item.finalExpected !== "boolean" || !Array.isArray(item.votes) || typeof item.labelledAt !== "number" || item.synthetic !== false) throw new Error("human_label_case_invalid");
+    if (item.votes.some(vote => !object(vote) || typeof vote.reviewerHash !== "string" || typeof vote.expected !== "boolean")) throw new Error("human_label_vote_invalid");
+    if (item.adjudicatorHash !== undefined && typeof item.adjudicatorHash !== "string") throw new Error("human_label_adjudicator_invalid");
+  }
+  if (typeof grader.used !== "boolean" || !Number.isSafeInteger(grader.humanLabelledCases) || !Number.isSafeInteger(grader.falseAccepts) || !Number.isSafeInteger(grader.falseRejects) || typeof grader.maximumFalseAcceptRate !== "number" || grader.maximumFalseAcceptRate < 0 || grader.maximumFalseAcceptRate > 1) throw new Error("model_grader_calibration_invalid");
+  return { run: value.run as unknown as EvaluationRun, labels: labels as unknown as HumanLabelManifest, modelGrader: grader as unknown as ModelGraderCalibration };
 }

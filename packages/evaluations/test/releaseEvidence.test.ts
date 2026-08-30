@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { humanLabelFailures, officialPopulation, populationFailures, releaseEvidenceGate, type HumanLabelManifest } from "../src/releaseEvidence.js";
+import { humanLabelFailures, officialPopulation, parseReleaseEvidenceInput, populationFailures, releaseEvidenceGate, type HumanLabelManifest } from "../src/releaseEvidence.js";
 import type { EvaluationRun } from "../src/score.js";
 
 const reviewer = "a".repeat(64), second = "b".repeat(64), adjudicator = "c".repeat(64);
@@ -18,4 +18,8 @@ describe("release evidence governance", () => {
   });
   it("cannot pass release merely because governance is valid when population metrics are weak", () => expect(releaseEvidenceGate({ run, population: officialPopulation, labels, modelGrader: { used: false, humanLabelledCases: 0, falseAccepts: 0, falseRejects: 0, maximumFalseAcceptRate: 0 } })).toMatchObject({ passed: false, deterministicGrader: { passed: true } }));
   it("rejects an uncalibrated model judge instead of letting it overrule deterministic evidence", () => { const result = releaseEvidenceGate({ run, population: officialPopulation, labels, modelGrader: { used: true, humanLabelledCases: 10, falseAccepts: 1, falseRejects: 0, maximumFalseAcceptRate: .01 } }); expect(result.failures).toContain("model_grader_uncalibrated"); });
+  it("parses only source-free, genuinely human-labelled release evidence", () => {
+    expect(parseReleaseEvidenceInput({ run, labels, modelGrader: { used: false, humanLabelledCases: 0, falseAccepts: 0, falseRejects: 0, maximumFalseAcceptRate: 0 } }).labels.version).toBe("labels-v1");
+    expect(() => parseReleaseEvidenceInput({ run, labels: { ...labels, cases: [{ ...labels.cases[0], synthetic: true }] }, modelGrader: { used: false, humanLabelledCases: 0, falseAccepts: 0, falseRejects: 0, maximumFalseAcceptRate: 0 } })).toThrow("human_label_case_invalid");
+  });
 });
