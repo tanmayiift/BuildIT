@@ -183,6 +183,7 @@ export function ModelKeyForm() {
             Sign in with GitHub
           </a>
         </div>
+        <KeyTrust />
         <Boundary />
       </section>
     );
@@ -390,5 +391,5 @@ function Boundary() {
 }
 
 function KeyTrust() {
-  return <div className="key-trust"><strong>This is not a GitHub key</strong><p>The model-provider key pays only for AI analysis through the provider you choose. GitHub access comes separately from the BuildIT GitHub App and stays limited to selected repositories.</p><dl className="trust-answers"><div><dt>What leaves BuildIT?</dt><dd>Only the review prompt and evidence selected for that model request go to the provider you choose.</dd></div><div><dt>What can the key change?</dt><dd>Nothing in GitHub. It can call only your selected AI provider; Autofix needs separate consent and GitHub App access.</dd></div><div><dt>How is it protected?</dt><dd>The broker validates it, encrypts it with AWS KMS in Ireland, never shows it again, and never stores plaintext in Convex.</dd></div><div><dt>How do I stop it?</dt><dd>An organization Owner or Admin can revoke or replace it here. BuildIT cannot recover the original value.</dd></div></dl></div>;
+  return <div className="key-trust"><strong>Two separate connections, two separate jobs</strong><p>GitHub proves who you are and gives BuildIT access only to repositories selected in GitHub. This model-provider key is not a GitHub key: it pays Google, OpenAI, or Anthropic for the AI calls you choose.</p><dl className="trust-answers"><div><dt>What reaches the AI provider?</dt><dd>The exact PR context and bounded evidence shown in the review consent screen—not another repository. Deterministic checks can run without this key.</dd></div><div><dt>What can this key change?</dt><dd>Nothing in GitHub. Autofix requires separate consent and a separate, short-lived GitHub App token for one stacked PR.</dd></div><div><dt>How does a review earn trust?</dt><dd>BuildIT pins both commits, runs named checks, requires source or test evidence for every finding, sends model claims through a critic, and returns inconclusive when proof is missing.</dd></div><div><dt>Who can merge?</dt><dd>Only a human. BuildIT has no merge permission and cannot edit workflows, repository settings, or unselected repositories.</dd></div><div><dt>How is the key protected?</dt><dd>The broker validates it, encrypts it with AWS KMS in Ireland, never shows it again, and never stores plaintext in Convex.</dd></div><div><dt>How do I stop access?</dt><dd>An organization Owner or Admin can revoke or replace the key here and remove repository access in GitHub. BuildIT cannot recover the original key.</dd></div></dl></div>;
 }
