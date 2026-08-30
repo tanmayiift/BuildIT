@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { terminalStatuses } from "./lib/lifecycle";
 
@@ -288,7 +289,7 @@ export const materializeReview = internalMutation({
       currentStage: "queue",
       executionGeneration: 0,
       queuePriority: 0,
-      runnerImageVersion: "buildit-node22-v1",
+      runnerImageVersion: RUNNER_IMAGE_VERSION,
       expiresAt: args.now + 7 * 86_400_000,
       createdAt: args.now,
       updatedAt: args.now,

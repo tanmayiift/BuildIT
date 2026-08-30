@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { requireRepositoryRole } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
+import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 
 export const scope = internalQuery({
   args: { repositoryId: v.id("repositories") },
@@ -53,7 +54,7 @@ export const create = internalMutation({
       mode: "review", status: "queued", budgetLimit: 5, budgetConsumed: 0, nextActionCode: "none", isStale: false,
       trustedRef: args.baseRef, trustedRefSha: args.baseSha, configRevisionId: config._id, configProvenance: "defaults_only",
       provider: credential.provider, model, modelVersion: "pinned-at-execution", promptVersion: "chain-v1", evalSetVersion: "buildit-eval-v1",
-      coverageLevel: "limited", currentStage: "queue", executionGeneration: 0, queuePriority: 0, runnerImageVersion: "buildit-node22-v1",
+      coverageLevel: "limited", currentStage: "queue", executionGeneration: 0, queuePriority: 0, runnerImageVersion: RUNNER_IMAGE_VERSION,
       expiresAt: args.now + 7 * 86_400_000, createdAt: args.now, updatedAt: args.now });
     await ctx.db.insert("reviewLocks", { repositoryId: repository._id, prNumber: args.prNumber, headSha: args.headSha, mode: "review", reviewId, createdAt: args.now });
     await ctx.db.insert("reviewEvents", { organizationId: repository.organizationId, reviewId, sequence: 1, type: "review_created", stage: "queue", internalCode: "dashboard_consent", metadata: {}, createdAt: args.now });

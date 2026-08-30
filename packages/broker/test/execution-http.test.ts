@@ -9,8 +9,8 @@ const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(valu
 function artifactBody(revision: "base" | "head") { const commitSha = revision === "base" ? baseSha : headSha, content = revision === "base" ? "export const value = 1" : "export const value = eval(input)"; return Buffer.from(JSON.stringify({ revision, snapshot: { commitSha, files: [{ path: "src/a.ts", content }] } })); }
 function fixture(changes: Record<string, unknown> = {}) {
   const artifacts = (["base", "head"] as const).map(revision => { const content = artifactBody(revision); return { revision, artifactId: `${revision}-artifact`, storageKey: `artifacts/org-a/repo-a/review-a/${revision}-artifact/context.json`, checksum: createHash("sha256").update(content).digest("hex"), size: content.byteLength, readGrant: `${revision}-read-grant` }; });
-  const body = { organizationId: "org-a", repositoryId: "repo-a", reviewId: "review-a", baseSha, headSha, runtime: "node22" as const, artifacts, ...plans, ...changes };
-  const descriptors = artifacts.map(({ readGrant: _, ...item }) => item), grant = issueExecutionGrant({ organizationId: "org-a", repositoryId: "repo-a", reviewId: "review-a", baseSha, headSha, artifactsHash: hash(descriptors), plansHash: hash({ runtime: body.runtime, install: body.install, checks: body.checks }) }, secret, now);
+  const body = { organizationId: "org-a", repositoryId: "repo-a", reviewId: "review-a", baseSha, headSha, runnerImageVersion: `buildit-runner@sha256:${"f".repeat(64)}`, runtime: "node22" as const, artifacts, ...plans, ...changes };
+  const descriptors = artifacts.map(({ readGrant: _, ...item }) => item), grant = issueExecutionGrant({ organizationId: "org-a", repositoryId: "repo-a", reviewId: "review-a", baseSha, headSha, artifactsHash: hash(descriptors), plansHash: hash({ runnerImageVersion: body.runnerImageVersion, runtime: body.runtime, install: body.install, checks: body.checks }) }, secret, now);
   return { body, grant };
 }
 function dependencies() {
@@ -36,7 +36,7 @@ describe("native base/head execution boundary", () => {
 
   it("rejects tenant, plan, and artifact changes before sandbox execution", async () => {
     const original = fixture();
-    for (const changed of [{ ...original.body, organizationId: "org-b" }, { ...original.body, checks: [] }, { ...original.body, headSha: "e".repeat(40) }]) {
+    for (const changed of [{ ...original.body, organizationId: "org-b" }, { ...original.body, checks: [] }, { ...original.body, headSha: "e".repeat(40) }, { ...original.body, runnerImageVersion: `buildit-runner@sha256:${"e".repeat(64)}` }]) {
       const deps = dependencies(), response = await handleExecution(new Request("https://broker/api/execute", { method: "POST", headers: { authorization: `Bearer ${original.grant}` }, body: JSON.stringify(changed) }), { artifactBroker: deps.artifactBroker as never, runner: deps.runner as never, grantSecret: secret, consume: async () => true, now });
       expect(response.status).toBe(403);
       expect(deps.runner.run).not.toHaveBeenCalled();
