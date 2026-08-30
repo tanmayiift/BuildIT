@@ -723,6 +723,17 @@ export const runConvergence = internalAction({
   },
 });
 
+export function autofixScannerLines(run: ExecutionResponse["scanners"]["head"]) {
+  const labels: Record<string, string> = { builditRules: "buildit-rules", gitleaks: "gitleaks", osvScanner: "osv-scanner" }, expected = Object.keys(labels), runs = run.runs ?? [];
+  if (!run.complete || runs.length !== expected.length || new Set(runs.map(item => item.scanner)).size !== expected.length || runs.some(item => !labels[item.scanner]) || expected.some(scanner => !runs.some(item => item.scanner === scanner)) || run.findings.some(finding => !finding.scanner || !labels[finding.scanner])) throw new Error("autofix_scanner_inventory_invalid");
+  return runs.map(item => {
+    const findings = run.findings.filter(finding => finding.scanner === item.scanner), counts = { critical: 0, warning: 0, info: 0 };
+    for (const finding of findings) counts[finding.severity] += 1;
+    const conclusion = counts.critical ? "failed" : "passed", detail = (["critical", "warning", "info"] as const).filter(level => counts[level]).map(level => `${counts[level]} ${level[0]!.toUpperCase()}${level.slice(1)}`).join(", ") || "no findings";
+    return `- ${labels[item.scanner]}: **${conclusion}** — ${detail}`;
+  });
+}
+
 export const deliverPassed = internalAction({
   args: {
     organizationId: v.id("organizations"),
@@ -882,7 +893,7 @@ export const deliverPassed = internalAction({
           ...results
             .filter((item) => item.required)
             .map((item) => `- ${item.planId}: **${item.conclusion}**`),
-          `- buildit-rules: **${validation.output.scanners.head.findings.some((item) => item.severity === "critical") ? "failed" : "passed"}**`,
+          ...autofixScannerLines(validation.output.scanners.head),
           ``,
           `BuildIT did not merge either pull request. A human must inspect and merge the stacked PR.`,
         ].join("\n"),
