@@ -24,6 +24,7 @@ import {
   issueExecutionGrant,
   issueModelInvocationGrant,
   redact,
+  redactForModel,
 } from "@buildit/security";
 import { validateSchemaValue } from "@buildit/providers";
 import {
@@ -107,6 +108,9 @@ type Analysis = {
     explanation?: string;
   }>;
 };
+export function redactAutofixSources<T extends { content: string }>(sources: T[]) {
+  return sources.map(item => ({ ...item, content: redactForModel(item.content) }));
+}
 
 async function readArtifact(
   scope: Scope,
@@ -365,6 +369,7 @@ export const runConvergence = internalAction({
             relevant = sources
               .filter((item) => relevantPaths.has(item.path))
               .slice(0, 20),
+            modelRelevant = redactAutofixSources(relevant),
             prior = scope.rounds.find(
               (item) => item.roundNumber === roundNumber - 1,
             ),
@@ -387,7 +392,7 @@ export const runConvergence = internalAction({
                 parentCandidateSha: parentSha,
               },
               acceptedFindings,
-              files: relevant,
+              files: modelRelevant,
               lastValidation: {
                 results: failure?.head.results ?? [],
                 outputs: (failure?.head.outputs ?? []).map((item) => ({
