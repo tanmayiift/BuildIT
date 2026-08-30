@@ -21,6 +21,7 @@ describe("AWS artifact and key boundary", () => {
     expect(template).toContain("BrokerS3ArtifactEncryption");
     expect(template).toContain('"kms:ViaService": s3.eu-west-1.amazonaws.com');
     expect(template).toContain('"kms:EncryptionContext:aws:s3:arn"');
+    expect(template).toContain("BucketKeyEnabled: true");
   });
 
   it("keeps the bucket private, non-versioned, encrypted, and short-lived", () => {
