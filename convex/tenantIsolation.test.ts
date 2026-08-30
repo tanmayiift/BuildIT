@@ -1635,6 +1635,27 @@ describe("audited membership administration", () => {
     expect(events[0].resourceIdHash).not.toContain(membershipId);
   });
 
+  it("resolves a member by their exact signed-in GitHub login", async () => {
+    const t = convexTest(schema, modules), seeded = await seedMembershipWorkspace(t);
+    const login = await t.run(async ctx => {
+      await ctx.db.insert("userProfiles", { userId: seeded.memberId, githubUserId: 2, githubLogin: "member", updatedAt: seeded.now });
+      return "member";
+    });
+    const membershipId = await t.withIdentity({ subject: `${seeded.ownerId}|owner-session` }).mutation(api.memberships.inviteByGitHubLogin, {
+      organizationId: seeded.organizationId,
+      githubLogin: login,
+      role: "developer",
+      requestId: "membership-login-invite-0001",
+    });
+    expect(await t.run(ctx => ctx.db.get(membershipId))).toMatchObject({ userId: seeded.memberId, role: "developer", status: "invited" });
+    await expect(t.withIdentity({ subject: `${seeded.ownerId}|owner-session` }).mutation(api.memberships.inviteByGitHubLogin, {
+      organizationId: seeded.organizationId,
+      githubLogin: "not-yet-a-buildit-user",
+      role: "viewer",
+      requestId: "membership-login-missing-0001",
+    })).rejects.toThrow("member_must_sign_in_first");
+  });
+
   it("requires recent GitHub authentication and preserves the final owner", async () => {
     const t = convexTest(schema, modules);
     const seeded = await seedMembershipWorkspace(t);

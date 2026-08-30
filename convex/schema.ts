@@ -34,7 +34,7 @@ export default defineSchema({
   userProfiles: defineTable({
     userId: v.id("users"), githubUserId: v.number(), githubLogin: v.string(),
     lastAuthenticatedAt: v.optional(v.number()), updatedAt: v.number(),
-  }).index("by_user", ["userId"]).index("by_github_user", ["githubUserId"]),
+  }).index("by_user", ["userId"]).index("by_github_user", ["githubUserId"]).index("by_github_login", ["githubLogin"]),
 
   githubInstallations: defineTable({
     organizationId: v.id("organizations"), installationId: v.number(), accountLogin: v.string(),

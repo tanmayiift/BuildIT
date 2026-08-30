@@ -24,7 +24,10 @@ export const list = query({
     await requireOrganizationRole(ctx, args.organizationId, "viewer");
     const active = await ctx.db.query("memberships").withIndex("by_org_status", q => q.eq("organizationId", args.organizationId).eq("status", "active")).collect();
     const invited = await ctx.db.query("memberships").withIndex("by_org_status", q => q.eq("organizationId", args.organizationId).eq("status", "invited")).collect();
-    return [...active, ...invited].map(item => ({ id: item._id, userId: item.userId, role: item.role, status: item.status, createdAt: item.createdAt, updatedAt: item.updatedAt }));
+    return Promise.all([...active, ...invited].map(async item => {
+      const user = await ctx.db.get(item.userId as Id<"users">), profile = user ? await ctx.db.query("userProfiles").withIndex("by_user", q => q.eq("userId", user._id)).unique() : null;
+      return { id: item._id, userId: item.userId, name: user?.name ?? null, githubLogin: profile?.githubLogin ?? null, role: item.role, status: item.status, createdAt: item.createdAt, updatedAt: item.updatedAt };
+    }));
   },
 });
 
@@ -41,6 +44,26 @@ export const invite = mutation({
     const existing = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", args.organizationId).eq("userId", args.targetUserId)).unique();
     if (existing?.status === "active") throw new ConvexError("membership_already_active");
     const membershipId = existing?._id ?? await ctx.db.insert("memberships", { organizationId: args.organizationId, userId: args.targetUserId, role: args.role, status: "invited", createdAt: now, updatedAt: now });
+    if (existing) await ctx.db.patch(existing._id, { role: args.role, status: "invited", updatedAt: now });
+    await appendAuditEvent(ctx, { organizationId: args.organizationId, actorId: actor.userId, action: "membership.invited", resourceType: "membership", resourceId: membershipId, requestId: args.requestId, result: "allowed", createdAt: now });
+    return membershipId;
+  },
+});
+
+export const inviteByGitHubLogin = mutation({
+  args: { organizationId: v.id("organizations"), githubLogin: v.string(), role, requestId: v.string() },
+  handler: async (ctx, args) => {
+    const githubLogin = args.githubLogin.trim();
+    if (!/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(githubLogin)) throw new ConvexError("github_login_invalid");
+    if (args.role === "owner") throw new ConvexError("owner_invitation_forbidden");
+    const now = Date.now(), actor = await requireOrganizationRole(ctx, args.organizationId, "admin");
+    await requireRecentGitHubLogin(ctx, actor.userId, now);
+    await assertCanManage(actor.role, args.role);
+    const profile = await ctx.db.query("userProfiles").withIndex("by_github_login", q => q.eq("githubLogin", githubLogin)).unique();
+    if (!profile) throw new ConvexError("member_must_sign_in_first");
+    const existing = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", args.organizationId).eq("userId", profile.userId)).unique();
+    if (existing?.status === "active") throw new ConvexError("membership_already_active");
+    const membershipId = existing?._id ?? await ctx.db.insert("memberships", { organizationId: args.organizationId, userId: profile.userId, role: args.role, status: "invited", createdAt: now, updatedAt: now });
     if (existing) await ctx.db.patch(existing._id, { role: args.role, status: "invited", updatedAt: now });
     await appendAuditEvent(ctx, { organizationId: args.organizationId, actorId: actor.userId, action: "membership.invited", resourceType: "membership", resourceId: membershipId, requestId: args.requestId, result: "allowed", createdAt: now });
     return membershipId;
