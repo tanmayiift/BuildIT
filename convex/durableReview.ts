@@ -104,7 +104,8 @@ export const cancel = internalMutation({
     await reviewWorkflowManager.cancel(ctx, args.workflowId);
     if (!terminalStatuses.has(review.status)) {
       await ctx.db.patch(args.reviewId, {
-        status: "cancelling", cancelledBy: args.actorId, cancellationRequestedAt: args.now,
+        status: "cancelled", statusReasonCode: "user_cancelled", nextActionCode: "start_new_review",
+        cancelledBy: args.actorId, cancellationRequestedAt: args.now, completedAt: args.now,
         executionGeneration: review.executionGeneration + 1, leaseOwner: undefined,
         leaseExpiresAt: undefined, updatedAt: args.now,
       });

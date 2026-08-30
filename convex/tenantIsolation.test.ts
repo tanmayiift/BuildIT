@@ -1767,6 +1767,12 @@ describe("Convex review state integrity", () => {
       actorId: "alice",
       now: 2,
     });
+    expect(await t.run((ctx) => ctx.db.get(seeded.reviewId))).toMatchObject({
+      status: "cancelled",
+      statusReasonCode: "user_cancelled",
+      completedAt: 2,
+      executionGeneration: 1,
+    });
     await expect(
       t.mutation(internal.reviewState.transition, {
         reviewId: seeded.reviewId,

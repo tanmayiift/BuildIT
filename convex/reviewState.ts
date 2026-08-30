@@ -79,7 +79,11 @@ export const requestCancellation = internalMutation({
     if (terminalStatuses.has(review.status)) return review.executionGeneration;
     const executionGeneration = review.executionGeneration + 1;
     await ctx.db.patch(args.reviewId, {
-      status: "cancelling", cancelledBy: args.actorId, cancellationRequestedAt: args.now,
+      status: review.workflowId ? "cancelling" : "cancelled",
+      statusReasonCode: review.workflowId ? undefined : "user_cancelled",
+      nextActionCode: review.workflowId ? review.nextActionCode : "start_new_review",
+      completedAt: review.workflowId ? undefined : args.now,
+      cancelledBy: args.actorId, cancellationRequestedAt: args.now,
       executionGeneration, leaseOwner: undefined, leaseExpiresAt: undefined, updatedAt: args.now,
     });
     return executionGeneration;
