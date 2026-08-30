@@ -15,8 +15,12 @@ export function credentialErrorMessage(code: CredentialErrorCode) {
   if (code === "invalid_key") return "Google, OpenAI, or Anthropic rejected this key. Check that the key is active and has API access, then paste it again.";
   if (code === "rate_limited") return "Too many key checks were attempted. No key was stored. Wait 15 minutes, then paste it again.";
   if (code === "recent_reauthentication_required") return "Your security check expired before the key was saved. No key was stored. Verify with GitHub, then paste the key again.";
-  if (code === "not_found_or_forbidden") return "BuildIT could not confirm this organization and repository for the final save. No key was stored. Refresh this page, confirm the active workspace, and try again.";
+  if (code === "not_found_or_forbidden") return "BuildIT could not prove this exact organization and repository at the final save. No key was stored. Verify with GitHub, confirm the same workspace, then paste the key again.";
   return "The secure key service could not save this key. No key was stored. Try again shortly.";
+}
+
+export function credentialNeedsIdentityRecovery(code: CredentialErrorCode | undefined) {
+  return code === "recent_reauthentication_required" || code === "not_found_or_forbidden";
 }
 
 export function needsFreshCredentialAuthentication(expiresAt: number | undefined, now: number) {

@@ -3,7 +3,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuthToken } from "@convex-dev/auth/react";
 import { makeFunctionReference } from "convex/server";
 import { type FormEvent, useEffect, useState } from "react";
-import { credentialErrorCode, credentialErrorMessage, credentialReauthenticationHref, needsFreshCredentialAuthentication, type CredentialErrorCode } from "./model-key-state";
+import { credentialErrorCode, credentialErrorMessage, credentialNeedsIdentityRecovery, credentialReauthenticationHref, needsFreshCredentialAuthentication, type CredentialErrorCode } from "./model-key-state";
 type Provider = "anthropic" | "openai" | "gemini";
 type Connection = {
   organization: null | { id: string; name: string; role: string };
@@ -319,7 +319,7 @@ export function ModelKeyForm() {
         {result ? (
           <div className={`form-result ${result.kind}`} role={result.kind === "error" ? "alert" : "status"}>
             <span>{result.text}</span>
-            {result.code === "recent_reauthentication_required" ? <a className="button secondary compact" href={reauthenticationHref}>Verify with GitHub</a> : null}
+            {credentialNeedsIdentityRecovery(result.code) ? <a className="button secondary compact" href={reauthenticationHref}>Verify with GitHub</a> : null}
           </div>
         ) : null}
       </form>

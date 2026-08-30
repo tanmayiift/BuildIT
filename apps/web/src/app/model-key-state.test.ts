@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { credentialErrorCode, credentialErrorMessage, credentialReauthenticationHref, needsFreshCredentialAuthentication } from "./model-key-state";
+import { credentialErrorCode, credentialErrorMessage, credentialNeedsIdentityRecovery, credentialReauthenticationHref, needsFreshCredentialAuthentication } from "./model-key-state";
 
 describe("model-key recovery", () => {
   it("expires the entry form at the exact server-provided time", () => {
@@ -16,6 +16,13 @@ describe("model-key recovery", () => {
     for (const code of ["recent_reauthentication_required", "not_found_or_forbidden"] as const) {
       expect(credentialErrorMessage(code)).toContain("No key was stored");
     }
+  });
+
+  it("offers fresh identity proof for both stale-login and changed-scope failures", () => {
+    expect(credentialNeedsIdentityRecovery("recent_reauthentication_required")).toBe(true);
+    expect(credentialNeedsIdentityRecovery("not_found_or_forbidden")).toBe(true);
+    expect(credentialNeedsIdentityRecovery("invalid_key")).toBe(false);
+    expect(credentialNeedsIdentityRecovery(undefined)).toBe(false);
   });
 
   it("does not expose an arbitrary broker error", () => {
