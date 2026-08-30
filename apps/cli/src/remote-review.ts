@@ -31,3 +31,19 @@ export async function remoteStatus(input: { pr: string | undefined; repo?: strin
   input.emit(event("remote_status", { repository: repo, prNumber: pr, prUrl: response.url, headSha: response.headRefOid, status, checks }));
   return status === "passed" ? 0 : status === "action_required" ? 2 : 3;
 }
+
+export async function requestRemoteAutofix(input: { pr: string | undefined; repo?: string | undefined; confirmed: boolean; emit: (item: CliEvent) => void; exec?: RemoteExec }) {
+  if (!input.confirmed) throw new Error("autofix_confirmation_required");
+  const exec = input.exec ?? execute, pr = validPr(input.pr), repo = await currentRepository(exec, input.repo);
+  const preview = await exec("gh", ["pr", "view", String(pr), "--repo", repo, "--json", "url,headRefOid"]);
+  if (preview.code !== 0) throw new Error("github_status_failed");
+  const pull = JSON.parse(preview.stdout) as { url?: unknown; headRefOid?: unknown };
+  if (typeof pull.headRefOid !== "string" || !/^[0-9a-f]{40}$/.test(pull.headRefOid)) throw new Error("github_pull_request_invalid");
+  const result = await exec("gh", ["api", "--method", "POST", "repos/" + repo + "/issues/" + pr + "/comments", "-f", "body=@buildit autofix stacked"]);
+  if (result.code !== 0) throw new Error("github_command_failed");
+  const response = JSON.parse(result.stdout) as { html_url?: unknown };
+  input.emit(event("remote_requested", { repository: repo, prNumber: pr, command: "autofix_stacked", pinnedHead: pull.headRefOid, prUrl: pull.url,
+    commentUrl: typeof response.html_url === "string" ? response.html_url : undefined, roundLimit: 3, delivery: "stacked_pr", humanMergeRequired: true,
+    authorization: "GitHub write permission and the current PR head are rechecked by BuildIT before any write" }));
+  return 0;
+}

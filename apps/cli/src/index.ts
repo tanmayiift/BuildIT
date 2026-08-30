@@ -9,7 +9,7 @@ import {
   saveCredential,
   type Provider,
 } from "./credential-store.js";
-import { remoteStatus, requestRemoteCommand } from "./remote-review.js";
+import { remoteStatus, requestRemoteAutofix, requestRemoteCommand } from "./remote-review.js";
 
 const args = process.argv.slice(2),
   command = args[0] ?? "help",
@@ -84,9 +84,12 @@ async function main() {
   }
   if (command === "status") return remoteStatus({ pr: value("--pr"), ...(value("--repo") ? { repo: value("--repo") } : {}), emit });
   if (command === "cancel") return requestRemoteCommand({ pr: value("--pr"), ...(value("--repo") ? { repo: value("--repo") } : {}), command: "cancel", emit });
-  if (command === "autofix") throw new Error("autofix_requires_hosted_consent");
+  if (command === "autofix") {
+    if (!args.includes("--remote") || !args.includes("--stacked")) throw new Error("autofix_requires_hosted_stacked_pr");
+    return requestRemoteAutofix({ pr: value("--pr"), ...(value("--repo") ? { repo: value("--repo") } : {}), confirmed: args.includes("--confirm-stacked-pr"), emit });
+  }
   process.stdout.write(
-    "BuildIT CLI\n\nCommands:\n  buildit configure --provider <anthropic|openai|gemini> [--from-env|--revoke]\n  buildit review [--dir path] [--json]\n  buildit review --remote --pr <number> [--repo owner/name] [--json]\n  buildit status --pr <number> [--repo owner/name] [--json]\n  buildit cancel --pr <number> [--repo owner/name] [--json]\n  buildit doctor [--json]\n\nNever pass a key as a command argument. Remote commands use your existing GitHub CLI login; BuildIT rechecks collaborator permission. Local review runs deterministic checks only. Autofix requires separate hosted consent.\n",
+    "BuildIT CLI\n\nCommands:\n  buildit configure --provider <anthropic|openai|gemini> [--from-env|--revoke]\n  buildit review [--dir path] [--json]\n  buildit review --remote --pr <number> [--repo owner/name] [--json]\n  buildit autofix --remote --stacked --confirm-stacked-pr --pr <number> [--repo owner/name] [--json]\n  buildit status --pr <number> [--repo owner/name] [--json]\n  buildit cancel --pr <number> [--repo owner/name] [--json]\n  buildit doctor [--json]\n\nNever pass a key as a command argument. Remote commands use your existing GitHub CLI login; BuildIT rechecks collaborator permission and the PR head. Autofix is limited to a stacked PR and never merges.\n",
   );
   return command === "help" || command === "--help" ? 0 : 4;
 }

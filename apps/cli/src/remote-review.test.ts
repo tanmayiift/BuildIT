@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { remoteStatus, requestRemoteCommand, type RemoteExec } from "./remote-review.js";
+import { remoteStatus, requestRemoteAutofix, requestRemoteCommand, type RemoteExec } from "./remote-review.js";
 
 function fixture(responses: Array<{ code: number; stdout: string; stderr?: string }>) {
   const calls: Array<[string, string[]]> = [], emit = vi.fn(), exec: RemoteExec = vi.fn(async (file, args) => {
@@ -52,5 +52,18 @@ describe("remote GitHub CLI review commands", () => {
     const f = fixture([{ code: 0, stdout: JSON.stringify({ nameWithOwner: "acme/service/escape" }) }]);
     await expect(requestRemoteCommand({ pr: "7", command: "review", emit: f.emit, exec: f.exec })).rejects.toThrow("github_repository_invalid");
     expect(f.calls).toHaveLength(1);
+  });
+
+  it("requires explicit stacked-PR consent before requesting Autofix", async () => {
+    const noCall = vi.fn<RemoteExec>();
+    await expect(requestRemoteAutofix({ pr: "7", repo: "acme/service", confirmed: false, emit: vi.fn(), exec: noCall })).rejects.toThrow("autofix_confirmation_required");
+    expect(noCall).not.toHaveBeenCalled();
+    const f = fixture([
+      { code: 0, stdout: JSON.stringify({ url: "https://github.com/acme/service/pull/7", headRefOid: "a".repeat(40) }) },
+      { code: 0, stdout: JSON.stringify({ html_url: "https://github.com/acme/service/issues/7#comment" }) },
+    ]);
+    await expect(requestRemoteAutofix({ pr: "7", repo: "acme/service", confirmed: true, emit: f.emit, exec: f.exec })).resolves.toBe(0);
+    expect(f.calls[1]).toEqual(["gh", ["api", "--method", "POST", "repos/acme/service/issues/7/comments", "-f", "body=@buildit autofix stacked"]]);
+    expect(f.emit).toHaveBeenCalledWith(expect.objectContaining({ type: "remote_requested", data: expect.objectContaining({ command: "autofix_stacked", pinnedHead: "a".repeat(40), roundLimit: 3, delivery: "stacked_pr", humanMergeRequired: true }) }));
   });
 });
