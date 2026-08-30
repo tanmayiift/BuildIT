@@ -1,6 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
+import { findingCategory, findingResolution, requirementStatus, severity } from "./validators";
+import type { Id } from "./_generated/dataModel";
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
 
@@ -51,7 +53,9 @@ export const reserveOutput = internalMutation({
 });
 
 export const completeAnalysis = internalMutation({
-  args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: v.string(), size: v.number(), credentialId: v.id("providerCredentials"), inputTokens: v.number(), outputTokens: v.number(), now: v.number() },
+  args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: v.string(), size: v.number(), credentialId: v.id("providerCredentials"), inputTokens: v.number(), outputTokens: v.number(),
+    requirements: v.array(v.object({ externalIdHash: v.string(), sourceUrlHash: v.string(), status: requirementStatus, confidence: v.number() })),
+    findings: v.array(v.object({ fingerprintHmac: v.string(), pathHmac: v.string(), category: findingCategory, severity, confidence: v.number(), blocking: v.boolean(), evidenceIds: v.array(v.id("artifacts")), startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()), requirementExternalIdHash: v.optional(v.string()), resolution: findingResolution })), now: v.number() },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), artifact = await ctx.db.get(args.artifactId), credential = await ctx.db.get(args.credentialId);
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
@@ -62,6 +66,25 @@ export const completeAnalysis = internalMutation({
     else throw new ConvexError("analysis_artifact_mismatch");
     const quantity = args.inputTokens + args.outputTokens;
     if (!Number.isSafeInteger(quantity) || quantity < 0) throw new ConvexError("invalid_model_usage");
+    if (args.requirements.length > 500 || args.findings.length > 500) throw new ConvexError("analysis_result_limit_exceeded");
+    const requirementIds = new Map<string, Id<"requirements">>();
+    for (const item of args.requirements) {
+      if (!/^[0-9a-f]{64}$/.test(item.externalIdHash) || !/^[0-9a-f]{64}$/.test(item.sourceUrlHash) || !Number.isFinite(item.confidence) || item.confidence < 0 || item.confidence > 1) throw new ConvexError("analysis_result_invalid");
+      const existing = (await ctx.db.query("requirements").withIndex("by_review", q => q.eq("reviewId", review._id)).collect()).find(value => value.externalIdHash === item.externalIdHash);
+      const id = existing?._id ?? await ctx.db.insert("requirements", { organizationId: args.organizationId, reviewId: review._id, sourceType: "pull_request", sourceUrlHash: item.sourceUrlHash, externalIdHash: item.externalIdHash,
+        contentArtifactId: artifact._id, fetchedVersion: review.headSha, fetchedAt: args.now, status: item.status, confidence: item.confidence, createdAt: args.now, updatedAt: args.now, expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000) });
+      requirementIds.set(item.externalIdHash, id);
+    }
+    for (const item of args.findings) {
+      if (!/^[0-9a-f]{64}$/.test(item.fingerprintHmac) || !/^[0-9a-f]{64}$/.test(item.pathHmac) || !Number.isFinite(item.confidence) || item.confidence < 0 || item.confidence > 1 || !Number.isInteger(item.startLine) || item.startLine < 1 || !Number.isInteger(item.endLine) || item.endLine < item.startLine || !item.evidenceIds.length) throw new ConvexError("analysis_result_invalid");
+      for (const evidenceId of item.evidenceIds) { const evidence = await ctx.db.get(evidenceId); if (!evidence || evidence.organizationId !== args.organizationId || evidence.repositoryId !== review.repositoryId || evidence.reviewId !== review._id || evidence.redactionStatus !== "redacted") throw new ConvexError("finding_evidence_scope_mismatch"); }
+      const requirementId = item.requirementExternalIdHash ? requirementIds.get(item.requirementExternalIdHash) : undefined;
+      if (item.requirementExternalIdHash && !requirementId) throw new ConvexError("finding_requirement_missing");
+      const existing = await ctx.db.query("findings").withIndex("by_review_fingerprint", q => q.eq("reviewId", review._id).eq("fingerprintHmac", item.fingerprintHmac)).unique();
+      if (!existing) await ctx.db.insert("findings", { organizationId: args.organizationId, reviewId: review._id, fingerprintHmac: item.fingerprintHmac, category: item.category, severity: item.severity,
+        confidence: item.confidence, blocking: item.blocking, contentArtifactId: artifact._id, evidenceIds: item.evidenceIds, pathHmac: item.pathHmac, startLine: item.startLine, endLine: item.endLine,
+        ...(item.ruleId ? { ruleId: item.ruleId } : {}), ...(requirementId ? { requirementId } : {}), resolution: item.resolution, createdAt: args.now, updatedAt: args.now, expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000) });
+    }
     await ctx.db.insert("usageLedger", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id,
       kind: "model_tokens", quantity, unitCost: 0, currency: "provider_billed", occurredAt: args.now });
     await ctx.db.patch(credential._id, { lastUsedAt: args.now });

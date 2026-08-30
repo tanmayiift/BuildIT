@@ -4,18 +4,20 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { runModelReviewChain, type ModelStageRequest, type PromptStage } from "@buildit/orchestrator";
+import { arbitrateFindings, runModelReviewChain, validateFindingCandidates, type CriticDecision, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, type PromptStage } from "@buildit/orchestrator";
 import type { ProviderName, ProviderResult } from "@buildit/providers";
-import { issueArtifactGrant, issueModelInvocationGrant, redact } from "@buildit/security";
+import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
-type SnapshotChunk = { revision?: "base" | "head"; pull?: { title: string; body: string; files: Array<{ path: string; patch?: string; status: string }>; omitted: unknown[]; urlHash: string }; snapshot: { files: Array<{ path: string; content: string; size: number }>; omitted: unknown[]; coverage: string } };
+type SnapshotChunk = { artifactId?: Id<"artifacts">; revision?: "base" | "head"; pull?: { title: string; body: string; files: Array<{ path: string; patch?: string; status: string }>; omitted: unknown[]; urlHash: string }; snapshot: { files: Array<{ path: string; content: string; size: number }>; omitted: unknown[]; coverage: string } };
 type AnalysisScope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; headSha: string; baseSha: string; configRevision: string; provider: ProviderName; model: string;
   credential: { id: string; organizationId: string; repositoryId?: string; provider: ProviderName; ciphertext: string; nonce: string; tag: string; wrappedDataKey: string; kmsKeyId: string; envelopeVersion: 1; keyVersion: number; aadDigest: string; maskedSuffix: string; status: "valid"; createdBy: string; createdAt: number; lastValidatedAt: number };
   credentialDocumentId: Id<"providerCredentials">; artifacts: Array<{ id: Id<"artifacts">; storageKey: string; checksum: string; size: number }>;
   validationArtifact: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number } };
 
 type ValidationArtifact = { version?: number; pinned?: { headSha?: string; baseSha?: string }; manager?: string; output?: { base?: { results?: unknown[]; outputs?: Array<{ planId?: string; text?: string; truncated?: boolean; evidenceTruncated?: boolean }> }; head?: { results?: unknown[]; outputs?: Array<{ planId?: string; text?: string; truncated?: boolean; evidenceTruncated?: boolean }> }; scanners?: unknown } };
+
+function sourceEvidence(path: string, content: string) { const contentHash = createHash("sha256").update(content).digest("hex"); return { evidenceId: `source-${createHash("sha256").update(`${path}\0${contentHash}`).digest("hex").slice(0, 24)}`, path, contentHash, startLine: 1, endLine: Math.max(1, content.split("\n").length) }; }
 
 export function boundedValidationEvidence(value: ValidationArtifact, pinned: { headSha: string; baseSha: string }, maxOutputBytes = 60_000) {
   if (value.version !== 1 || value.pinned?.headSha !== pinned.headSha || value.pinned?.baseSha !== pinned.baseSha || !value.output?.base || !value.output.head) throw new Error("validation_evidence_pinning_failed");
@@ -42,7 +44,7 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   const base = { pull: { title: pull.title, body, bodyTruncated, changes, urlHash: pull.urlHash }, files, exclusions: { paths: excluded, patchPaths, source: headChunks.flatMap(chunk => chunk.snapshot.omitted), pull: pull.omitted } };
   let bytes = Buffer.byteLength(JSON.stringify(base));
   for (const file of headChunks.flatMap(chunk => chunk.snapshot.files).sort((a, b) => Number(changed.has(b.path)) - Number(changed.has(a.path)) || a.path.localeCompare(b.path))) {
-    const contentHash = createHash("sha256").update(file.content).digest("hex"), item = { evidenceId: `source-${createHash("sha256").update(`${file.path}\0${contentHash}`).digest("hex").slice(0, 24)}`, path: file.path, content: file.content, startLine: 1, endLine: Math.max(1, file.content.split("\n").length), contentHash }, size = Buffer.byteLength(JSON.stringify(item));
+    const evidence = sourceEvidence(file.path, file.content), item = { ...evidence, content: file.content }, size = Buffer.byteLength(JSON.stringify(item));
     if (bytes + size > maxBytes) { excluded.push(file.path); continue; }
     files.push(item); bytes += size;
   }
@@ -62,7 +64,7 @@ export const analyze = internalAction({
       if (!response.ok) throw new Error(`context_artifact_download_${response.status}`);
       const body = Buffer.from(await response.arrayBuffer());
       if (body.byteLength !== artifact.size || createHash("sha256").update(body).digest("hex") !== artifact.checksum) throw new Error("context_artifact_integrity_failed");
-      chunks.push(JSON.parse(body.toString("utf8")) as SnapshotChunk);
+      chunks.push({ ...(JSON.parse(body.toString("utf8")) as SnapshotChunk), artifactId: artifact.id });
     }
     const revisions = new Set(chunks.map(chunk => chunk.revision));
     if (!revisions.has("base") || !revisions.has("head")) throw new Error("base_head_context_incomplete");
@@ -71,7 +73,8 @@ export const analyze = internalAction({
     if (!validationResponse.ok) throw new Error(`validation_artifact_download_${validationResponse.status}`);
     const validationBody = Buffer.from(await validationResponse.arrayBuffer());
     if (validationBody.byteLength !== validation.size || createHash("sha256").update(validationBody).digest("hex") !== validation.checksum) throw new Error("validation_artifact_integrity_failed");
-    const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(JSON.parse(validationBody.toString("utf8")) as ValidationArtifact, { headSha: scope.headSha, baseSha: scope.baseSha }) }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
+    const validationValue = JSON.parse(validationBody.toString("utf8")) as ValidationArtifact;
+    const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }) }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
     const records = await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
       invoke: async (stageRequest: ModelStageRequest): Promise<ProviderResult> => {
         const stage = stageRequest.stage as PromptStage, model = stage === "critic" ? criticModel(scope.provider, scope.model) : scope.model;
@@ -84,7 +87,27 @@ export const analyze = internalAction({
         if (!response.ok || !output.result) throw new Error(output.error ?? `model_stage_${response.status}`);
         return output.result;
       }, onUsage: item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens }); } });
-    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, coverage: untrusted.coverage, records }));
+    const headEvidence = new Map<string, { record: EvidenceRecord; artifactId: Id<"artifacts"> }>();
+    for (const chunk of chunks.filter(item => item.revision === "head")) for (const file of chunk.snapshot.files) {
+      if (!chunk.artifactId) throw new Error("context_artifact_reference_missing");
+      const item = sourceEvidence(file.path, file.content);
+      headEvidence.set(item.evidenceId, { artifactId: chunk.artifactId, record: { id: item.evidenceId, artifactExists: true, commitSha: scope.headSha, path: item.path, pathExists: true, startLine: item.startLine, endLine: item.endLine, contentHash: item.contentHash, lineHashMatches: true, truncated: false } });
+    }
+    const stage = (name: PromptStage) => records.find(item => item.stage === name)?.value ?? {};
+    const requirements = ((stage("requirements").requirements ?? []) as Array<{ id: string; status: "resolved" | "missing" | "inaccessible" | "conflicting" | "excluded"; confidence: number }>).filter(item => item && typeof item.id === "string" && Number.isFinite(item.confidence) && item.confidence >= 0 && item.confidence <= 1);
+    const modelFindings = ((stage("findings").findings ?? []) as FindingCandidate[]).map(item => ({ ...item, origin: "model" as const }));
+    const critic = ((stage("critic").decisions ?? []) as CriticDecision[]);
+    const scannerHead = (validationValue.output?.scanners as { head?: { findings?: Array<{ ruleId?: string; severity?: "critical" | "warning" | "info"; path?: string; startLine?: number; endLine?: number; summary?: string }> } } | undefined)?.head?.findings ?? [];
+    const scannerFindings: FindingCandidate[] = scannerHead.flatMap((item, index) => {
+      if (!item.path || !item.ruleId || !item.severity || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine)) return [];
+      const evidence = [...headEvidence.values()].find(value => value.record.path === item.path);
+      if (!evidence) return [];
+      return [{ id: `scanner-${index}-${item.ruleId}`, title: item.summary ?? item.ruleId, category: "security", severity: item.severity, confidence: 1, path: item.path, startLine: item.startLine!, endLine: item.endLine!, evidenceIds: [evidence.record.id], impact: item.summary ?? "Deterministic scanner finding", explanation: `${item.ruleId} was detected by the pinned BuildIT scanner.`, origin: "scanner" as const }];
+    });
+    const candidates = validateFindingCandidates({ findings: [...modelFindings, ...scannerFindings], criteriaIds: new Set(requirements.map(item => item.id)), allowedPaths: new Set([...headEvidence.values()].flatMap(item => item.record.path ? [item.record.path] : [])), evidence: [...headEvidence.values()].map(item => item.record), pinnedCommit: scope.headSha });
+    const arbitrated = arbitrateFindings(candidates, critic), fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
+    if (fingerprintKey.byteLength < 32) throw new Error("finding_fingerprint_secret_invalid");
+    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, coverage: untrusted.coverage, records, arbitrated }));
     if (outputBody.byteLength > 4_000_000) throw new Error("analysis_output_too_large");
     const checksum = createHash("sha256").update(outputBody).digest("hex"), now = Date.now();
     const reserved: { artifactId: Id<"artifacts">; storageKey: string } = await ctx.runMutation(internal.reviewModelData.reserveOutput, { ...args, checksum, size: outputBody.byteLength, now });
@@ -92,7 +115,12 @@ export const analyze = internalAction({
     const upload = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${writeGrant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body: outputBody });
     if (!upload.ok) throw new Error(`analysis_artifact_upload_${upload.status}`);
     const inputTokens = usage.reduce((sum, item) => sum + item.inputTokens, 0), outputTokens = usage.reduce((sum, item) => sum + item.outputTokens, 0);
-    await ctx.runMutation(internal.reviewModelData.completeAnalysis, { ...args, artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, credentialId: scope.credentialDocumentId, inputTokens, outputTokens, now: Date.now() });
+    await ctx.runMutation(internal.reviewModelData.completeAnalysis, { ...args, artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, credentialId: scope.credentialDocumentId, inputTokens, outputTokens,
+      requirements: requirements.map(item => ({ externalIdHash: fingerprint(item.id, fingerprintKey), status: item.status, confidence: item.confidence, sourceUrlHash: untrusted.pull.urlHash })),
+      findings: arbitrated.filter(item => item.resolution !== "rejected").map(item => ({ fingerprintHmac: fingerprint(`${item.id}\0${item.path}\0${item.startLine}\0${item.endLine}`, fingerprintKey), pathHmac: fingerprint(item.path, fingerprintKey),
+        category: item.category as "correctness" | "security" | "requirement" | "architecture" | "quality" | "dependency" | "test", severity: item.severity, confidence: item.confidence, blocking: item.blocking,
+        evidenceIds: item.evidenceIds.map(id => headEvidence.get(id)!.artifactId), startLine: item.startLine, endLine: item.endLine, ...(item.origin === "scanner" ? { ruleId: item.id.split("-").slice(2).join("-") } : {}),
+        ...(item.criterionId ? { requirementExternalIdHash: fingerprint(item.criterionId, fingerprintKey) } : {}), resolution: item.resolution === "accepted" ? "open" as const : "uncertain" as const })), now: Date.now() });
     return { artifactId: String(reserved.artifactId), stages: records.length, inputTokens, outputTokens };
   },
 });
