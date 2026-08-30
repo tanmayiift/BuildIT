@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { arbitrateFindings, runModelReviewChain, validateFindingCandidates, type CriticDecision, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, type PromptStage } from "@buildit/orchestrator";
+import { arbitrateFindings, reconcileArbitration, runModelReviewChain, validateFindingCandidates, type ArbitrationDecision, type CriticDecision, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, type PromptStage } from "@buildit/orchestrator";
 import type { ProviderName, ProviderResult } from "@buildit/providers";
 import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact } from "@buildit/security";
 
@@ -112,7 +112,7 @@ export const analyze = internalAction({
       return [{ id: `scanner-${index}-${item.ruleId}`, title: item.summary ?? item.ruleId, category: "security", severity: item.severity, confidence: 1, path: item.path, startLine: item.startLine!, endLine: item.endLine!, evidenceIds: [evidence.record.id], impact: item.summary ?? "Deterministic scanner finding", explanation: `${item.ruleId} was detected by the pinned BuildIT scanner.`, origin: "scanner" as const }];
     });
     const candidates = validateFindingCandidates({ findings: [...modelFindings, ...scannerFindings], criteriaIds: new Set(requirements.map(item => item.id)), allowedPaths: new Set([...headEvidence.values()].flatMap(item => item.record.path ? [item.record.path] : [])), evidence: [...headEvidence.values()].map(item => item.record), pinnedCommit: scope.headSha });
-    const arbitrated = arbitrateFindings(candidates, critic), fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
+    const arbitration = ((stage("arbitration").findings ?? []) as ArbitrationDecision[]), arbitrated = reconcileArbitration(arbitrateFindings(candidates, critic), arbitration), fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
     if (fingerprintKey.byteLength < 32) throw new Error("finding_fingerprint_secret_invalid");
     const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, coverage: untrusted.coverage, records, arbitrated }));
     if (outputBody.byteLength > 4_000_000) throw new Error("analysis_output_too_large");
