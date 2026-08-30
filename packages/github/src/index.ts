@@ -57,3 +57,4 @@ export class GitHubAppClient{
  async repository(input:{installationToken:string;repositoryId:number}){const response=await this.#http(`https://api.github.com/repositories/${input.repositoryId}`,{headers:{...githubHeaders,Authorization:`Bearer ${input.installationToken}`}});if(response.status===401)throw new Error("installation_token_expired");if(response.status===403||response.status===404)throw new Error("repository_unavailable");if(!response.ok)throw new Error(`github_repository_${response.status}`);const repository=await response.json() as {id:number;name:string;full_name:string;private:boolean;archived:boolean};return{githubRepositoryId:repository.id,name:repository.name,fullName:repository.full_name,private:repository.private,archived:repository.archived}}
 }
 export * from "./repository-content.js";
+export * from "./repository-writer.js";
