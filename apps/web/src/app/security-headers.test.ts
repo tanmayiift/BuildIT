@@ -5,7 +5,7 @@ describe("web security headers", () => {
   it("applies a fail-closed browser policy to every route", async () => {
     const rules = await config.headers?.();
     expect(rules).toHaveLength(1);
-    expect(rules?.[0]?.source).toBe("/(.*)");
+    expect(rules?.[0]?.source).toBe("/:path*");
     const headers = new Map(rules?.[0]?.headers.map((item) => [item.key, item.value]));
     expect(headers.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
     expect(headers.get("Content-Security-Policy")).toContain("object-src 'none'");
