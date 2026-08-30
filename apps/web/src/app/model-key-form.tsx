@@ -6,6 +6,7 @@ import { type FormEvent, useEffect, useState } from "react";
 type Provider = "anthropic" | "openai" | "gemini";
 type Connection = {
   organization: null | { id: string; name: string; role: string };
+  credentialReauthenticationExpiresAt?: number;
   repositories: Array<{ id: string; owner: string; name: string }>;
 };
 type SavedCredential = {
@@ -205,6 +206,19 @@ export function ModelKeyForm() {
         <Boundary />
       </section>
     );
+  if (!connection?.credentialReauthenticationExpiresAt || connection.credentialReauthenticationExpiresAt <= Date.now())
+    return (
+      <section className="setup-card">
+        <Heading />
+        <div className="credential-state">
+          <strong>Verify with GitHub before entering a key</strong>
+          <p>Your repository access is unchanged. BuildIT requires a fresh GitHub login before an Owner or Admin can add an encrypted model-provider key. This prevents someone using an unattended session from replacing your organization’s key.</p>
+          <a className="button" href="/sign-in?returnTo=%2Fsetup%2Fmodel">Verify with GitHub</a>
+        </div>
+        <KeyTrust />
+        <Boundary />
+      </section>
+    );
   return (
     <section className="setup-card">
       <Heading />
@@ -227,6 +241,7 @@ export function ModelKeyForm() {
         </div>
       ) : null}
       <form className="credential-form" onSubmit={save}>
+        <KeyTrust />
         <div className="credential-grid">
           <label className="field">
             <span>Provider</span>
@@ -369,4 +384,8 @@ function Boundary() {
       never returned to the browser or stored in Convex as plaintext.
     </div>
   );
+}
+
+function KeyTrust() {
+  return <div className="key-trust"><strong>This is not a GitHub key</strong><p>The model-provider key pays only for AI analysis through the provider you choose. GitHub access comes separately from the BuildIT GitHub App and stays limited to selected repositories. BuildIT validates this key, encrypts it with AWS KMS, never shows it again, and lets an organization Owner or Admin replace or revoke it.</p></div>;
 }

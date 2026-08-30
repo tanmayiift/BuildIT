@@ -5,8 +5,8 @@ import type { CredentialStore, StoredCredential } from "./index.js";
 type ConvexResult = { status?: unknown; value?: unknown; errorMessage?: unknown; errorData?: unknown };
 
 function stableConvexError(result: ConvexResult): Error {
-  const text = `${String(result.errorMessage ?? "")} ${JSON.stringify(result.errorData ?? "")}`;
-  for (const code of ["authentication_required", "not_found_or_forbidden", "recent_reauthentication_required", "credential_scope_already_exists", "rate_limited"])
+  const text = JSON.stringify(result);
+  for (const code of ["recent_reauthentication_required", "authentication_required", "not_found_or_forbidden", "credential_scope_already_exists", "rate_limited"])
     if (text.includes(code)) return new Error(code);
   return new Error("credential_store_unavailable");
 }

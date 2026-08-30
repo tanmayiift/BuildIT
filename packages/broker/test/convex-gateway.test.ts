@@ -29,6 +29,12 @@ describe("user-authorized Convex credential gateway", () => {
     await expect(gateway.authorize({ token: "signed-user-token", organizationId: "org-a" })).rejects.toThrow("credential_store_unavailable");
   });
 
+  it("preserves the safe recent-login recovery code from nested Convex errors", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ status: "error", errorMessage: "Server Error", errorData: { code: "ConvexError", data: "recent_reauthentication_required" } }, { status: 500 })));
+    const gateway = new ConvexCredentialGateway("https://tenant.convex.cloud", "signed-user-token");
+    await expect(gateway.authorize({ token: "signed-user-token", organizationId: "org-a" })).rejects.toThrow("recent_reauthentication_required");
+  });
+
   it("accepts Ireland deployment URLs but rejects lookalike hosts", () => {
     expect(() => new ConvexCredentialGateway("https://tacit-coyote-455.eu-west-1.convex.cloud", "token")).not.toThrow();
     expect(() => new ConvexCredentialGateway("https://convex.cloud.evil.example", "token")).toThrow("credential_gateway_configuration_invalid");
