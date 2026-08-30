@@ -9,7 +9,8 @@ import type { ProviderName, ProviderResult } from "@buildit/providers";
 import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
-type SnapshotChunk = { artifactId?: Id<"artifacts">; revision?: "base" | "head"; pull?: { title: string; body: string; files: Array<{ path: string; patch?: string; status: string }>; omitted: unknown[]; urlHash: string }; snapshot: { files: Array<{ path: string; content: string; size: number }>; omitted: unknown[]; coverage: string } };
+type RequirementSourceType = "pull_request" | "github_issue" | "linear" | "jira" | "repository_document" | "test";
+type SnapshotChunk = { artifactId?: Id<"artifacts">; revision?: "base" | "head"; pull?: { title: string; body: string; files: Array<{ path: string; patch?: string; status: string }>; omitted: unknown[]; urlHash: string; requirementCoverage?: "complete" | "partial"; requirementSources?: Array<{ id: string; type: RequirementSourceType; status: string; version: string; urlHash: string; content?: string }>; requirements?: Array<{ id: string; text: string; sourceId: string; line: number; evidenceHash: string; certainty: string }> }; snapshot: { files: Array<{ path: string; content: string; size: number }>; omitted: unknown[]; coverage: string } };
 type AnalysisScope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; headSha: string; baseSha: string; configRevision: string; provider: ProviderName; model: string;
   credential: { id: string; organizationId: string; repositoryId?: string; provider: ProviderName; ciphertext: string; nonce: string; tag: string; wrappedDataKey: string; kmsKeyId: string; envelopeVersion: 1; keyVersion: number; aadDigest: string; maskedSuffix: string; status: "valid"; createdBy: string; createdAt: number; lastValidatedAt: number };
   credentialDocumentId: Id<"providerCredentials">; artifacts: Array<{ id: Id<"artifacts">; storageKey: string; checksum: string; size: number }>;
@@ -47,8 +48,10 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
     if (file.patch && patch?.length !== file.patch.length) patchPaths.push(file.path);
     changes.push({ path: file.path, status: file.status, ...(patch ? { patch } : {}) });
   }
+  let requirementBudget = 20_000, requirementTruncated = false;
+  const requirementSources = (pull.requirementSources ?? []).map(source => { const content = source.content?.slice(0, Math.max(0, requirementBudget)); if (source.content && content?.length !== source.content.length) requirementTruncated = true; requirementBudget -= Buffer.byteLength(content ?? ""); return { ...source, ...(content === undefined ? {} : { content }) }; });
   const changed = new Set(changes.map(file => file.path)), files: Array<{ evidenceId: string; path: string; content: string; startLine: number; endLine: number; contentHash: string }> = [], excluded: string[] = [];
-  const base = { pull: { title: pull.title, body, bodyTruncated, changes, urlHash: pull.urlHash }, files, exclusions: { paths: excluded, patchPaths, source: headChunks.flatMap(chunk => chunk.snapshot.omitted), pull: pull.omitted } };
+  const base = { pull: { title: pull.title, body, bodyTruncated, changes, urlHash: pull.urlHash, requirementCoverage: pull.requirementCoverage ?? "partial", requirementSources, requirements: pull.requirements ?? [] }, files, exclusions: { paths: excluded, patchPaths, source: headChunks.flatMap(chunk => chunk.snapshot.omitted), pull: pull.omitted } };
   let bytes = Buffer.byteLength(JSON.stringify(base));
   for (const file of headChunks.flatMap(chunk => chunk.snapshot.files).sort((a, b) => Number(changed.has(b.path)) - Number(changed.has(a.path)) || a.path.localeCompare(b.path))) {
     const evidence = sourceEvidence(file.path, file.content), item = { ...evidence, content: file.content }, size = Buffer.byteLength(JSON.stringify(item));
@@ -56,7 +59,7 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
     files.push(item); bytes += size;
   }
   if (Buffer.byteLength(JSON.stringify(base)) > maxBytes) throw new Error("analysis_context_too_large");
-  return { ...base, coverage: excluded.length || patchPaths.length || bodyTruncated || pull.omitted.length || headChunks.some(chunk => chunk.snapshot.coverage !== "full") ? "partial" as const : "full" as const };
+  return { ...base, coverage: excluded.length || patchPaths.length || bodyTruncated || requirementTruncated || pull.requirementCoverage !== "complete" || pull.omitted.length || headChunks.some(chunk => chunk.snapshot.coverage !== "full") ? "partial" as const : "full" as const };
 }
 function criticModel(provider: ProviderName, primary: string) { return provider === "gemini" ? (primary === "gemini-2.5-flash" ? "gemini-2.5-pro" : "gemini-2.5-flash") : provider === "openai" ? (primary === "gpt-5.4-mini" ? "gpt-5.4" : "gpt-5.4-mini") : (primary === "claude-sonnet-4-5" ? "claude-sonnet-4-6" : "claude-sonnet-4-5"); }
 
@@ -102,7 +105,9 @@ export const analyze = internalAction({
       headEvidence.set(item.evidenceId, { artifactId: chunk.artifactId, record: { id: item.evidenceId, artifactExists: true, commitSha: scope.headSha, path: item.path, pathExists: true, startLine: item.startLine, endLine: item.endLine, contentHash: item.contentHash, lineHashMatches: true, truncated: false } });
     }
     const stage = (name: PromptStage) => records.find(item => item.stage === name)?.value ?? {};
-    const requirements = ((stage("requirements").requirements ?? []) as Array<{ id: string; status: "resolved" | "missing" | "inaccessible" | "conflicting" | "excluded"; confidence: number }>).filter(item => item && typeof item.id === "string" && Number.isFinite(item.confidence) && item.confidence >= 0 && item.confidence <= 1);
+    const sourceById = new Map(untrusted.pull.requirementSources.map(source => [source.id, source]));
+    const provenanceByRequirementId = new Map(untrusted.pull.requirements.flatMap(requirement => { const source = sourceById.get(requirement.sourceId); return source ? [[requirement.id, source] as const] : []; }));
+    const requirements = ((stage("requirements").requirements ?? []) as Array<{ id: string; status: "resolved" | "missing" | "inaccessible" | "conflicting" | "excluded"; confidence: number }>).filter(item => item && typeof item.id === "string" && provenanceByRequirementId.has(item.id) && Number.isFinite(item.confidence) && item.confidence >= 0 && item.confidence <= 1);
     const modelFindings = ((stage("findings").findings ?? []) as FindingCandidate[]).map(item => ({ ...item, origin: "model" as const }));
     const critic = ((stage("critic").decisions ?? []) as CriticDecision[]);
     const scannerHead = (validationValue.output?.scanners as { head?: { findings?: Array<{ ruleId?: string; severity?: "critical" | "warning" | "info"; path?: string; startLine?: number; endLine?: number; summary?: string }> } } | undefined)?.head?.findings ?? [];
@@ -125,7 +130,8 @@ export const analyze = internalAction({
     if (!upload.ok) throw new Error(`analysis_artifact_upload_${upload.status}`);
     const inputTokens = usage.reduce((sum, item) => sum + item.inputTokens, 0), outputTokens = usage.reduce((sum, item) => sum + item.outputTokens, 0);
     await ctx.runMutation(internal.reviewModelData.completeAnalysis, { ...args, artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, credentialId: scope.credentialDocumentId, inputTokens, outputTokens,
-      requirements: requirements.map(item => ({ externalIdHash: fingerprint(item.id, fingerprintKey), status: item.status, confidence: item.confidence, sourceUrlHash: untrusted.pull.urlHash })),
+      requirements: requirements.map(item => { const source = provenanceByRequirementId.get(item.id)!; return { externalIdHash: fingerprint(item.id, fingerprintKey), status: item.status, confidence: item.confidence,
+        sourceType: source.type, sourceUrlHash: source.urlHash, fetchedVersion: source.version }; }),
       findings: arbitrated.filter(item => item.resolution !== "rejected").map(item => ({ fingerprintHmac: fingerprint(`${item.id}\0${item.path}\0${item.startLine}\0${item.endLine}`, fingerprintKey), pathHmac: fingerprint(item.path, fingerprintKey),
         category: item.category as "correctness" | "security" | "requirement" | "architecture" | "quality" | "dependency" | "test", severity: item.severity, confidence: item.confidence, blocking: item.blocking,
         evidenceIds: item.evidenceIds.map(id => headEvidence.get(id)!.artifactId), startLine: item.startLine, endLine: item.endLine, ...(item.origin === "scanner" ? { ruleId: item.id.split("-").slice(2).join("-") } : {}),

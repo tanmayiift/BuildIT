@@ -1257,7 +1257,9 @@ describe("Convex tenant isolation", () => {
         requirements: [
           {
             externalIdHash: "1".repeat(64),
+            sourceType: "github_issue" as const,
             sourceUrlHash: "2".repeat(64),
+            fetchedVersion: "issue-etag-v1",
             status: "resolved" as const,
             confidence: 0.9,
           },
@@ -1352,6 +1354,7 @@ describe("Convex tenant isolation", () => {
       }),
     ]);
     expect(stored.requirements).toHaveLength(1);
+    expect(stored.requirements[0]).toMatchObject({ sourceType: "github_issue", fetchedVersion: "issue-etag-v1" });
     expect(stored.findings).toHaveLength(1);
     expect(stored.findings[0]).toMatchObject({
       blocking: true,

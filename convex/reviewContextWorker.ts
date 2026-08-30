@@ -4,10 +4,19 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { chunkRepositorySnapshot, GitHubAppClient, PullRequestContextClient, RepositoryContentClient, type PullRequestContext, type RepositorySnapshot } from "@buildit/github";
+import { chunkRepositorySnapshot, GitHubAppClient, GitHubIssueContextClient, PullRequestContextClient, RepositoryContentClient, type PullRequestContext, type RepositorySnapshot } from "@buildit/github";
+import { acquireRequirements } from "@buildit/orchestrator";
 import { issueArtifactGrant } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
+export function sameRepositoryIssueNumber(url: string, repositoryUrl: string) {
+  try {
+    const link = new URL(url), repository = new URL(repositoryUrl), prefix = repository.pathname.replace(/\/$/, "");
+    if (link.protocol !== "https:" || repository.protocol !== "https:" || link.hostname !== "github.com" || repository.hostname !== "github.com" || link.search || link.hash) return undefined;
+    const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), match = link.pathname.match(new RegExp(`^${escaped}/issues/(\\d+)$`)), number = match ? Number(match[1]) : 0;
+    return Number.isSafeInteger(number) && number > 0 ? number : undefined;
+  } catch { return undefined; }
+}
 
 export const gather = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
@@ -27,8 +36,20 @@ export const gather = internalAction({
         new PullRequestContextClient().fetch({ installationToken: token, repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber,
           expectedHeadSha: scope.headSha, expectedBaseSha: scope.baseSha }),
       ]);
+      const repositoryMatch = pullContext.htmlUrl.match(/^(https:\/\/github\.com\/[^/]+\/[^/]+)\/pull\/\d+$/i);
+      if (!repositoryMatch) throw new Error("pull_request_url_invalid");
+      const repositoryUrl = repositoryMatch[1]!, issueClient = new GitHubIssueContextClient();
+      const intent = await acquireRequirements({ prBody: pullContext.body, prUrl: pullContext.htmlUrl, repositoryUrl, headSha: scope.headSha, now: Date.now(), maxSourceBytes: 250_000, fetch: async link => {
+        if (link.type !== "github_issue") return { status: "inaccessible", version: "connection_unavailable" };
+        const issueNumber = sameRepositoryIssueNumber(link.url, repositoryUrl);
+        if (!issueNumber) return { status: "inaccessible", version: "repository_scope_mismatch" };
+        return issueClient.fetch({ installationToken: token, repositoryId: scope.githubRepositoryId, issueNumber, maxBytes: 250_000 });
+      } });
       const pull = { title: pullContext.title, body: pullContext.body, files: pullContext.files, omitted: pullContext.omitted,
-        urlHash: createHash("sha256").update(pullContext.htmlUrl).digest("hex") };
+        urlHash: createHash("sha256").update(pullContext.htmlUrl).digest("hex"), requirementCoverage: intent.coverage,
+        requirementSources: intent.sources.map(source => ({ id: source.id, type: source.type, status: source.status, version: source.version, urlHash: createHash("sha256").update(source.url).digest("hex"),
+          ...(source.type === "pull_request" || source.content === undefined ? {} : { content: source.content }) })),
+        requirements: intent.requirements };
       const pullBytes = Buffer.byteLength(JSON.stringify(pull));
       if (pullBytes > 2_500_000) throw new Error("pull_request_context_too_large");
       const artifactIds: string[] = [], brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""),
@@ -47,15 +68,15 @@ export const gather = internalAction({
           await ctx.runQuery(internal.durableReview.assertActive, args);
           const response = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${grant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body });
           if (!response.ok) throw new Error(`artifact_upload_${response.status}`);
-          const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" ? "full" as const : "partial" as const;
+          const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" && intent.coverage === "complete" ? "full" as const : "partial" as const;
           await ctx.runMutation(internal.reviewArtifactData.complete, { organizationId: scope.organizationId, reviewId: scope.reviewId,
             artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, now: Date.now() });
           artifactIds.push(String(reserved.artifactId));
         }
       }
-      const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" ? "full" as const : "partial" as const;
+      const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" && intent.coverage === "complete" ? "full" as const : "partial" as const;
       return { artifactIds, chunkCount, fileCount: headSnapshot.files.length + baseSnapshot.files.length,
-        omittedCount: headSnapshot.omitted.length + baseSnapshot.omitted.length + pullContext.omitted.length, coverage };
+        omittedCount: headSnapshot.omitted.length + baseSnapshot.omitted.length + pullContext.omitted.length + intent.sources.filter(source => source.status !== "available").length, coverage };
     } finally { github.revoke(tokenScope); }
   },
 });
