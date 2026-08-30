@@ -38,11 +38,11 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
     if (file.patch && patch?.length !== file.patch.length) patchPaths.push(file.path);
     changes.push({ path: file.path, status: file.status, ...(patch ? { patch } : {}) });
   }
-  const changed = new Set(changes.map(file => file.path)), files: Array<{ path: string; content: string }> = [], excluded: string[] = [];
+  const changed = new Set(changes.map(file => file.path)), files: Array<{ evidenceId: string; path: string; content: string; startLine: number; endLine: number; contentHash: string }> = [], excluded: string[] = [];
   const base = { pull: { title: pull.title, body, bodyTruncated, changes, urlHash: pull.urlHash }, files, exclusions: { paths: excluded, patchPaths, source: headChunks.flatMap(chunk => chunk.snapshot.omitted), pull: pull.omitted } };
   let bytes = Buffer.byteLength(JSON.stringify(base));
   for (const file of headChunks.flatMap(chunk => chunk.snapshot.files).sort((a, b) => Number(changed.has(b.path)) - Number(changed.has(a.path)) || a.path.localeCompare(b.path))) {
-    const item = { path: file.path, content: file.content }, size = Buffer.byteLength(JSON.stringify(item));
+    const contentHash = createHash("sha256").update(file.content).digest("hex"), item = { evidenceId: `source-${createHash("sha256").update(`${file.path}\0${contentHash}`).digest("hex").slice(0, 24)}`, path: file.path, content: file.content, startLine: 1, endLine: Math.max(1, file.content.split("\n").length), contentHash }, size = Buffer.byteLength(JSON.stringify(item));
     if (bytes + size > maxBytes) { excluded.push(file.path); continue; }
     files.push(item); bytes += size;
   }

@@ -7,12 +7,12 @@ const object = (properties: Record<string, unknown>, required = Object.keys(prop
 const array = (items: JsonSchema): JsonSchema => ({ type: "array", items });
 
 export const stageSchemas: Record<PromptStage, JsonSchema> = {
-  requirements: object({ requirements: array(object({ id: string, statement: string, evidenceIds: stringArray, uncertainty: string })) }),
-  review_plan: object({ checks: stringArray, evidenceOperations: stringArray }),
-  findings: object({ findings: array(object({ id: string, title: string, severity: { type: "string", enum: ["critical", "warning", "info"] }, evidenceIds: stringArray, explanation: string })) }),
-  critic: object({ accepted: stringArray, rejected: stringArray, uncertain: stringArray }),
-  arbitration: object({ findings: array(object({ id: string, resolution: { type: "string", enum: ["accepted", "rejected", "uncertain"] }, evidenceIds: stringArray })) }),
-  patch: object({ patches: array(object({ path: string, rationale: string, findingIds: stringArray })) }),
+  requirements: object({ requirements: array(object({ id: string, statement: string, evidenceIds: stringArray, status: { type: "string", enum: ["resolved", "missing", "inaccessible", "conflicting", "excluded"] }, confidence: { type: "number" }, uncertainty: string })) }),
+  review_plan: object({ checks: stringArray, evidenceOperations: stringArray, riskAreas: stringArray, exclusions: stringArray }),
+  findings: object({ findings: array(object({ id: string, title: string, category: { type: "string", enum: ["correctness", "security", "requirement", "architecture", "quality", "dependency", "test"] }, severity: { type: "string", enum: ["critical", "high", "warning", "info"] }, confidence: { type: "number" }, criterionId: string, path: string, startLine: { type: "number" }, endLine: { type: "number" }, evidenceIds: stringArray, impact: string, explanation: string })) }),
+  critic: object({ decisions: array(object({ findingId: string, verdict: { type: "string", enum: ["supported", "unsupported", "uncertain"] }, missingEvidenceIds: stringArray, injectionDetected: { type: "boolean" }, explanation: string })) }),
+  arbitration: object({ findings: array(object({ id: string, resolution: { type: "string", enum: ["accepted", "rejected", "uncertain"] }, evidenceIds: stringArray, reason: string })) }),
+  patch: object({ patches: array(object({ path: string, rationale: string, findingIds: stringArray, unifiedDiff: string })) }),
   report: object({ claims: array(object({ text: string, evidenceIds: stringArray, uncertainty: { type: "string", enum: ["certain", "uncertain"] } })) }),
 };
 

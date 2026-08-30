@@ -4,9 +4,10 @@ import { boundedAnalysisContext, boundedValidationEvidence } from "./reviewAnaly
 const pull = { title: "Fix transfer limit", body: "Must reject amounts above the daily limit", files: [{ path: "src/changed.ts", status: "modified", patch: "@@ guard" }], omitted: [], urlHash: "a".repeat(64) };
 describe("bounded model evidence selection", () => {
   it("prioritizes changed-file contents and stays inside the byte ceiling", () => {
-    const result = boundedAnalysisContext([{ pull, snapshot: { coverage: "full", omitted: [], files: [{ path: "src/other.ts", content: "o".repeat(200), size: 200 }, { path: "src/changed.ts", content: "changed", size: 7 }] } }], 500);
-    expect(result.files[0]).toEqual({ path: "src/changed.ts", content: "changed" });
-    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(550);
+    const result = boundedAnalysisContext([{ pull, snapshot: { coverage: "full", omitted: [], files: [{ path: "src/other.ts", content: "o".repeat(200), size: 200 }, { path: "src/changed.ts", content: "changed", size: 7 }] } }], 800);
+    expect(result.files[0]).toMatchObject({ path: "src/changed.ts", content: "changed", startLine: 1, endLine: 1 });
+    expect(result.files[0]?.evidenceId).toMatch(/^source-[0-9a-f]{24}$/);
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(850);
   });
 
   it("reports excluded paths and partial coverage instead of silently truncating", () => {

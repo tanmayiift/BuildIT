@@ -3,8 +3,8 @@ import { promptStages } from "../src/promptChain";
 import { runModelReviewChain, stageSchemas, validateRoutes } from "../src/modelChain";
 
 const values: Record<string, Record<string, unknown>> = {
-  requirements: { requirements: [] }, review_plan: { checks: [], evidenceOperations: [] }, findings: { findings: [] },
-  critic: { accepted: [], rejected: [], uncertain: [] }, arbitration: { findings: [] }, patch: { patches: [] }, report: { claims: [] },
+  requirements: { requirements: [] }, review_plan: { checks: [], evidenceOperations: [], riskAreas: [], exclusions: [] }, findings: { findings: [] },
+  critic: { decisions: [] }, arbitration: { findings: [] }, patch: { patches: [] }, report: { claims: [] },
 };
 const pinned = { headSha: "a".repeat(40), baseSha: "b".repeat(40), configRevision: "cfg" };
 
@@ -32,5 +32,10 @@ describe("executable model review chain", () => {
     expect(() => validateRoutes(routes)).toThrow("critic_not_independent");
     routes.critic = { provider: "openai", model: "critic", credentialId: "credential-b" };
     expect(validateRoutes(routes)).toBe(routes);
+  });
+
+  it("rejects a plausible finding that lacks inspectable location and impact", async () => {
+    const invoke = vi.fn(async request => ({ value: request.stage === "findings" ? { findings: [{ id: "f-1", title: "Bug", severity: "high", evidenceIds: ["source-1"], explanation: "Maybe broken" }] } : values[request.stage], provider: "gemini" as const, model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 }));
+    await expect(runModelReviewChain({ invoke, pinned, untrusted: {} })).rejects.toThrow("stage_schema_invalid:findings");
   });
 });
