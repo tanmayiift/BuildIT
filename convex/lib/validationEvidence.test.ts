@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { detectPackageManager, revisionFromStorageKey, summarizeExecution, type ExecutionResponse } from "./validationEvidence";
+import { defaultExecutionPlans } from "@buildit/runner";
+import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, summarizeExecution, type ExecutionResponse } from "./validationEvidence";
 
 describe("validation evidence", () => {
   it("requires the same unambiguous package manager on base and head", () => {
@@ -40,4 +41,8 @@ describe("validation evidence", () => {
       ["buildit-rules", "static_analysis", "passed"], ["gitleaks", "secret_scan", "failed"],
     ]);
   });
+
+  it("binds paired evidence to one environment and classifies each exact command",()=>{const baseSha="a".repeat(40),headSha="b".repeat(40),{install,checks}=defaultExecutionPlans("pnpm"),result=(commitSha:string,failed=false)=>({credentialTeardownProved:true,stopped:true,results:[{...checks[0]!,conclusion:failed?"failed" as const:"passed" as const,exitCode:failed?1:0,durationMs:4}],outputs:[{planId:"test" as const,text:failed?"failed":"passed",truncated:false,evidenceTruncated:false}]}),scanner=(commitSha:string)=>({scanner:"builditRules",scannerVersion:"combined",commitSha,complete:true as const,runs:[{scanner:"builditRules",scannerVersion:"1"}],findings:[]}),output={base:result(baseSha),head:result(headSha,true),scanners:{base:scanner(baseSha),head:scanner(headSha)}} as ExecutionResponse,environment={configRevision:"cfg-1",runnerImage:`runner@sha256:${"c".repeat(64)}`,runtime:"node24" as const,manager:"pnpm" as const,architecture:"linux-x64",networkPolicy:"deny-all-v1",toolVersions:[{name:"node",version:"24"},{name:"pnpm",version:"10"}],install,checks},paired=pairExecutionEvidence(output,baseSha,headSha,environment);expect(paired.executionFingerprint).toMatch(/^[0-9a-f]{64}$/);expect(paired.summaries.filter(item=>item.planId==="test").every(item=>item.regressionClassification==="introduced"&&item.executionFingerprint===paired.executionFingerprint)).toBe(true);expect(paired.summaries.find(item=>item.planId==="test"&&item.revision==="head")).toMatchObject({outputTruncated:false,outputHash:expect.stringMatching(/^[0-9a-f]{64}$/)})});
+
+  it("rejects an unpinned environment or incomplete base/head pair",()=>{const baseSha="a".repeat(40),headSha="b".repeat(40),{install,checks}=defaultExecutionPlans("npm"),scanner=(commitSha:string)=>({scanner:"builditRules",scannerVersion:"1",commitSha,complete:true as const,findings:[]}),empty={credentialTeardownProved:true,stopped:true,results:[],outputs:[]},output={base:empty,head:empty,scanners:{base:scanner(baseSha),head:scanner(headSha)}} as ExecutionResponse,environment={configRevision:"cfg",runnerImage:"latest",runtime:"node24" as const,manager:"npm" as const,architecture:"linux-x64",networkPolicy:"deny-all-v1",toolVersions:[],install,checks};expect(()=>pairExecutionEvidence(output,baseSha,headSha,environment)).toThrow("execution_environment_invalid")});
 });

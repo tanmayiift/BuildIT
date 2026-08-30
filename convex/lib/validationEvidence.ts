@@ -1,6 +1,6 @@
 "use node";
 import { createHash } from "node:crypto";
-import type { CheckResult, PackageManager } from "@buildit/runner";
+import { classifyRegression, type CheckResult, type CommandPlan, type PackageManager } from "@buildit/runner";
 
 export type ContextArtifact = { id: string; storageKey: string; checksum: string; size: number };
 export type ExecutionResult = { credentialTeardownProved: boolean; stopped: boolean; results: CheckResult[]; outputs: Array<{ planId: string; text: string; truncated: boolean; evidenceTruncated: boolean }> };
@@ -8,6 +8,7 @@ export type ScannerSummary = { scanner: string; scannerVersion: string; commitSh
   runs?: Array<{ scanner: string; scannerVersion: string }>;
   findings: Array<{ scanner?: string; severity: "critical" | "warning" | "info" }> };
 export type ExecutionResponse = { base: ExecutionResult; head: ExecutionResult; scanners: { base: ScannerSummary; head: ScannerSummary } };
+export type ExecutionEnvironment={configRevision:string;runnerImage:string;runtime:"node22"|"node24";manager:PackageManager;architecture:string;networkPolicy:string;toolVersions:Array<{name:string;version:string}>;install:CommandPlan;checks:CommandPlan[]};
 
 export const sha256Json = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
@@ -43,3 +44,5 @@ export function summarizeExecution(output: ExecutionResponse, baseSha: string, h
   };
   return [...summarize("base", baseSha, output.base), ...scanner("base", baseSha, output.scanners.base), ...summarize("head", headSha, output.head), ...scanner("head", headSha, output.scanners.head)];
 }
+
+export function pairExecutionEvidence(output:ExecutionResponse,baseSha:string,headSha:string,environment:ExecutionEnvironment){if(!/^[0-9a-f]{40}$/.test(baseSha)||!/^[0-9a-f]{40}$/.test(headSha)||baseSha===headSha||!/@sha256:[0-9a-f]{64}$/.test(environment.runnerImage)||!environment.configRevision)throw new Error("execution_environment_invalid");const executionFingerprint=sha256Json({...environment,toolVersions:[...environment.toolVersions].sort((a,b)=>a.name.localeCompare(b.name))}),summaries=summarizeExecution(output,baseSha,headSha),groups=new Map<string,typeof summaries>();for(const item of summaries)groups.set(item.planId,[...(groups.get(item.planId)??[]),item]);const evidence=[];for(const [planId,items] of [...groups].sort(([a],[b])=>a.localeCompare(b))){const base=items.find(item=>item.revision==="base"),head=items.find(item=>item.revision==="head");if(!base||!head||items.length!==2)throw new Error("paired_execution_incomplete");const comparable={configRevision:environment.configRevision,runnerImage:environment.runnerImage,toolVersions:sha256Json(environment.toolVersions),architecture:environment.architecture,networkPolicy:environment.networkPolicy};const regression=classifyRegression({commitSha:baseSha,commandFingerprint:base.commandFingerprint,conclusion:base.conclusion,...comparable},{commitSha:headSha,commandFingerprint:head.commandFingerprint,conclusion:head.conclusion,...comparable});const outputFor=(revision:"base"|"head")=>output[revision].outputs.find(item=>item.planId===planId),scannerFor=(revision:"base"|"head")=>{const run=output.scanners[revision],item=(run.runs?.length?run.runs:[{scanner:run.scanner,scannerVersion:run.scannerVersion}]).find(candidate=>(candidate.scanner==="gitleaks"?"gitleaks":candidate.scanner==="osvScanner"?"osv-scanner":"buildit-rules")===planId);return item};const enrich=(revision:"base"|"head",item:typeof base)=>{const commandOutput=outputFor(revision),scanner=scannerFor(revision);return{...item,executionFingerprint,regressionClassification:regression.classification,outputHash:sha256Json(commandOutput?{text:commandOutput.text,truncated:commandOutput.truncated,evidenceTruncated:commandOutput.evidenceTruncated}:{scanner:scanner?.scanner,scannerVersion:scanner?.scannerVersion}),outputTruncated:Boolean(commandOutput?.truncated||commandOutput?.evidenceTruncated),...(scanner?{scannerName:scanner.scanner,scannerVersion:scanner.scannerVersion}:{})}};evidence.push(enrich("base",base),enrich("head",head))}return{executionFingerprint,summaries:evidence}}

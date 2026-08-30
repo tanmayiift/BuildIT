@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { defaultExecutionPlans, type PackageManager } from "@buildit/runner";
 import { issueArtifactGrant, issueExecutionGrant } from "@buildit/security";
-import { detectPackageManager, revisionFromStorageKey, sha256Json, summarizeExecution, type ExecutionResponse } from "./lib/validationEvidence";
+import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, sha256Json, type ExecutionResponse } from "./lib/validationEvidence";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; headSha: string; baseSha: string; configRevisionId: Id<"configRevisions">; runnerImageVersion: string; expiresAt: number; completedArtifactId?: Id<"artifacts">; contexts: Array<{ id: Id<"artifacts">; storageKey: string; checksum: string; size: number }> };
@@ -38,8 +38,8 @@ export const validate = internalAction({
     const response = await fetch(`${brokerUrl}/api/execute`, { method: "POST", headers: { authorization: `Bearer ${executionGrant}`, "content-type": "application/json" }, body: JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), baseSha: scope.baseSha, headSha: scope.headSha, runnerImageVersion: scope.runnerImageVersion, runtime, artifacts: descriptors, install, checks }) });
     const output = await response.json() as ExecutionResponse & { error?: string };
     if (!response.ok) throw new Error(output.error ?? `validation_execution_${response.status}`);
-    const summaries = summarizeExecution(output, scope.baseSha, scope.headSha).map(item => ({ ...item, nameHash: createHash("sha256").update(item.planId).digest("hex") }));
-    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { baseSha: scope.baseSha, headSha: scope.headSha, configRevisionId: String(scope.configRevisionId), runnerImageVersion: scope.runnerImageVersion }, manager, output }));
+    const environment = { configRevision: String(scope.configRevisionId), runnerImage: scope.runnerImageVersion, runtime, manager, architecture: "linux-x64", networkPolicy: "deny-all-v1", toolVersions: [{ name: "node", version: "24" }, { name: "package-manager", version: manager }], install, checks }, paired = pairExecutionEvidence(output, scope.baseSha, scope.headSha, environment), summaries = paired.summaries.map(item => ({ ...item, nameHash: createHash("sha256").update(item.planId).digest("hex") }));
+    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { baseSha: scope.baseSha, headSha: scope.headSha, configRevisionId: String(scope.configRevisionId), runnerImageVersion: scope.runnerImageVersion }, manager, executionFingerprint: paired.executionFingerprint, output }));
     if (outputBody.byteLength > 4_000_000) throw new Error("validation_output_too_large");
     const checksum = createHash("sha256").update(outputBody).digest("hex"), now = Date.now();
     const reserved: { artifactId: Id<"artifacts">; storageKey: string } = await ctx.runMutation(internal.reviewValidationData.reserveOutput, { ...args, checksum, size: outputBody.byteLength, now });

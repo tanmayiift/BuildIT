@@ -41,7 +41,8 @@ export const reserveOutput = internalMutation({
 
 const summary = v.object({ revision: v.union(v.literal("base"), v.literal("head")), commitSha: v.string(), planId: v.string(), kind: checkKind,
   required: v.boolean(), conclusion: checkConclusion, exitCode: v.optional(v.number()), durationMs: v.number(), commandFingerprint: hash, nameHash: hash,
-  credentialTeardownProved: v.literal(true), sandboxStopped: v.literal(true) });
+  credentialTeardownProved: v.literal(true), sandboxStopped: v.literal(true), executionFingerprint:v.optional(hash),outputHash:v.optional(hash),outputTruncated:v.optional(v.boolean()),
+  scannerName:v.optional(v.string()),scannerVersion:v.optional(v.string()),regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))) });
 export const completeValidation = internalMutation({
   args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: hash, size: v.number(), summaries: v.array(summary), manager: v.union(v.literal("npm"), v.literal("pnpm"), v.literal("yarn")), now: v.number() },
   handler: async (ctx, args) => {
@@ -50,7 +51,7 @@ export const completeValidation = internalMutation({
     if (!config || config.organizationId !== args.organizationId || config.repositoryId !== review.repositoryId) throw new ConvexError("configuration_scope_mismatch");
     if (!artifact || artifact.organizationId !== args.organizationId || artifact.repositoryId !== review.repositoryId || artifact.reviewId !== review._id || artifact.type !== "command_output" || artifact.checksum !== args.checksum || artifact.size !== args.size) throw new ConvexError("validation_artifact_mismatch");
     if (!args.summaries.length || args.summaries.length > 12) throw new ConvexError("validation_summary_invalid");
-    for (const item of args.summaries) if (!/^[0-9a-f]{40}$/.test(item.commitSha) || !/^[0-9a-f]{64}$/.test(item.commandFingerprint) || !/^[0-9a-f]{64}$/.test(item.nameHash) || !Number.isInteger(item.durationMs) || item.durationMs < 0 || item.durationMs > 240_000 || (item.revision === "base" ? review.baseSha : review.headSha) !== item.commitSha) throw new ConvexError("validation_summary_invalid");
+    for (const item of args.summaries) if (!/^[0-9a-f]{40}$/.test(item.commitSha) || !/^[0-9a-f]{64}$/.test(item.commandFingerprint) || !/^[0-9a-f]{64}$/.test(item.nameHash) || (item.executionFingerprint&&!/^[0-9a-f]{64}$/.test(item.executionFingerprint)) || (item.outputHash&&!/^[0-9a-f]{64}$/.test(item.outputHash)) || !Number.isInteger(item.durationMs) || item.durationMs < 0 || item.durationMs > 240_000 || (item.revision === "base" ? review.baseSha : review.headSha) !== item.commitSha) throw new ConvexError("validation_summary_invalid");
     const existing = await ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
     if (artifact.redactionStatus === "redacted" && existing.length) return artifact._id;
     if (artifact.redactionStatus !== "pending") throw new ConvexError("validation_artifact_mismatch");
@@ -60,6 +61,8 @@ export const completeValidation = internalMutation({
         required: item.required, status: "completed", conclusion: item.conclusion, commandFingerprint: item.commandFingerprint, commitSha: item.commitSha,
         ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }), durationMs: item.durationMs, artifactId: artifact._id,
         credentialTeardownProved: item.credentialTeardownProved, sandboxStopped: item.sandboxStopped,
+        ...(item.executionFingerprint?{executionFingerprint:item.executionFingerprint}:{}),...(item.outputHash?{outputHash:item.outputHash}:{}),...(item.outputTruncated===undefined?{}:{outputTruncated:item.outputTruncated}),
+        ...(item.scannerName?{scannerName:item.scannerName}:{}),...(item.scannerVersion?{scannerVersion:item.scannerVersion}:{}),...(item.regressionClassification?{regressionClassification:item.regressionClassification}:{}),
         ...(item.conclusion === "failed" ? { failureClass: "code" as const } : {}), startedAt: Math.max(0, args.now - item.durationMs), completedAt: args.now });
       if (item.revision === "base") {
         const cached = await ctx.db.query("baseResults").withIndex("by_full_cache_key", q => q.eq("repositoryId", review.repositoryId).eq("baseSha", review.baseSha).eq("commandFingerprint", item.commandFingerprint).eq("configRevisionId", review.configRevisionId).eq("runnerImageVersion", review.runnerImageVersion).eq("architecture", "linux-x64").eq("networkPolicyVersion", "deny-all-v1")).unique();

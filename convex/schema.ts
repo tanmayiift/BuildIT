@@ -174,6 +174,8 @@ export default defineSchema({
     conclusion: value.checkConclusion, commandFingerprint: v.string(), commitSha: v.string(),
     exitCode: v.optional(v.number()), durationMs: v.number(), artifactId: v.optional(v.id("artifacts")),
     credentialTeardownProved: v.optional(v.boolean()), sandboxStopped: v.optional(v.boolean()),
+    executionFingerprint:v.optional(v.string()),outputHash:v.optional(v.string()),outputTruncated:v.optional(v.boolean()),scannerName:v.optional(v.string()),scannerVersion:v.optional(v.string()),
+    regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))),
     failureClass: v.optional(value.failureClass), startedAt: v.number(), completedAt: v.optional(v.number()),
   }).index("by_review", ["reviewId"])
     .index("by_review_round", ["reviewId", "roundId"]),
