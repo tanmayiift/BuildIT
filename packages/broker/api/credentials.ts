@@ -8,7 +8,7 @@ function required(name: string) {
   return value;
 }
 
-export default async function handler(request: Request) {
+async function route(request: Request) {
   try {
     const authorization = request.headers.get("authorization") ?? "";
     const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "unauthenticated-request";
@@ -22,3 +22,6 @@ export default async function handler(request: Request) {
     return Response.json({ error: "broker_unavailable" }, { status: 503, headers: { "cache-control": "no-store" } });
   }
 }
+
+export const POST = route;
+export const OPTIONS = route;
