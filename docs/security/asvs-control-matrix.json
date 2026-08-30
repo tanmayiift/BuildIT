@@ -1,0 +1,21 @@
+{
+  "standard": "OWASP ASVS 5.0.0",
+  "source": "https://github.com/OWASP/ASVS/tree/v5.0.0",
+  "scope": "BuildIT-relevant technical controls; this is not an OWASP certification",
+  "controls": [
+    { "id": "v5.0.0-1.2.5", "area": "command injection", "status": "automated", "evidence": ["packages/runner/test/runner.test.ts"] },
+    { "id": "v5.0.0-3.3.4", "area": "session cookie protection", "status": "manual_required", "evidence": ["convex/tenantIsolation.test.ts"] },
+    { "id": "v5.0.0-4.2.5", "area": "bounded HTTP inputs", "status": "automated", "evidence": ["packages/broker/test/http.test.ts", "packages/broker/test/model-http.test.ts"] },
+    { "id": "v5.0.0-7.2.1", "area": "server-side session verification", "status": "automated", "evidence": ["convex/tenantIsolation.test.ts"] },
+    { "id": "v5.0.0-7.4.1", "area": "session termination", "status": "automated", "evidence": ["convex/tenantIsolation.test.ts"] },
+    { "id": "v5.0.0-8.2.2", "area": "object-level tenant authorization", "status": "automated", "evidence": ["convex/tenantIsolation.test.ts", "tests/architecture/public-function-inventory.test.ts"] },
+    { "id": "v5.0.0-8.3.1", "area": "trusted-service authorization", "status": "automated", "evidence": ["convex/tenantIsolation.test.ts", "convex/lib/parentConsistency.test.ts"] },
+    { "id": "v5.0.0-10.1.2", "area": "OAuth transaction binding", "status": "automated", "evidence": ["packages/github/test/github.test.ts", "apps/web/src/app/installation-claim-message.test.ts"] },
+    { "id": "v5.0.0-10.2.1", "area": "OAuth CSRF state", "status": "automated", "evidence": ["packages/github/test/github.test.ts"] },
+    { "id": "v5.0.0-10.2.3", "area": "least OAuth scope", "status": "manual_required", "evidence": ["docs/security/push-protection.md"] },
+    { "id": "v5.0.0-11.1.1", "area": "cryptographic key lifecycle", "status": "automated", "evidence": ["packages/security/test/aws-kms.test.ts", "tests/architecture/incident-runbooks.test.ts"] },
+    { "id": "v5.0.0-11.2.1", "area": "validated cryptographic implementation", "status": "automated", "evidence": ["packages/security/test/security.test.ts", "packages/security/test/aws-kms.test.ts"] },
+    { "id": "v5.0.0-16.3.3", "area": "security event logging", "status": "automated", "evidence": ["convex/tenantIsolation.test.ts", "tests/architecture/incident-runbooks.test.ts"] },
+    { "id": "external-penetration-test", "area": "independent adversarial assessment", "status": "external_required", "evidence": [] }
+  ]
+}
