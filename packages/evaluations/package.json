@@ -1,1 +1,1 @@
-{"name":"@buildit/evaluations","version":"0.1.0","type":"module","scripts":{"build":"tsc -p tsconfig.json","typecheck":"tsc -p tsconfig.json --noEmit","lint":"tsc -p tsconfig.json --noEmit"},"bin":{"buildit-eval":"dist/cli.js"},"devDependencies":{"typescript":"^5.9.2"}}
+{"name":"@buildit/evaluations","version":"0.1.0","type":"module","scripts":{"build":"tsc -p tsconfig.json","typecheck":"tsc -p tsconfig.json --noEmit","lint":"tsc -p tsconfig.json --noEmit"},"bin":{"buildit-eval":"dist/src/cli.js"},"devDependencies":{"typescript":"^5.9.2"}}
