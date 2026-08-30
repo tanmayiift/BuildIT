@@ -10,6 +10,7 @@ import {
   reviewPolicy,
 } from "@buildit/github";
 import type { WorkflowId } from "@convex-dev/workflow";
+import { requireExecutionEnabled } from "./lib/executionGate";
 
 export const processWebhook = internalAction({
   args: {
@@ -113,6 +114,7 @@ export const processWebhook = internalAction({
         });
         return;
       }
+      requireExecutionEnabled();
       const pullResponse = await client.withToken(
         {
           installationId: args.installationId,

@@ -15,6 +15,7 @@ type Connection = {
 const connectionQuery = makeFunctionReference<"query", Record<string, never>, Connection>("repositoryConnections:current");
 const credentialQuery = makeFunctionReference<"query", { organizationId: string }, Array<{ status: string }>>("integrations:listProviderCredentials");
 const receiptQuery = makeFunctionReference<"query", Record<string, never>, null | {identity:{login:string;lastAuthenticatedAt?:number};organization:{name:string;role:string;region:"eu-west-1";retentionHours:number};installations:Array<{installationId:number;accountLogin:string;accountType:"user"|"organization";status:string;permissions:{metadata:"read";contents:"read"|"write";pullRequests:"write";issues:"read";checks:"read"|"write"};lastSynchronizedAt:number}>;repositories:Array<{id:string;owner:string;name:string;visibility:string;autofixMode:string}>;credentials:Array<{id:string;provider:string;repositoryId?:string;maskedSuffix:string;lastValidatedAt?:number;lastUsedAt?:number}>;boundaries:{sourceRegion:"eu-west-1";maximumSourceRetentionHours:number;mergeAuthority:false;workflowWrite:false;repositoryAdministration:false}}>("permissionReceipts:current");
+const readinessQuery = makeFunctionReference<"query", Record<string, never>, { executionEnabled: boolean }>("runtimeReadiness:current");
 
 const signedOutConnection: Connection = { state: "signed_out", organization: null, installations: [], repositories: [] };
 function useConnection() {
@@ -79,8 +80,9 @@ export function GitHubIntegrationState() {
 
 export function ConnectionBanner() {
   const connection = useConnection();
+  const readiness = useQuery(readinessQuery, connection && connection.state !== "signed_out" ? {} : "skip");
   const connected = connection?.state === "connected";
-  return <div className="preview-banner" role="status"><span className="preview-label">{connected ? "Connected" : "Preview"}</span><span>{connected ? `${connection.repositories.length} GitHub repositories connected. Repository execution and AI review remain disabled until their safety gates pass.` : "Sample evidence is clearly marked. Connect GitHub to replace setup examples with your isolated workspace."}</span><a href={connected ? "/repositories" : "/data-handling"}>{connected ? "View access" : "Trust boundary"}</a></div>;
+  return <div className="preview-banner" role="status"><span className="preview-label">{connected ? "Connected" : "Preview"}</span><span>{connected ? readiness?.executionEnabled ? `${connection.repositories.length} GitHub repositories connected. Reviews can start only after exact-scope consent.` : `${connection.repositories.length} GitHub repositories connected. Repository execution and AI review remain disabled until their safety gates pass.` : "Sample evidence is clearly marked. Connect GitHub to replace setup examples with your isolated workspace."}</span><a href={connected ? "/repositories" : "/data-handling"}>{connected ? "View access" : "Trust boundary"}</a></div>;
 }
 
 export function SetupProgress() {
@@ -98,11 +100,12 @@ export function OverviewReadiness() {
 
 export function SetupAccessSummary({ stepIndex }: { stepIndex: number }) {
   const connection = useConnection();
+  const readiness = useQuery(readinessQuery, connection && connection.state !== "signed_out" ? {} : "skip");
   const credential = useCredentialReadiness(connection);
   const signedIn = Boolean(connection && connection.state !== "signed_out");
   const connected = connection?.state === "connected";
   const providerDetail = credential.ready ? "Encrypted and valid" : signedIn && !credential.canManage ? "Managed by Admin" : stepIndex > 1 ? "Optional" : "Not requested";
-  return <><p className="eyebrow">Access at this step</p><AccessRow label="GitHub identity" active={signedIn} detail={signedIn ? "Verified" : "Required"} /><AccessRow label="Selected repositories" active={connected} detail={connected ? `${connection.repositories.length} connected` : "Not connected"} /><AccessRow label="Provider API key" active={credential.ready} detail={providerDetail} /><AccessRow label="Repository execution" active={false} detail="Safety blocked" /><p className="aside-note">These states come from your active workspace. A check mark means the connection is verified now.</p></>;
+  return <><p className="eyebrow">Access at this step</p><AccessRow label="GitHub identity" active={signedIn} detail={signedIn ? "Verified" : "Required"} /><AccessRow label="Selected repositories" active={connected} detail={connected ? `${connection.repositories.length} connected` : "Not connected"} /><AccessRow label="Provider API key" active={credential.ready} detail={providerDetail} /><AccessRow label="Repository execution" active={readiness?.executionEnabled ?? false} detail={readiness?.executionEnabled ? "Release gate passed" : "Safety blocked"} /><p className="aside-note">These states come from your active workspace. A check mark means the connection is verified now.</p></>;
 }
 
 export function PermissionReceipt() {
@@ -119,8 +122,10 @@ function AccessRow({ label, active, detail }: { label: string; active: boolean; 
 export function SetupHealthState() {
   const connection = useConnection();
   const credential = useCredentialReadiness(connection);
+  const readiness = useQuery(readinessQuery, connection && connection.state !== "signed_out" ? {} : "skip");
   const connected = connection?.state === "connected";
-  return <section className="setup-card"><h2>Readiness checks</h2><div className="health-list"><Health ready title="GitHub App registration" detail="Verified App identity and least-privilege permissions" result="ready" /><Health ready={connected} title="Repository installation" detail={connected ? `${connection.repositories.length} selected repositories in ${connection.organization?.name}` : connection ? stateCopy[connection.state].body : "Checking active workspace"} result={connected ? "ready" : "required"} /><Health ready={false} title="Sandbox boundary" detail="Execution remains disabled until adversarial tests pass" result="blocked" /><Health ready={credential.ready} title="Model provider" detail={credential.ready ? "A valid encrypted organization credential is available" : credential.canManage ? "Optional until AI analysis" : "Managed by an organization Admin or Owner"} result={credential.ready ? "ready" : "optional"} /></div></section>;
+  const executionReady = readiness?.executionEnabled ?? false;
+  return <section className="setup-card"><h2>Readiness checks</h2><div className="health-list"><Health ready title="GitHub App registration" detail="Verified App identity and least-privilege permissions" result="ready" /><Health ready={connected} title="Repository installation" detail={connected ? `${connection.repositories.length} selected repositories in ${connection.organization?.name}` : connection ? stateCopy[connection.state].body : "Checking active workspace"} result={connected ? "ready" : "required"} /><Health ready={executionReady} title="Sandbox boundary" detail={executionReady ? "Broker, runner, and release probes are enabled" : "Execution remains disabled until adversarial tests pass"} result={executionReady ? "ready" : "blocked"} /><Health ready={credential.ready} title="Model provider" detail={credential.ready ? "A valid encrypted organization credential is available" : credential.canManage ? "Optional until AI analysis" : "Managed by an organization Admin or Owner"} result={credential.ready ? "ready" : "optional"} /></div></section>;
 }
 function Health({ ready, title, detail, result }: { ready: boolean; title: string; detail: string; result: string }) { return <div><span className={`health-dot${ready ? " ready" : ""}`} /><span><strong>{title}</strong><small>{detail}</small></span><code>{result}</code></div>; }
 

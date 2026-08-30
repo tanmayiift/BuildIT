@@ -5,6 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { makeFunctionReference } from "convex/server";
 import { GitHubAppClient, pinPullRequest, reviewPolicy } from "@buildit/github";
+import { requireExecutionEnabled } from "./lib/executionGate";
 
 const args = { repositoryId: v.id("repositories"), prNumber: v.number() };
 type DashboardScope = { actorId: string; actorRole: "developer" | "admin" | "owner"; organizationId: Id<"organizations">;
@@ -40,6 +41,7 @@ export const prepare = action({ args, handler: async (ctx, input): Promise<Prepa
 } });
 
 export const start = action({ args: { ...args, expectedHeadSha: v.string(), expectedBaseSha: v.string(), expectedCredentialScopeId: v.string(), consent: v.literal(true) }, handler: async (ctx, input): Promise<{ reviewId: string }> => {
+  requireExecutionEnabled();
   const scope: DashboardScope = await ctx.runQuery(internal.dashboardReviewData.scope, { repositoryId: input.repositoryId });
   const pull = await snapshot(scope, input.prNumber);
   if (pull.headSha !== input.expectedHeadSha || pull.baseSha !== input.expectedBaseSha) throw new Error("pull_request_changed_review_again");
