@@ -3,9 +3,11 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { publicFunctionPolicies } from "../../convex/publicFunctionPolicy";
+import { tablePolicies } from "../../convex/tablePolicy";
 
 const convexDir = fileURLToPath(new URL("../../convex", import.meta.url));
 const declaration = /export const\s+([A-Za-z0-9_]+)\s*=\s*(?:query|mutation|action)\s*\(/g;
+const schema = readFileSync(join(convexDir, "schema.ts"), "utf8");
 
 function publicFunctions() {
   return readdirSync(convexDir).filter(file => file.endsWith(".ts") && !file.endsWith(".test.ts")).flatMap(file => {
@@ -25,5 +27,19 @@ describe("public Convex function inventory", () => {
       /^(artifacts|integrations|memberships|metrics|organizations|repositoryConnections|reviews):/.test(name)
       && policy.authorization === "public_webhook");
     expect(unsafe).toEqual([]);
+  });
+});
+
+describe("product table security inventory", () => {
+  it("requires scope, parent, and stored-data declarations for every product table", () => {
+    const tables = [...schema.matchAll(/^  ([A-Za-z_]+): defineTable/gm)].map(match => match[1]).sort();
+    expect(Object.keys(tablePolicies).sort()).toEqual(tables);
+  });
+
+  it("requires repository and review tables to declare their complete parent chain", () => {
+    const incomplete = Object.entries(tablePolicies).filter(([name, policy]) =>
+      policy.scope === "repository" && name !== "repositories" && !policy.parents.includes("repositoryId" as never)
+      || policy.scope === "review" && name !== "reviews" && !policy.parents.includes("reviewId" as never));
+    expect(incomplete).toEqual([]);
   });
 });

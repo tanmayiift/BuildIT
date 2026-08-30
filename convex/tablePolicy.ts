@@ -1,0 +1,33 @@
+export type TableScope = "user" | "organization" | "repository" | "review" | "global_ingress";
+export type StoredDataClass = "metadata" | "personal_identity" | "encrypted_secret" | "artifact_reference_only";
+
+export const tablePolicies = {
+  users: { scope: "user", parents: [], data: "personal_identity" },
+  organizations: { scope: "organization", parents: [], data: "metadata" },
+  memberships: { scope: "organization", parents: ["organizationId", "userId"], data: "metadata" },
+  userPreferences: { scope: "user", parents: ["userId"], data: "metadata" },
+  userProfiles: { scope: "user", parents: ["userId"], data: "personal_identity" },
+  githubInstallations: { scope: "organization", parents: ["organizationId"], data: "metadata" },
+  repositories: { scope: "repository", parents: ["organizationId", "installationId"], data: "metadata" },
+  configRevisions: { scope: "repository", parents: ["organizationId", "repositoryId", "configArtifactId"], data: "artifact_reference_only" },
+  providerCredentials: { scope: "organization", parents: ["organizationId", "repositoryId"], data: "encrypted_secret" },
+  trackerConnections: { scope: "organization", parents: ["organizationId"], data: "encrypted_secret" },
+  reviews: { scope: "review", parents: ["organizationId", "repositoryId", "configRevisionId"], data: "metadata" },
+  reviewEvents: { scope: "review", parents: ["organizationId", "reviewId", "publicMessageArtifactId"], data: "artifact_reference_only" },
+  requirements: { scope: "review", parents: ["organizationId", "reviewId", "contentArtifactId"], data: "artifact_reference_only" },
+  findings: { scope: "review", parents: ["organizationId", "reviewId", "contentArtifactId", "evidenceIds", "requirementId"], data: "artifact_reference_only" },
+  findingSuppressions: { scope: "repository", parents: ["organizationId", "repositoryId"], data: "metadata" },
+  checkRuns: { scope: "review", parents: ["organizationId", "reviewId", "roundId", "artifactId"], data: "artifact_reference_only" },
+  baseResults: { scope: "repository", parents: ["organizationId", "repositoryId", "configRevisionId", "artifactId"], data: "artifact_reference_only" },
+  autofixAttempts: { scope: "review", parents: ["organizationId", "reviewId", "patchArtifactId"], data: "artifact_reference_only" },
+  autofixRounds: { scope: "review", parents: ["organizationId", "reviewId", "attemptId"], data: "metadata" },
+  artifacts: { scope: "repository", parents: ["organizationId", "repositoryId", "reviewId"], data: "artifact_reference_only" },
+  usageLedger: { scope: "review", parents: ["organizationId", "repositoryId", "reviewId", "roundId"], data: "metadata" },
+  githubSideEffects: { scope: "review", parents: ["organizationId", "repositoryId", "reviewId"], data: "metadata" },
+  deliveries: { scope: "review", parents: ["organizationId", "reviewId"], data: "metadata" },
+  webhookDeliveries: { scope: "global_ingress", parents: ["reviewId"], data: "metadata" },
+  notifications: { scope: "organization", parents: ["organizationId", "userId", "reviewId"], data: "metadata" },
+  auditEvents: { scope: "organization", parents: ["organizationId"], data: "metadata" },
+  metricEvents: { scope: "organization", parents: ["organizationId", "repositoryId", "reviewId", "roundId"], data: "metadata" },
+  reviewLocks: { scope: "repository", parents: ["repositoryId", "reviewId"], data: "metadata" },
+} as const satisfies Record<string, { scope: TableScope; parents: readonly string[]; data: StoredDataClass }>;
