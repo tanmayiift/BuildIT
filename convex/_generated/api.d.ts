@@ -29,6 +29,8 @@ import type * as metrics from "../metrics.js";
 import type * as organizations from "../organizations.js";
 import type * as publicFunctionPolicy from "../publicFunctionPolicy.js";
 import type * as repositoryConnections from "../repositoryConnections.js";
+import type * as reviewArtifactData from "../reviewArtifactData.js";
+import type * as reviewContextWorker from "../reviewContextWorker.js";
 import type * as reviewState from "../reviewState.js";
 import type * as reviews from "../reviews.js";
 import type * as tablePolicy from "../tablePolicy.js";
@@ -64,6 +66,8 @@ declare const fullApi: ApiFromModules<{
   organizations: typeof organizations;
   publicFunctionPolicy: typeof publicFunctionPolicy;
   repositoryConnections: typeof repositoryConnections;
+  reviewArtifactData: typeof reviewArtifactData;
+  reviewContextWorker: typeof reviewContextWorker;
   reviewState: typeof reviewState;
   reviews: typeof reviews;
   tablePolicy: typeof tablePolicy;

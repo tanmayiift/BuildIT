@@ -31,6 +31,18 @@ test("GitHub callback failures are visible and recoverable", async ({ page }) =>
   await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
 });
 
+test("permission requests explain benefit, limits, retention, and revocation", async ({ page }) => {
+  await page.goto("/sign-in");
+  await expect(page.getByText(/does not give BuildIT access to a repository/i)).toBeVisible();
+  await page.goto("/setup/install");
+  await expect(page.getByRole("heading", { name: /inspect one exact pull request/i })).toBeVisible();
+  await expect(page.getByText(/unselected repositories remain invisible/i)).toBeVisible();
+  await expect(page.getByText(/cannot merge, edit workflows/i)).toBeVisible();
+  await expect(page.getByText(/deleted within 7 days/i)).toBeVisible();
+  await expect(page.getByText(/remove repositories or uninstall BuildIT/i)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Review access in GitHub" })).toBeVisible();
+});
+
 test("navigation exposes all promised product areas", async ({ page }) => {
   await page.goto("/");
   const menu = page.getByText("Menu", { exact: true });
