@@ -1,11 +1,32 @@
-import { efficacy, sampleReviews } from "./sample-data";
 import { OverviewReadiness } from "./live-connections";
 
+const layers = [
+  { mark: "01", title: "Choose one pull request", body: "Connect only the GitHub repositories you want BuildIT to read. Public and private repositories use the same selected-access boundary." },
+  { mark: "02", title: "Compare intent with code", body: "BuildIT pins the exact base and head commits, gathers linked requirements, and reports anything it could not read." },
+  { mark: "03", title: "Run checks and challenge findings", body: "Tests and scanners provide the facts. AI findings must cite those facts and survive a separate critic before they can block a review." },
+  { mark: "04", title: "Hand back an inspectable fix", body: "With your consent, BuildIT can prepare a bounded stacked PR. A human reviews and merges it; BuildIT never merges." },
+] as const;
+
 export default function Overview() {
-  return <div className="content">
-    <div className="page-heading"><div><p className="eyebrow">Sample workspace · product tour</p><h1 className="title">Engineering review, with proof</h1><p className="page-description">See what needs a decision, what BuildIT verified, and what is safe to hand back to a human.</p></div><a className="button" href="/setup/install">Connect your first repository</a></div>
+  return <div className="content landing">
+    <section className="landing-hero" aria-labelledby="landing-title">
+      <div className="landing-promise">
+        <p className="eyebrow">Evidence-backed pull request review</p>
+        <h1 id="landing-title">Know what a pull request breaks before you merge it.</h1>
+        <p>BuildIT checks the proposed code against its linked requirements, repository context, tests, and security rules. You get cited findings, clear limits, and—when you approve it—an independently reviewable fix.</p>
+        <div className="button-row landing-actions"><a className="button" href="/setup/install">Connect a repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
+        <small className="landing-boundary">GitHub sign-in identifies you. Repository installation controls code access. A model key is requested only for AI analysis or Autofix.</small>
+      </div>
+      <aside className="review-proof" aria-label="What a BuildIT decision contains">
+        <div className="proof-context"><span><small>Repository</small><strong>your-org/api</strong></span><span><small>Commit</small><code>exact head SHA</code></span></div>
+        <div className="proof-verdict"><span className="status warning">Needs evidence</span><h2>One requirement is not covered</h2><p>The finding cannot block until its cited lines and required test output pass verification.</p></div>
+        <dl><div><dt>Requirements</dt><dd>Linked to source</dd></div><div><dt>Checks</dt><dd>Base vs head</dd></div><div><dt>AI claims</dt><dd>Evidence-gated</dd></div><div><dt>Merge</dt><dd>Human only</dd></div></dl>
+      </aside>
+    </section>
     <OverviewReadiness />
-    <section aria-labelledby="outcomes-title"><div className="section-heading"><div><p className="eyebrow">Illustrative outcomes</p><h2 id="outcomes-title">What efficacy looks like</h2></div><a href="/metrics?tour=1">How these are measured →</a></div><div className="metric-line"><article className="metric hero-metric"><span>PRs reviewed</span><strong>{efficacy.reviewed}</strong><small>Since Sunday</small></article><article className="metric"><span>Regressions caught</span><strong>{efficacy.regressions}</strong><small>Before human merge</small></article><article className="metric"><span>Suggested → implemented</span><strong>{efficacy.suggestions} → {efficacy.implemented}</strong><small>Verified fixes only</small></article><article className="metric"><span>Effective LOC</span><strong>{efficacy.effectiveLoc}</strong><small>No comments or formatting</small></article></div></section>
-    <section aria-labelledby="decisions-title"><div className="section-heading"><div><p className="eyebrow">Needs a human</p><h2 id="decisions-title">Decisions waiting</h2></div><a href="/reviews?tour=1">Open review queue →</a></div><div className="decision-list">{sampleReviews.slice(0, 3).map(review => <a href={`/reviews/${review.pr}?tour=1`} className="decision-row" key={review.pr}><span className={`status ${review.tone}`}>{review.status}</span><span><strong>{review.repo} #{review.pr}</strong><small>{review.title}</small></span><code>{review.commit}</code><span>{review.coverage} criteria</span><span className="row-arrow">→</span></a>)}</div></section>
+
+    <section className="landing-flow" aria-labelledby="flow-title"><div className="section-heading"><div><p className="eyebrow">One review, four working layers</p><h2 id="flow-title">From pull request to a decision you can inspect</h2></div></div><ol>{layers.map(layer => <li key={layer.mark}><code>{layer.mark}</code><div><h3>{layer.title}</h3><p>{layer.body}</p></div></li>)}</ol></section>
+
+    <section className="landing-trust" aria-labelledby="trust-title"><div><p className="eyebrow">The accuracy boundary</p><h2 id="trust-title">AI proposes. Evidence decides.</h2></div><p>A model does not mark a branch safe. BuildIT derives its final status from required checks, accepted evidence-backed findings, environment availability, and staleness. Missing or conflicting proof ends as <strong>inconclusive</strong>, not a confident guess.</p><a className="text-link" href="/data-handling">Read the data and access boundary →</a></section>
   </div>;
 }
