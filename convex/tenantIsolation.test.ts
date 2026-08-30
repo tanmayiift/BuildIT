@@ -213,7 +213,17 @@ describe("Convex tenant isolation", () => {
     const asAlice = t.withIdentity({ subject: "alice" });
     await expect(asAlice.query(api.reviews.list, { organizationId: beta.organizationId })).rejects.toThrow("not_found_or_forbidden");
     await expect(asAlice.query(api.reviews.get, { reviewId: beta.reviewId })).rejects.toThrow("not_found_or_forbidden");
+    await expect(asAlice.query(api.reviews.getEvidence, { reviewId: beta.reviewId })).rejects.toThrow("not_found_or_forbidden");
     await expect(asAlice.query(api.artifacts.getMetadata, { artifactId: beta.artifactId })).rejects.toThrow("not_found_or_forbidden");
+  });
+
+  it("returns source-free live review evidence only to the review tenant", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "evidence-alpha", "alice");
+    const evidence = await t.withIdentity({ subject: "alice|session" }).query(api.reviews.getEvidence, { reviewId: alpha.reviewId });
+    expect(evidence).toMatchObject({ repository: { owner: "evidence-alpha", name: "fixture" }, review: { headSha: "a".repeat(40) } });
+    expect(JSON.stringify(evidence)).not.toContain("ciphertext");
+    expect(JSON.stringify(evidence)).not.toContain("storageKey");
+    expect(JSON.stringify(evidence)).not.toContain("sourceCommitSha");
   });
 
   it("creates a dashboard review only inside the authorized repository and records consent", async () => {

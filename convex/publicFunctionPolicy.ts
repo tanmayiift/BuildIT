@@ -32,6 +32,7 @@ export const publicFunctionPolicies = {
   "repositoryConnections:current": { authorization: "authenticated_user", response: "metadata" },
   "reviews:list": { authorization: "active_organization_viewer", response: "metadata" },
   "reviews:get": { authorization: "active_organization_viewer", response: "metadata" },
+  "reviews:getEvidence": { authorization: "active_organization_viewer", response: "metadata" },
   "users:viewer": { authorization: "authenticated_user", response: "personal_identity" },
   "users:sessions": { authorization: "authenticated_user", response: "metadata" },
   "users:revokeOtherSessions": { authorization: "authenticated_user", response: "metadata" },
