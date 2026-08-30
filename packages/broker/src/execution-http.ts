@@ -21,6 +21,7 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     if (Buffer.byteLength(raw) > 250_000) return json(413, { error: "request_too_large" });
     const body = parse(raw), install = validatePlan(body.install), checks = body.checks.map(validatePlan);
     if (install.planId !== "install" || install.network !== "registry_only" || checks.some(plan => plan.network !== "none")) throw new Error("invalid_execution_request");
+    if (install.timeoutMs + checks.reduce((sum, plan) => sum + plan.timeoutMs, 0) > 240_000) throw new Error("invalid_execution_request");
     const grant = await verifyExecutionGrant(token, input.grantSecret, { ...(input.now === undefined ? {} : { now: input.now }), consume: input.consume });
     if (grant.organizationId !== body.organizationId || grant.repositoryId !== body.repositoryId || grant.reviewId !== body.reviewId || grant.baseSha !== body.baseSha || grant.headSha !== body.headSha || grant.artifactsHash !== hash(descriptorsForHash(body.artifacts)) || grant.plansHash !== hash({ runtime: body.runtime, install, checks })) throw new Error("execution_grant_scope_invalid");
     if (body.artifacts.reduce((sum, item) => sum + item.size, 0) > 80_000_000) throw new Error("invalid_execution_request");
@@ -42,4 +43,4 @@ export async function handleExecution(request: Request, input: { artifactBroker:
   } catch (error) { const mapped = safe(error); return json(mapped.status, { error: mapped.code }); }
 }
 
-export function defaultExecutionPlans(manager: "npm" | "pnpm" | "yarn") { return { install: createNamedPlan({ planId: "install", manager, origin: "built_in", required: true }), checks: ["test", "lint", "typecheck"].map(planId => createNamedPlan({ planId: planId as "test" | "lint" | "typecheck", manager, origin: "built_in", required: planId === "test" })) }; }
+export function defaultExecutionPlans(manager: "npm" | "pnpm" | "yarn") { return { install: { ...createNamedPlan({ planId: "install", manager, origin: "built_in", required: true }), timeoutMs: 90_000 }, checks: ["test", "lint", "typecheck"].map(planId => ({ ...createNamedPlan({ planId: planId as "test" | "lint" | "typecheck", manager, origin: "built_in", required: planId === "test" }), timeoutMs: 45_000 })) }; }

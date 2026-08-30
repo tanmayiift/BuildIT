@@ -13,7 +13,7 @@
       "maxDuration": 60
     },
     "api/execute.ts": {
-      "maxDuration": 800
+      "maxDuration": 300
     }
   }
 }
