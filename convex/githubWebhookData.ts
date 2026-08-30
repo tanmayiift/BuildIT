@@ -59,7 +59,7 @@ export const materializeReview = internalMutation({
     const mode = delivery.triggerVerb === "autofix" ? "autofix" : "review";
     const existing = await ctx.db.query("reviews").withIndex("by_repo_pr_head_mode", q => q.eq("repositoryId", args.repositoryId)
       .eq("prNumber", delivery.prNumber!).eq("headSha", delivery.headSha!).eq("mode", mode)).unique();
-    if (existing) { await ctx.db.patch(delivery._id, { reviewId: existing._id }); return existing._id; }
+    if (existing) { await ctx.db.patch(delivery._id, { reviewId: existing._id }); return { reviewId: existing._id, status: existing.status, headSha: existing.headSha, executionGeneration: existing.executionGeneration }; }
     let config = repository.configRevisionId ? await ctx.db.get(repository.configRevisionId) : null;
     if (!config || config.repositoryId !== repository._id || config.organizationId !== args.organizationId) {
       const contentHash = await digestText("buildit-defaults-v1");
@@ -93,7 +93,7 @@ export const materializeReview = internalMutation({
     await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId, sequence: 1,
       type: "review_created", stage: "queue", internalCode: credential ? "review_queued" : "provider_key_required", metadata: {}, createdAt: args.now });
     await ctx.db.patch(delivery._id, { reviewId });
-    return reviewId;
+    return { reviewId, status, headSha: delivery.headSha, executionGeneration: 0 };
   },
 });
 

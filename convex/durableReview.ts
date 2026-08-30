@@ -91,6 +91,7 @@ export const start = internalMutation({
   handler: async (ctx, args): Promise<string> => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
     if (review.workflowId) return review.workflowId;
+    if (review.status !== "queued" || review.currentStage !== "queue" || review.isStale || review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration) throw new ConvexError("review_not_runnable");
     const workflowId: WorkflowId = await reviewWorkflowManager.start(ctx, internal.durableReview.execute, {
       organizationId: args.organizationId, reviewId: args.reviewId,
       expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
