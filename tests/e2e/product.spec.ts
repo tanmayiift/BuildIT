@@ -145,6 +145,9 @@ test("repository and integration screens use truthful live connection states", a
   const githubAction = github.getByRole("link", { name: "Sign in with GitHub" });
   await expect(githubAction).toBeVisible();
   await expect(githubAction).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(page.getByText("Not available", { exact: true })).toHaveCount(2);
+  await expect(page.getByRole("link", { name: /Linear|Jira/ })).toHaveCount(0);
+  await expect(page.locator('a[href="#linear"], a[href="#jira"]')).toHaveCount(0);
   await page.screenshot({ path: `.local/ui-evidence/integrations-${testInfo.project.name}.png`, fullPage: true });
 });
 
