@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { describe, expect, it, vi } from "vitest";
 import { issueArtifactGrant } from "@buildit/security";
-import { ArtifactBroker } from "../src/artifacts";
+import { ArtifactBroker, S3GrantConsumer } from "../src/artifacts";
 
 const secret = new Uint8Array(32).fill(5), now = 1_000;
 type Command = DeleteObjectCommand | GetObjectCommand | PutObjectCommand;
@@ -40,5 +40,23 @@ describe("artifact broker", () => {
     const checksum = createHash("sha256").update(new Uint8Array([1])).digest("hex");
     await expect(value.put(token, new Uint8Array([1]), checksum)).rejects.toThrow("artifact_grant_replayed");
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe("durable grant replay guard", () => {
+  it("creates one encrypted conditional marker and accepts it", async () => {
+    const send = vi.fn(async (_command: Command) => ({}));
+    const consumer = new S3GrantConsumer({ bucket: "bucket", kmsKeyId: "kms-key", s3: { send } });
+    await expect(consumer.consume("grant-a", 3_000)).resolves.toBe(true);
+    const command = send.mock.calls[0]![0] as PutObjectCommand;
+    expect(command.input).toMatchObject({ Bucket: "bucket", IfNoneMatch: "*", ServerSideEncryption: "aws:kms", SSEKMSKeyId: "kms-key", Metadata: { "expires-at": "3000" } });
+    expect(command.input.Key).toMatch(/^grant-replay\/[0-9a-f]{64}$/);
+  });
+
+  it("treats an existing marker as replay and hides storage failures", async () => {
+    const replay = new S3GrantConsumer({ bucket: "bucket", kmsKeyId: "kms-key", s3: { send: vi.fn(async () => { throw { name: "PreconditionFailed", $metadata: { httpStatusCode: 412 } }; }) } });
+    await expect(replay.consume("grant-a", 3_000)).resolves.toBe(false);
+    const unavailable = new S3GrantConsumer({ bucket: "bucket", kmsKeyId: "kms-key", s3: { send: vi.fn(async () => { throw new Error("raw aws error"); }) } });
+    await expect(unavailable.consume("grant-a", 3_000)).rejects.toThrow("artifact_grant_store_unavailable");
   });
 });

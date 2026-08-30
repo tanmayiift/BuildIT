@@ -5,6 +5,9 @@
   "functions": {
     "api/credentials.ts": {
       "maxDuration": 30
+    },
+    "api/artifacts.ts": {
+      "maxDuration": 30
     }
   }
 }

@@ -6,6 +6,31 @@ type S3Command = DeleteObjectCommand | GetObjectCommand | PutObjectCommand;
 type S3Sender = { send(command: S3Command): Promise<Record<string, unknown>> };
 type GrantConsumer = (grantId: string, expiresAt: number) => Promise<boolean>;
 
+export class S3GrantConsumer {
+  constructor(private readonly config: { bucket: string; kmsKeyId: string; s3: S3Sender }) {}
+
+  async consume(grantId: string, expiresAt: number) {
+    const digest = createHash("sha256").update(grantId).digest("hex");
+    try {
+      await this.config.s3.send(new PutObjectCommand({
+        Bucket: this.config.bucket,
+        Key: `grant-replay/${digest}`,
+        Body: new Uint8Array(0),
+        ServerSideEncryption: "aws:kms",
+        SSEKMSKeyId: this.config.kmsKeyId,
+        IfNoneMatch: "*",
+        Metadata: { "expires-at": String(expiresAt) },
+      }));
+      return true;
+    } catch (error) {
+      const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+      const name = (error as { name?: string }).name;
+      if (status === 412 || name === "PreconditionFailed") return false;
+      throw new Error("artifact_grant_store_unavailable");
+    }
+  }
+}
+
 export class ArtifactBroker {
   readonly #s3: S3Sender;
   constructor(private readonly config: {

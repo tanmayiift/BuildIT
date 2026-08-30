@@ -108,5 +108,6 @@ export class CredentialBroker {
   }
 }
 export * from "./artifacts.js";
+export * from "./artifact-http.js";
 export * from "./http.js";
 export * from "./convex-gateway.js";
