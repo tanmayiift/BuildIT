@@ -20,6 +20,7 @@ const operations = [
 const settings = [
   { label: "Policies", href: "/policies" },
   { label: "Members", href: "/members" },
+  { label: "Notifications", href: "/notifications" },
   { label: "Audit log", href: "/audit" },
 ];
 

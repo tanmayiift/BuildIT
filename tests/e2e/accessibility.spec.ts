@@ -17,6 +17,7 @@ const routes = [
   "/integrations?tour=1",
   "/policies?tour=1",
   "/members?tour=1",
+  "/notifications?tour=1",
   "/audit?tour=1",
   "/setup/install",
   "/setup/repository",

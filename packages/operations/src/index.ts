@@ -5,3 +5,4 @@ export function mayStart(kind:"review"|"autofix",switches:KillSwitches,provider:
 export function watchdog(input:{stageStartedAt:number;now:number;thresholdMs:number;terminal:boolean}){return !input.terminal&&input.now-input.stageStartedAt>input.thresholdMs?"reconcile":"healthy"}
 export function hashAudit(previous:string,event:string){return crypto.subtle.digest("SHA-256",new TextEncoder().encode(previous+"\n"+event)).then(v=>Buffer.from(v).toString("hex"))}
 export { calculateEffectiveLoc, normalizedExecutableLines, type EffectiveLoc, type SourceFile } from "./effectiveLoc.js";
+export { decisionEmail, sendDecisionEmail, type DecisionEmail, type EmailTransport } from "./email.js";

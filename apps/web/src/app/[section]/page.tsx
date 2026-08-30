@@ -1,8 +1,9 @@
 import { GitHubIntegrationState, MembersWorkspaceState, RepositoryConnectionView } from "../live-connections";
 import { WorkspaceMetrics, WorkspaceUsage } from "../live-metrics-usage";
 import { WorkspaceAudit } from "../live-audit";
+import { NotificationPreferences } from "../notification-preferences";
 
-const validSections = new Set(["repositories", "metrics", "usage", "integrations", "policies", "members", "audit"]);
+const validSections = new Set(["repositories", "metrics", "usage", "integrations", "policies", "members", "notifications", "audit"]);
 
 export default async function Section({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params;
@@ -13,6 +14,7 @@ export default async function Section({ params }: { params: Promise<{ section: s
   if (section === "integrations") return <Integrations />;
   if (section === "policies") return <Policies />;
   if (section === "members") return <Members />;
+  if (section === "notifications") return <Notifications />;
   return <Audit />;
 }
 
@@ -42,5 +44,6 @@ function Policies() { return <div className="content"><Header eyebrow="Trusted c
 function Setting({ title, value, detail }: { title: string; value: string; detail: string }) { return <article className="setting-row"><div><strong>{title}</strong><p>{detail}</p></div><code>{value}</code><button type="button" disabled>Configure after organization setup</button></article>; }
 
 function Members() { return <div className="content"><Header eyebrow="Organization access" title="Members & roles" description="One person can belong to multiple organizations with a separate role in each." /><MembersWorkspaceState /></div>; }
+function Notifications() { return <div className="content"><Header eyebrow="Source-free communication" title="Notifications" description="Choose when BuildIT tells you a human decision is needed. Email never contains source, diffs, logs, findings, or secrets."/><NotificationPreferences/></div>; }
 
 function Audit() { return <div className="content"><Header eyebrow="Source-free evidence" title="Audit log" description="Security-relevant actions are append-only and contain identifiers, decisions, and hashes—not repository source." /><WorkspaceAudit/></div>; }

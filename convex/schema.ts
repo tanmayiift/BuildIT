@@ -256,6 +256,12 @@ export default defineSchema({
   }).index("by_dedupe_key", ["dedupeKey"])
     .index("by_user_created", ["userId", "createdAt"]),
 
+  notificationPreferences: defineTable({
+    organizationId: v.id("organizations"), userId: v.string(), emailEnabled: v.boolean(),
+    digestMode: v.union(v.literal("immediate"), v.literal("daily")),
+    mutedRepositoryIds: v.array(v.id("repositories")), updatedAt: v.number(),
+  }).index("by_org_user", ["organizationId", "userId"]),
+
   auditEvents: defineTable({
     organizationId: v.id("organizations"), actorId: v.string(), action: v.string(),
     resourceType: v.string(), resourceIdHash: v.string(), result: value.auditResult,

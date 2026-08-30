@@ -29,6 +29,7 @@ export const tablePolicies = {
   deliveries: { scope: "review", parents: ["organizationId", "reviewId"], data: "metadata" },
   webhookDeliveries: { scope: "global_ingress", parents: ["reviewId"], data: "metadata" },
   notifications: { scope: "organization", parents: ["organizationId", "userId", "reviewId"], data: "metadata" },
+  notificationPreferences: { scope: "organization", parents: ["organizationId", "userId", "mutedRepositoryIds"], data: "metadata" },
   auditEvents: { scope: "organization", parents: ["organizationId"], data: "metadata" },
   metricEvents: { scope: "organization", parents: ["organizationId", "repositoryId", "reviewId", "roundId"], data: "metadata" },
   reviewLocks: { scope: "repository", parents: ["repositoryId", "reviewId"], data: "metadata" },
