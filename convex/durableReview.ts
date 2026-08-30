@@ -130,7 +130,15 @@ export const cancel = internalMutation({
   handler: async (ctx, args) => {
     const review = await ctx.db.get(args.reviewId);
     if (!review || review.workflowId !== String(args.workflowId)) throw new ConvexError("workflow_mismatch");
-    await reviewWorkflowManager.cancel(ctx, args.workflowId);
+    // Cancellation is deliberately idempotent. A worker can finish or crash between
+    // the database lookup and the workflow component call; that must not leave the
+    // review looking active forever.
+    try {
+      await reviewWorkflowManager.cancel(ctx, args.workflowId);
+    } catch {
+      // The generation fence and terminal database state below remain the source of
+      // truth. They prevent any late worker from publishing a side effect.
+    }
     if (!terminalStatuses.has(review.status)) {
       await ctx.db.patch(args.reviewId, {
         status: "cancelled", statusReasonCode: "user_cancelled", nextActionCode: "start_new_review",

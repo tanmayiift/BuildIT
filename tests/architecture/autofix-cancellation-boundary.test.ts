@@ -53,6 +53,13 @@ describe("Autofix cancellation boundary", () => {
 });
 
 describe("normal review cancellation boundary", () => {
+  it("finishes cancellation even when the workflow already stopped", () => {
+    const durableReview = readFileSync("convex/durableReview.ts", "utf8");
+    expect(durableReview).toMatch(/try\s*{\s*await reviewWorkflowManager\.cancel/);
+    expect(durableReview).toMatch(/catch\s*{[\s\S]*?executionGeneration: review\.executionGeneration \+ 1/);
+    expect(durableReview).toContain('status: "cancelled"');
+  });
+
   it("fences costly and write-capable external stages", () => {
     expectReviewFence("convex/reviewContextWorker.ts", "github.tokenFor(");
     expectReviewFence("convex/reviewContextWorker.ts", "Promise.all([");
