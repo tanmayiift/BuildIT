@@ -216,6 +216,32 @@ describe("Convex tenant isolation", () => {
     await expect(asAlice.query(api.artifacts.getMetadata, { artifactId: beta.artifactId })).rejects.toThrow("not_found_or_forbidden");
   });
 
+  it("creates a dashboard review only inside the authorized repository and records consent", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "dashboard-alpha", "alice"), beta = await seedTenant(t, "dashboard-beta", "bob");
+    const asAlice = t.withIdentity({ subject: "alice|dashboard-session" });
+    await expect(asAlice.action(api.dashboardReviews.prepare, { repositoryId: beta.repositoryId, prNumber: 2 })).rejects.toThrow("not_found_or_forbidden");
+    const created = await t.mutation(internal.dashboardReviewData.create, { repositoryId: alpha.repositoryId, prNumber: 2,
+      headSha: "c".repeat(40), baseSha: "b".repeat(40), baseRef: "main", isFork: false, actorId: "alice", actorRole: "developer", now: Date.now() });
+    expect(await t.run(ctx => ctx.db.get(created.reviewId))).toMatchObject({ organizationId: alpha.organizationId, repositoryId: alpha.repositoryId,
+      trigger: "dashboard", triggerVerb: "review", triggerActorPermission: "write", headSha: "c".repeat(40), status: "queued" });
+    const [event, audit] = await t.run(async ctx => Promise.all([
+      ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", created.reviewId)).filter(q => q.eq(q.field("sequence"), 1)).unique(),
+      ctx.db.query("auditEvents").withIndex("by_org_created", q => q.eq("organizationId", alpha.organizationId)).order("desc").first(),
+    ]));
+    expect(event).toMatchObject({ internalCode: "dashboard_consent" });
+    expect(audit).toMatchObject({ action: "review.created", actorId: "alice", result: "allowed" });
+    expect(audit?.resourceIdHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(audit?.resourceIdHash).not.toBe(created.reviewId);
+  });
+
+  it("does not let a viewer prepare or forge a dashboard review", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "dashboard-viewer", "owner");
+    await t.run(ctx => ctx.db.insert("memberships", { organizationId: alpha.organizationId, userId: "viewer", role: "viewer", status: "active", createdAt: Date.now(), updatedAt: Date.now() }));
+    await expect(t.withIdentity({ subject: "viewer|session" }).action(api.dashboardReviews.prepare, { repositoryId: alpha.repositoryId, prNumber: 2 })).rejects.toThrow("not_found_or_forbidden");
+    await expect(t.mutation(internal.dashboardReviewData.create, { repositoryId: alpha.repositoryId, prNumber: 2, headSha: "c".repeat(40),
+      baseSha: "b".repeat(40), baseRef: "main", isFork: false, actorId: "viewer", actorRole: "developer", now: Date.now() })).rejects.toThrow("not_found_or_forbidden");
+  });
+
   it("never returns encrypted provider credential fields", async () => {
     const t = convexTest(schema, modules);
     const alpha = await seedTenant(t, "alpha", "alice");

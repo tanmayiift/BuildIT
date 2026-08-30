@@ -10,6 +10,8 @@
 
 import type * as artifacts from "../artifacts.js";
 import type * as auth from "../auth.js";
+import type * as dashboardReviewData from "../dashboardReviewData.js";
+import type * as dashboardReviews from "../dashboardReviews.js";
 import type * as dataClassification from "../dataClassification.js";
 import type * as durableReview from "../durableReview.js";
 import type * as githubInstallations from "../githubInstallations.js";
@@ -59,6 +61,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   artifacts: typeof artifacts;
   auth: typeof auth;
+  dashboardReviewData: typeof dashboardReviewData;
+  dashboardReviews: typeof dashboardReviews;
   dataClassification: typeof dataClassification;
   durableReview: typeof durableReview;
   githubInstallations: typeof githubInstallations;
