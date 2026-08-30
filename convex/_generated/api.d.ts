@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as activation from "../activation.js";
 import type * as artifactCleanupData from "../artifactCleanupData.js";
 import type * as artifactCleanupWorker from "../artifactCleanupWorker.js";
 import type * as artifacts from "../artifacts.js";
@@ -65,6 +66,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  activation: typeof activation;
   artifactCleanupData: typeof artifactCleanupData;
   artifactCleanupWorker: typeof artifactCleanupWorker;
   artifacts: typeof artifacts;
