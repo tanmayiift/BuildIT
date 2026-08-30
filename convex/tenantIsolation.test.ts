@@ -2372,6 +2372,8 @@ describe("durable Autofix evidence", () => {
         durationMs: 1,
         commandFingerprint: "d".repeat(64),
         nameHash: "e".repeat(64),
+        credentialTeardownProved: true as const,
+        sandboxStopped: true as const,
       },
       args = {
         organizationId: alpha.organizationId,
@@ -2387,6 +2389,12 @@ describe("durable Autofix evidence", () => {
         outcome: "passed" as const,
         now,
       };
+    await expect(
+      t.mutation(internal.reviewAutofixData.completeRound, {
+        ...args,
+        summaries: [{ ...summary, conclusion: "failed" as const }],
+      }),
+    ).rejects.toThrow("autofix_summary_invalid");
     const roundId = await t.mutation(
       internal.reviewAutofixData.completeRound,
       args,
@@ -2491,6 +2499,8 @@ describe("durable Autofix evidence", () => {
             durationMs: 1,
             commandFingerprint: "f".repeat(64),
             nameHash: "1".repeat(64),
+            credentialTeardownProved: true as const,
+            sandboxStopped: true as const,
           },
         ],
         outcome: "passed" as const,
@@ -2519,6 +2529,22 @@ describe("durable Autofix evidence", () => {
           updatedAt: now,
         }),
       );
+    const storedCheckId = await t.run(async (ctx) => {
+      const storedRound = await ctx.db
+        .query("autofixRounds")
+        .withIndex("by_review_round", (q) =>
+          q.eq("reviewId", tenant.reviewId).eq("roundNumber", 1),
+        )
+        .unique();
+      if (!storedRound) throw new Error("round_missing");
+      const checks = await ctx.db
+        .query("checkRuns")
+        .withIndex("by_review_round", (q) =>
+          q.eq("reviewId", tenant.reviewId).eq("roundId", storedRound._id),
+        )
+        .collect();
+      return checks[0]!._id;
+    });
     const deliveryArgs = {
       organizationId: tenant.organizationId,
       reviewId: tenant.reviewId,
@@ -2529,6 +2555,11 @@ describe("durable Autofix evidence", () => {
       reportArtifactId,
       now: now + 1,
     };
+    await t.run((ctx) => ctx.db.patch(storedCheckId, { sandboxStopped: false }));
+    await expect(
+      t.mutation(internal.reviewAutofixData.completeDelivery, deliveryArgs),
+    ).rejects.toThrow("autofix_delivery_evidence_incomplete");
+    await t.run((ctx) => ctx.db.patch(storedCheckId, { sandboxStopped: true }));
     await expect(
       t.mutation(internal.reviewAutofixData.completeDelivery, deliveryArgs),
     ).resolves.toBe(tenant.reviewId);
