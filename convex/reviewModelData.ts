@@ -9,10 +9,13 @@ export const analysisScope = internalQuery({
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
-    const artifacts = (await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect())
+    const allArtifacts = await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
+    const artifacts = allArtifacts
       .filter(item => item.type === "repository_snapshot" && item.redactionStatus === "redacted" && !item.deletedAt)
       .sort((a, b) => a.storageKey.localeCompare(b.storageKey));
     if (!artifacts.length || artifacts.some(item => item.organizationId !== args.organizationId || item.repositoryId !== review.repositoryId)) throw new ConvexError("review_context_unavailable");
+    const validationArtifact = allArtifacts.find(item => item.type === "command_output" && item.redactionStatus === "redacted" && !item.deletedAt && item.storageKey.endsWith("/validation.json"));
+    if (!validationArtifact || validationArtifact.organizationId !== args.organizationId || validationArtifact.repositoryId !== review.repositoryId) throw new ConvexError("validation_evidence_unavailable");
     const credentials = await ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", args.organizationId).eq("status", "valid")).collect();
     const credential = credentials.find(item => item.repositoryId === review.repositoryId && item.provider === review.provider)
       ?? credentials.find(item => item.repositoryId === undefined && item.provider === review.provider);
@@ -25,7 +28,8 @@ export const analysisScope = internalQuery({
         keyVersion: credential.keyVersion, aadDigest: credential.aadDigest, maskedSuffix: credential.maskedSuffix, status: "valid" as const,
         createdBy: credential.createdBy, createdAt: credential.createdAt, lastValidatedAt: credential.lastValidatedAt },
       credentialDocumentId: credential._id,
-      artifacts: artifacts.map(item => ({ id: item._id, storageKey: item.storageKey, checksum: item.checksum, size: item.size })) };
+      artifacts: artifacts.map(item => ({ id: item._id, storageKey: item.storageKey, checksum: item.checksum, size: item.size })),
+      validationArtifact: { id: validationArtifact._id, storageKey: validationArtifact.storageKey, checksum: validationArtifact.checksum, size: validationArtifact.size } };
   },
 });
 

@@ -11,7 +11,7 @@ describe("durable review crash recovery", () => {
   });
 
   it("uses a fixed stage order", () => {
-    expect(durableReviewStages).toEqual(["context", "analysis", "validation"]);
+    expect(durableReviewStages).toEqual(["context", "validation", "analysis"]);
   });
 
   it("executes the real context worker before recording its checkpoint", () => {
@@ -34,5 +34,12 @@ describe("durable review crash recovery", () => {
     expect(analysisBranch).toBeGreaterThan(-1);
     expect(worker).toBeGreaterThan(analysisBranch);
     expect(checkpoint).toBeGreaterThan(worker);
+  });
+
+  it("runs exact base and head validation before model analysis", () => {
+    const stages = [...durableReviewStages];
+    expect(stages.indexOf("validation")).toBeLessThan(stages.indexOf("analysis"));
+    const source = readFileSync("convex/durableReview.ts", "utf8");
+    expect(source).toContain("step.runAction(internal.reviewValidationWorker.validate");
   });
 });

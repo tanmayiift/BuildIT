@@ -365,6 +365,9 @@ describe("Convex tenant isolation", () => {
       await ctx.db.insert("artifacts", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId,
         type: "repository_snapshot", storageKey: `artifacts/${alpha.organizationId}/${alpha.repositoryId}/${alpha.reviewId}/context/context-0.json`, encrypted: true,
         checksum: "a".repeat(64), size: 100, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      await ctx.db.insert("artifacts", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId,
+        type: "command_output", storageKey: `artifacts/${alpha.organizationId}/${alpha.repositoryId}/${alpha.reviewId}/validation/validation.json`, encrypted: true,
+        checksum: "f".repeat(64), size: 100, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
       const credentialId = await ctx.db.insert("providerCredentials", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId,
         credentialScopeId: "repository-credential", provider: "anthropic", encryptedCiphertext: "repo-ciphertext", nonce: "nonce", authTag: "tag", aadDigest: "b".repeat(64),
         wrappedDataKey: "wrapped", kmsKeyId: "kms-test", envelopeVersion: 1, keyVersion: 1, maskedSuffix: "9999", status: "valid", createdBy: "alice", createdAt: now, lastValidatedAt: now });

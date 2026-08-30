@@ -6,13 +6,26 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { runModelReviewChain, type ModelStageRequest, type PromptStage } from "@buildit/orchestrator";
 import type { ProviderName, ProviderResult } from "@buildit/providers";
-import { issueArtifactGrant, issueModelInvocationGrant } from "@buildit/security";
+import { issueArtifactGrant, issueModelInvocationGrant, redact } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 type SnapshotChunk = { revision?: "base" | "head"; pull?: { title: string; body: string; files: Array<{ path: string; patch?: string; status: string }>; omitted: unknown[]; urlHash: string }; snapshot: { files: Array<{ path: string; content: string; size: number }>; omitted: unknown[]; coverage: string } };
 type AnalysisScope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; headSha: string; baseSha: string; configRevision: string; provider: ProviderName; model: string;
   credential: { id: string; organizationId: string; repositoryId?: string; provider: ProviderName; ciphertext: string; nonce: string; tag: string; wrappedDataKey: string; kmsKeyId: string; envelopeVersion: 1; keyVersion: number; aadDigest: string; maskedSuffix: string; status: "valid"; createdBy: string; createdAt: number; lastValidatedAt: number };
-  credentialDocumentId: Id<"providerCredentials">; artifacts: Array<{ id: Id<"artifacts">; storageKey: string; checksum: string; size: number }> };
+  credentialDocumentId: Id<"providerCredentials">; artifacts: Array<{ id: Id<"artifacts">; storageKey: string; checksum: string; size: number }>;
+  validationArtifact: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number } };
+
+type ValidationArtifact = { version?: number; pinned?: { headSha?: string; baseSha?: string }; manager?: string; output?: { base?: { results?: unknown[]; outputs?: Array<{ planId?: string; text?: string; truncated?: boolean; evidenceTruncated?: boolean }> }; head?: { results?: unknown[]; outputs?: Array<{ planId?: string; text?: string; truncated?: boolean; evidenceTruncated?: boolean }> }; scanners?: unknown } };
+
+export function boundedValidationEvidence(value: ValidationArtifact, pinned: { headSha: string; baseSha: string }, maxOutputBytes = 60_000) {
+  if (value.version !== 1 || value.pinned?.headSha !== pinned.headSha || value.pinned?.baseSha !== pinned.baseSha || !value.output?.base || !value.output.head) throw new Error("validation_evidence_pinning_failed");
+  let remaining = maxOutputBytes;
+  const run = (input: NonNullable<ValidationArtifact["output"]>["base"]) => ({ results: input?.results ?? [], outputs: (input?.outputs ?? []).map(item => {
+    const raw = typeof item.text === "string" ? redact(item.text) : "", text = raw.slice(0, Math.max(0, remaining)); remaining -= Buffer.byteLength(text);
+    return { planId: item.planId, text, truncated: Boolean(item.truncated || item.evidenceTruncated || text.length !== raw.length) };
+  }) });
+  return { manager: value.manager, base: run(value.output.base), head: run(value.output.head), scanners: value.output.scanners };
+}
 
 export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_000) {
   const headChunks = chunks.filter(chunk => chunk.revision !== "base"), pull = headChunks.find(chunk => chunk.pull)?.pull;
@@ -53,7 +66,12 @@ export const analyze = internalAction({
     }
     const revisions = new Set(chunks.map(chunk => chunk.revision));
     if (!revisions.has("base") || !revisions.has("head")) throw new Error("base_head_context_incomplete");
-    const untrusted = boundedAnalysisContext(chunks), usage: Array<{ inputTokens: number; outputTokens: number }> = [];
+    const validation = scope.validationArtifact, validationGrant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(validation.id), storageKey: validation.storageKey, operation: "read" }, artifactSecret);
+    const validationResponse = await fetch(`${brokerUrl}/api/artifacts`, { headers: { authorization: `Bearer ${validationGrant}` } });
+    if (!validationResponse.ok) throw new Error(`validation_artifact_download_${validationResponse.status}`);
+    const validationBody = Buffer.from(await validationResponse.arrayBuffer());
+    if (validationBody.byteLength !== validation.size || createHash("sha256").update(validationBody).digest("hex") !== validation.checksum) throw new Error("validation_artifact_integrity_failed");
+    const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(JSON.parse(validationBody.toString("utf8")) as ValidationArtifact, { headSha: scope.headSha, baseSha: scope.baseSha }) }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
     const records = await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
       invoke: async (stageRequest: ModelStageRequest): Promise<ProviderResult> => {
         const stage = stageRequest.stage as PromptStage, model = stage === "critic" ? criticModel(scope.provider, scope.model) : scope.model;

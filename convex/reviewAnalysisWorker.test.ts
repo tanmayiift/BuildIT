@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundedAnalysisContext } from "./reviewAnalysisWorker";
+import { boundedAnalysisContext, boundedValidationEvidence } from "./reviewAnalysisWorker";
 
 const pull = { title: "Fix transfer limit", body: "Must reject amounts above the daily limit", files: [{ path: "src/changed.ts", status: "modified", patch: "@@ guard" }], omitted: [], urlHash: "a".repeat(64) };
 describe("bounded model evidence selection", () => {
@@ -26,3 +26,5 @@ describe("bounded model evidence selection", () => {
     expect(() => boundedAnalysisContext([{ snapshot: { coverage: "full", omitted: [], files: [] } }], 500)).toThrow("pull_request_context_missing");
   });
 });
+
+describe("bounded validation evidence",()=>{it("requires exact commits and redacts bounded stdout",()=>{const pinned={headSha:"a".repeat(40),baseSha:"b".repeat(40)},value={version:1,pinned,manager:"npm",output:{base:{results:[],outputs:[{planId:"test",text:"ghp_abcdefghijk",truncated:false,evidenceTruncated:false}]},head:{results:[],outputs:[]},scanners:{}}};expect(boundedValidationEvidence(value,pinned).base.outputs[0]?.text).toBe("[REDACTED]");expect(()=>boundedValidationEvidence({...value,pinned:{...pinned,headSha:"c".repeat(40)}},pinned)).toThrow("validation_evidence_pinning_failed")})});

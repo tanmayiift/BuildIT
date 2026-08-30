@@ -1,4 +1,4 @@
-export const durableReviewStages = ["context", "analysis", "validation"] as const;
+export const durableReviewStages = ["context", "validation", "analysis"] as const;
 export type DurableReviewStage = (typeof durableReviewStages)[number];
 
 export function nextStageAfter(completed: readonly DurableReviewStage[]): DurableReviewStage | undefined {
