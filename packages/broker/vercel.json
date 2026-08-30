@@ -16,6 +16,9 @@
     "api/tracker.ts": {
       "maxDuration": 60
     },
+    "api/tracker-credentials.ts": {
+      "maxDuration": 30
+    },
     "api/execute.ts": {
       "maxDuration": 300
     }

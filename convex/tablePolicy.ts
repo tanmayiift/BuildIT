@@ -12,7 +12,7 @@ export const tablePolicies = {
   configRevisions: { scope: "repository", parents: ["organizationId", "repositoryId", "configArtifactId"], data: "artifact_reference_only" },
   providerCredentials: { scope: "organization", parents: ["organizationId", "repositoryId"], data: "encrypted_secret" },
   credentialRateLimits: { scope: "organization", parents: ["organizationId", "userId"], data: "metadata" },
-  trackerConnections: { scope: "organization", parents: ["organizationId"], data: "encrypted_secret" },
+  trackerConnections: { scope: "organization", parents: ["organizationId", "repositoryId"], data: "encrypted_secret" },
   reviews: { scope: "review", parents: ["organizationId", "repositoryId", "configRevisionId"], data: "metadata" },
   reviewEvents: { scope: "review", parents: ["organizationId", "reviewId", "publicMessageArtifactId"], data: "artifact_reference_only" },
   modelStageRuns: { scope: "review", parents: ["organizationId", "repositoryId", "reviewId"], data: "metadata" },

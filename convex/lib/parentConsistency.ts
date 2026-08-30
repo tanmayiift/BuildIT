@@ -47,6 +47,7 @@ export const parentConsistencyPolicies = {
   repositories: "organization_installation",
   configRevisions: "organization_repository_artifact",
   providerCredentials: "organization_optional_repository",
+  trackerConnections: "organization_optional_repository",
   reviews: "organization_repository_config",
   reviewEvents: "organization_review_optional_artifact",
   modelStageRuns: "organization_repository_review",

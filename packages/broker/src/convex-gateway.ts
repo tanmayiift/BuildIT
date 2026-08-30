@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { CredentialAuthorization } from "./http.js";
 import type { CredentialStore, StoredCredential } from "./index.js";
+import type{StoredTrackerCredential,TrackerCredentialStore}from"./tracker-credentials.js";
 
 type ConvexResult = { status?: unknown; value?: unknown; errorMessage?: unknown; errorData?: unknown };
 
@@ -22,7 +23,7 @@ async function callConvex(url: string, token: string, operation: "query" | "muta
   return result.value;
 }
 
-export class ConvexCredentialGateway implements CredentialStore {
+export class ConvexCredentialGateway implements CredentialStore,TrackerCredentialStore {
   readonly authorize: CredentialAuthorization;
 
   constructor(private readonly convexUrl: string, private readonly token: string) {
@@ -48,6 +49,7 @@ export class ConvexCredentialGateway implements CredentialStore {
       ...(value.replacesCredentialId ? { replacesCredentialId: value.replacesCredentialId } : {}),
     });
   }
+  async insertTracker(value:StoredTrackerCredential){await callConvex(this.convexUrl,this.token,"mutation","integrations:storeEncryptedTrackerConnection",{organizationId:value.organizationId,...(value.repositoryId?{repositoryId:value.repositoryId}:{}),credentialScopeId:value.id,provider:value.provider,workspaceId:value.workspaceId,scopes:value.scopes,encryptedAccessToken:value.ciphertext,nonce:value.nonce,authTag:value.tag,aadDigest:value.aadDigest,wrappedDataKey:value.wrappedDataKey,kmsKeyId:value.kmsKeyId,envelopeVersion:value.envelopeVersion,keyVersion:value.keyVersion,maskedSuffix:value.maskedSuffix,lastValidatedAt:value.lastValidatedAt,...(value.expiresAt?{expiresAt:value.expiresAt}:{}),...(value.replacesConnectionId?{replacesConnectionId:value.replacesConnectionId}:{}),requestId:`tracker-create:${randomUUID()}`})}
 
   async get(): Promise<StoredCredential | null> { throw new Error("credential_read_not_configured"); }
   async markUsed(): Promise<void> { throw new Error("credential_use_not_configured"); }

@@ -86,12 +86,12 @@ export default defineSchema({
   }).index("by_org_user_action_window", ["organizationId", "userId", "action", "windowStart"]),
 
   trackerConnections: defineTable({
-    organizationId: v.id("organizations"), provider: value.trackerProvider,
+    organizationId: v.id("organizations"), repositoryId:v.optional(v.id("repositories")),provider: value.trackerProvider,
     credentialScopeId:v.string(),wrappedDataKey:v.string(),kmsKeyId:v.string(),envelopeVersion:v.literal(1),
     encryptedAccessToken: v.string(), encryptedRefreshToken: v.optional(v.string()),
     nonce: v.string(), authTag: v.string(), aadDigest: v.string(), keyVersion: v.number(),
     scopes: v.array(v.string()), workspaceId: v.string(), status: value.trackerStatus,
-    createdBy: v.string(), expiresAt: v.optional(v.number()), ...timestampFields,
+    createdBy: v.string(),maskedSuffix:v.string(),lastValidatedAt:v.number(),lastUsedAt:v.optional(v.number()),revokedAt:v.optional(v.number()), expiresAt: v.optional(v.number()), ...timestampFields,
   }).index("by_org_provider", ["organizationId", "provider"])
     .index("by_status", ["status"]),
 
