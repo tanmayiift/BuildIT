@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 
-export type CliEvent={version:1;type:"session"|"command_plan"|"check_started"|"check_completed"|"review_completed"|"credential_saved"|"credential_revoked"|"remote_requested"|"remote_status"|"error";at:string;data:Record<string,unknown>};
+export type CliEvent={version:1;type:"session"|"command_plan"|"check_started"|"check_completed"|"review_completed"|"credential_saved"|"credential_revoked"|"remote_requested"|"remote_status"|"remote_watch_started"|"remote_watch_timeout"|"error";at:string;data:Record<string,unknown>};
 export type ExecResult={code:number;stdout:string;stderr:string};
 export type Exec=(file:string,args:string[],options:{cwd:string;env:NodeJS.ProcessEnv;timeoutMs:number})=>Promise<ExecResult>;
 const defaultExec:Exec=(file,args,options)=>new Promise((resolveResult,reject)=>{const child=spawn(file,args,{cwd:options.cwd,env:options.env,stdio:["ignore","pipe","pipe"]}),stdout:Buffer[]=[],stderr:Buffer[]=[];let bytes=0;const capture=(target:Buffer[])=>(chunk:Buffer)=>{bytes+=chunk.byteLength;if(bytes<=2_000_000)target.push(chunk)};child.stdout.on("data",capture(stdout));child.stderr.on("data",capture(stderr));const timeout=setTimeout(()=>{child.kill("SIGTERM");reject(new Error("command_timeout"))},options.timeoutMs);child.on("error",reject);child.on("close",code=>{clearTimeout(timeout);resolveResult({code:code??1,stdout:Buffer.concat(stdout).toString("utf8"),stderr:Buffer.concat(stderr).toString("utf8")})})});
