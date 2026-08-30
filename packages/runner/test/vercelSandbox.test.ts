@@ -25,6 +25,7 @@ describe("Vercel sandbox runner", () => {
     const f = fixture(), runner = new VercelSandboxRunner(f.create);
     const result = await runner.run({ runtime: "node22", files: [{ path: "package.json", content: "{}" }], install, checks: [test] });
     expect(result.credentialTeardownProved).toBe(true);
+    expect(result.outputs).toEqual([{ planId: "install", text: "ok", truncated: false }, { planId: "test", text: "ok", truncated: false }]);
     expect(f.calls).toContainEqual(["network", { allow: ["registry.npmjs.org", "registry.yarnpkg.com"] }]);
     expect(f.calls).toContainEqual(["network", "deny-all"]);
     expect(f.calls).toContainEqual(["command", { cmd: "pnpm", args: ["install", "--frozen-lockfile", "--ignore-scripts"], cwd: "/vercel/sandbox/repo", timeoutMs: 600_000 }]);

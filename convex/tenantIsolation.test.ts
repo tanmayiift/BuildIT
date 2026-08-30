@@ -340,10 +340,14 @@ describe("Convex tenant isolation", () => {
     if (!review) throw new Error("missing review");
     const checksum = "d".repeat(64), now = Date.now();
     const reserved = await t.mutation(internal.reviewArtifactData.reserve, { organizationId: alpha.organizationId, reviewId: alpha.reviewId,
-      expectedHeadSha: review.headSha, expectedGeneration: review.executionGeneration, checksum, size: 128, chunkIndex: 0, now });
+      expectedHeadSha: review.headSha, expectedGeneration: review.executionGeneration, checksum, size: 128, chunkIndex: 0, revision: "head", now });
     await expect(t.mutation(internal.reviewArtifactData.reserve, { organizationId: alpha.organizationId, reviewId: alpha.reviewId,
-      expectedHeadSha: review.headSha, expectedGeneration: review.executionGeneration, checksum, size: 128, chunkIndex: 0, now: now + 1 })).resolves.toMatchObject({ artifactId: reserved.artifactId });
-    expect(reserved.storageKey).toContain(`artifacts/${alpha.organizationId}/${alpha.repositoryId}/${alpha.reviewId}/${reserved.artifactId}/context-0.json`);
+      expectedHeadSha: review.headSha, expectedGeneration: review.executionGeneration, checksum, size: 128, chunkIndex: 0, revision: "head", now: now + 1 })).resolves.toMatchObject({ artifactId: reserved.artifactId });
+    const baseReserved = await t.mutation(internal.reviewArtifactData.reserve, { organizationId: alpha.organizationId, reviewId: alpha.reviewId,
+      expectedHeadSha: review.headSha, expectedGeneration: review.executionGeneration, checksum: "f".repeat(64), size: 128, chunkIndex: 0, revision: "base", now });
+    expect(baseReserved.artifactId).not.toBe(reserved.artifactId);
+    expect(baseReserved.storageKey).toContain("/context-base-0.json");
+    expect(reserved.storageKey).toContain(`artifacts/${alpha.organizationId}/${alpha.repositoryId}/${alpha.reviewId}/${reserved.artifactId}/context-head-0.json`);
     await expect(t.mutation(internal.reviewArtifactData.complete, { organizationId: beta.organizationId, reviewId: alpha.reviewId,
       artifactId: reserved.artifactId, checksum, size: 128, coverage: "full", now })).rejects.toThrow("parent_scope_mismatch");
     await expect(t.mutation(internal.reviewArtifactData.complete, { organizationId: alpha.organizationId, reviewId: alpha.reviewId,

@@ -34,7 +34,7 @@ export class VercelSandboxRunner {
     if (input.checks.some(plan => plan.network !== "none")) throw new Error("sandbox_check_network_must_be_denied");
     const timeout = Math.min(45 * 60_000, input.install.timeoutMs + input.checks.reduce((sum, plan) => sum + plan.timeoutMs, 0) + 60_000);
     const sandbox = await this.create({ runtime: input.runtime, timeout, resources: { vcpus: 2 }, networkPolicy: "deny-all", env: { CI: "true" }, region: "cdg1", persistent: false });
-    const results: CheckResult[] = [];
+    const results: CheckResult[] = [], outputs: Array<{ planId: CommandPlan["planId"]; text: string; truncated: boolean }> = [];
     try {
       const workspace: Workspace = { files: new Map(), environment: { CI: "true" }, tokenRevoked: true };
       if (!executionReady(workspace)) throw new Error("credential_teardown_failed");
@@ -50,16 +50,18 @@ export class VercelSandboxRunner {
       await sandbox.updateNetworkPolicy({ allow: registryDomains });
       const installResult = await sandbox.runCommand({ cmd: input.install.executable, args: input.install.args, cwd: "/vercel/sandbox/repo", timeoutMs: input.install.timeoutMs });
       const installOutput = await output(installResult, input.install.outputBytes);
+      outputs.push({ planId: input.install.planId, ...installOutput });
       results.push({ ...input.install, conclusion: installOutput.truncated ? "truncated" : installResult.exitCode === 0 ? "passed" : "failed", exitCode: installResult.exitCode, durationMs: installResult.durationMs ?? 0, ...(installResult.exitCode === 0 ? {} : { failureClass: "code" as const }) });
-      if (installResult.exitCode !== 0 || installOutput.truncated) return { credentialTeardownProved: true, results, stopped: true };
+      if (installResult.exitCode !== 0 || installOutput.truncated) return { credentialTeardownProved: true, results, outputs, stopped: true };
 
       await sandbox.updateNetworkPolicy("deny-all");
       for (const plan of input.checks) {
         const result = await sandbox.runCommand({ cmd: plan.executable, args: plan.args, cwd: "/vercel/sandbox/repo", timeoutMs: plan.timeoutMs });
         const captured = await output(result, plan.outputBytes);
+        outputs.push({ planId: plan.planId, ...captured });
         results.push({ ...plan, conclusion: captured.truncated ? "truncated" : result.exitCode === 0 ? "passed" : "failed", exitCode: result.exitCode, durationMs: result.durationMs ?? 0, ...(result.exitCode === 0 ? {} : { failureClass: "code" as const }) });
       }
-      return { credentialTeardownProved: true, results, stopped: true };
+      return { credentialTeardownProved: true, results, outputs, stopped: true };
     } finally {
       await sandbox.stop();
     }

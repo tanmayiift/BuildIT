@@ -17,9 +17,11 @@ export const gather = internalAction({
     const tokenScope = { installationId: scope.installationId, repositoryId: scope.githubRepositoryId, stage: "review" as const };
     const token = await github.tokenFor(tokenScope);
     try {
-      const [snapshot, pullContext]: [RepositorySnapshot, PullRequestContext] = await Promise.all([
+      const [headSnapshot, baseSnapshot, pullContext]: [RepositorySnapshot, RepositorySnapshot, PullRequestContext] = await Promise.all([
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
           commitSha: scope.headSha, limits: { maxFiles: 10_000, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
+        new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
+          commitSha: scope.baseSha, limits: { maxFiles: 10_000, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
         new PullRequestContextClient().fetch({ installationToken: token, repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber,
           expectedHeadSha: scope.headSha, expectedBaseSha: scope.baseSha }),
       ]);
@@ -27,25 +29,30 @@ export const gather = internalAction({
         urlHash: createHash("sha256").update(pullContext.htmlUrl).digest("hex") };
       const pullBytes = Buffer.byteLength(JSON.stringify(pull));
       if (pullBytes > 2_500_000) throw new Error("pull_request_context_too_large");
-      const chunks = chunkRepositorySnapshot(snapshot, Math.max(1_100_000, 3_700_000 - pullBytes));
       const artifactIds: string[] = [], brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""),
         secret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url");
-      for (const chunk of chunks) {
-        const body = Buffer.from(JSON.stringify({ version: 1, pull: chunk.chunkIndex === 0 ? pull : undefined, snapshot: chunk }));
-        if (body.byteLength > 4_000_000) throw new Error("context_artifact_too_large");
-        const checksum = createHash("sha256").update(body).digest("hex"), now = Date.now();
-        const reserved: { artifactId: Id<"artifacts">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; storageKey: string; expiresAt: number } = await ctx.runMutation(internal.reviewArtifactData.reserve, { ...args, checksum, size: body.byteLength, chunkIndex: chunk.chunkIndex, now });
-        const grant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
-          artifactId: String(reserved.artifactId), storageKey: reserved.storageKey, operation: "write" }, secret, now);
-        const response = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${grant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body });
-        if (!response.ok) throw new Error(`artifact_upload_${response.status}`);
-        const coverage = snapshot.coverage === "full" && pullContext.coverage === "full" ? "full" as const : "partial" as const;
-        await ctx.runMutation(internal.reviewArtifactData.complete, { organizationId: scope.organizationId, reviewId: scope.reviewId,
-          artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, now: Date.now() });
-        artifactIds.push(String(reserved.artifactId));
+      let chunkCount = 0;
+      for (const [revision, snapshot] of [["head", headSnapshot], ["base", baseSnapshot]] as const) {
+        const chunks = chunkRepositorySnapshot(snapshot, revision === "head" ? Math.max(1_100_000, 3_700_000 - pullBytes) : 3_700_000);
+        chunkCount += chunks.length;
+        for (const chunk of chunks) {
+          const body = Buffer.from(JSON.stringify({ version: 1, revision, pull: revision === "head" && chunk.chunkIndex === 0 ? pull : undefined, snapshot: chunk }));
+          if (body.byteLength > 4_000_000) throw new Error("context_artifact_too_large");
+          const checksum = createHash("sha256").update(body).digest("hex"), now = Date.now();
+          const reserved: { artifactId: Id<"artifacts">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; storageKey: string; expiresAt: number } = await ctx.runMutation(internal.reviewArtifactData.reserve, { ...args, checksum, size: body.byteLength, chunkIndex: chunk.chunkIndex, revision, now });
+          const grant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
+            artifactId: String(reserved.artifactId), storageKey: reserved.storageKey, operation: "write" }, secret, now);
+          const response = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${grant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body });
+          if (!response.ok) throw new Error(`artifact_upload_${response.status}`);
+          const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" ? "full" as const : "partial" as const;
+          await ctx.runMutation(internal.reviewArtifactData.complete, { organizationId: scope.organizationId, reviewId: scope.reviewId,
+            artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, now: Date.now() });
+          artifactIds.push(String(reserved.artifactId));
+        }
       }
-      const coverage = snapshot.coverage === "full" && pullContext.coverage === "full" ? "full" as const : "partial" as const;
-      return { artifactIds, chunkCount: chunks.length, fileCount: snapshot.files.length, omittedCount: snapshot.omitted.length + pullContext.omitted.length, coverage };
+      const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" ? "full" as const : "partial" as const;
+      return { artifactIds, chunkCount, fileCount: headSnapshot.files.length + baseSnapshot.files.length,
+        omittedCount: headSnapshot.omitted.length + baseSnapshot.omitted.length + pullContext.omitted.length, coverage };
     } finally { github.revoke(tokenScope); }
   },
 });

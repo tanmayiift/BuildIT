@@ -18,13 +18,13 @@ export const contextScope = internalQuery({
 
 export const reserve = internalMutation({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number(),
-    checksum: v.string(), size: v.number(), chunkIndex: v.number(), now: v.number() },
+    checksum: v.string(), size: v.number(), chunkIndex: v.number(), revision: v.union(v.literal("base"), v.literal("head")), now: v.number() },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
     if (!/^[0-9a-f]{64}$/.test(args.checksum) || !Number.isInteger(args.size) || args.size < 1 || args.size > 4_000_000 || !Number.isInteger(args.chunkIndex) || args.chunkIndex < 0 || args.chunkIndex >= 64) throw new ConvexError("invalid_artifact_reservation");
     const prior = (await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect())
-      .find(item => item.type === "repository_snapshot" && item.storageKey.endsWith(`/context-${args.chunkIndex}.json`));
+      .find(item => item.type === "repository_snapshot" && item.storageKey.endsWith(`/context-${args.revision}-${args.chunkIndex}.json`));
     if (prior) {
       if (prior.organizationId !== args.organizationId || prior.repositoryId !== review.repositoryId || prior.checksum !== args.checksum || prior.size !== args.size) throw new ConvexError("context_artifact_conflict");
       return { artifactId: prior._id, repositoryId: review.repositoryId, reviewId: review._id, storageKey: prior.storageKey, expiresAt: prior.expiresAt };
@@ -32,7 +32,7 @@ export const reserve = internalMutation({
     const artifactId = await ctx.db.insert("artifacts", { organizationId: args.organizationId, repositoryId: review.repositoryId,
       reviewId: review._id, type: "repository_snapshot", storageKey: "pending", encrypted: true, checksum: args.checksum,
       size: args.size, redactionStatus: "pending", expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000), deletionAttempts: 0 });
-    const storageKey = `artifacts/${args.organizationId}/${review.repositoryId}/${review._id}/${artifactId}/context-${args.chunkIndex}.json`;
+    const storageKey = `artifacts/${args.organizationId}/${review.repositoryId}/${review._id}/${artifactId}/context-${args.revision}-${args.chunkIndex}.json`;
     await ctx.db.patch(artifactId, { storageKey });
     return { artifactId, repositoryId: review.repositoryId, reviewId: review._id, storageKey, expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000) };
   },

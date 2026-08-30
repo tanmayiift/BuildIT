@@ -9,13 +9,13 @@ import type { ProviderName, ProviderResult } from "@buildit/providers";
 import { issueArtifactGrant, issueModelInvocationGrant } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
-type SnapshotChunk = { pull?: { title: string; body: string; files: Array<{ path: string; patch?: string; status: string }>; omitted: unknown[]; urlHash: string }; snapshot: { files: Array<{ path: string; content: string; size: number }>; omitted: unknown[]; coverage: string } };
+type SnapshotChunk = { revision?: "base" | "head"; pull?: { title: string; body: string; files: Array<{ path: string; patch?: string; status: string }>; omitted: unknown[]; urlHash: string }; snapshot: { files: Array<{ path: string; content: string; size: number }>; omitted: unknown[]; coverage: string } };
 type AnalysisScope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; headSha: string; baseSha: string; configRevision: string; provider: ProviderName; model: string;
   credential: { id: string; organizationId: string; repositoryId?: string; provider: ProviderName; ciphertext: string; nonce: string; tag: string; wrappedDataKey: string; kmsKeyId: string; envelopeVersion: 1; keyVersion: number; aadDigest: string; maskedSuffix: string; status: "valid"; createdBy: string; createdAt: number; lastValidatedAt: number };
   credentialDocumentId: Id<"providerCredentials">; artifacts: Array<{ id: Id<"artifacts">; storageKey: string; checksum: string; size: number }> };
 
 export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_000) {
-  const pull = chunks.find(chunk => chunk.pull)?.pull;
+  const headChunks = chunks.filter(chunk => chunk.revision !== "base"), pull = headChunks.find(chunk => chunk.pull)?.pull;
   if (!pull) throw new Error("pull_request_context_missing");
   const body = pull.body.slice(0, 30_000), bodyTruncated = body.length !== pull.body.length, changes: Array<{ path: string; status: string; patch?: string }> = [], patchPaths: string[] = [];
   let patchBudget = 30_000;
@@ -26,15 +26,15 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
     changes.push({ path: file.path, status: file.status, ...(patch ? { patch } : {}) });
   }
   const changed = new Set(changes.map(file => file.path)), files: Array<{ path: string; content: string }> = [], excluded: string[] = [];
-  const base = { pull: { title: pull.title, body, bodyTruncated, changes, urlHash: pull.urlHash }, files, exclusions: { paths: excluded, patchPaths, source: chunks.flatMap(chunk => chunk.snapshot.omitted), pull: pull.omitted } };
+  const base = { pull: { title: pull.title, body, bodyTruncated, changes, urlHash: pull.urlHash }, files, exclusions: { paths: excluded, patchPaths, source: headChunks.flatMap(chunk => chunk.snapshot.omitted), pull: pull.omitted } };
   let bytes = Buffer.byteLength(JSON.stringify(base));
-  for (const file of chunks.flatMap(chunk => chunk.snapshot.files).sort((a, b) => Number(changed.has(b.path)) - Number(changed.has(a.path)) || a.path.localeCompare(b.path))) {
+  for (const file of headChunks.flatMap(chunk => chunk.snapshot.files).sort((a, b) => Number(changed.has(b.path)) - Number(changed.has(a.path)) || a.path.localeCompare(b.path))) {
     const item = { path: file.path, content: file.content }, size = Buffer.byteLength(JSON.stringify(item));
     if (bytes + size > maxBytes) { excluded.push(file.path); continue; }
     files.push(item); bytes += size;
   }
   if (Buffer.byteLength(JSON.stringify(base)) > maxBytes) throw new Error("analysis_context_too_large");
-  return { ...base, coverage: excluded.length || patchPaths.length || bodyTruncated || pull.omitted.length || chunks.some(chunk => chunk.snapshot.coverage !== "full") ? "partial" as const : "full" as const };
+  return { ...base, coverage: excluded.length || patchPaths.length || bodyTruncated || pull.omitted.length || headChunks.some(chunk => chunk.snapshot.coverage !== "full") ? "partial" as const : "full" as const };
 }
 function criticModel(provider: ProviderName, primary: string) { return provider === "gemini" ? (primary === "gemini-2.5-flash" ? "gemini-2.5-pro" : "gemini-2.5-flash") : provider === "openai" ? (primary === "gpt-5.4-mini" ? "gpt-5.4" : "gpt-5.4-mini") : (primary === "claude-sonnet-4-5" ? "claude-sonnet-4-6" : "claude-sonnet-4-5"); }
 
@@ -51,6 +51,8 @@ export const analyze = internalAction({
       if (body.byteLength !== artifact.size || createHash("sha256").update(body).digest("hex") !== artifact.checksum) throw new Error("context_artifact_integrity_failed");
       chunks.push(JSON.parse(body.toString("utf8")) as SnapshotChunk);
     }
+    const revisions = new Set(chunks.map(chunk => chunk.revision));
+    if (!revisions.has("base") || !revisions.has("head")) throw new Error("base_head_context_incomplete");
     const untrusted = boundedAnalysisContext(chunks), usage: Array<{ inputTokens: number; outputTokens: number }> = [];
     const records = await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
       invoke: async (stageRequest: ModelStageRequest): Promise<ProviderResult> => {

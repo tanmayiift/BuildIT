@@ -16,10 +16,14 @@ describe("durable review crash recovery", () => {
 
   it("executes the real context worker before recording its checkpoint", () => {
     const source = readFileSync("convex/durableReview.ts", "utf8");
+    const gatherSource = readFileSync("convex/reviewContextWorker.ts", "utf8");
+    const artifactSource = readFileSync("convex/reviewArtifactData.ts", "utf8");
     const worker = source.indexOf("step.runAction(internal.reviewContextWorker.gather");
     const checkpoint = source.indexOf("step.runMutation(internal.durableReview.checkpoint");
     expect(worker).toBeGreaterThan(-1);
     expect(checkpoint).toBeGreaterThan(worker);
+    expect(gatherSource).toContain('["head", headSnapshot], ["base", baseSnapshot]');
+    expect(artifactSource).toContain("context-${args.revision}-${args.chunkIndex}.json");
   });
 
   it("executes the real model analysis worker before its checkpoint", () => {
