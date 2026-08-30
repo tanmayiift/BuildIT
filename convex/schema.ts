@@ -60,7 +60,7 @@ export default defineSchema({
 
   configRevisions: defineTable({
     organizationId: v.id("organizations"), repositoryId: v.id("repositories"),
-    sourceCommitSha: v.string(), sourceRef: v.string(), configArtifactId: v.id("artifacts"),
+    sourceCommitSha: v.string(), sourceRef: v.string(), configArtifactId: v.optional(v.id("artifacts")),
     contentHash: v.string(), rulesDigest: v.string(), schemaVersion: v.string(),
     validationState: value.configValidationState, provenance: value.configProvenance,
     refProtectionState: value.refProtectionState, approvedBy: v.optional(v.string()),

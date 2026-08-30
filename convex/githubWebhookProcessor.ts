@@ -41,6 +41,9 @@ export const processWebhook = internalAction({
         headSha: snapshot.headSha, baseSha: snapshot.baseSha,
         headRefHash: await sha256(snapshot.headRef), baseRefHash: await sha256(snapshot.baseRef),
         isFork: snapshot.isFork, triggerVerb: mode });
+      await ctx.runMutation(internal.githubWebhookData.materializeReview, { deliveryId: args.deliveryId,
+        organizationId: scope.organizationId, repositoryId: scope.repositoryId, baseRef: snapshot.baseRef,
+        triggerActor: await sha256(args.senderLogin.toLowerCase()), actorPermission: permission, now: Date.now() });
       await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "processed", status: "enqueued", now: Date.now() });
     } catch {
       await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "rejected", status: "failed", now: Date.now() });
