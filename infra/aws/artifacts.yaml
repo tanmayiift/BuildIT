@@ -5,10 +5,10 @@ Parameters:
   Environment:
     Type: String
     AllowedValues: [production, staging]
-  BrokerPrincipalArn:
+  VercelProjectName:
     Type: String
-    AllowedPattern: '^arn:aws:iam::[0-9]{12}:role/.+$'
-    Description: Dedicated BuildIT content-broker IAM role; never an account root or human user
+    Default: buildit-agentic-review
+    AllowedPattern: '^[a-zA-Z0-9._-]+$'
   ArtifactRetentionDays:
     Type: Number
     Default: 7
@@ -22,6 +22,39 @@ Rules:
         AssertDescription: BuildIT source-derived artifacts and BYOK wrapping keys must remain in eu-west-1.
 
 Resources:
+  VercelOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://oidc.vercel.com/pulsetrade
+      ClientIdList:
+        - https://vercel.com/pulsetrade
+      Tags:
+        - Key: product
+          Value: buildit
+
+  ContentBrokerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: buildit-production-content-broker
+      Description: Short-lived production access for the BuildIT content broker only
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref VercelOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "oidc.vercel.com/pulsetrade:aud": https://vercel.com/pulsetrade
+                "oidc.vercel.com/pulsetrade:sub": !Sub owner:pulsetrade:project:${VercelProjectName}:environment:production
+      Tags:
+        - Key: product
+          Value: buildit
+        - Key: workload
+          Value: content-broker
+
   BuildITKey:
     Type: AWS::KMS::Key
     DeletionPolicy: Retain
@@ -46,7 +79,7 @@ Resources:
           - Sid: BrokerEnvelopeOperations
             Effect: Allow
             Principal:
-              AWS: !Ref BrokerPrincipalArn
+              AWS: !GetAtt ContentBrokerRole.Arn
             Action:
               - kms:Decrypt
               - kms:Encrypt
@@ -57,11 +90,11 @@ Resources:
             Resource: "*"
             Condition:
               StringEquals:
-                aws:RequestedRegion: eu-west-1
-              Null:
-                kms:EncryptionContext:organizationId: "false"
-                kms:EncryptionContext:credentialId: "false"
-                kms:EncryptionContext:purpose: "false"
+                "aws:RequestedRegion": eu-west-1
+              "Null":
+                "kms:EncryptionContext:organizationId": "false"
+                "kms:EncryptionContext:credentialId": "false"
+                "kms:EncryptionContext:purpose": "false"
   BuildITKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
@@ -108,9 +141,6 @@ Resources:
             BucketArn: !GetAtt ArtifactInventoryBucket.Arn
             Format: CSV
             Prefix: inventory
-            Encryption:
-              SSEKMS:
-                KeyId: !GetAtt BuildITKey.Arn
       Tags:
         - Key: product
           Value: buildit
@@ -163,7 +193,7 @@ Resources:
               - !Sub ${ArtifactInventoryBucket.Arn}/*
             Condition:
               Bool:
-                aws:SecureTransport: "false"
+                "aws:SecureTransport": "false"
           - Sid: AllowS3InventoryDelivery
             Effect: Allow
             Principal:
@@ -172,10 +202,10 @@ Resources:
             Resource: !Sub ${ArtifactInventoryBucket.Arn}/inventory/*
             Condition:
               StringEquals:
-                aws:SourceAccount: !Ref AWS::AccountId
-                s3:x-amz-acl: bucket-owner-full-control
+                "aws:SourceAccount": !Ref AWS::AccountId
+                "s3:x-amz-acl": bucket-owner-full-control
               ArnLike:
-                aws:SourceArn: !Sub arn:${AWS::Partition}:s3:::buildit-${Environment}-${AWS::AccountId}-artifacts-eu-west-1
+                "aws:SourceArn": !Sub arn:${AWS::Partition}:s3:::buildit-${Environment}-${AWS::AccountId}-artifacts-eu-west-1
 
   ArtifactBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -193,7 +223,7 @@ Resources:
               - !Sub ${ArtifactBucket.Arn}/*
             Condition:
               Bool:
-                aws:SecureTransport: "false"
+                "aws:SecureTransport": "false"
           - Sid: DenyUnencryptedObjectWrites
             Effect: Deny
             Principal: "*"
@@ -201,7 +231,7 @@ Resources:
             Resource: !Sub ${ArtifactBucket.Arn}/artifacts/*
             Condition:
               StringNotEquals:
-                s3:x-amz-server-side-encryption: aws:kms
+                "s3:x-amz-server-side-encryption": aws:kms
           - Sid: DenyWrongEncryptionKey
             Effect: Deny
             Principal: "*"
@@ -209,11 +239,11 @@ Resources:
             Resource: !Sub ${ArtifactBucket.Arn}/artifacts/*
             Condition:
               StringNotEquals:
-                s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt BuildITKey.Arn
+                "s3:x-amz-server-side-encryption-aws-kms-key-id": !GetAtt BuildITKey.Arn
           - Sid: BrokerArtifactObjectsOnly
             Effect: Allow
             Principal:
-              AWS: !Ref BrokerPrincipalArn
+              AWS: !GetAtt ContentBrokerRole.Arn
             Action:
               - s3:GetObject
               - s3:PutObject
@@ -222,14 +252,16 @@ Resources:
           - Sid: BrokerListsArtifactPrefixOnly
             Effect: Allow
             Principal:
-              AWS: !Ref BrokerPrincipalArn
+              AWS: !GetAtt ContentBrokerRole.Arn
             Action: s3:ListBucket
             Resource: !GetAtt ArtifactBucket.Arn
             Condition:
               StringLike:
-                s3:prefix: artifacts/*
+                "s3:prefix": artifacts/*
 
 Outputs:
+  ContentBrokerRoleArn:
+    Value: !GetAtt ContentBrokerRole.Arn
   ArtifactBucketName:
     Value: !Ref ArtifactBucket
   KmsKeyArn:

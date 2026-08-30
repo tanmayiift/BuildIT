@@ -11,7 +11,10 @@ describe("AWS artifact and key boundary", () => {
   });
 
   it("requires a dedicated role and tenant-bound KMS context", () => {
-    expect(template).toContain("AllowedPattern: '^arn:aws:iam::[0-9]{12}:role/.+$'");
+    expect(template).toContain("ContentBrokerRole:");
+    expect(template).toContain("sts:AssumeRoleWithWebIdentity");
+    expect(template).toContain("project:${VercelProjectName}:environment:production");
+    expect(template).not.toContain("environment:preview");
     for (const field of ["organizationId", "credentialId", "purpose"]) {
       expect(template).toContain(`kms:EncryptionContext:${field}`);
     }
@@ -24,7 +27,8 @@ describe("AWS artifact and key boundary", () => {
   });
 
   it("denies plaintext transport and writes using the wrong key", () => {
-    expect(template).toContain("aws:SecureTransport: \"false\"");
+    expect(template).toContain('"aws:SecureTransport": "false"');
+    expect(template).toContain('"Null":');
     expect(template).toContain("DenyUnencryptedObjectWrites");
     expect(template).toContain("DenyWrongEncryptionKey");
   });
@@ -32,7 +36,7 @@ describe("AWS artifact and key boundary", () => {
   it("writes a daily encrypted deletion inventory and expires it after 14 days", () => {
     expect(template).toContain("Id: DailyDeletionAudit");
     expect(template).toContain("ScheduleFrequency: Daily");
-    expect(template).toContain("SSEKMS:");
+    expect(template.match(/SSEAlgorithm: aws:kms/g)).toHaveLength(2);
     expect(template).toContain("Id: ExpireDeletionInventory");
     expect(template).toContain("ExpirationInDays: 14");
   });
