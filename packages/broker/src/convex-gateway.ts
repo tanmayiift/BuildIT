@@ -45,6 +45,7 @@ export class ConvexCredentialGateway implements CredentialStore {
       kmsKeyId: value.kmsKeyId, envelopeVersion: value.envelopeVersion, keyVersion: value.keyVersion,
       maskedSuffix: value.maskedSuffix, lastValidatedAt: value.lastValidatedAt,
       requestId: `credential-create:${randomUUID()}`,
+      ...(value.replacesCredentialId ? { replacesCredentialId: value.replacesCredentialId } : {}),
     });
   }
 

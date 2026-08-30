@@ -25,12 +25,13 @@ describe("credential broker", () => {
   it("validates and stores only a tenant-bound encrypted value", async () => {
     const f = fixtures();
     const broker = new CredentialBroker(f.store, f.kms, "kms-key", f.providers as never, () => 100);
-    const result = await broker.save({ actorId: "user-a", organizationId: "org-a", repositoryId: "repo-a", provider: "gemini", apiKey: "a-secret-provider-key" });
+    const result = await broker.save({ actorId: "user-a", organizationId: "org-a", repositoryId: "repo-a", provider: "gemini", apiKey: "a-secret-provider-key", replacesCredentialId: "old-credential" });
     expect(f.providers.validateKey).toHaveBeenCalledWith("gemini", "a-secret-provider-key");
     expect(result).toMatchObject({ provider: "gemini", maskedSuffix: "-key", status: "valid" });
     expect(f.getSaved()).not.toHaveProperty("apiKey");
     expect(f.getSaved()!.ciphertext).not.toContain("a-secret-provider-key");
     expect(f.getSaved()!.repositoryId).toBe("repo-a");
+    expect(f.getSaved()!.replacesCredentialId).toBe("old-credential");
   });
 
   it("decrypts for exactly one authorized provider callback", async () => {

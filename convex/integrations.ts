@@ -15,6 +15,7 @@ export const listProviderCredentials = query({
       status: credential.status, createdBy: credential.createdBy, createdAt: credential.createdAt,
       lastValidatedAt: credential.lastValidatedAt, lastUsedAt: credential.lastUsedAt,
       revokedAt: credential.revokedAt,
+      repositoryId: credential.repositoryId,
     }));
   },
 });
@@ -45,6 +46,7 @@ export const storeEncryptedCredential = mutation({
     authTag: v.string(), aadDigest: v.string(), wrappedDataKey: v.string(), kmsKeyId: v.string(),
     envelopeVersion: v.literal(1), keyVersion: v.number(), maskedSuffix: v.string(),
     lastValidatedAt: v.number(), requestId: v.string(),
+    replacesCredentialId: v.optional(v.id("providerCredentials")),
   },
   handler: async (ctx, args) => {
     const access = args.repositoryId
@@ -57,12 +59,18 @@ export const storeEncryptedCredential = mutation({
     }
     const existing = await ctx.db.query("providerCredentials").withIndex("by_scope", q => q.eq("credentialScopeId", args.credentialScopeId)).unique();
     if (existing) throw new Error("credential_scope_already_exists");
-    const { requestId, ...encrypted } = args;
+    const replaced = args.replacesCredentialId ? await ctx.db.get(args.replacesCredentialId) : null;
+    if (args.replacesCredentialId && (!replaced || replaced.organizationId !== args.organizationId
+      || replaced.repositoryId !== args.repositoryId || replaced.provider !== args.provider || replaced.status !== "valid")) {
+      throw new Error("not_found_or_forbidden");
+    }
+    const { requestId, replacesCredentialId: _replacesCredentialId, ...encrypted } = args;
     const credentialId = await ctx.db.insert("providerCredentials", {
       ...encrypted, status: "valid", createdBy: access.userId, createdAt: Date.now(),
     });
+    if (replaced) await ctx.db.patch(replaced._id, { status: "revoked", revokedAt: Date.now() });
     await appendAuditEvent(ctx, { organizationId: args.organizationId, actorId: access.userId,
-      action: "credential.created", resourceType: "provider_credential", resourceId: credentialId,
+      action: replaced ? "credential.rotated" : "credential.created", resourceType: "provider_credential", resourceId: credentialId,
       requestId, result: "allowed", createdAt: Date.now() });
     return { id: credentialId, provider: args.provider, maskedSuffix: args.maskedSuffix, status: "valid" as const, lastValidatedAt: args.lastValidatedAt };
   },

@@ -48,4 +48,11 @@ describe("credential broker HTTP boundary", () => {
     expect(await response.json()).toEqual({ error: "rate_limited" });
     expect(f.broker.save).not.toHaveBeenCalled();
   });
+
+  it("forwards an explicit replacement ID without changing tenant authorization", async () => {
+    const f = fixture();
+    const response = await handleCredentialSave(request({ organizationId: "organization-a", provider: "openai", apiKey: "secret-provider-key-1234", replacesCredentialId: "credential-old" }), { allowedOrigin: origin, authorize: f.authorize, broker: f.broker as never });
+    expect(response.status).toBe(201);
+    expect(f.broker.save).toHaveBeenCalledWith(expect.objectContaining({ replacesCredentialId: "credential-old", organizationId: "organization-a" }));
+  });
 });

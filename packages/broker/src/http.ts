@@ -33,11 +33,12 @@ export async function handleCredentialSave(request: Request, input: {
   if (new TextEncoder().encode(raw).byteLength > maxBodyBytes) return json(413, { error: "request_too_large" }, origin);
   let body: Record<string, unknown>;
   try { body = JSON.parse(raw) as Record<string, unknown>; } catch { return json(400, { error: "invalid_request" }, origin); }
-  const allowed = new Set(["organizationId", "repositoryId", "provider", "apiKey"]);
+  const allowed = new Set(["organizationId", "repositoryId", "provider", "apiKey", "replacesCredentialId"]);
   if (Object.keys(body).some(key => !allowed.has(key)) || typeof body.organizationId !== "string"
     || body.organizationId.length < 5 || typeof body.apiKey !== "string" || body.apiKey.length < 16
     || !providers.has(body.provider as ProviderName)
-    || (body.repositoryId !== undefined && typeof body.repositoryId !== "string")) {
+    || (body.repositoryId !== undefined && typeof body.repositoryId !== "string")
+    || (body.replacesCredentialId !== undefined && typeof body.replacesCredentialId !== "string")) {
     return json(400, { error: "invalid_request" }, origin);
   }
   const token = authorization.slice(7);
@@ -49,7 +50,8 @@ export async function handleCredentialSave(request: Request, input: {
     const scope = { token, organizationId, ...(repositoryId ? { repositoryId } : {}) };
     const { actorId } = await input.authorize(scope);
     const saved = await input.broker.save({ actorId, organizationId,
-      ...(repositoryId ? { repositoryId } : {}), provider, apiKey });
+      ...(repositoryId ? { repositoryId } : {}), provider, apiKey,
+      ...(typeof body.replacesCredentialId === "string" ? { replacesCredentialId: body.replacesCredentialId } : {}) });
     return json(201, { credential: saved }, origin);
   } catch (error) {
     const code = error instanceof Error ? error.message : "credential_save_failed";

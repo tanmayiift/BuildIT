@@ -256,6 +256,18 @@ describe("Convex tenant isolation", () => {
     expect(result).toMatchObject({ provider: "gemini", maskedSuffix: "1234", status: "valid" });
     const stored = await t.run(ctx => ctx.db.get(result.id));
     expect(stored).toMatchObject({ organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, createdBy: userId, encryptedCiphertext: "encrypted" });
+    const rotated = await signedIn.mutation(api.integrations.storeEncryptedCredential, {
+      organizationId: alpha.organizationId, repositoryId: alpha.repositoryId,
+      credentialScopeId: "223e4567-e89b-12d3-a456-426614174000", provider: "gemini",
+      encryptedCiphertext: "replacement", nonce: "nonce-2", authTag: "tag-2", aadDigest: "b".repeat(64),
+      wrappedDataKey: "wrapped-2", kmsKeyId: "arn:aws:kms:eu-west-1:123:key/test", envelopeVersion: 1,
+      keyVersion: 1, maskedSuffix: "5678", lastValidatedAt: Date.now(), requestId: "credential-rotate-0001",
+      replacesCredentialId: result.id,
+    });
+    expect(await t.run(ctx => ctx.db.get(result.id))).toMatchObject({ status: "revoked" });
+    expect(await t.run(ctx => ctx.db.get(rotated.id))).toMatchObject({ status: "valid", maskedSuffix: "5678" });
+    const audit = await t.run(ctx => ctx.db.query("auditEvents").withIndex("by_org_created", q => q.eq("organizationId", alpha.organizationId)).order("desc").first());
+    expect(audit).toMatchObject({ action: "credential.rotated" });
   });
 
   it("rejects a model credential bound to another tenant's repository", async () => {

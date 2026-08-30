@@ -22,6 +22,7 @@ export type StoredCredential = EnvelopeCiphertext & {
   lastValidatedAt: number;
   lastUsedAt?: number;
   revokedAt?: number;
+  replacesCredentialId?: string;
 };
 
 export type CredentialStore = {
@@ -61,7 +62,7 @@ export class CredentialBroker {
     private readonly now = () => Date.now(),
   ) {}
 
-  async save(input: CredentialAccess & { provider: ProviderName; apiKey: string }) {
+  async save(input: CredentialAccess & { provider: ProviderName; apiKey: string; replacesCredentialId?: string }) {
     await this.providers.validateKey(input.provider, input.apiKey);
     const id = randomUUID();
     const scope = scopeFor({ id, organizationId: input.organizationId, ...(input.repositoryId ? { repositoryId: input.repositoryId } : {}) });
@@ -79,6 +80,7 @@ export class CredentialBroker {
       createdBy: input.actorId,
       createdAt: timestamp,
       lastValidatedAt: timestamp,
+      ...(input.replacesCredentialId ? { replacesCredentialId: input.replacesCredentialId } : {}),
     };
     await this.store.insert(stored);
     return { id, provider: stored.provider, maskedSuffix: stored.maskedSuffix, status: stored.status, lastValidatedAt: timestamp };
