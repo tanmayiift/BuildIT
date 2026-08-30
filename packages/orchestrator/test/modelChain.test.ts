@@ -25,6 +25,26 @@ describe("executable model review chain", () => {
     await expect(runModelReviewChain({ invoke, pinned, untrusted: {} })).rejects.toThrow("stage_schema_invalid:findings");
     expect(invoke.mock.calls.filter(([request]) => request.stage === "findings")).toHaveLength(2);
     expect(invoke.mock.calls.some(([request]) => request.stage === "critic")).toBe(false);
+    expect(invoke.mock.calls.filter(([request]) => request.stage === "findings")[1]?.[0].input).toContain("<buildit:invalid-output>");
+    expect(invoke.mock.calls.filter(([request]) => request.stage === "findings")[1]?.[0].input).toContain("Correct only the invalid output above");
+  });
+
+  it("redacts the invalid output before asking for one bounded repair", async () => {
+    const secret = "AIzaSyA123456789012345678901234567890", calls: string[] = [];
+    let malformed = true;
+    await runModelReviewChain({ invoke: async request => {
+      calls.push(request.input);
+      if (request.stage === "requirements" && malformed) { malformed = false; return { value: { leaked: secret }, provider: "gemini", model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 }; }
+      return { value: values[request.stage], provider: "gemini", model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 };
+    }, pinned, untrusted: {} });
+    expect(calls[1]).toContain("[REDACTED]");
+    expect(calls[1]).not.toContain(secret);
+  });
+
+  it("does not resend an oversized invalid response", async () => {
+    const invoke = vi.fn(async request => ({ value: request.stage === "requirements" ? { invalid: "x".repeat(16_001) } : values[request.stage], provider: "gemini" as const, model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 }));
+    await expect(runModelReviewChain({ invoke, pinned, untrusted: {} })).rejects.toThrow("schema_repair_output_too_large");
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 
   it("requires the critic to use a different model or credential", () => {

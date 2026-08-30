@@ -1,4 +1,5 @@
 import { validateSchemaValue, type JsonSchema, type ProviderName, type ProviderResult } from "@buildit/providers";
+import { redactForModel } from "@buildit/security";
 import { promptStages, runPromptChain, type PromptStage, type StageDefinition } from "./promptChain.js";
 
 const string = { type: "string" } as const;
@@ -28,6 +29,14 @@ export type ModelStageRequest = {
 export type ModelStageInvoker = (request: ModelStageRequest) => Promise<ProviderResult>;
 export type StageUsage = Pick<ProviderResult, "provider" | "model" | "finishReason" | "inputTokens" | "outputTokens" | "requestId"> & { stage: PromptStage };
 
+const repairOutputLimit = 16_000;
+function repairInput(input: string, repairOf: unknown) {
+  const redacted = JSON.stringify(repairOf, (_key, value) => typeof value === "string" ? redactForModel(value) : value);
+  if (Buffer.byteLength(redacted, "utf8") > repairOutputLimit) throw new Error("schema_repair_output_too_large");
+  const quoted = redacted.replaceAll("<", "\\u003c").replaceAll(">", "\\u003e").replaceAll("&", "\\u0026");
+  return `${input}\n<buildit:invalid-output>\n${quoted}\n</buildit:invalid-output>\nCorrect only the invalid output above. Return exactly the requested schema; do not add prose or new evidence.`;
+}
+
 function strictDefinition(stage: PromptStage): StageDefinition {
   const schema = stageSchemas[stage];
   return {
@@ -56,8 +65,10 @@ export async function runModelReviewChain(input: {
     untrusted: input.untrusted,
     maxSchemaRepairs: 1,
     executor: async request => {
+      const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);
       const result = await input.invoke({
         ...request,
+        input: providerInput,
         schemaName: `buildit_${request.stage}_v1`,
         schema: stageSchemas[request.stage],
         maxOutputTokens: request.stage === "findings" || request.stage === "patch" ? 8_000 : 4_000,

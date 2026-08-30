@@ -190,6 +190,9 @@ importers:
       '@buildit/runner':
         specifier: workspace:*
         version: link:../runner
+      '@buildit/security':
+        specifier: workspace:*
+        version: link:../security
     devDependencies:
       typescript:
         specifier: ^5.9.2
