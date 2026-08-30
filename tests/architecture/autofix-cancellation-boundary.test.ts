@@ -44,7 +44,9 @@ describe("Autofix cancellation boundary", () => {
   });
 
   it("cleans an exact candidate branch only before a stacked PR exists", () => {
-    expect(source).toContain("if (branchReady && !stackedEstablished)");
+    expect(source).toContain("stackedAttempted = true;");
+    expect(source.indexOf("stackedAttempted = true;")).toBeLessThan(source.indexOf("writer.upsertStackedPullRequest("));
+    expect(source).toContain("if (branchReady && !stackedAttempted)");
     expect(source).toContain("await writer.deleteBranchIfExact({");
     expect(source).toContain('throw new Error("autofix_branch_cleanup_failed"');
   });

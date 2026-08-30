@@ -788,7 +788,7 @@ export const deliverPassed = internalAction({
       .replace(/[^A-Za-z0-9_-]/g, "")
       .slice(0, 24)}`;
     let branchReady = false,
-      stackedEstablished = false;
+      stackedAttempted = false;
     try {
       await assertActive(ctx, args);
       const current = await fetch(
@@ -858,13 +858,13 @@ export const deliverPassed = internalAction({
           },
         );
       await assertActive(ctx, args);
+      stackedAttempted = true;
       const stacked = await writer.upsertStackedPullRequest({
         head: branch,
         base: pull.head.ref,
         title: `BuildIT fixes for PR #${scope.prNumber}`,
         body: `Validated candidate \`${passed.candidateCommitSha}\` after ${passed.roundNumber} bounded Autofix round${passed.roundNumber === 1 ? "" : "s"}. BuildIT cannot merge this pull request; a human owns the merge decision.`,
       });
-      stackedEstablished = true;
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, {
         ...args,
         sideEffectId: prEffect,
@@ -977,7 +977,7 @@ export const deliverPassed = internalAction({
         candidateCommitSha: passed.candidateCommitSha,
       };
     } catch (error) {
-      if (branchReady && !stackedEstablished) {
+      if (branchReady && !stackedAttempted) {
         try {
           await writer.deleteBranchIfExact({
             name: branch,
