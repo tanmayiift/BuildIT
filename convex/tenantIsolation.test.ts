@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 import { normalizeGitHubProfile } from "./lib/githubProfile";
@@ -2954,5 +2954,44 @@ describe("GitHub webhook durability", () => {
     const after = await t.run((ctx) => ctx.db.get(tenant.reviewId));
     expect(after).toMatchObject({ isStale: true, executionGeneration: 1 });
     expect(after?.leaseOwner).toBeUndefined();
+  });
+});
+
+describe("expired artifact cleanup", () => {
+  it("leases and deletes only a parent-consistent expired artifact", async () => {
+    const t=convexTest(schema,modules),tenant=await seedTenant(t,"cleanup","alice"),now=100_000,leaseId="11111111-1111-4111-8111-111111111111";
+    const {validId,forgedId,futureId}=await t.run(async ctx=>{
+      const insert=async(expiresAt:number)=>ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"repository_snapshot",storageKey:"pending",encrypted:true,checksum:"a".repeat(64),size:10,redactionStatus:"redacted",expiresAt,deletionAttempts:0});
+      const validId=await insert(now-1),forgedId=await insert(now-1),futureId=await insert(now+60_000);
+      await ctx.db.patch(validId,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${validId}/context-head-0.json`});
+      await ctx.db.patch(forgedId,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/someone-else/context-head-0.json`});
+      await ctx.db.patch(futureId,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${futureId}/context-head-0.json`});
+      return{validId,forgedId,futureId};
+    });
+    await expect(t.mutation(internal.artifactCleanupData.claimExpired,{now,leaseId:"bad",limit:25})).rejects.toThrow("artifact_cleanup_claim_invalid");
+    const claimed=await t.mutation(internal.artifactCleanupData.claimExpired,{now,leaseId,limit:25});
+    expect(claimed.map(item=>item.artifactId)).toEqual([validId]);
+    await expect(t.mutation(internal.artifactCleanupData.claimExpired,{now:now+1,leaseId:"22222222-2222-4222-8222-222222222222",limit:25})).resolves.toEqual([]);
+    await expect(t.mutation(internal.artifactCleanupData.completeDeletion,{artifactId:validId,leaseId:"22222222-2222-4222-8222-222222222222",now:now+2})).rejects.toThrow("artifact_cleanup_lease_invalid");
+    await t.mutation(internal.artifactCleanupData.completeDeletion,{artifactId:validId,leaseId,now:now+2});
+    const stored=await t.run(async ctx=>({valid:await ctx.db.get(validId),forged:await ctx.db.get(forgedId),future:await ctx.db.get(futureId)}));
+    expect(stored.valid).toMatchObject({deletedAt:now+2,deletionAttempts:1});expect(stored.valid?.deletionLeaseId).toBeUndefined();expect(stored.forged?.deletedAt).toBeUndefined();expect(stored.future?.deletedAt).toBeUndefined();
+  });
+
+  it("releases a failed lease for a bounded retry",async()=>{
+    const t=convexTest(schema,modules),tenant=await seedTenant(t,"cleanup-retry","alice"),now=200_000,first="33333333-3333-4333-8333-333333333333",second="44444444-4444-4444-8444-444444444444";
+    const artifactId=await t.run(async ctx=>{const id=await ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"command_output",storageKey:"pending",encrypted:true,checksum:"b".repeat(64),size:10,redactionStatus:"redacted",expiresAt:now-1,deletionAttempts:0});await ctx.db.patch(id,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/validation.json`});return id});
+    expect(await t.mutation(internal.artifactCleanupData.claimExpired,{now,leaseId:first,limit:1})).toHaveLength(1);
+    await t.mutation(internal.artifactCleanupData.failDeletion,{artifactId,leaseId:first,errorCode:"broker_delete_failed",now:now+1});
+    expect(await t.mutation(internal.artifactCleanupData.claimExpired,{now:now+2,leaseId:second,limit:1})).toHaveLength(1);
+    expect(await t.run(ctx=>ctx.db.get(artifactId))).toMatchObject({deletionAttempts:2,deletionLeaseId:second});
+  });
+
+  it("deletes through the broker before marking the artifact deleted",async()=>{
+    const t=convexTest(schema,modules),tenant=await seedTenant(t,"cleanup-worker","alice");
+    const artifactId=await t.run(async ctx=>{const id=await ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"repository_snapshot",storageKey:"pending",encrypted:true,checksum:"c".repeat(64),size:10,redactionStatus:"redacted",expiresAt:1,deletionAttempts:0});await ctx.db.patch(id,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/context-base-0.json`});return id});
+    vi.stubEnv("BUILDIT_BROKER_URL","https://broker.example");vi.stubEnv("ARTIFACT_GRANT_SECRET",Buffer.alloc(32,7).toString("base64url"));
+    const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{expect(String(input)).toBe("https://broker.example/api/artifacts");expect(init?.method).toBe("DELETE");expect(String((init?.headers as Record<string,string>).authorization)).toMatch(/^Bearer [^.]+\.[^.]+$/);return Response.json({deleted:true})});vi.stubGlobal("fetch",fetchMock);
+    try{await expect(t.action(internal.artifactCleanupWorker.cleanup,{})).resolves.toEqual({claimed:1,deleted:1,failed:0});expect(fetchMock).toHaveBeenCalledTimes(1);expect(await t.run(ctx=>ctx.db.get(artifactId))).toMatchObject({deletedAt:expect.any(Number),deletionAttempts:1})}finally{vi.unstubAllGlobals();vi.unstubAllEnvs()}
   });
 });

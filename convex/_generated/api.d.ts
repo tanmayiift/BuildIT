@@ -8,9 +8,12 @@
  * @module
  */
 
+import type * as artifactCleanupData from "../artifactCleanupData.js";
+import type * as artifactCleanupWorker from "../artifactCleanupWorker.js";
 import type * as artifacts from "../artifacts.js";
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
 import type * as dashboardReviewData from "../dashboardReviewData.js";
 import type * as dashboardReviews from "../dashboardReviews.js";
 import type * as dataClassification from "../dataClassification.js";
@@ -27,6 +30,7 @@ import type * as lib_durableStages from "../lib/durableStages.js";
 import type * as lib_githubProfile from "../lib/githubProfile.js";
 import type * as lib_lifecycle from "../lib/lifecycle.js";
 import type * as lib_parentConsistency from "../lib/parentConsistency.js";
+import type * as lib_runtimeVersion from "../lib/runtimeVersion.js";
 import type * as lib_validationEvidence from "../lib/validationEvidence.js";
 import type * as memberships from "../memberships.js";
 import type * as metrics from "../metrics.js";
@@ -61,9 +65,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  artifactCleanupData: typeof artifactCleanupData;
+  artifactCleanupWorker: typeof artifactCleanupWorker;
   artifacts: typeof artifacts;
   audit: typeof audit;
   auth: typeof auth;
+  crons: typeof crons;
   dashboardReviewData: typeof dashboardReviewData;
   dashboardReviews: typeof dashboardReviews;
   dataClassification: typeof dataClassification;
@@ -80,6 +87,7 @@ declare const fullApi: ApiFromModules<{
   "lib/githubProfile": typeof lib_githubProfile;
   "lib/lifecycle": typeof lib_lifecycle;
   "lib/parentConsistency": typeof lib_parentConsistency;
+  "lib/runtimeVersion": typeof lib_runtimeVersion;
   "lib/validationEvidence": typeof lib_validationEvidence;
   memberships: typeof memberships;
   metrics: typeof metrics;

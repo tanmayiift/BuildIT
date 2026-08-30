@@ -200,7 +200,8 @@ export default defineSchema({
     organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.optional(v.id("reviews")), type: value.artifactType,
     storageKey: v.string(), encrypted: v.literal(true), checksum: v.string(), size: v.number(),
     redactionStatus: value.redactionStatus, expiresAt: v.number(), deletedAt: v.optional(v.number()),
-    deletionAttempts: v.number(),
+    deletionAttempts: v.number(), deletionLeaseId: v.optional(v.string()), deletionLeaseExpiresAt: v.optional(v.number()),
+    lastDeletionErrorCode: v.optional(v.string()),
   }).index("by_expiry", ["expiresAt"])
     .index("by_repository", ["repositoryId"])
     .index("by_review", ["reviewId"]),
