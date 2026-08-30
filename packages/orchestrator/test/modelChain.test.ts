@@ -17,6 +17,8 @@ describe("executable model review chain", () => {
     expect(records).toHaveLength(6);
     expect(usage).toHaveLength(6);
     expect(JSON.stringify(usage)).not.toContain("untrusted");
+    expect(usage[0]).toMatchObject({ stage: "requirements", provider: "gemini", model: "gemini-test", promptVersion: "requirements-v1", schemaVersion: "requirements-schema-v1", finishReason: "STOP", inputTokens: 10, outputTokens: 2, attempt: 1, outcome: "valid" });
+    expect((usage[0] as {requestFingerprint:string}).requestFingerprint).toMatch(/^[0-9a-f]{64}$/);
     expect(invoke.mock.calls[0]![0].schema).toEqual(stageSchemas.requirements);
   });
 

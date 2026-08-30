@@ -1,10 +1,12 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
-import { findingCategory, findingResolution, requirementStatus, severity, sourceType } from "./validators";
+import { findingCategory, findingResolution, modelStage, modelStageOutcome, provider, requirementStatus, severity, sourceType } from "./validators";
 import type { Id } from "./_generated/dataModel";
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
+
+export const recordStageRun=internalMutation({args:{...executionArgs,roundNumber:v.optional(v.number()),stage:modelStage,provider,model:v.string(),promptVersion:v.string(),schemaVersion:v.string(),finishReason:v.string(),requestHash:v.string(),requestId:v.optional(v.string()),attempt:v.number(),outcome:modelStageOutcome,inputTokens:v.number(),outputTokens:v.number(),now:v.number()},handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||!/^\w[\w.:/-]{0,199}$/.test(args.model)||!args.promptVersion||!args.schemaVersion||args.finishReason.length>100||!/^[0-9a-f]{64}$/.test(args.requestHash)||!Number.isInteger(args.attempt)||args.attempt<1||args.attempt>2||![args.inputTokens,args.outputTokens].every(value=>Number.isSafeInteger(value)&&value>=0)||args.provider!==review.provider)throw new ConvexError("model_stage_run_invalid");await ctx.db.insert("modelStageRuns",{organizationId:args.organizationId,repositoryId:review.repositoryId,reviewId:review._id,...(args.roundNumber===undefined?{}:{roundNumber:args.roundNumber}),stage:args.stage,provider:args.provider,model:args.model,promptVersion:args.promptVersion,schemaVersion:args.schemaVersion,finishReason:args.finishReason,requestHash:args.requestHash,...(args.requestId?{requestId:args.requestId.slice(0,200)}:{}),attempt:args.attempt,outcome:args.outcome,inputTokens:args.inputTokens,outputTokens:args.outputTokens,createdAt:args.now})}});
 
 export const analysisScope = internalQuery({
   args: executionArgs,

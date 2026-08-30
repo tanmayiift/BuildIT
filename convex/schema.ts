@@ -134,6 +134,12 @@ export default defineSchema({
   }).index("by_review", ["reviewId", "sequence"])
     .index("by_org_created", ["organizationId", "createdAt"]),
 
+  modelStageRuns: defineTable({
+    organizationId:v.id("organizations"),repositoryId:v.id("repositories"),reviewId:v.id("reviews"),roundNumber:v.optional(v.number()),stage:value.modelStage,
+    provider:value.provider,model:v.string(),promptVersion:v.string(),schemaVersion:v.string(),finishReason:v.string(),requestHash:v.string(),requestId:v.optional(v.string()),
+    attempt:v.number(),outcome:value.modelStageOutcome,inputTokens:v.number(),outputTokens:v.number(),createdAt:v.number(),
+  }).index("by_review",["reviewId"]).index("by_review_stage",["reviewId","stage"]),
+
   requirements: defineTable({
     organizationId: v.id("organizations"), reviewId: v.id("reviews"), sourceType: value.sourceType,
     sourceUrlHash: v.optional(v.string()), externalIdHash: v.optional(v.string()),

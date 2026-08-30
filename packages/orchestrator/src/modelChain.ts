@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { validateSchemaValue, type JsonSchema, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { redactForModel } from "@buildit/security";
 import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type PromptStage, type StageDefinition } from "./promptChain.js";
@@ -27,7 +28,7 @@ export type ModelStageRequest = {
   maxOutputTokens: number;
 };
 export type ModelStageInvoker = (request: ModelStageRequest) => Promise<ProviderResult>;
-export type StageUsage = Pick<ProviderResult, "provider" | "model" | "finishReason" | "inputTokens" | "outputTokens" | "requestId"> & { stage: PromptStage };
+export type StageUsage = Pick<ProviderResult, "provider" | "model" | "finishReason" | "inputTokens" | "outputTokens" | "requestId"> & { stage: PromptStage;promptVersion:string;schemaVersion:string;requestFingerprint:string;attempt:number;outcome:"valid"|"schema_invalid" };
 
 const repairOutputLimit = 16_000;
 function repairInput(input: string, repairOf: unknown) {
@@ -60,12 +61,14 @@ export async function runModelReviewChain(input: {
   untrusted: Record<string, unknown>;
   onUsage?: (usage: StageUsage) => Promise<void> | void;
 }) {
+  const attempts=new Map<PromptStage,Array<Omit<StageUsage,"promptVersion"|"schemaVersion"|"attempt"|"outcome">>>();
   return runPromptChain({
     definitions: strictModelChain,
     expectedStages: reviewPromptStages,
     pinned: input.pinned,
     untrusted: input.untrusted,
     maxSchemaRepairs: 1,
+    onAttempt: async attempt=>{const queue=attempts.get(attempt.stage),usage=queue?.shift();if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},
     executor: async request => {
       const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);
       const result = await input.invoke({
@@ -75,15 +78,16 @@ export async function runModelReviewChain(input: {
         schema: stageSchemas[request.stage],
         maxOutputTokens: request.stage === "findings" || request.stage === "patch" ? 8_000 : 4_000,
       });
-      await input.onUsage?.({
+      const usage={
         stage: request.stage,
         provider: result.provider,
         model: result.model,
         finishReason: result.finishReason,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
+        requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas[request.stage])).digest("hex"),
         ...(result.requestId ? { requestId: result.requestId } : {}),
-      });
+      };attempts.set(request.stage,[...(attempts.get(request.stage)??[]),usage]);
       return result.value;
     },
   });
@@ -95,16 +99,18 @@ export async function runModelPatchChain(input: {
   untrusted: Record<string, unknown>;
   onUsage?: (usage: StageUsage) => Promise<void> | void;
 }) {
+  const attempts:Array<Omit<StageUsage,"promptVersion"|"schemaVersion"|"attempt"|"outcome">>=[];
   return runPromptChain({
     definitions: strictPatchChain,
     expectedStages: autofixPromptStages,
     pinned: input.pinned,
     untrusted: input.untrusted,
     maxSchemaRepairs: 1,
+    onAttempt: async attempt=>{const usage=attempts.shift();if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},
     executor: async request => {
       const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);
       const result = await input.invoke({ ...request, input: providerInput, schemaName: "buildit_patch_v1", schema: stageSchemas.patch, maxOutputTokens: 8_000 });
-      await input.onUsage?.({ stage: "patch", provider: result.provider, model: result.model, finishReason: result.finishReason, inputTokens: result.inputTokens, outputTokens: result.outputTokens, ...(result.requestId ? { requestId: result.requestId } : {}) });
+      attempts.push({ stage: "patch", provider: result.provider, model: result.model, finishReason: result.finishReason, inputTokens: result.inputTokens, outputTokens: result.outputTokens,requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas.patch)).digest("hex"), ...(result.requestId ? { requestId: result.requestId } : {}) });
       return result.value;
     },
   });

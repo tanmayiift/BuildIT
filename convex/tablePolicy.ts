@@ -15,6 +15,7 @@ export const tablePolicies = {
   trackerConnections: { scope: "organization", parents: ["organizationId"], data: "encrypted_secret" },
   reviews: { scope: "review", parents: ["organizationId", "repositoryId", "configRevisionId"], data: "metadata" },
   reviewEvents: { scope: "review", parents: ["organizationId", "reviewId", "publicMessageArtifactId"], data: "artifact_reference_only" },
+  modelStageRuns: { scope: "review", parents: ["organizationId", "repositoryId", "reviewId"], data: "metadata" },
   requirements: { scope: "review", parents: ["organizationId", "reviewId", "contentArtifactId"], data: "artifact_reference_only" },
   findings: { scope: "review", parents: ["organizationId", "reviewId", "contentArtifactId", "evidenceIds", "requirementId"], data: "artifact_reference_only" },
   findingSuppressions: { scope: "repository", parents: ["organizationId", "repositoryId"], data: "metadata" },

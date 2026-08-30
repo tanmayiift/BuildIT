@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundedAnalysisContext, boundedValidationEvidence, redactModelOutput } from "./reviewAnalysisWorker";
+import { boundedAnalysisContext, boundedValidationEvidence, redactModelOutput,requireIndependentCritic,selectCriticModel } from "./reviewAnalysisWorker";
 
 const pull = { title: "Fix transfer limit", body: "Must reject amounts above the daily limit", files: [{ path: "src/changed.ts", status: "modified", patch: "@@ guard" }], omitted: [], urlHash: "a".repeat(64) };
 describe("bounded model evidence selection", () => {
@@ -52,3 +52,4 @@ describe("model output retention", () => {
     expect(safe.value.findings[0]?.title).toBe("Leaked [REDACTED]");
   });
 });
+describe("critic independence",()=>{it("chooses a different approved model",()=>{expect(selectCriticModel("gemini","gemini-2.5-pro")).toEqual({model:"gemini-2.5-flash",independent:true});expect(selectCriticModel("openai","not-approved")).toEqual({model:"gpt-5.4-mini",independent:true})});it("forces risky model findings uncertain when independence is unavailable",()=>{const findings=[{id:"f1",severity:"critical",origin:"model"},{id:"s1",severity:"critical",origin:"scanner"}] as never;const decisions=[{findingId:"f1",verdict:"supported",missingEvidenceIds:[],injectionDetected:false,explanation:"ok"},{findingId:"s1",verdict:"supported",missingEvidenceIds:[],injectionDetected:false,explanation:"ok"}] as never;expect(requireIndependentCritic(findings,decisions,false)).toEqual([expect.objectContaining({findingId:"f1",verdict:"uncertain"}),expect.objectContaining({findingId:"s1",verdict:"supported"})])})});

@@ -1,14 +1,9 @@
 import { createHash } from "node:crypto";
-import { ProviderClient, type ProviderName, type ProviderRequest } from "@buildit/providers";
+import { approvedProviderModels, ProviderClient, type ProviderRequest } from "@buildit/providers";
 import { verifyModelInvocationGrant, type ModelStage } from "@buildit/security";
 import type { CredentialBroker, StoredCredential } from "./index.js";
 
 const maxBodyBytes = 400_000;
-const approvedModels: Record<ProviderName, ReadonlySet<string>> = {
-  anthropic: new Set(["claude-sonnet-4-5", "claude-sonnet-4-6", "claude-opus-4-6"]),
-  openai: new Set(["gpt-5", "gpt-5.4", "gpt-5.4-mini"]),
-  gemini: new Set(["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.1-pro-preview"]),
-};
 
 type InvocationBody = {
   organizationId: string; repositoryId: string; reviewId: string; stage: ModelStage;
@@ -71,7 +66,7 @@ export async function handleModelInvocation(request: Request, input: {
       || grant.model !== body.request.model || grant.requestHash !== requestHash) throw new Error("model_grant_scope_invalid");
     const broker = typeof input.broker === "function" ? input.broker(body.credential) : input.broker;
     const result = await broker.withCredential(body.credential.id, { actorId: "review-worker", organizationId: body.organizationId, repositoryId: body.repositoryId },
-      (provider, apiKey) => (input.providers ?? new ProviderClient()).generateWithRetry(provider, apiKey, body.request, approvedModels[provider]));
+      (provider, apiKey) => (input.providers ?? new ProviderClient()).generateWithRetry(provider, apiKey, body.request, approvedProviderModels[provider]));
     return json(200, { result });
   } catch (error) {
     const mapped = safe(error);

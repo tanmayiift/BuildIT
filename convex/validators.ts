@@ -13,6 +13,8 @@ export const reviewStatus = v.union(
   v.literal("cancelled"), v.literal("budget_exhausted"), v.literal("platform_failed"),
 );
 export const reviewMode = v.union(v.literal("review"), v.literal("autofix"));
+export const modelStage = v.union(v.literal("requirements"),v.literal("review_plan"),v.literal("findings"),v.literal("critic"),v.literal("arbitration"),v.literal("patch"),v.literal("report"));
+export const modelStageOutcome = v.union(v.literal("valid"),v.literal("schema_invalid"),v.literal("provider_error"));
 export const triggerSource = v.union(
   v.literal("github_comment"), v.literal("dashboard"), v.literal("automatic"), v.literal("cli"),
 );

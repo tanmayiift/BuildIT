@@ -5,7 +5,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { arbitrateFindings, reconcileArbitration, runModelReviewChain, validateFindingCandidates, type ArbitrationDecision, type CriticDecision, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, type PromptStage } from "@buildit/orchestrator";
-import type { ProviderName, ProviderResult } from "@buildit/providers";
+import { approvedProviderModels, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact, redactForModel } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
@@ -61,7 +61,8 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   if (Buffer.byteLength(JSON.stringify(base)) > maxBytes) throw new Error("analysis_context_too_large");
   return { ...base, coverage: excluded.length || patchPaths.length || bodyTruncated || requirementTruncated || pull.requirementCoverage !== "complete" || pull.omitted.length || headChunks.some(chunk => chunk.snapshot.coverage !== "full") ? "partial" as const : "full" as const };
 }
-function criticModel(provider: ProviderName, primary: string) { return provider === "gemini" ? (primary === "gemini-2.5-flash" ? "gemini-2.5-pro" : "gemini-2.5-flash") : provider === "openai" ? (primary === "gpt-5.4-mini" ? "gpt-5.4" : "gpt-5.4-mini") : (primary === "claude-sonnet-4-5" ? "claude-sonnet-4-6" : "claude-sonnet-4-5"); }
+export function selectCriticModel(provider:ProviderName,primary:string){const preferred=provider==="gemini"?(primary==="gemini-2.5-flash"?"gemini-2.5-pro":"gemini-2.5-flash"):provider==="openai"?(primary==="gpt-5.4-mini"?"gpt-5.4":"gpt-5.4-mini"):(primary==="claude-sonnet-4-5"?"claude-sonnet-4-6":"claude-sonnet-4-5");return{model:approvedProviderModels[provider].has(preferred)&&preferred!==primary?preferred:primary,independent:approvedProviderModels[provider].has(preferred)&&preferred!==primary}}
+export function requireIndependentCritic(findings:FindingCandidate[],decisions:CriticDecision[],independent:boolean){if(independent)return decisions;const risky=new Set(findings.filter(item=>item.origin==="model"&&["critical","high"].includes(item.severity)).map(item=>item.id));return decisions.map(item=>risky.has(item.findingId)?{...item,verdict:"uncertain" as const,missingEvidenceIds:[...new Set([...item.missingEvidenceIds,"independent-critic-unavailable"])],explanation:"An independent approved critic model was unavailable."}:item)}
 
 export const analyze = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
@@ -84,10 +85,10 @@ export const analyze = internalAction({
     const validationBody = Buffer.from(await validationResponse.arrayBuffer());
     if (validationBody.byteLength !== validation.size || createHash("sha256").update(validationBody).digest("hex") !== validation.checksum) throw new Error("validation_artifact_integrity_failed");
     const validationValue = JSON.parse(validationBody.toString("utf8")) as ValidationArtifact;
-    const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }) }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
+    const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }) }, usage: Array<{ inputTokens: number; outputTokens: number }> = [],criticRoute=selectCriticModel(scope.provider,scope.model);
     const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
       invoke: async (stageRequest: ModelStageRequest): Promise<ProviderResult> => {
-        const stage = stageRequest.stage as PromptStage, model = stage === "critic" ? criticModel(scope.provider, scope.model) : scope.model;
+        const stage = stageRequest.stage as PromptStage, model = stage === "critic" ? criticRoute.model : scope.model;
         const request = { model, system: stageRequest.system, input: stageRequest.input, schemaName: stageRequest.schemaName, schema: stageRequest.schema, maxOutputTokens: stageRequest.maxOutputTokens };
         const body = JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), stage, credential: scope.credential, request });
         const grant = issueModelInvocationGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), credentialScopeId: scope.credential.id,
@@ -95,9 +96,9 @@ export const analyze = internalAction({
         await ctx.runQuery(internal.durableReview.assertActive, args);
         const response = await fetch(`${brokerUrl}/api/model`, { method: "POST", headers: { authorization: `Bearer ${grant}`, "content-type": "application/json" }, body });
         const output = await response.json() as { result?: ProviderResult; error?: string };
-        if (!response.ok || !output.result) throw new Error(output.error ?? `model_stage_${response.status}`);
+        if (!response.ok || !output.result){await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage,provider:scope.provider,model,promptVersion:`${stage}-v1`,schemaVersion:`${stage}-schema-v1`,finishReason:(output.error??`http_${response.status}`).slice(0,100),requestHash:createHash("sha256").update(stageRequest.system).update("\0").update(stageRequest.input).update("\0").update(JSON.stringify(stageRequest.schema)).digest("hex"),attempt:stageRequest.repairOf===undefined?1:2,outcome:"provider_error",inputTokens:0,outputTokens:0,now:Date.now()});throw new Error(output.error ?? `model_stage_${response.status}`)}
         return output.result;
-      }, onUsage: item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens }); } }));
+      }, onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); } }));
     const headEvidence = new Map<string, { record: EvidenceRecord; artifactId: Id<"artifacts"> }>();
     for (const chunk of chunks.filter(item => item.revision === "head")) for (const file of chunk.snapshot.files) {
       if (!chunk.artifactId) throw new Error("context_artifact_reference_missing");
@@ -109,7 +110,7 @@ export const analyze = internalAction({
     const provenanceByRequirementId = new Map(untrusted.pull.requirements.flatMap(requirement => { const source = sourceById.get(requirement.sourceId); return source ? [[requirement.id, source] as const] : []; }));
     const requirements = ((stage("requirements").requirements ?? []) as Array<{ id: string; status: "resolved" | "missing" | "inaccessible" | "conflicting" | "excluded"; confidence: number }>).filter(item => item && typeof item.id === "string" && provenanceByRequirementId.has(item.id) && Number.isFinite(item.confidence) && item.confidence >= 0 && item.confidence <= 1);
     const modelFindings = ((stage("findings").findings ?? []) as FindingCandidate[]).map(item => ({ ...item, origin: "model" as const }));
-    const critic = ((stage("critic").decisions ?? []) as CriticDecision[]);
+    const critic = requireIndependentCritic(modelFindings,((stage("critic").decisions ?? []) as CriticDecision[]),criticRoute.independent);
     const scannerHead = (validationValue.output?.scanners as { head?: { findings?: Array<{ ruleId?: string; severity?: "critical" | "warning" | "info"; path?: string; startLine?: number; endLine?: number; summary?: string }> } } | undefined)?.head?.findings ?? [];
     const scannerFindings: FindingCandidate[] = scannerHead.flatMap((item, index) => {
       if (!item.path || !item.ruleId || !item.severity || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine)) return [];

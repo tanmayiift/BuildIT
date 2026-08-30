@@ -2,6 +2,7 @@ export type ProviderName = "anthropic" | "openai" | "gemini";
 export type JsonSchema = Record<string, unknown>;
 export type ProviderRequest = { model: string; system: string; input: string; schemaName: string; schema: JsonSchema; maxOutputTokens: number };
 export type ProviderResult = { value: unknown; provider: ProviderName; model: string; finishReason: string; inputTokens: number; outputTokens: number; requestId?: string | undefined };
+export const approvedProviderModels:Record<ProviderName,ReadonlySet<string>>={anthropic:new Set(["claude-sonnet-4-5","claude-sonnet-4-6","claude-opus-4-6"]),openai:new Set(["gpt-5","gpt-5.4","gpt-5.4-mini"]),gemini:new Set(["gemini-2.5-pro","gemini-2.5-flash","gemini-3.1-pro-preview"])};
 type Http = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export class ProviderError extends Error {

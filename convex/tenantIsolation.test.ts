@@ -1280,6 +1280,9 @@ describe("Convex tenant isolation", () => {
           },
         ],
       };
+    const stageRun={...args,stage:"findings" as const,provider:"anthropic" as const,model:"claude-sonnet-4-5",promptVersion:"findings-v1",schemaVersion:"findings-schema-v1",finishReason:"tool_use",requestHash:"9".repeat(64),requestId:"provider-request-1",attempt:1,outcome:"valid" as const,inputTokens:10,outputTokens:2,now};
+    await expect(t.mutation(internal.reviewModelData.recordStageRun,{...stageRun,organizationId:beta.organizationId})).rejects.toThrow("parent_scope_mismatch");
+    await expect(t.mutation(internal.reviewModelData.recordStageRun,stageRun)).resolves.toBeNull();
     await expect(
       t.mutation(internal.reviewModelData.completeAnalysis, {
         ...args,
@@ -1337,6 +1340,7 @@ describe("Convex tenant isolation", () => {
           q.eq("reviewId", alpha.reviewId).eq("severity", "high"),
         )
         .collect(),
+      stageRuns:await ctx.db.query("modelStageRuns").withIndex("by_review",q=>q.eq("reviewId",alpha.reviewId)).collect(),
     }));
     expect(stored.artifact).toMatchObject({
       redactionStatus: "redacted",
@@ -1363,6 +1367,8 @@ describe("Convex tenant isolation", () => {
       evidenceIds: [seeded.contextArtifactId],
     });
     expect(JSON.stringify(stored.usage)).not.toContain("ciphertext");
+    expect(stored.stageRuns).toEqual([expect.objectContaining({organizationId:alpha.organizationId,repositoryId:alpha.repositoryId,reviewId:alpha.reviewId,stage:"findings",model:"claude-sonnet-4-5",requestHash:"9".repeat(64),attempt:1,outcome:"valid"})]);
+    expect(JSON.stringify(stored.stageRuns)).not.toContain("ciphertext");
   });
 
   it("keeps review filters separate for repositories with the same name", async () => {
