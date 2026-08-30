@@ -2,7 +2,13 @@ import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
 import { checkConclusion, checkKind } from "./validators";
-import { conservativeModelCost } from "@buildit/orchestrator";
+
+// Keep this calculation local to the Convex data runtime. Importing the
+// orchestrator package here also bundles its Node-only sandbox and crypto code.
+const conservativeModelCost = (inputTokens: number, outputTokens: number) => {
+  if (!Number.isSafeInteger(inputTokens) || inputTokens < 0 || !Number.isSafeInteger(outputTokens) || outputTokens < 0) throw new Error("model_usage_invalid");
+  return inputTokens * 15 / 1_000_000 + outputTokens * 75 / 1_000_000;
+};
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
 const hash = v.string();
