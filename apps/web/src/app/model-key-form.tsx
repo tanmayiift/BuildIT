@@ -58,6 +58,7 @@ export function ModelKeyForm() {
     [provider, setProvider] = useState<Provider>("anthropic"),
     [repositoryId, setRepositoryId] = useState(""),
     [replacesCredentialId, setReplacesCredentialId] = useState(""),
+    [confirmRevokeId, setConfirmRevokeId] = useState(""),
     [apiKey, setApiKey] = useState(""),
     [now, setNow] = useState(0),
     [working, setWorking] = useState(false),
@@ -142,6 +143,7 @@ export function ModelKeyForm() {
         credentialId: credential.id,
         requestId: `credential-revoke-${crypto.randomUUID()}`,
       });
+      setConfirmRevokeId("");
       setResult({
         kind: "success",
         text: `${names[credential.provider]} key ending in ${credential.maskedSuffix} was revoked. BuildIT will not use it again.`,
@@ -334,33 +336,15 @@ export function ModelKeyForm() {
               <span className="provider-mark">
                 {names[credential.provider].slice(0, 2).toUpperCase()}
               </span>
-              <span>
-                <strong>
-                  {names[credential.provider]} · •••• {credential.maskedSuffix}
-                </strong>
-                <small>
-                  {credential.status} · validated{" "}
-                  {new Date(credential.lastValidatedAt).toLocaleDateString()}
-                </small>
+              <span className="credential-identity">
+                <strong>{names[credential.provider]}</strong>
+                <code aria-label={`Key ending in ${credential.maskedSuffix}`}>•••• {credential.maskedSuffix}</code>
               </span>
-              <span className="credential-actions">
-                <button
-                  className="button secondary compact"
-                  type="button"
-                  disabled={working || credential.status === "revoked"}
-                  onClick={() => beginRotation(credential)}
-                >
-                  Replace
-                </button>
-                <button
-                  className="button tertiary compact"
-                  type="button"
-                  disabled={working || credential.status === "revoked"}
-                  onClick={() => void revoke(credential)}
-                >
-                  {credential.status === "revoked" ? "Revoked" : "Revoke"}
-                </button>
+              <span className="credential-scope">
+                <span>{credential.repositoryId ? (() => { const repository = connection?.repositories.find(item => item.id === credential.repositoryId); return repository ? `${repository.owner}/${repository.name}` : "Removed repository"; })() : "All connected repositories"}</span>
+                <small>{credential.status === "revoked" ? "Revoked" : `Validated ${new Date(credential.lastValidatedAt).toLocaleDateString()}`}</small>
               </span>
+              {confirmRevokeId === credential.id ? <span className="credential-confirm"><small>Stop BuildIT from using this key?</small><button className="button tertiary compact" type="button" disabled={working} onClick={() => setConfirmRevokeId("")}>Cancel</button><button className="button destructive compact" type="button" disabled={working} onClick={() => void revoke(credential)}>Confirm revoke</button></span> : <span className="credential-actions"><button className="button secondary compact" type="button" disabled={working || credential.status === "revoked"} onClick={() => beginRotation(credential)}>Replace</button><button className="button destructive compact" type="button" disabled={working || credential.status === "revoked"} onClick={() => setConfirmRevokeId(credential.id)}>{credential.status === "revoked" ? "Revoked" : "Revoke"}</button></span>}
             </div>
           ))}
         </div>

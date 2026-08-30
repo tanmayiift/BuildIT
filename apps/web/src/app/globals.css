@@ -30,7 +30,7 @@ body { margin: 0; background: var(--workbench); -webkit-font-smoothing: antialia
 a { color: inherit; text-decoration: none; }
 button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
-code, .mono, time, .status { font-family: "JetBrains Mono Variable", monospace; font-variant-numeric: tabular-nums; }
+code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-variant-numeric: tabular-nums; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .preview-banner { min-height: 36px; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 7px 20px; background: var(--warning-bg); border-bottom: 1px solid #ead4a5; color: #563900; font-size: 12px; }
 .preview-banner a { margin-left: 8px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
@@ -115,6 +115,10 @@ code, .mono, time, .status { font-family: "JetBrains Mono Variable", monospace; 
 .button:active { transform: scale(.97); }
 .button.compact { min-height: 44px; }
 .button.secondary { color: var(--ink); background: var(--surface); border-color: var(--line-strong); }
+.button.tertiary { color: var(--navy); background: transparent; border-color: transparent; }
+.button.tertiary:hover { background: var(--navy-soft); }
+.button.destructive { color: var(--danger); background: var(--surface); border-color: #dca6a2; }
+.button.destructive:hover { background: var(--danger-bg); border-color: var(--danger); }
 .action-primary:hover { background: #174675; }
 .action-secondary { color: var(--ink); background: var(--surface); border-color: var(--line-strong); }
 .action-secondary:hover { color: var(--navy); background: var(--workbench); border-color: var(--navy); }
