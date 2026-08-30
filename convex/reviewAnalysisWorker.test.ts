@@ -30,6 +30,12 @@ describe("bounded model evidence selection", () => {
     expect(result.coverage).toBe("partial");
   });
 
+  it("preserves requirement conflicts and prevents full coverage", () => {
+    const result = boundedAnalysisContext([{ pull: { ...pull, requirementCoverage: "partial", requirementConflicts: [{ canonical: "allow empty names", requirementIds: ["r1", "r2"], sourceIds: ["pr", "ticket"] }] }, snapshot: { coverage: "full", omitted: [], files: [] } }], 80_000);
+    expect(result.pull.requirementConflicts).toEqual([{ canonical: "allow empty names", requirementIds: ["r1", "r2"], sourceIds: ["pr", "ticket"] }]);
+    expect(result.coverage).toBe("partial");
+  });
+
   it("removes secret-looking values from every model-bound text source", () => {
     const secret = "super-secret-value-123", result = boundedAnalysisContext([{ pull: { ...pull, title: `token=${secret}`, body: `password=${secret}`, files: [{ path: "src/a.ts", status: "modified", patch: `api_key=${secret}` }], requirementSources: [{ id: "linked-1", type: "github_issue", status: "available", version: "v1", urlHash: "a".repeat(64), content: `access_token=${secret}` }], requirements: [{ id: "r1", text: `client_secret=${secret}`, sourceId: "linked-1", line: 1, evidenceHash: "b".repeat(64), certainty: "explicit" }] }, snapshot: { coverage: "full", omitted: [], files: [{ path: "src/a.ts", content: `auth_token=${secret}\nexport const ok = true`, size: 1 }] } }], 80_000);
     expect(JSON.stringify(result)).not.toContain(secret);

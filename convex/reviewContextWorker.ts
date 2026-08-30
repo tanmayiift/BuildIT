@@ -50,7 +50,7 @@ export const gather = internalAction({
         urlHash: createHash("sha256").update(pullContext.htmlUrl).digest("hex"), requirementCoverage: intentCoverage,
         requirementSources: intent.sources.map(source => ({ id: source.id, type: source.type, status: source.status, version: source.version, urlHash: createHash("sha256").update(source.url).digest("hex"),
           ...(source.type === "pull_request" || source.content === undefined ? {} : { content: source.content }) })),
-        requirements: intent.requirements };
+        requirements: intent.requirements,requirementConflicts:intent.conflicts };
       const pullBytes = Buffer.byteLength(JSON.stringify(pull));
       if (pullBytes > 2_500_000) throw new Error("pull_request_context_too_large");
       const artifactIds: string[] = [],
