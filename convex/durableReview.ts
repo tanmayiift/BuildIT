@@ -48,6 +48,12 @@ export const execute = reviewWorkflowManager.define({
         expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
       });
     }
+    if (stage === "analysis") {
+      await step.runAction(internal.reviewAnalysisWorker.analyze, {
+        organizationId: args.organizationId, reviewId: args.reviewId,
+        expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
+      });
+    }
     await step.runMutation(internal.durableReview.checkpoint, {
       ...args, stage, sequence: index + 2, now: args.startedAt + index + 1,
     });

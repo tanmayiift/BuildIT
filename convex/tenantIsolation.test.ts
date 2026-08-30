@@ -355,6 +355,35 @@ describe("Convex tenant isolation", () => {
     expect(await t.run(ctx => ctx.db.get(reserved.artifactId))).toMatchObject({ redactionStatus: "redacted", organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId });
   });
 
+  it("selects a repository-scoped model key and records only encrypted analysis metadata", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "analysis-alpha", "alice"), beta = await seedTenant(t, "analysis-beta", "bob"), now = Date.now();
+    const seeded = await t.run(async ctx => {
+      await ctx.db.insert("artifacts", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId,
+        type: "repository_snapshot", storageKey: `artifacts/${alpha.organizationId}/${alpha.repositoryId}/${alpha.reviewId}/context/context-0.json`, encrypted: true,
+        checksum: "a".repeat(64), size: 100, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const credentialId = await ctx.db.insert("providerCredentials", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId,
+        credentialScopeId: "repository-credential", provider: "anthropic", encryptedCiphertext: "repo-ciphertext", nonce: "nonce", authTag: "tag", aadDigest: "b".repeat(64),
+        wrappedDataKey: "wrapped", kmsKeyId: "kms-test", envelopeVersion: 1, keyVersion: 1, maskedSuffix: "9999", status: "valid", createdBy: "alice", createdAt: now, lastValidatedAt: now });
+      return { credentialId };
+    });
+    const args = { organizationId: alpha.organizationId, reviewId: alpha.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0 };
+    const scope = await t.query(internal.reviewModelData.analysisScope, args);
+    expect(scope.credential).toMatchObject({ id: "repository-credential", ciphertext: "repo-ciphertext", repositoryId: alpha.repositoryId });
+    await expect(t.query(internal.reviewModelData.analysisScope, { ...args, organizationId: beta.organizationId })).rejects.toThrow("parent_scope_mismatch");
+    const checksum = "c".repeat(64), reserved = await t.mutation(internal.reviewModelData.reserveOutput, { ...args, checksum, size: 200, now });
+    await expect(t.mutation(internal.reviewModelData.completeAnalysis, { ...args, organizationId: beta.organizationId, artifactId: reserved.artifactId, checksum, size: 200,
+      credentialId: seeded.credentialId, inputTokens: 10, outputTokens: 2, now })).rejects.toThrow("parent_scope_mismatch");
+    await expect(t.mutation(internal.reviewModelData.completeAnalysis, { ...args, artifactId: reserved.artifactId, checksum, size: 200,
+      credentialId: seeded.credentialId, inputTokens: 10, outputTokens: 2, now })).resolves.toBe(reserved.artifactId);
+    await expect(t.mutation(internal.reviewModelData.completeAnalysis, { ...args, artifactId: reserved.artifactId, checksum, size: 200,
+      credentialId: seeded.credentialId, inputTokens: 10, outputTokens: 2, now: now + 1 })).resolves.toBe(reserved.artifactId);
+    const stored = await t.run(async ctx => ({ artifact: await ctx.db.get(reserved.artifactId), credential: await ctx.db.get(seeded.credentialId), usage: await ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", alpha.reviewId)).collect() }));
+    expect(stored.artifact).toMatchObject({ redactionStatus: "redacted", checksum, size: 200 });
+    expect(stored.credential).toMatchObject({ lastUsedAt: now });
+    expect(stored.usage).toEqual([expect.objectContaining({ organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId, kind: "model_tokens", quantity: 12 })]);
+    expect(JSON.stringify(stored.usage)).not.toContain("ciphertext");
+  });
+
   it("keeps review filters separate for repositories with the same name", async () => {
     const t = convexTest(schema, modules);
     const alpha = await seedTenant(t, "alpha", "alice");

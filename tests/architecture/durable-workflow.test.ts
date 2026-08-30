@@ -21,4 +21,14 @@ describe("durable review crash recovery", () => {
     expect(worker).toBeGreaterThan(-1);
     expect(checkpoint).toBeGreaterThan(worker);
   });
+
+  it("executes the real model analysis worker before its checkpoint", () => {
+    const source = readFileSync("convex/durableReview.ts", "utf8");
+    const worker = source.indexOf("step.runAction(internal.reviewAnalysisWorker.analyze");
+    const analysisBranch = source.indexOf('stage === "analysis"');
+    const checkpoint = source.indexOf("step.runMutation(internal.durableReview.checkpoint", worker);
+    expect(analysisBranch).toBeGreaterThan(-1);
+    expect(worker).toBeGreaterThan(analysisBranch);
+    expect(checkpoint).toBeGreaterThan(worker);
+  });
 });

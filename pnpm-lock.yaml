@@ -14,6 +14,12 @@ importers:
       '@buildit/github':
         specifier: workspace:*
         version: link:packages/github
+      '@buildit/orchestrator':
+        specifier: workspace:*
+        version: link:packages/orchestrator
+      '@buildit/providers':
+        specifier: workspace:*
+        version: link:packages/providers
       '@buildit/security':
         specifier: workspace:*
         version: link:packages/security
