@@ -28,7 +28,21 @@ export const scope = internalQuery({
     if (!installation || installation.status !== "active") throw new Error("installation_unavailable");
     const repository = await ctx.db.query("repositories").withIndex("by_github_id", q => q.eq("githubRepositoryId", args.githubRepositoryId)).unique();
     if (!repository || !repository.enabled || repository.installationId !== installation._id || repository.organizationId !== installation.organizationId) throw new Error("repository_unavailable");
-    return { organizationId: installation.organizationId, repositoryId: repository._id, owner: repository.owner, name: repository.name };
+    return { organizationId: installation.organizationId, repositoryId: repository._id, owner: repository.owner, name: repository.name, forkPolicy: repository.forkPolicy };
+  },
+});
+
+export const recordPinnedSnapshot = internalMutation({
+  args: { deliveryId: v.string(), prNumber: v.number(), headSha: v.string(), baseSha: v.string(),
+    headRefHash: v.string(), baseRefHash: v.string(), isFork: v.boolean(), triggerVerb: v.union(v.literal("review"), v.literal("autofix")) },
+  handler: async (ctx, args) => {
+    if (!Number.isInteger(args.prNumber) || args.prNumber < 1 || !/^[0-9a-f]{40}$/i.test(args.headSha)
+      || !/^[0-9a-f]{40}$/i.test(args.baseSha) || !/^[0-9a-f]{64}$/i.test(args.headRefHash)
+      || !/^[0-9a-f]{64}$/i.test(args.baseRefHash)) throw new Error("invalid_pull_request_snapshot");
+    const delivery = await ctx.db.query("webhookDeliveries").withIndex("by_delivery_id", q => q.eq("deliveryId", args.deliveryId)).unique();
+    if (!delivery || delivery.status !== "received" || delivery.disposition !== "processed") throw new Error("delivery_not_reservable");
+    await ctx.db.patch(delivery._id, { ...args, headSha: args.headSha.toLowerCase(), baseSha: args.baseSha.toLowerCase() });
+    return delivery._id;
   },
 });
 

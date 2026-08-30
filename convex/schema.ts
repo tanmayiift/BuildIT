@@ -230,7 +230,10 @@ export default defineSchema({
   webhookDeliveries: defineTable({
     deliveryId: v.string(), event: v.string(), action: v.string(), installationId: v.optional(v.number()),
     signatureValid: v.boolean(), disposition: value.webhookDisposition, status: value.webhookStatus,
-    reviewId: v.optional(v.id("reviews")), receivedAt: v.number(), completedAt: v.optional(v.number()),
+    reviewId: v.optional(v.id("reviews")), prNumber: v.optional(v.number()), headSha: v.optional(v.string()),
+    baseSha: v.optional(v.string()), headRefHash: v.optional(v.string()), baseRefHash: v.optional(v.string()),
+    isFork: v.optional(v.boolean()), triggerVerb: v.optional(value.triggerVerb),
+    receivedAt: v.number(), completedAt: v.optional(v.number()),
   }).index("by_delivery_id", ["deliveryId"])
     .index("by_status_received", ["status", "receivedAt"]),
 

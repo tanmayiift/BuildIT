@@ -2,7 +2,7 @@
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { authorizeTrigger, GitHubAppClient } from "@buildit/github";
+import { authorizeTrigger, GitHubAppClient, pinPullRequest, reviewPolicy } from "@buildit/github";
 
 export const processWebhook = internalAction({
   args: { deliveryId: v.string(), installationId: v.number(), githubRepositoryId: v.number(), prNumber: v.number(), senderLogin: v.string(), senderType: v.string(), commentAction: v.string(), command: v.string() },
@@ -18,12 +18,40 @@ export const processWebhook = internalAction({
       const raw = (await response.json() as { permission?: string }).permission;
       const permission = raw === "admin" || raw === "maintain" || raw === "write" || raw === "triage" || raw === "read" ? raw : "read";
       const decision = authorizeTrigger({ deliveryId: args.deliveryId, action: args.commentAction, senderType: args.senderType, body: args.command, permission });
-      await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: decision.accepted ? "processed" : "rejected", status: decision.accepted ? "enqueued" : "completed", now: Date.now() });
+      if (!decision.accepted) {
+        await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "rejected", status: "completed", now: Date.now() });
+        return;
+      }
+      if (decision.kind === "cancel") {
+        await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "rejected", status: "completed", now: Date.now() });
+        return;
+      }
+      const pullResponse = await client.withToken({ installationId: args.installationId, repositoryId: args.githubRepositoryId, stage: "review" }, token => fetch(`https://api.github.com/repos/${encodeURIComponent(scope.owner)}/${encodeURIComponent(scope.name)}/pulls/${args.prNumber}`, { headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "BuildIT" } }));
+      if (!pullResponse.ok) throw new Error(`pull_request_lookup_${pullResponse.status}`);
+      const pull = await pullResponse.json() as { number?: number; head?: { sha?: string; ref?: string; repo?: { full_name?: string } | null }; base?: { sha?: string; ref?: string; repo?: { full_name?: string } } };
+      const snapshot = pinPullRequest({ number: pull.number ?? args.prNumber,
+        head: { sha: pull.head?.sha ?? "", ref: pull.head?.ref ?? "", repoFullName: pull.head?.repo?.full_name ?? null },
+        base: { sha: pull.base?.sha ?? "", ref: pull.base?.ref ?? "", repoFullName: pull.base?.repo?.full_name ?? "" } });
+      const mode: "review" | "autofix" = decision.kind === "autofix" ? "autofix" : "review";
+      if (!reviewPolicy(snapshot, mode, scope.forkPolicy).allowed) {
+        await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "rejected", status: "completed", now: Date.now() });
+        return;
+      }
+      await ctx.runMutation(internal.githubWebhookData.recordPinnedSnapshot, { deliveryId: args.deliveryId, prNumber: snapshot.number,
+        headSha: snapshot.headSha, baseSha: snapshot.baseSha,
+        headRefHash: await sha256(snapshot.headRef), baseRefHash: await sha256(snapshot.baseRef),
+        isFork: snapshot.isFork, triggerVerb: mode });
+      await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "processed", status: "enqueued", now: Date.now() });
     } catch {
       await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "rejected", status: "failed", now: Date.now() });
     }
   },
 });
+
+async function sha256(value: string) {
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, "0")).join("");
+}
 
 export const processPullRequestWebhook = internalAction({
   args: { deliveryId: v.string(), installationId: v.number(), githubRepositoryId: v.number(), prNumber: v.number(), headSha: v.string() },
