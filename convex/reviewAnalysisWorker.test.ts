@@ -30,6 +30,12 @@ describe("bounded model evidence selection", () => {
     expect(result.coverage).toBe("partial");
   });
 
+  it("removes secret-looking values from every model-bound text source", () => {
+    const secret = "super-secret-value-123", result = boundedAnalysisContext([{ pull: { ...pull, title: `token=${secret}`, body: `password=${secret}`, files: [{ path: "src/a.ts", status: "modified", patch: `api_key=${secret}` }], requirementSources: [{ id: "linked-1", type: "github_issue", status: "available", version: "v1", urlHash: "a".repeat(64), content: `access_token=${secret}` }], requirements: [{ id: "r1", text: `client_secret=${secret}`, sourceId: "linked-1", line: 1, evidenceHash: "b".repeat(64), certainty: "explicit" }] }, snapshot: { coverage: "full", omitted: [], files: [{ path: "src/a.ts", content: `auth_token=${secret}\nexport const ok = true`, size: 1 }] } }], 80_000);
+    expect(JSON.stringify(result)).not.toContain(secret);
+    expect(result.files[0]?.endLine).toBe(2);
+  });
+
   it("requires pull-request intent and changed-file context", () => {
     expect(() => boundedAnalysisContext([{ snapshot: { coverage: "full", omitted: [], files: [] } }], 500)).toThrow("pull_request_context_missing");
   });

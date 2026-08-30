@@ -24,6 +24,15 @@ export async function rotateEnvelope(value:EnvelopeCiphertext,scope:CredentialAa
 }
 const patterns=[/\b(?:sk-ant-|sk-proj[-_]|gh[opsu]_)[A-Za-z0-9_-]{8,}\b/g,/\bAIza[0-9A-Za-z_-]{30,}\b/g,/\bAKIA[A-Z0-9]{16}\b/g,/-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----/g];
 export function redact(input:string){return patterns.reduce((v,p)=>v.replace(p,"[REDACTED]"),input)}
+const modelSecretPatterns=[
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
+  /\b(?:sk-ant-|sk-proj[-_]|gh[opsu]_)[A-Za-z0-9_-]{8,}\b/g,
+  /\bAIza[0-9A-Za-z_-]{30,}\b/g,
+  /\bAKIA[A-Z0-9]{16}\b/g,
+  /\bBearer\s+[A-Za-z0-9._~+/-]{16,}={0,2}\b/gi,
+  /\b(?:api[_-]?key|token|access[_-]?token|auth[_-]?token|client[_-]?secret|password)\s*[:=]\s*["']?[A-Za-z0-9_./+@:$=-]{16,}["']?/gi,
+];
+export function redactForModel(input:string){return modelSecretPatterns.reduce((value,pattern)=>value.replace(pattern,match=>"[REDACTED]"+"\n".repeat((match.match(/\n/g)??[]).length)),input)}
 export function fingerprint(value:string,key:Buffer){return createHmac("sha256",key).update(value).digest("hex")}
 export function sanitizeGitHub(input:string){return redact(input).replace(/@/g,"＠").replace(/<img[^>]*>/gi,"").replace(/<script[\s\S]*?<\/script>/gi,"")}
 export { AwsKmsClient } from "./aws-kms.js";

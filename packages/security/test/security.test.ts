@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
-import { credentialAad, decryptSecret, encryptSecret, envelopeDecryptSecret, envelopeEncryptSecret, fingerprint, type KmsClient, redact, rotateEnvelope, sanitizeGitHub } from "../src/index.js";
+import { credentialAad, decryptSecret, encryptSecret, envelopeDecryptSecret, envelopeEncryptSecret, fingerprint, type KmsClient, redact, redactForModel, rotateEnvelope, sanitizeGitHub } from "../src/index.js";
 
 describe("security", () => {
   it("binds ciphertext to the exact organization, repository, credential, and purpose", () => {
@@ -30,6 +30,14 @@ describe("security", () => {
     expect(redact("token sk-proj_abcdefghijk")).not.toContain("abcdefghijk");
     const gemini = ["AI", "za", "SyA", "1234567890", "1234567890", "1234567890"].join("");
     expect(redact(`gemini ${gemini}`)).toBe("gemini [REDACTED]");
+  });
+
+  it("redacts model-bound credentials without shifting evidence lines", () => {
+    const input = "first\npassword='super-secret-value-123'\n-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----\nlast";
+    const output = redactForModel(input);
+    expect(output).not.toContain("super-secret-value-123");
+    expect(output).not.toContain("abc123");
+    expect(output.split("\n")).toHaveLength(input.split("\n").length);
   });
 
   it("uses a separate wrapped data key and binds KMS unwrap to the tenant scope", async () => {

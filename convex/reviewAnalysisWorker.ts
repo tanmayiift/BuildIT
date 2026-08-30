@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { arbitrateFindings, reconcileArbitration, runModelReviewChain, validateFindingCandidates, type ArbitrationDecision, type CriticDecision, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, type PromptStage } from "@buildit/orchestrator";
 import type { ProviderName, ProviderResult } from "@buildit/providers";
-import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact } from "@buildit/security";
+import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact, redactForModel } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 type RequirementSourceType = "pull_request" | "github_issue" | "linear" | "jira" | "repository_document" | "test";
@@ -40,21 +40,21 @@ export function boundedValidationEvidence(value: ValidationArtifact, pinned: { h
 export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_000) {
   const headChunks = chunks.filter(chunk => chunk.revision !== "base"), pull = headChunks.find(chunk => chunk.pull)?.pull;
   if (!pull) throw new Error("pull_request_context_missing");
-  const body = pull.body.slice(0, 30_000), bodyTruncated = body.length !== pull.body.length, changes: Array<{ path: string; status: string; patch?: string }> = [], patchPaths: string[] = [];
+  const rawBody = pull.body.slice(0, 30_000), body = redactForModel(rawBody), bodyTruncated = rawBody.length !== pull.body.length, changes: Array<{ path: string; status: string; patch?: string }> = [], patchPaths: string[] = [];
   let patchBudget = 30_000;
   for (const file of pull.files) {
-    const patch = file.patch?.slice(0, Math.max(0, patchBudget));
-    if (patch) patchBudget -= patch.length;
-    if (file.patch && patch?.length !== file.patch.length) patchPaths.push(file.path);
+    const rawPatch = file.patch?.slice(0, Math.max(0, patchBudget)), patch = rawPatch === undefined ? undefined : redactForModel(rawPatch);
+    if (rawPatch) patchBudget -= rawPatch.length;
+    if (file.patch && rawPatch?.length !== file.patch.length) patchPaths.push(file.path);
     changes.push({ path: file.path, status: file.status, ...(patch ? { patch } : {}) });
   }
   let requirementBudget = 20_000, requirementTruncated = false;
-  const requirementSources = (pull.requirementSources ?? []).map(source => { const content = source.content?.slice(0, Math.max(0, requirementBudget)); if (source.content && content?.length !== source.content.length) requirementTruncated = true; requirementBudget -= Buffer.byteLength(content ?? ""); return { ...source, ...(content === undefined ? {} : { content }) }; });
+  const requirementSources = (pull.requirementSources ?? []).map(source => { const rawContent = source.content?.slice(0, Math.max(0, requirementBudget)), content = rawContent === undefined ? undefined : redactForModel(rawContent); if (source.content && rawContent?.length !== source.content.length) requirementTruncated = true; requirementBudget -= Buffer.byteLength(rawContent ?? ""); return { ...source, ...(content === undefined ? {} : { content }) }; });
   const changed = new Set(changes.map(file => file.path)), files: Array<{ evidenceId: string; path: string; content: string; startLine: number; endLine: number; contentHash: string }> = [], excluded: string[] = [];
-  const base = { pull: { title: pull.title, body, bodyTruncated, changes, urlHash: pull.urlHash, requirementCoverage: pull.requirementCoverage ?? "partial", requirementSources, requirements: pull.requirements ?? [] }, files, exclusions: { paths: excluded, patchPaths, source: headChunks.flatMap(chunk => chunk.snapshot.omitted), pull: pull.omitted } };
+  const base = { pull: { title: redactForModel(pull.title), body, bodyTruncated, changes, urlHash: pull.urlHash, requirementCoverage: pull.requirementCoverage ?? "partial", requirementSources, requirements: (pull.requirements ?? []).map(item => ({ ...item, text: redactForModel(item.text) })) }, files, exclusions: { paths: excluded, patchPaths, source: headChunks.flatMap(chunk => chunk.snapshot.omitted), pull: pull.omitted } };
   let bytes = Buffer.byteLength(JSON.stringify(base));
   for (const file of headChunks.flatMap(chunk => chunk.snapshot.files).sort((a, b) => Number(changed.has(b.path)) - Number(changed.has(a.path)) || a.path.localeCompare(b.path))) {
-    const evidence = sourceEvidence(file.path, file.content), item = { ...evidence, content: file.content }, size = Buffer.byteLength(JSON.stringify(item));
+    const evidence = sourceEvidence(file.path, file.content), item = { ...evidence, content: redactForModel(file.content) }, size = Buffer.byteLength(JSON.stringify(item));
     if (bytes + size > maxBytes) { excluded.push(file.path); continue; }
     files.push(item); bytes += size;
   }
