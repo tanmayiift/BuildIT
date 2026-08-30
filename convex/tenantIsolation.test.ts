@@ -557,6 +557,7 @@ describe("Convex tenant isolation", () => {
       isFork: false,
       actorId: "alice",
       actorRole: "admin",
+      expectedCredentialScopeId: "credential-test",
       now,
     });
     const asAlice = t.withIdentity({ subject: "alice|session" });
@@ -613,6 +614,7 @@ describe("Convex tenant isolation", () => {
       isFork: false,
       actorId: "alice",
       actorRole: "developer",
+      expectedCredentialScopeId: "credential-test",
       now: Date.now(),
     });
     expect(await t.run((ctx) => ctx.db.get(created.reviewId))).toMatchObject({
@@ -624,6 +626,18 @@ describe("Convex tenant isolation", () => {
       headSha: "c".repeat(40),
       status: "queued",
     });
+    await expect(t.mutation(internal.dashboardReviewData.create, {
+      repositoryId: alpha.repositoryId,
+      prNumber: 3,
+      headSha: "d".repeat(40),
+      baseSha: "b".repeat(40),
+      baseRef: "main",
+      isFork: false,
+      actorId: "alice",
+      actorRole: "developer",
+      expectedCredentialScopeId: "replaced-after-preview",
+      now: Date.now(),
+    })).rejects.toThrow("provider_credential_changed_review_again");
     const [event, audit] = await t.run(async (ctx) =>
       Promise.all([
         ctx.db
@@ -681,6 +695,7 @@ describe("Convex tenant isolation", () => {
         isFork: false,
         actorId: "viewer",
         actorRole: "developer",
+        expectedCredentialScopeId: "credential-test",
         now: Date.now(),
       }),
     ).rejects.toThrow("not_found_or_forbidden");

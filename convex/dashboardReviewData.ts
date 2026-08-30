@@ -8,16 +8,20 @@ export const scope = internalQuery({
   handler: async (ctx, args) => {
     const access = await requireRepositoryRole(ctx, args.repositoryId, "developer");
     if (access.role === "viewer") throw new ConvexError("not_found_or_forbidden");
+    const credentials = await ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", access.repository.organizationId).eq("status", "valid")).collect();
+    const credential = credentials.find(item => item.repositoryId === access.repository._id) ?? credentials.find(item => item.repositoryId === undefined);
+    if (!credential) throw new ConvexError("provider_credential_invalid");
+    const model = credential.provider === "gemini" ? "gemini-2.5-pro" : credential.provider === "openai" ? "gpt-5" : "claude-sonnet-4-5";
     return { actorId: access.userId, actorRole: access.role, organizationId: access.repository.organizationId,
       repositoryId: access.repository._id, githubRepositoryId: access.repository.githubRepositoryId,
       installationId: access.installation.installationId, owner: access.repository.owner, name: access.repository.name,
-      forkPolicy: access.repository.forkPolicy };
+      forkPolicy: access.repository.forkPolicy, credentialScopeId: credential.credentialScopeId, provider: credential.provider, model };
   },
 });
 
 export const create = internalMutation({
   args: { repositoryId: v.id("repositories"), prNumber: v.number(), headSha: v.string(), baseSha: v.string(),
-    baseRef: v.string(), isFork: v.boolean(), actorId: v.string(), actorRole: v.union(v.literal("developer"), v.literal("admin"), v.literal("owner")), now: v.number() },
+    baseRef: v.string(), isFork: v.boolean(), actorId: v.string(), actorRole: v.union(v.literal("developer"), v.literal("admin"), v.literal("owner")), expectedCredentialScopeId: v.string(), now: v.number() },
   handler: async (ctx, args) => {
     const repository = await ctx.db.get(args.repositoryId);
     if (!repository || !repository.enabled || !Number.isInteger(args.prNumber) || args.prNumber < 1
@@ -39,7 +43,7 @@ export const create = internalMutation({
     if (!config) throw new ConvexError("configuration_unavailable");
     const credentials = await ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", repository.organizationId).eq("status", "valid")).collect();
     const credential = credentials.find(item => item.repositoryId === repository._id) ?? credentials.find(item => item.repositoryId === undefined);
-    if (!credential) throw new ConvexError("provider_credential_invalid");
+    if (!credential || credential.credentialScopeId !== args.expectedCredentialScopeId) throw new ConvexError("provider_credential_changed_review_again");
     const model = credential.provider === "gemini" ? "gemini-2.5-pro" : credential.provider === "openai" ? "gpt-5" : "claude-sonnet-4-5";
     const reviewId = await ctx.db.insert("reviews", { organizationId: repository.organizationId, repositoryId: repository._id,
       githubRepositoryId: repository.githubRepositoryId, prNumber: args.prNumber, isFork: args.isFork, baseRef: args.baseRef,
