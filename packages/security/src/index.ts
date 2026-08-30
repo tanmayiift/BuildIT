@@ -22,7 +22,7 @@ export async function rotateEnvelope(value:EnvelopeCiphertext,scope:CredentialAa
  const wrapped=await kms.rewrapDataKey({sourceKeyId:value.kmsKeyId,destinationKeyId,encryptedKey:Buffer.from(value.wrappedDataKey,"base64"),encryptionContext:kmsContext(scope)});
  return{...value,wrappedDataKey:Buffer.from(wrapped).toString("base64"),kmsKeyId:destinationKeyId,keyVersion:nextKeyVersion};
 }
-const patterns=[/\b(?:sk-ant-|sk-proj[-_]|gh[opsu]_)[A-Za-z0-9_-]{8,}\b/g,/\bAKIA[A-Z0-9]{16}\b/g,/-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----/g];
+const patterns=[/\b(?:sk-ant-|sk-proj[-_]|gh[opsu]_)[A-Za-z0-9_-]{8,}\b/g,/\bAIza[0-9A-Za-z_-]{30,}\b/g,/\bAKIA[A-Z0-9]{16}\b/g,/-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----/g];
 export function redact(input:string){return patterns.reduce((v,p)=>v.replace(p,"[REDACTED]"),input)}
 export function fingerprint(value:string,key:Buffer){return createHmac("sha256",key).update(value).digest("hex")}
 export function sanitizeGitHub(input:string){return redact(input).replace(/@/g,"＠").replace(/<img[^>]*>/gi,"").replace(/<script[\s\S]*?<\/script>/gi,"")}

@@ -26,7 +26,10 @@ describe("security", () => {
     expect(fingerprint("x", key)).not.toBe(fingerprint("y", key));
   });
 
-  it("redacts provider keys", () => expect(redact("token sk-proj_abcdefghijk")).not.toContain("abcdefghijk"));
+  it("redacts provider keys", () => {
+    expect(redact("token sk-proj_abcdefghijk")).not.toContain("abcdefghijk");
+    expect(redact("gemini AIzaSyA123456789012345678901234567890")).toBe("gemini [REDACTED]");
+  });
 
   it("uses a separate wrapped data key and binds KMS unwrap to the tenant scope", async () => {
     const wrappingKeys=new Map([["kms-v1",randomBytes(32)],["kms-v2",randomBytes(32)]]),contexts=new Map<string,string>();

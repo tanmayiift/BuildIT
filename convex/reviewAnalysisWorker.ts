@@ -19,6 +19,13 @@ type ValidationArtifact = { version?: number; pinned?: { headSha?: string; baseS
 
 function sourceEvidence(path: string, content: string) { const contentHash = createHash("sha256").update(content).digest("hex"); return { evidenceId: `source-${createHash("sha256").update(`${path}\0${contentHash}`).digest("hex").slice(0, 24)}`, path, contentHash, startLine: 1, endLine: Math.max(1, content.split("\n").length) }; }
 
+export function redactModelOutput<T>(value: T): T {
+  if (typeof value === "string") return redact(value) as T;
+  if (Array.isArray(value)) return value.map(redactModelOutput) as T;
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactModelOutput(item)])) as T;
+  return value;
+}
+
 export function boundedValidationEvidence(value: ValidationArtifact, pinned: { headSha: string; baseSha: string }, maxOutputBytes = 60_000) {
   if (value.version !== 1 || value.pinned?.headSha !== pinned.headSha || value.pinned?.baseSha !== pinned.baseSha || !value.output?.base || !value.output.head) throw new Error("validation_evidence_pinning_failed");
   let remaining = maxOutputBytes;
@@ -75,7 +82,7 @@ export const analyze = internalAction({
     if (validationBody.byteLength !== validation.size || createHash("sha256").update(validationBody).digest("hex") !== validation.checksum) throw new Error("validation_artifact_integrity_failed");
     const validationValue = JSON.parse(validationBody.toString("utf8")) as ValidationArtifact;
     const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }) }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
-    const records = await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
+    const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
       invoke: async (stageRequest: ModelStageRequest): Promise<ProviderResult> => {
         const stage = stageRequest.stage as PromptStage, model = stage === "critic" ? criticModel(scope.provider, scope.model) : scope.model;
         const request = { model, system: stageRequest.system, input: stageRequest.input, schemaName: stageRequest.schemaName, schema: stageRequest.schema, maxOutputTokens: stageRequest.maxOutputTokens };
@@ -86,7 +93,7 @@ export const analyze = internalAction({
         const output = await response.json() as { result?: ProviderResult; error?: string };
         if (!response.ok || !output.result) throw new Error(output.error ?? `model_stage_${response.status}`);
         return output.result;
-      }, onUsage: item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens }); } });
+      }, onUsage: item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens }); } }));
     const headEvidence = new Map<string, { record: EvidenceRecord; artifactId: Id<"artifacts"> }>();
     for (const chunk of chunks.filter(item => item.revision === "head")) for (const file of chunk.snapshot.files) {
       if (!chunk.artifactId) throw new Error("context_artifact_reference_missing");
