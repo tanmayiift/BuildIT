@@ -34,6 +34,34 @@ test("GitHub callback failures are visible and recoverable", async ({ page }) =>
   await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
 });
 
+test("production sign-in control reaches identity-only GitHub OAuth", async ({
+  page,
+}) => {
+  test.skip(
+    !process.env.BUILDIT_E2E_BASE_URL,
+    "Production OAuth proof requires an explicit deployed base URL",
+  );
+  await page.goto("/sign-in?returnTo=%2Frepositories");
+  await page.getByRole("button", { name: "Continue with GitHub" }).click();
+  await page.waitForURL((url) => url.hostname === "github.com", {
+    timeout: 15_000,
+  });
+  const authorization = new URL(page.url());
+  expect(authorization.protocol).toBe("https:");
+  const oauthTarget =
+    authorization.pathname === "/login"
+      ? new URL(authorization.searchParams.get("return_to") ?? "", authorization)
+      : authorization;
+  expect(oauthTarget.hostname).toBe("github.com");
+  expect(oauthTarget.pathname).toBe("/login/oauth/authorize");
+  const scopes = (oauthTarget.searchParams.get("scope") ?? "")
+    .split(/[ ,]+/)
+    .filter(Boolean);
+  expect(scopes).not.toContain("repo");
+  expect(scopes).not.toContain("public_repo");
+  expect(scopes).not.toContain("write:org");
+});
+
 test("permission requests explain benefit, limits, retention, and revocation", async ({ page }) => {
   await page.goto("/sign-in");
   await expect(page.getByText(/does not give BuildIT access to a repository/i)).toBeVisible();
