@@ -41,11 +41,15 @@ export async function handleCredentialSave(request: Request, input: {
     return json(400, { error: "invalid_request" }, origin);
   }
   const token = authorization.slice(7);
+  const organizationId = body.organizationId as string;
+  const repositoryId = body.repositoryId as string | undefined;
+  const provider = body.provider as ProviderName;
+  const apiKey = body.apiKey as string;
   try {
-    const scope = { token, organizationId: body.organizationId, ...(body.repositoryId ? { repositoryId: body.repositoryId } : {}) };
+    const scope = { token, organizationId, ...(repositoryId ? { repositoryId } : {}) };
     const { actorId } = await input.authorize(scope);
-    const saved = await input.broker.save({ actorId, organizationId: body.organizationId,
-      ...(body.repositoryId ? { repositoryId: body.repositoryId } : {}), provider: body.provider as ProviderName, apiKey: body.apiKey });
+    const saved = await input.broker.save({ actorId, organizationId,
+      ...(repositoryId ? { repositoryId } : {}), provider, apiKey });
     return json(201, { credential: saved }, origin);
   } catch (error) {
     const code = error instanceof Error ? error.message : "credential_save_failed";

@@ -5,7 +5,7 @@ import {
   ReEncryptCommand,
   type KMSClientConfig,
 } from "@aws-sdk/client-kms";
-import type { KmsClient, KmsContext } from "./index";
+import type { KmsClient, KmsContext } from "./index.js";
 
 type CommandSender = Pick<KMSClient, "send">;
 

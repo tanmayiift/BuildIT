@@ -27,7 +27,7 @@ export class ProviderClient {
 
   async validateKey(provider: ProviderName, apiKey: string) {
     if (!apiKey || apiKey.length < 16) throw new ProviderError("invalid_key");
-    const config = provider === "anthropic"
+    const config: { url: string; headers: Record<string, string> } = provider === "anthropic"
       ? { url: "https://api.anthropic.com/v1/models?limit=1", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" } }
       : provider === "openai"
         ? { url: "https://api.openai.com/v1/models", headers: { authorization: `Bearer ${apiKey}` } }
