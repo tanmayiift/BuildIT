@@ -53,7 +53,7 @@ export const artifactType = v.union(
   v.literal("finding_content"), v.literal("evidence_excerpt"),
   v.literal("review_message"), v.literal("command_output"),
   v.literal("scanner_output"), v.literal("patch"), v.literal("base_result"),
-  v.literal("prompt_trace"), v.literal("evaluation_report"),
+  v.literal("prompt_trace"), v.literal("evaluation_report"), v.literal("repository_snapshot"),
 );
 export const eventType = v.union(
   v.literal("review_created"), v.literal("stage_started"), v.literal("stage_completed"),

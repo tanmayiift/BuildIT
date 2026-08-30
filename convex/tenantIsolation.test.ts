@@ -334,6 +334,27 @@ describe("Convex tenant isolation", () => {
     await expect(t.withIdentity({ subject: "alice" }).query(api.artifacts.getMetadata, { artifactId: forgedArtifactId })).rejects.toThrow("not_found_or_forbidden");
   });
 
+  it("reserves and completes a repository snapshot only inside the exact review parent chain", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "snapshot-alpha", "alice"), beta = await seedTenant(t, "snapshot-beta", "bob");
+    const review = await t.run(ctx => ctx.db.get(alpha.reviewId));
+    if (!review) throw new Error("missing review");
+    const checksum = "d".repeat(64), now = Date.now();
+    const reserved = await t.mutation(internal.reviewArtifactData.reserve, { organizationId: alpha.organizationId, reviewId: alpha.reviewId,
+      expectedHeadSha: review.headSha, expectedGeneration: review.executionGeneration, checksum, size: 128, chunkIndex: 0, now });
+    await expect(t.mutation(internal.reviewArtifactData.reserve, { organizationId: alpha.organizationId, reviewId: alpha.reviewId,
+      expectedHeadSha: review.headSha, expectedGeneration: review.executionGeneration, checksum, size: 128, chunkIndex: 0, now: now + 1 })).resolves.toMatchObject({ artifactId: reserved.artifactId });
+    expect(reserved.storageKey).toContain(`artifacts/${alpha.organizationId}/${alpha.repositoryId}/${alpha.reviewId}/${reserved.artifactId}/context-0.json`);
+    await expect(t.mutation(internal.reviewArtifactData.complete, { organizationId: beta.organizationId, reviewId: alpha.reviewId,
+      artifactId: reserved.artifactId, checksum, size: 128, coverage: "full", now })).rejects.toThrow("parent_scope_mismatch");
+    await expect(t.mutation(internal.reviewArtifactData.complete, { organizationId: alpha.organizationId, reviewId: alpha.reviewId,
+      artifactId: reserved.artifactId, checksum: "e".repeat(64), size: 128, coverage: "full", now })).rejects.toThrow("artifact_completion_mismatch");
+    await expect(t.mutation(internal.reviewArtifactData.complete, { organizationId: alpha.organizationId, reviewId: alpha.reviewId,
+      artifactId: reserved.artifactId, checksum, size: 128, coverage: "full", now })).resolves.toBe(reserved.artifactId);
+    await expect(t.mutation(internal.reviewArtifactData.complete, { organizationId: alpha.organizationId, reviewId: alpha.reviewId,
+      artifactId: reserved.artifactId, checksum, size: 128, coverage: "full", now: now + 1 })).resolves.toBe(reserved.artifactId);
+    expect(await t.run(ctx => ctx.db.get(reserved.artifactId))).toMatchObject({ redactionStatus: "redacted", organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId });
+  });
+
   it("keeps review filters separate for repositories with the same name", async () => {
     const t = convexTest(schema, modules);
     const alpha = await seedTenant(t, "alpha", "alice");

@@ -14,6 +14,9 @@ importers:
       '@buildit/github':
         specifier: workspace:*
         version: link:packages/github
+      '@buildit/security':
+        specifier: workspace:*
+        version: link:packages/security
       '@convex-dev/auth':
         specifier: ^0.0.95
         version: 0.0.95(@auth/core@0.41.3)(convex@1.45.0(react@19.2.8))(react@19.2.8)

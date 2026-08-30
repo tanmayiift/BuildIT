@@ -42,8 +42,14 @@ export const execute = reviewWorkflowManager.define({
   returns: v.null(),
 }).handler(async (step, args): Promise<null> => {
   for (const [index, stage] of durableReviewStages.entries()) {
+    if (stage === "context") {
+      await step.runAction(internal.reviewContextWorker.gather, {
+        organizationId: args.organizationId, reviewId: args.reviewId,
+        expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
+      });
+    }
     await step.runMutation(internal.durableReview.checkpoint, {
-      ...args, stage, sequence: index + 1, now: args.startedAt + index + 1,
+      ...args, stage, sequence: index + 2, now: args.startedAt + index + 1,
     });
   }
   return null;
