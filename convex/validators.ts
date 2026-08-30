@@ -130,4 +130,6 @@ export const metricName = v.union(
   v.literal("review_duration_ms"), v.literal("runner_failure"),
   v.literal("provider_failure"), v.literal("stale_review"),
   v.literal("human_time_to_merge_ms"), v.literal("reconciliation_lag_ms"),
+  v.literal("effective_loc_added"), v.literal("effective_loc_removed"),
+  v.literal("effective_loc_net"), v.literal("effective_loc_reverted"),
 );

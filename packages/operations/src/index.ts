@@ -4,3 +4,4 @@ export type KillSwitches={reviews:boolean;autofix:boolean;runner:boolean;directP
 export function mayStart(kind:"review"|"autofix",switches:KillSwitches,provider:string){return switches.reviews&&switches.runner&&switches.providers[provider]===true&&(kind==="review"||switches.autofix)}
 export function watchdog(input:{stageStartedAt:number;now:number;thresholdMs:number;terminal:boolean}){return !input.terminal&&input.now-input.stageStartedAt>input.thresholdMs?"reconcile":"healthy"}
 export function hashAudit(previous:string,event:string){return crypto.subtle.digest("SHA-256",new TextEncoder().encode(previous+"\n"+event)).then(v=>Buffer.from(v).toString("hex"))}
+export { calculateEffectiveLoc, normalizedExecutableLines, type EffectiveLoc, type SourceFile } from "./effectiveLoc.js";

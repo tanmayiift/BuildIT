@@ -78,7 +78,7 @@ export const completeRound = internalMutation({
 });
 
 export const completeDelivery = internalMutation({
-  args: { ...executionArgs, roundNumber: v.number(), candidateCommitSha: v.string(), reportArtifactId: v.id("artifacts"), now: v.number() },
+  args: { ...executionArgs, roundNumber: v.number(), candidateCommitSha: v.string(), reportArtifactId: v.id("artifacts"), effectiveLoc: v.object({ added: v.number(), removed: v.number(), net: v.number(), reverted: v.number(), eligibleFiles: v.number(), excludedFiles: v.number() }), now: v.number() },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), round = await ctx.db.query("autofixRounds").withIndex("by_review_round", q => q.eq("reviewId", review._id).eq("roundNumber", args.roundNumber)).unique(), report = await ctx.db.get(args.reportArtifactId);
     if (review.status === "delivered" && review.completedAt) return review._id;
@@ -93,6 +93,9 @@ export const completeDelivery = internalMutation({
     const organization = await ctx.db.get(args.organizationId); if (!organization) throw new ConvexError("organization_unavailable");
     const metric = await ctx.db.query("metricEvents").withIndex("by_org_time", q => q.eq("organizationId", args.organizationId)).filter(q => q.and(q.eq(q.field("reviewId"), review._id),q.eq(q.field("name"), "autofix_applied"))).unique();
     if (!metric) await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, name: "autofix_applied", value: 1, organizationTimezone: organization.timezone, occurredAt: args.now });
+    const effectiveMetrics = { effective_loc_added: args.effectiveLoc.added, effective_loc_removed: args.effectiveLoc.removed, effective_loc_net: args.effectiveLoc.net, effective_loc_reverted: args.effectiveLoc.reverted } as const;
+    const existingMetrics = await ctx.db.query("metricEvents").withIndex("by_org_time", q => q.eq("organizationId", args.organizationId)).collect();
+    for (const [name, value] of Object.entries(effectiveMetrics) as Array<[keyof typeof effectiveMetrics, number]>) if (!existingMetrics.some(item => item.reviewId === review._id && item.name === name)) await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, roundId: round._id, name, value, organizationTimezone: organization.timezone, occurredAt: args.now });
     return review._id;
   },
 });

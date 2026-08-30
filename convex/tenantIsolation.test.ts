@@ -2649,6 +2649,7 @@ describe("durable Autofix evidence", () => {
       roundNumber: 1,
       candidateCommitSha,
       reportArtifactId,
+      effectiveLoc: { added: 3, removed: 1, net: 2, reverted: 0, eligibleFiles: 1, excludedFiles: 2 },
       now: now + 1,
     };
     await t.run((ctx) => ctx.db.patch(storedCheckId, { sandboxStopped: false }));
@@ -2670,9 +2671,9 @@ describe("durable Autofix evidence", () => {
       nextActionCode: "human_merge",
       githubCheckConclusion: "success",
     });
-    expect(
-      await t.run((ctx) => ctx.db.query("metricEvents").collect()),
-    ).toHaveLength(1);
+    const metrics = await t.run((ctx) => ctx.db.query("metricEvents").collect());
+    expect(metrics).toHaveLength(5);
+    expect(Object.fromEntries(metrics.map(item => [item.name, item.value]))).toMatchObject({ autofix_applied: 1, effective_loc_added: 3, effective_loc_removed: 1, effective_loc_net: 2, effective_loc_reverted: 0 });
   });
 });
 

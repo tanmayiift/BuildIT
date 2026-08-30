@@ -31,6 +31,7 @@ import {
   redactForModel,
 } from "@buildit/security";
 import type { ProviderResult } from "@buildit/providers";
+import { calculateEffectiveLoc } from "@buildit/operations";
 import {
   detectPackageManager,
   sha256Json,
@@ -873,13 +874,20 @@ export const deliverPassed = internalAction({
         status: "completed",
         now: Date.now(),
       });
-      const results = validation.output.head.results,
+      const [deliveredFrom, deliveredCandidate] = await Promise.all([
+          new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId, commitSha: scope.headSha, limits: { maxFiles: 10_000, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
+          new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId, commitSha: passed.candidateCommitSha, limits: { maxFiles: 10_000, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
+        ]);
+      if (deliveredFrom.coverage !== "full" || deliveredCandidate.coverage !== "full") throw new Error("effective_loc_context_partial");
+      const effectiveLoc = calculateEffectiveLoc(deliveredFrom.files, deliveredCandidate.files),
+        results = validation.output.head.results,
         reportText = [
           `## BuildIT Autofix: delivered for human review`,
           `Original PR head: \`${scope.headSha}\``,
           `Candidate: \`${passed.candidateCommitSha}\``,
           `Stacked PR: ${stacked.url}`,
           `Rounds completed: **${passed.roundNumber} of 3 maximum**`,
+          `Effective LOC: **+${effectiveLoc.added} / -${effectiveLoc.removed}** executable lines (comments, formatting, generated files, and lockfiles excluded)`,
           ``,
           `### Final required checks`,
           ...results
@@ -969,6 +977,7 @@ export const deliverPassed = internalAction({
         roundNumber: passed.roundNumber,
         candidateCommitSha: passed.candidateCommitSha,
         reportArtifactId: report.id,
+        effectiveLoc,
         now: Date.now(),
       });
       return {
