@@ -12,13 +12,13 @@ test("overview leads through the review queue to exact-commit evidence", async (
   await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
 });
 
-test("setup protects the model key and permits skipping it", async ({ page }) => {
+test("setup protects the model key and permits skipping it", async ({ page }, testInfo) => {
   await page.goto("/setup/model");
-  const key = page.getByLabel("API key");
-  await expect(key).toHaveAttribute("type", "password");
-  await expect(key).toBeDisabled();
-  await expect(page.getByText(/will not pretend a key was saved/i)).toBeVisible();
+  await expect(page.getByLabel("API key")).toHaveCount(0);
+  await expect(page.getByText(/sign in before adding a key/i)).toBeVisible();
+  await expect(page.getByText(/separate credential broker/i)).toBeVisible();
   await expect(page.getByText("Optional now")).toBeVisible();
+  await page.screenshot({path:`.local/ui-evidence/model-key-${testInfo.project.name}.png`,fullPage:true});
 });
 
 test("GitHub installation return preserves sign-in and claim context",async({page})=>{await page.goto("/setup/install?installation_id=157557707");const link=page.getByRole("link",{name:"Sign in and return"});await expect(link).toBeVisible();await expect(link).toHaveAttribute("href",/returnTo=.*installation_id%3D157557707/)});
