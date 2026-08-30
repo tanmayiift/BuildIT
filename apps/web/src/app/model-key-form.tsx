@@ -3,6 +3,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuthToken } from "@convex-dev/auth/react";
 import { makeFunctionReference } from "convex/server";
 import { type FormEvent, useEffect, useState } from "react";
+import { credentialErrorCode, credentialErrorMessage, credentialReauthenticationHref, needsFreshCredentialAuthentication, type CredentialErrorCode } from "./model-key-state";
 type Provider = "anthropic" | "openai" | "gemini";
 type Connection = {
   organization: null | { id: string; name: string; role: string };
@@ -37,17 +38,6 @@ const names: Record<Provider, string> = {
   openai: "OpenAI",
   gemini: "Google Gemini",
 };
-function safeMessage(code: string) {
-  if (code === "invalid_key")
-    return "That provider rejected the key. Check its API access, then try again.";
-  if (code === "rate_limited")
-    return "Too many key checks were attempted. Wait 15 minutes before trying again.";
-  if (code === "recent_reauthentication_required")
-    return "For security, sign in with GitHub again before saving a key.";
-  if (code === "not_found_or_forbidden")
-    return "Your access changed. Refresh and check the active organization.";
-  return "The secure key service could not save this key. The key was not stored; try again shortly.";
-}
 export function ModelKeyForm() {
   const [hydrated, setHydrated] = useState(false),
     { isAuthenticated, isLoading } = useConvexAuth(),
@@ -68,13 +58,27 @@ export function ModelKeyForm() {
     [repositoryId, setRepositoryId] = useState(""),
     [replacesCredentialId, setReplacesCredentialId] = useState(""),
     [apiKey, setApiKey] = useState(""),
+    [now, setNow] = useState(0),
     [working, setWorking] = useState(false),
     [result, setResult] = useState<{
       kind: "success" | "error";
       text: string;
+      code?: CredentialErrorCode;
     } | null>(null),
     brokerUrl = process.env.NEXT_PUBLIC_BROKER_URL;
-  useEffect(() => setHydrated(true), []);
+  useEffect(() => {
+    setHydrated(true);
+    setNow(Date.now());
+    const params = new URLSearchParams(window.location.search), requestedProvider = params.get("provider"), requestedRepository = params.get("repository");
+    if (requestedProvider === "anthropic" || requestedProvider === "openai" || requestedProvider === "gemini") setProvider(requestedProvider);
+    if (requestedRepository) setRepositoryId(requestedRepository);
+  }, []);
+  useEffect(() => {
+    const expiresAt = connection?.credentialReauthenticationExpiresAt;
+    if (!expiresAt || expiresAt <= Date.now()) return;
+    const timeout = window.setTimeout(() => setNow(Date.now()), Math.min(expiresAt - Date.now() + 25, 2_147_483_647));
+    return () => window.clearTimeout(timeout);
+  }, [connection?.credentialReauthenticationExpiresAt]);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token || !organization || !brokerUrl || !apiKey) return;
@@ -116,11 +120,11 @@ export function ModelKeyForm() {
         text: `${names[provider]} key ending in ${body.credential?.maskedSuffix ?? "••••"} was validated, encrypted, and ${rotating ? "rotated" : "saved"} for ${scope}.`,
       });
     } catch (error) {
+      const code = credentialErrorCode(error);
       setResult({
         kind: "error",
-        text: safeMessage(
-          error instanceof Error ? error.message : "credential_save_failed",
-        ),
+        text: credentialErrorMessage(code),
+        code,
       });
     } finally {
       setWorking(false);
@@ -141,11 +145,11 @@ export function ModelKeyForm() {
         text: `${names[credential.provider]} key ending in ${credential.maskedSuffix} was revoked. BuildIT will not use it again.`,
       });
     } catch (error) {
+      const code = credentialErrorCode(error);
       setResult({
         kind: "error",
-        text: safeMessage(
-          error instanceof Error ? error.message : "credential_save_failed",
-        ),
+        text: credentialErrorMessage(code),
+        code,
       });
     } finally {
       setWorking(false);
@@ -206,14 +210,15 @@ export function ModelKeyForm() {
         <Boundary />
       </section>
     );
-  if (!connection?.credentialReauthenticationExpiresAt || connection.credentialReauthenticationExpiresAt <= Date.now())
+  const reauthenticationHref = credentialReauthenticationHref(provider, repositoryId);
+  if (needsFreshCredentialAuthentication(connection?.credentialReauthenticationExpiresAt, now))
     return (
       <section className="setup-card">
         <Heading />
         <div className="credential-state">
           <strong>Verify with GitHub before entering a key</strong>
           <p>Your repository access is unchanged. BuildIT requires a fresh GitHub login before an Owner or Admin can add an encrypted model-provider key. This prevents someone using an unattended session from replacing your organization’s key.</p>
-          <a className="button" href="/sign-in?returnTo=%2Fsetup%2Fmodel">Verify with GitHub</a>
+          <a className="button" href={reauthenticationHref}>Verify with GitHub</a>
         </div>
         <KeyTrust />
         <Boundary />
@@ -312,12 +317,10 @@ export function ModelKeyForm() {
           </p>
         ) : null}
         {result ? (
-          <p
-            className={`form-result ${result.kind}`}
-            role={result.kind === "error" ? "alert" : "status"}
-          >
-            {result.text}
-          </p>
+          <div className={`form-result ${result.kind}`} role={result.kind === "error" ? "alert" : "status"}>
+            <span>{result.text}</span>
+            {result.code === "recent_reauthentication_required" ? <a className="button secondary compact" href={reauthenticationHref}>Verify with GitHub</a> : null}
+          </div>
         ) : null}
       </form>
       {credentials?.length ? (

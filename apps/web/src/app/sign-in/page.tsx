@@ -4,7 +4,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useEffect, useState } from "react";
 
 export default function SignIn() {
-  const { signIn } = useAuthActions();
+  const { signIn, signOut } = useAuthActions();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
@@ -18,6 +18,7 @@ export default function SignIn() {
     setError("");
     try {
       const requested=new URLSearchParams(window.location.search).get("returnTo"),redirectTo=requested?.startsWith("/")&&!requested.startsWith("//")?requested:"/";
+      if (new URLSearchParams(window.location.search).get("reauth") === "1") await signOut();
       await signIn("github", { redirectTo });
     } catch {
       setError("GitHub sign-in could not start. No repository access was granted. Please try again.");
