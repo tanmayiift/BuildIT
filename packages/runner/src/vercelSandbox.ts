@@ -9,7 +9,7 @@ export type SandboxLike = {
   updateNetworkPolicy(policy: "deny-all" | { allow: string[] }): Promise<unknown>;
   stop(): Promise<unknown>;
 };
-export type SandboxFactory = (input: { runtime: "node22" | "node24"; timeout: number; resources: { vcpus: number }; networkPolicy: "deny-all"; env: Record<string, string>; region: string; persistent: false }) => Promise<SandboxLike>;
+export type SandboxFactory = (input: { runtime?: "node22" | "node24"; image?: string; timeout: number; resources: { vcpus: number }; networkPolicy: "deny-all"; env: Record<string, string>; region: string; persistent: false }) => Promise<SandboxLike>;
 
 const registryDomains = ["registry.npmjs.org", "registry.yarnpkg.com"];
 const sensitive = /(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|GITHUB_|VERCEL_|CONVEX_|ANTHROPIC_|OPENAI_|GEMINI_|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)/i;
@@ -22,10 +22,14 @@ async function output(result: Finished, limit: number) {
 }
 
 export class VercelSandboxRunner {
-  constructor(private readonly create: SandboxFactory = async input => Sandbox.create(input) as unknown as SandboxLike) {}
+  constructor(private readonly create: SandboxFactory = async input => {
+    const { image, runtime, ...environment } = input;
+    return Sandbox.create(image ? { ...environment, image } : { ...environment, runtime: runtime ?? "node24" }) as unknown as SandboxLike;
+  }) {}
 
   async run(input: {
     runtime: "node22" | "node24";
+    image?: string;
     files: Array<{ path: string; content: string }>;
     install: CommandPlan;
     checks: CommandPlan[];
@@ -33,7 +37,9 @@ export class VercelSandboxRunner {
     if (input.install.planId !== "install" || input.install.network !== "registry_only") throw new Error("sandbox_install_plan_required");
     if (input.checks.some(plan => plan.network !== "none")) throw new Error("sandbox_check_network_must_be_denied");
     const timeout = Math.min(45 * 60_000, input.install.timeoutMs + input.checks.reduce((sum, plan) => sum + plan.timeoutMs, 0) + 60_000);
-    const sandbox = await this.create({ runtime: input.runtime, timeout, resources: { vcpus: 2 }, networkPolicy: "deny-all", env: { CI: "true" }, region: "cdg1", persistent: false });
+    if (input.image && !/@sha256:[0-9a-f]{64}$/.test(input.image)) throw new Error("sandbox_image_must_be_digest_pinned");
+    const environment = { timeout, resources: { vcpus: 2 }, networkPolicy: "deny-all" as const, env: { CI: "true" }, region: "cdg1", persistent: false as const };
+    const sandbox = await this.create(input.image ? { ...environment, image: input.image } : { ...environment, runtime: input.runtime });
     const results: CheckResult[] = [], outputs: Array<{ planId: CommandPlan["planId"]; text: string; truncated: boolean }> = [];
     try {
       const workspace: Workspace = { files: new Map(), environment: { CI: "true" }, tokenRevoked: true };

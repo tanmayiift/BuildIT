@@ -60,6 +60,15 @@ describe("Vercel sandbox runner", () => {
     await expect(runner.run({ runtime: "node22", files: [], install, checks: [{ ...test, network: "registry_only" }] })).rejects.toThrow("sandbox_check_network_must_be_denied");
   });
 
+  it("accepts only a digest-pinned custom image", async () => {
+    const f = fixture(), runner = new VercelSandboxRunner(f.create);
+    await expect(runner.run({ runtime: "node24", image: "runner:latest", files: [], install, checks: [test] })).rejects.toThrow("sandbox_image_must_be_digest_pinned");
+    const image = `buildit-runner@sha256:${"a".repeat(64)}`;
+    await runner.run({ runtime: "node24", image, files: [], install, checks: [test] });
+    expect(f.create.mock.calls[0]![0]).toMatchObject({ image });
+    expect(f.create.mock.calls[0]![0]).not.toHaveProperty("runtime");
+  });
+
   it("rejects repository-owned package-manager hooks and credential configuration", async () => {
     for (const path of [".git/config", ".npmrc", ".yarnrc.yml", ".yarn/plugins/attack.cjs", ".pnpmfile.cjs"]) {
       const f = fixture();

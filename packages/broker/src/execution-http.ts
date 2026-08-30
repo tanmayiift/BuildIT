@@ -7,6 +7,7 @@ import type { ArtifactBroker } from "./artifacts.js";
 type Descriptor = { revision: "base" | "head"; artifactId: string; storageKey: string; checksum: string; size: number; readGrant: string };
 type Body = { organizationId: string; repositoryId: string; reviewId: string; baseSha: string; headSha: string; runtime: "node22" | "node24"; artifacts: Descriptor[]; install: CommandPlan; checks: CommandPlan[] };
 type Runner = Pick<VercelSandboxRunner, "run">;
+export function pinnedSandboxImage(value: string | undefined) { if (!value || !/@sha256:[0-9a-f]{64}$/.test(value)) throw new Error("sandbox_image_unavailable"); return value; }
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const descriptorsForHash = (items: Descriptor[]) => items.map(({ readGrant: _, ...item }) => item);
 function json(status: number, body: Record<string, unknown>) { return Response.json(body, { status, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } }); }
@@ -36,7 +37,7 @@ export async function handleExecution(request: Request, input: { artifactBroker:
       for (const file of chunk.snapshot.files) { if (typeof file.path !== "string" || typeof file.content !== "string" || files[descriptor.revision].has(file.path)) throw new Error("artifact_file_conflict"); files[descriptor.revision].set(file.path, file.content); }
     }
     if (!files.base.size || !files.head.size) throw new Error("base_head_context_incomplete");
-    const runner = input.runner ?? new VercelSandboxRunner(), execute = async (revision: "base" | "head") => runner.run({ runtime: body.runtime, files: [...files[revision]].map(([path, content]) => ({ path, content })), install, checks });
+    const runner = input.runner ?? new VercelSandboxRunner(), image = input.runner ? undefined : pinnedSandboxImage(process.env.BUILDIT_SANDBOX_IMAGE), execute = async (revision: "base" | "head") => runner.run({ runtime: body.runtime, ...(image ? { image } : {}), files: [...files[revision]].map(([path, content]) => ({ path, content })), install, checks });
     const [baseResult, headResult] = await Promise.all([execute("base"), execute("head")]);
     const bounded = (result: Awaited<ReturnType<Runner["run"]>>) => ({ credentialTeardownProved: result.credentialTeardownProved, stopped: result.stopped, results: result.results, outputs: result.outputs.map(output => ({ ...output, evidenceTruncated: output.text.length > 250_000, text: output.text.slice(0, 250_000) })) });
     return json(200, { base: bounded(baseResult), head: bounded(headResult), scanners: { base: scanBuildITRules([...files.base].map(([path, content]) => ({ path, content })), body.baseSha), head: scanBuildITRules([...files.head].map(([path, content]) => ({ path, content })), body.headSha) } });

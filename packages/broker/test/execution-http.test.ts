@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { issueExecutionGrant } from "@buildit/security";
 import { defaultExecutionPlans } from "@buildit/runner";
-import { handleExecution } from "../src/execution-http";
+import { handleExecution, pinnedSandboxImage } from "../src/execution-http";
 
 const secret = new Uint8Array(32).fill(3), now = 1_000, baseSha = "b".repeat(40), headSha = "a".repeat(40), plans = defaultExecutionPlans("pnpm");
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -20,6 +20,11 @@ function dependencies() {
 }
 
 describe("native base/head execution boundary", () => {
+  it("fails closed unless the hosted scanner image uses an immutable digest", () => {
+    expect(() => pinnedSandboxImage(undefined)).toThrow("sandbox_image_unavailable");
+    expect(() => pinnedSandboxImage("buildit-runner:latest")).toThrow("sandbox_image_unavailable");
+    expect(pinnedSandboxImage(`buildit-runner@sha256:${"a".repeat(64)}`)).toContain("@sha256:");
+  });
   it("runs exact trusted plans on both revisions and returns bounded deterministic evidence", async () => {
     const f = fixture(), deps = dependencies();
     const response = await handleExecution(new Request("https://broker/api/execute", { method: "POST", headers: { authorization: `Bearer ${f.grant}` }, body: JSON.stringify(f.body) }), { artifactBroker: deps.artifactBroker as never, runner: deps.runner as never, grantSecret: secret, consume: async () => true, now });
