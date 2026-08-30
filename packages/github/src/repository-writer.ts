@@ -52,4 +52,23 @@ export class GitHubRepositoryWriter {
     if (typeof value.id !== "number" || typeof value.html_url !== "string") throw new Error("github_check_run_malformed");
     return { id: value.id, url: value.html_url };
   }
+  async upsertCheckRun(input: { name: string; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; title: string; summary: string }) {
+    if (!/^[0-9a-f]{40}$/i.test(input.headSha) || !input.name.trim() || !input.title.trim() || !input.summary.trim()) throw new Error("check_run_input_invalid");
+    const existing = await this.request(`/commits/${input.headSha}/check-runs?check_name=${encodeURIComponent(input.name)}&filter=latest&per_page=100`);
+    const run = Array.isArray(existing.check_runs) ? (existing.check_runs as Array<{ id?: unknown; name?: unknown; app?: { slug?: unknown } }>).find(item => item.name === input.name && item.app?.slug === "buildit-agentic-review") : undefined;
+    const body = JSON.stringify({ name: input.name, head_sha: input.headSha, status: "completed", conclusion: input.conclusion, output: { title: input.title, summary: input.summary } });
+    const value = run && typeof run.id === "number" ? await this.request(`/check-runs/${run.id}`, { method: "PATCH", body }) : await this.request("/check-runs", { method: "POST", body });
+    if (typeof value.id !== "number" || typeof value.html_url !== "string") throw new Error("github_check_run_malformed");
+    return { id: value.id, url: value.html_url, operation: run ? "updated" as const : "created" as const };
+  }
+  async upsertIssueComment(input: { prNumber: number; marker: string; body: string }) {
+    if (!Number.isInteger(input.prNumber) || input.prNumber < 1 || !/^buildit-review:[A-Za-z0-9_|-]+:[0-9a-f]{40}$/.test(input.marker) || !input.body.trim()) throw new Error("comment_input_invalid");
+    const marker = `<!-- ${input.marker} -->`, body = `${marker}\n${input.body}`;
+    if (Buffer.byteLength(body) > 65_000) throw new Error("comment_too_large");
+    const comments = await this.request(`/issues/${input.prNumber}/comments?per_page=100&sort=created&direction=desc`), items = Array.isArray(comments) ? comments : [];
+    const existing = (items as Array<{ id?: unknown; body?: unknown; user?: { type?: unknown } }>).find(item => item.user?.type === "Bot" && typeof item.body === "string" && item.body.includes(marker));
+    const value = existing && typeof existing.id === "number" ? await this.request(`/issues/comments/${existing.id}`, { method: "PATCH", body: JSON.stringify({ body }) }) : await this.request(`/issues/${input.prNumber}/comments`, { method: "POST", body: JSON.stringify({ body }) });
+    if (typeof value.id !== "number" || typeof value.html_url !== "string") throw new Error("github_comment_malformed");
+    return { id: value.id, url: value.html_url, operation: existing ? "updated" as const : "created" as const };
+  }
 }
