@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { issueExecutionGrant } from "@buildit/security";
-import { defaultExecutionPlans, handleExecution } from "../src/execution-http";
+import { defaultExecutionPlans } from "@buildit/runner";
+import { handleExecution } from "../src/execution-http";
 
 const secret = new Uint8Array(32).fill(3), now = 1_000, baseSha = "b".repeat(40), headSha = "a".repeat(40), plans = defaultExecutionPlans("pnpm");
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");

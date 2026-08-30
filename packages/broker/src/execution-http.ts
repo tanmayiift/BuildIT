@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { createNamedPlan, validatePlan, VercelSandboxRunner, type CommandPlan } from "@buildit/runner";
+import { defaultExecutionPlans, validatePlan, VercelSandboxRunner, type CommandPlan } from "@buildit/runner";
 import { scanBuildITRules } from "@buildit/scanners";
 import { verifyExecutionGrant } from "@buildit/security";
 import type { ArtifactBroker } from "./artifacts.js";
@@ -42,5 +42,3 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     return json(200, { base: bounded(baseResult), head: bounded(headResult), scanners: { base: scanBuildITRules([...files.base].map(([path, content]) => ({ path, content })), body.baseSha), head: scanBuildITRules([...files.head].map(([path, content]) => ({ path, content })), body.headSha) } });
   } catch (error) { const mapped = safe(error); return json(mapped.status, { error: mapped.code }); }
 }
-
-export function defaultExecutionPlans(manager: "npm" | "pnpm" | "yarn") { return { install: { ...createNamedPlan({ planId: "install", manager, origin: "built_in", required: true }), timeoutMs: 90_000 }, checks: ["test", "lint", "typecheck"].map(planId => ({ ...createNamedPlan({ planId: planId as "test" | "lint" | "typecheck", manager, origin: "built_in", required: planId === "test" }), timeoutMs: 45_000 })) }; }
