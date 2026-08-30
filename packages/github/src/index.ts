@@ -4,7 +4,18 @@ export type TriggerInput={deliveryId:string;action:string;senderType:string;body
 const command=/^\s*@buildit\s+(review|autofix|cancel)(?:\s+(stacked))?\s*$/im;
 export function authorizeTrigger(input:TriggerInput){if(input.senderType==="Bot")return{accepted:false as const,reason:"bot"};if(input.action==="edited")return{accepted:false as const,reason:"edited"};const match=input.body.match(command);if(!match)return{accepted:false as const,reason:"no_command"};const kind=match[1]!;const allowed=kind==="review"?["triage","write","maintain","admin"]:["write","maintain","admin"];return allowed.includes(input.permission)?{accepted:true as const,kind,mode:match[2]??"default"}:{accepted:false as const,reason:"permission"}}
 export class DeliveryLedger{#ids=new Set<string>();accept(id:string){if(this.#ids.has(id))return false;this.#ids.add(id);return true}}
-export function trustedConfiguration(input:{defaultBranch:string;trustedRef?:string;headSha:string;trustedSha:string;protectionVerified:boolean;explicitlyApproved:boolean}){const ref=input.trustedRef??input.defaultBranch;if(input.headSha===input.trustedSha)throw new Error("configuration_must_not_come_from_pr_head");return{ref,sha:input.trustedSha,provenance:input.protectionVerified?"protected_ref_merge":input.explicitlyApproved?"explicit_admin_approval":"defaults_only" as const}}
+type TrustedConfigurationInput={defaultBranch:string;trustedRef?:string;headSha:string;trustedSha:string;contentHash:string;protection:{branchProtected:boolean;rulesetProtected:boolean;allowsUntrustedDirectWrites:boolean};approval?:{actorRole:"viewer"|"member"|"admin"|"owner";approvedSha:string}};
+export function trustedConfiguration(input:TrustedConfigurationInput){
+ const validSha=(value:string)=>/^[0-9a-f]{40}$/i.test(value),validHash=(value:string)=>/^[0-9a-f]{64}$/i.test(value);
+ if(!validSha(input.headSha)||!validSha(input.trustedSha)||!validHash(input.contentHash))throw new Error("invalid_configuration_revision");
+ const ref=input.trustedRef??input.defaultBranch,sha=input.trustedSha.toLowerCase();
+ const protectedRef=(input.protection.branchProtected||input.protection.rulesetProtected)&&!input.protection.allowsUntrustedDirectWrites;
+ const approved=Boolean(input.approval&&["admin","owner"].includes(input.approval.actorRole)&&input.approval.approvedSha.toLowerCase()===sha);
+ if(input.headSha.toLowerCase()===sha)return{useRepositoryConfig:false as const,provenance:"defaults_only" as const,reason:"pr_head_untrusted" as const};
+ if(!protectedRef&&!approved)return{useRepositoryConfig:false as const,provenance:"defaults_only" as const,reason:"unverified_ref" as const};
+ const provenance=protectedRef?"protected_ref_merge" as const:"explicit_admin_approval" as const;
+ return{useRepositoryConfig:true as const,ref,sha,contentHash:input.contentHash.toLowerCase(),revisionKey:`${sha}:${input.contentHash.toLowerCase()}`,provenance};
+}
 export function canCommitSensitiveWrite(pinned:string,current:string){return pinned===current}
 export type PullRequestSnapshot={number:number;headSha:string;baseSha:string;headRef:string;baseRef:string;isFork:boolean;fromMergeQueue:boolean};
 export function pinPullRequest(input:{number:number;head:{sha:string;ref:string;repoFullName:string|null};base:{sha:string;ref:string;repoFullName:string};mergeQueueRef?:string}):PullRequestSnapshot{
