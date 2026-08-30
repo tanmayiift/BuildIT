@@ -5,7 +5,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { chunkRepositorySnapshot, GitHubAppClient, GitHubIssueContextClient, PullRequestContextClient, RepositoryContentClient, type PullRequestContext, type RepositorySnapshot } from "@buildit/github";
-import { acquireRequirements } from "@buildit/orchestrator";
+import { acquireRequirements,repositoryRequirementSources } from "@buildit/orchestrator";
 import { issueArtifactGrant } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
@@ -38,15 +38,16 @@ export const gather = internalAction({
       ]);
       const repositoryMatch = pullContext.htmlUrl.match(/^(https:\/\/github\.com\/[^/]+\/[^/]+)\/pull\/\d+$/i);
       if (!repositoryMatch) throw new Error("pull_request_url_invalid");
-      const repositoryUrl = repositoryMatch[1]!, issueClient = new GitHubIssueContextClient();
+      const repositoryUrl = repositoryMatch[1]!, issueClient = new GitHubIssueContextClient(),repositoryIntent=repositoryRequirementSources({files:headSnapshot.files,headSha:scope.headSha,now:Date.now()});
       const intent = await acquireRequirements({ prBody: pullContext.body, prUrl: pullContext.htmlUrl, repositoryUrl, headSha: scope.headSha, now: Date.now(), maxSourceBytes: 250_000, fetch: async link => {
         if (link.type !== "github_issue") return { status: "inaccessible", version: "connection_unavailable" };
         const issueNumber = sameRepositoryIssueNumber(link.url, repositoryUrl);
         if (!issueNumber) return { status: "inaccessible", version: "repository_scope_mismatch" };
         return issueClient.fetch({ installationToken: token, repositoryId: scope.githubRepositoryId, issueNumber, maxBytes: 250_000 });
-      } });
+      },repositorySources:repositoryIntent.sources });
+      const intentCoverage=intent.coverage==="complete"&&repositoryIntent.coverage==="complete"?"complete" as const:"partial" as const;
       const pull = { title: pullContext.title, body: pullContext.body, files: pullContext.files, omitted: pullContext.omitted,
-        urlHash: createHash("sha256").update(pullContext.htmlUrl).digest("hex"), requirementCoverage: intent.coverage,
+        urlHash: createHash("sha256").update(pullContext.htmlUrl).digest("hex"), requirementCoverage: intentCoverage,
         requirementSources: intent.sources.map(source => ({ id: source.id, type: source.type, status: source.status, version: source.version, urlHash: createHash("sha256").update(source.url).digest("hex"),
           ...(source.type === "pull_request" || source.content === undefined ? {} : { content: source.content }) })),
         requirements: intent.requirements };
@@ -68,15 +69,15 @@ export const gather = internalAction({
           await ctx.runQuery(internal.durableReview.assertActive, args);
           const response = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${grant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body });
           if (!response.ok) throw new Error(`artifact_upload_${response.status}`);
-          const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" && intent.coverage === "complete" ? "full" as const : "partial" as const;
+          const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" && intentCoverage === "complete" ? "full" as const : "partial" as const;
           await ctx.runMutation(internal.reviewArtifactData.complete, { organizationId: scope.organizationId, reviewId: scope.reviewId,
             artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, now: Date.now() });
           artifactIds.push(String(reserved.artifactId));
         }
       }
-      const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" && intent.coverage === "complete" ? "full" as const : "partial" as const;
+      const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" && intentCoverage === "complete" ? "full" as const : "partial" as const;
       return { artifactIds, chunkCount, fileCount: headSnapshot.files.length + baseSnapshot.files.length,
-        omittedCount: headSnapshot.omitted.length + baseSnapshot.omitted.length + pullContext.omitted.length + intent.sources.filter(source => source.status !== "available").length, coverage };
+        omittedCount: headSnapshot.omitted.length + baseSnapshot.omitted.length + pullContext.omitted.length + intent.sources.filter(source => source.status !== "available").length+repositoryIntent.omitted.length, coverage };
     } finally { github.revoke(tokenScope); }
   },
 });
