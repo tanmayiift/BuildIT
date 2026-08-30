@@ -183,11 +183,13 @@ describe("Convex tenant isolation", () => {
   it("derives source-free activation only inside the active organization", async () => {
     const t = convexTest(schema, modules), alpha = await seedTenant(t, "activation-alpha", "alice"), beta = await seedTenant(t, "activation-beta", "bob"), asAlice = t.withIdentity({ subject: "alice" });
     await expect(asAlice.query(activationFunnel, { organizationId: beta.organizationId })).rejects.toThrow("not_found_or_forbidden");
-    expect(await asAlice.query(activationFunnel, { organizationId: alpha.organizationId })).toEqual({ repositoryConnected: true, modelKeyReady: true, pullRequestPreviewed: false, reviewStarted: true, firstEvidenceReady: false });
-    await t.mutation(recordPreview, { repositoryId: alpha.repositoryId, actorId: "alice", headSha: "a".repeat(40), now: 10 });
-    await t.run(ctx => ctx.db.insert("reviewEvents", { organizationId: alpha.organizationId, reviewId: alpha.reviewId, sequence: 2, type: "stage_completed", stage: "analysis", internalCode: "analysis_complete", metadata: {}, createdAt: 11 }));
+    const initial = await asAlice.query(activationFunnel, { organizationId: alpha.organizationId });
+    expect(initial).toMatchObject({ repositoryConnected: true, modelKeyReady: true, pullRequestPreviewed: false, reviewStarted: true, firstEvidenceReady: false, chronologyValid: true, outcomes: { started: 1, active: 1 } });
+    const progressedAt = Date.now() + 100;
+    await t.mutation(recordPreview, { repositoryId: alpha.repositoryId, actorId: "alice", headSha: "a".repeat(40), now: progressedAt });
+    await t.run(ctx => ctx.db.insert("reviewEvents", { organizationId: alpha.organizationId, reviewId: alpha.reviewId, sequence: 2, type: "stage_completed", stage: "analysis", internalCode: "analysis_complete", metadata: {}, createdAt: progressedAt + 1 }));
     const progressed = await asAlice.query(activationFunnel, { organizationId: alpha.organizationId });
-    expect(progressed).toMatchObject({ pullRequestPreviewed: true, firstEvidenceReady: true });
+    expect(progressed).toMatchObject({ pullRequestPreviewed: true, firstEvidenceReady: true, chronologyValid: true, durationMs: { repositoryToPreview: expect.any(Number), identityToFirstEvidence: expect.any(Number) } });
     expect(JSON.stringify(progressed)).not.toContain("activation-alpha");
   });
   it("stores a normalized GitHub profile when the account email is private", async () => {
