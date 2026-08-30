@@ -5,6 +5,7 @@ const baseURL = externalBaseUrl ?? "http://127.0.0.1:3107";
 
 export default defineConfig({
   testDir: "tests/e2e",
+  snapshotPathTemplate: "{testDir}/{testFilePath}-snapshots/{arg}-{projectName}{ext}",
   fullyParallel: true,
   use: {
     baseURL,
