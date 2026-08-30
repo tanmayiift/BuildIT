@@ -28,6 +28,18 @@ describe("GitHub candidate writer", () => {
     expect(http).toHaveBeenCalledTimes(2);
   });
   it("reuses an exact branch and open stacked PR after retry",async()=>{const http=vi.fn(async(url:string|URL)=>{const path=String(url);if(path.includes("/git/ref/heads/buildit/pr-2/job"))return new Response(JSON.stringify({object:{sha:candidate}}));if(path.includes("/pulls?"))return new Response(JSON.stringify([{number:4,html_url:"https://github.test/pr/4",head:{ref:"buildit/pr-2/job"},base:{ref:"feature"}}]));return new Response("",{status:500})}),writer=new GitHubRepositoryWriter({repositoryId:7,installationToken:"token",http});await expect(writer.upsertBranch({name:"buildit/pr-2/job",sha:candidate})).resolves.toEqual({operation:"reused"});await expect(writer.upsertStackedPullRequest({head:"buildit/pr-2/job",base:"feature",title:"Fix",body:"Human merge required"})).resolves.toMatchObject({number:4,operation:"reused"});expect(http).toHaveBeenCalledTimes(2)});
+  it("deletes only the exact candidate branch during failed delivery cleanup", async () => {
+    const http = vi.fn(async (_url: string | URL, init?: RequestInit) => init?.method === "DELETE" ? new Response(null, { status: 204 }) : new Response(JSON.stringify({ object: { sha: candidate } })));
+    const writer = new GitHubRepositoryWriter({ repositoryId: 7, installationToken: "token", http });
+    await expect(writer.deleteBranchIfExact({ name: "buildit/pr-2/job", sha: candidate })).resolves.toEqual({ operation: "deleted" });
+    expect(http.mock.calls[1]?.[1]?.method).toBe("DELETE");
+  });
+  it("refuses cleanup when the branch moved and accepts an already-missing branch", async () => {
+    const changed = vi.fn(async () => new Response(JSON.stringify({ object: { sha: head } }))), missing = vi.fn(async () => new Response(null, { status: 404 }));
+    await expect(new GitHubRepositoryWriter({ repositoryId: 7, installationToken: "token", http: changed }).deleteBranchIfExact({ name: "buildit/pr-2/job", sha: candidate })).rejects.toThrow("branch_cleanup_sha_mismatch");
+    expect(changed).toHaveBeenCalledOnce();
+    await expect(new GitHubRepositoryWriter({ repositoryId: 7, installationToken: "token", http: missing }).deleteBranchIfExact({ name: "buildit/pr-2/job", sha: candidate })).resolves.toEqual({ operation: "missing" });
+  });
   it("publishes an exact-commit completed check without merge authority", async () => {
     const http = vi.fn(async (_url: string | URL, init?: RequestInit) => new Response(JSON.stringify({ id: 9, html_url: "https://github.test/check/9", body: init?.body }), { status: 201 }));
     const writer = new GitHubRepositoryWriter({ repositoryId: 7, installationToken: "token", http });

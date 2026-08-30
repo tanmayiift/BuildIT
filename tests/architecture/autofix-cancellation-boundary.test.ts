@@ -42,6 +42,12 @@ describe("Autofix cancellation boundary", () => {
     expectFreshFenceBefore("writer.upsertIssueComment(", 1);
     expectFreshFenceBefore("writer.upsertIssueComment(", 2);
   });
+
+  it("cleans an exact candidate branch only before a stacked PR exists", () => {
+    expect(source).toContain("if (branchReady && !stackedEstablished)");
+    expect(source).toContain("await writer.deleteBranchIfExact({");
+    expect(source).toContain('throw new Error("autofix_branch_cleanup_failed"');
+  });
 });
 
 describe("normal review cancellation boundary", () => {
