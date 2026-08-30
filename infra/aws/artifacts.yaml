@@ -1,0 +1,240 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: BuildIT Ireland-only ephemeral artifact encryption and storage boundary
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [production, staging]
+  BrokerPrincipalArn:
+    Type: String
+    AllowedPattern: '^arn:aws:iam::[0-9]{12}:role/.+$'
+    Description: Dedicated BuildIT content-broker IAM role; never an account root or human user
+  ArtifactRetentionDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    MaxValue: 7
+
+Rules:
+  IrelandOnly:
+    Assertions:
+      - Assert: !Equals [!Ref "AWS::Region", eu-west-1]
+        AssertDescription: BuildIT source-derived artifacts and BYOK wrapping keys must remain in eu-west-1.
+
+Resources:
+  BuildITKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: BuildIT production envelope and ephemeral artifact key (Ireland)
+      EnableKeyRotation: true
+      Enabled: true
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
+      MultiRegion: false
+      PendingWindowInDays: 30
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AccountAdministration
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: "*"
+          - Sid: BrokerEnvelopeOperations
+            Effect: Allow
+            Principal:
+              AWS: !Ref BrokerPrincipalArn
+            Action:
+              - kms:Decrypt
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:ReEncryptFrom
+              - kms:ReEncryptTo
+              - kms:DescribeKey
+            Resource: "*"
+            Condition:
+              StringEquals:
+                aws:RequestedRegion: eu-west-1
+              Null:
+                kms:EncryptionContext:organizationId: "false"
+                kms:EncryptionContext:credentialId: "false"
+                kms:EncryptionContext:purpose: "false"
+  BuildITKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/buildit-${Environment}-eu-west-1
+      TargetKeyId: !Ref BuildITKey
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: ArtifactInventoryBucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub buildit-${Environment}-${AWS::AccountId}-artifacts-eu-west-1
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+            ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !GetAtt BuildITKey.Arn
+              SSEAlgorithm: aws:kms
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpungeEphemeralArtifacts
+            Prefix: artifacts/
+            Status: Enabled
+            ExpirationInDays: !Ref ArtifactRetentionDays
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Suspended
+      InventoryConfigurations:
+        - Id: DailyDeletionAudit
+          Enabled: true
+          IncludedObjectVersions: Current
+          ScheduleFrequency: Daily
+          Destination:
+            BucketArn: !GetAtt ArtifactInventoryBucket.Arn
+            Format: CSV
+            Prefix: inventory
+            Encryption:
+              SSEKMS:
+                KeyId: !GetAtt BuildITKey.Arn
+      Tags:
+        - Key: product
+          Value: buildit
+        - Key: data-class
+          Value: ephemeral-source-derived
+        - Key: region-boundary
+          Value: eu-west-1
+
+  ArtifactInventoryBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub buildit-${Environment}-${AWS::AccountId}-artifact-inventory-eu-west-1
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - BucketKeyEnabled: true
+            ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !GetAtt BuildITKey.Arn
+              SSEAlgorithm: aws:kms
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireDeletionInventory
+            Status: Enabled
+            ExpirationInDays: 14
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Suspended
+
+  ArtifactInventoryBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactInventoryBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt ArtifactInventoryBucket.Arn
+              - !Sub ${ArtifactInventoryBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+          - Sid: AllowS3InventoryDelivery
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub ${ArtifactInventoryBucket.Arn}/inventory/*
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                s3:x-amz-acl: bucket-owner-full-control
+              ArnLike:
+                aws:SourceArn: !Sub arn:${AWS::Partition}:s3:::buildit-${Environment}-${AWS::AccountId}-artifacts-eu-west-1
+
+  ArtifactBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt ArtifactBucket.Arn
+              - !Sub ${ArtifactBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+          - Sid: DenyUnencryptedObjectWrites
+            Effect: Deny
+            Principal: "*"
+            Action: s3:PutObject
+            Resource: !Sub ${ArtifactBucket.Arn}/artifacts/*
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: aws:kms
+          - Sid: DenyWrongEncryptionKey
+            Effect: Deny
+            Principal: "*"
+            Action: s3:PutObject
+            Resource: !Sub ${ArtifactBucket.Arn}/artifacts/*
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt BuildITKey.Arn
+          - Sid: BrokerArtifactObjectsOnly
+            Effect: Allow
+            Principal:
+              AWS: !Ref BrokerPrincipalArn
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub ${ArtifactBucket.Arn}/artifacts/*
+          - Sid: BrokerListsArtifactPrefixOnly
+            Effect: Allow
+            Principal:
+              AWS: !Ref BrokerPrincipalArn
+            Action: s3:ListBucket
+            Resource: !GetAtt ArtifactBucket.Arn
+            Condition:
+              StringLike:
+                s3:prefix: artifacts/*
+
+Outputs:
+  ArtifactBucketName:
+    Value: !Ref ArtifactBucket
+  KmsKeyArn:
+    Value: !GetAtt BuildITKey.Arn
+  KmsAlias:
+    Value: !Ref BuildITKeyAlias
+  InventoryBucketName:
+    Value: !Ref ArtifactInventoryBucket
