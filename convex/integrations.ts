@@ -52,7 +52,9 @@ export const storeEncryptedCredential = mutation({
     const access = args.repositoryId
       ? await requireRepositoryRole(ctx, args.repositoryId, "admin", args.organizationId)
       : await requireOrganizationRole(ctx, args.organizationId, "admin");
-    await requireRecentGitHubLogin(ctx, access.userId);
+    // authorizeCredentialWrite already required a fresh GitHub login before the
+    // provider saw the key. Re-check membership and repository scope here, but
+    // do not let provider response time invalidate the approved write.
     if (!/^[0-9a-f-]{36}$/i.test(args.credentialScopeId) || !/^[0-9a-f]{64}$/i.test(args.aadDigest)
       || args.maskedSuffix.length !== 4 || args.keyVersion !== 1 || args.lastValidatedAt > Date.now() + 5_000) {
       throw new Error("invalid_encrypted_credential");

@@ -272,6 +272,25 @@ describe("Convex tenant isolation", () => {
     expect(audit).toMatchObject({ action: "credential.rotated" });
   });
 
+  it("keeps an authorized credential save valid while provider validation runs", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId: 142, githubLogin: "alice" }));
+    const alpha = await seedTenant(t, "credential-provider-delay", userId);
+    const profileId = await t.run(ctx => ctx.db.insert("userProfiles", { userId, githubUserId: 142, githubLogin: "alice", lastAuthenticatedAt: Date.now(), updatedAt: Date.now() }));
+    const signedIn = t.withIdentity({ subject: `${userId}|credential-session` });
+    await expect(signedIn.mutation(api.integrations.authorizeCredentialWrite, { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId })).resolves.toEqual({ actorId: userId });
+    await t.run(ctx => ctx.db.patch(profileId, { lastAuthenticatedAt: Date.now() - 11 * 60 * 1000, updatedAt: Date.now() }));
+    const common = { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId,
+      credentialScopeId: "323e4567-e89b-12d3-a456-426614174000", provider: "gemini" as const,
+      encryptedCiphertext: "encrypted", nonce: "nonce", authTag: "tag", aadDigest: "c".repeat(64),
+      wrappedDataKey: "wrapped", kmsKeyId: "arn:aws:kms:eu-west-1:123:key/test", envelopeVersion: 1 as const,
+      keyVersion: 1, maskedSuffix: "9012", lastValidatedAt: Date.now(), requestId: "credential-provider-delay-0001" };
+    await expect(signedIn.mutation(api.integrations.storeEncryptedCredential, common)).resolves.toMatchObject({ status: "valid" });
+    await expect(signedIn.mutation(api.integrations.authorizeCredentialWrite, { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId })).rejects.toThrow("recent_reauthentication_required");
+    await t.run(async ctx => { const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", alpha.organizationId).eq("userId", userId)).unique(); if (!membership) throw new Error("membership_missing"); await ctx.db.patch(membership._id, { status: "removed", updatedAt: Date.now() }); });
+    await expect(signedIn.mutation(api.integrations.storeEncryptedCredential, { ...common, credentialScopeId: "423e4567-e89b-12d3-a456-426614174000", requestId: "credential-provider-delay-0002" })).rejects.toThrow("not_found_or_forbidden");
+  });
+
   it("rejects a model credential bound to another tenant's repository", async () => {
     const t = convexTest(schema, modules);
     const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId: 43, githubLogin: "alice" }));
