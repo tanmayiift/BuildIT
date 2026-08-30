@@ -14,6 +14,7 @@ http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(a
   if (!deliveryId) return new Response("missing delivery", { status: 400 });
   const action = typeof payload.action === "string" ? payload.action : "unknown", sender = payload.sender as { login?: unknown; type?: unknown } | undefined, installation = payload.installation as { id?: unknown } | undefined, repository = payload.repository as { id?: unknown } | undefined, comment = payload.comment as { body?: unknown } | undefined, issue = payload.issue as { pull_request?: unknown } | undefined;
   const pullRequest = payload.pull_request as { number?: unknown; head?: { sha?: unknown } } | undefined;
+  const pushRef = payload.ref, pushAfter = payload.after;
   const disposition = sender?.type === "Bot" ? "ignored_bot" : action === "edited" ? "ignored_edit" : "processed";
   const reserved = await ctx.runMutation(internal.githubWebhookData.reserve, { deliveryId, event, action, installationId: typeof installation?.id === "number" ? installation.id : undefined, disposition, now: Date.now() });
   if (reserved.duplicate) return new Response("duplicate", { status: 202 });
@@ -22,6 +23,8 @@ http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(a
     await ctx.scheduler.runAfter(0, internal.githubWebhookProcessor.processWebhook, { deliveryId, installationId: installation.id, githubRepositoryId: repository.id, senderLogin: sender.login, senderType: sender.type, commentAction: action, command: comment.body.slice(0, 200) });
   } else if (event === "pull_request" && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof pullRequest?.number === "number" && typeof pullRequest.head?.sha === "string") {
     await ctx.scheduler.runAfter(0, internal.githubWebhookProcessor.processPullRequestWebhook, { deliveryId, installationId: installation.id, githubRepositoryId: repository.id, prNumber: pullRequest.number, headSha: pullRequest.head.sha });
+  } else if (event === "push" && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof pushRef === "string" && typeof pushAfter === "string") {
+    await ctx.scheduler.runAfter(0, internal.githubWebhookProcessor.processPushWebhook, { deliveryId, installationId: installation.id, githubRepositoryId: repository.id, ref: pushRef, afterSha: pushAfter });
   } else await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId, disposition: "rejected", status: "completed", now: Date.now() });
   return new Response("accepted", { status: 202 });
 }) });

@@ -36,3 +36,15 @@ export const processPullRequestWebhook = internalAction({
     }
   },
 });
+
+export const processPushWebhook = internalAction({
+  args: { deliveryId: v.string(), installationId: v.number(), githubRepositoryId: v.number(), ref: v.string(), afterSha: v.string() },
+  handler: async (ctx, args) => {
+    try {
+      await ctx.runMutation(internal.githubWebhookData.reconcileDefaultBranchPush, { installationId: args.installationId, githubRepositoryId: args.githubRepositoryId, ref: args.ref, afterSha: args.afterSha, now: Date.now() });
+      await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "processed", status: "completed", now: Date.now() });
+    } catch {
+      await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "rejected", status: "failed", now: Date.now() });
+    }
+  },
+});

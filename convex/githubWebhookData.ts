@@ -62,3 +62,23 @@ export const reconcilePullRequestHead = internalMutation({
     return { staleCount };
   },
 });
+
+export const reconcileDefaultBranchPush = internalMutation({
+  args: { installationId: v.number(), githubRepositoryId: v.number(), ref: v.string(), afterSha: v.string(), now: v.number() },
+  handler: async (ctx, args) => {
+    if (!/^refs\/heads\/[A-Za-z0-9._\/-]+$/.test(args.ref) || !/^[0-9a-f]{40}$/i.test(args.afterSha)) throw new Error("invalid_push_snapshot");
+    const installation = await ctx.db.query("githubInstallations").withIndex("by_installation", q => q.eq("installationId", args.installationId)).unique();
+    const repository = await ctx.db.query("repositories").withIndex("by_github_id", q => q.eq("githubRepositoryId", args.githubRepositoryId)).unique();
+    if (!installation || installation.status !== "active" || !repository || !repository.enabled || repository.installationId !== installation._id || repository.organizationId !== installation.organizationId) throw new Error("repository_unavailable");
+    const branch = args.ref.slice("refs/heads/".length);
+    if (branch !== repository.defaultBranch) return { staleCount: 0, ignored: true };
+    const reviews = await ctx.db.query("reviews").withIndex("by_org_status", q => q.eq("organizationId", repository.organizationId)).collect();
+    let staleCount = 0;
+    for (const review of reviews) {
+      if (review.repositoryId !== repository._id || review.baseRef !== branch || review.baseSha === args.afterSha.toLowerCase() || review.isStale || terminalStatuses.has(review.status)) continue;
+      await ctx.db.patch(review._id, { isStale: true, staleSince: args.now, executionGeneration: review.executionGeneration + 1, leaseOwner: undefined, leaseExpiresAt: undefined, updatedAt: args.now });
+      staleCount++;
+    }
+    return { staleCount, ignored: false };
+  },
+});
