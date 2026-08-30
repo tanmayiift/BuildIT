@@ -64,9 +64,14 @@ export const execute = reviewWorkflowManager.define({
       ...args, stage, sequence: index + 2, now: args.startedAt + index + 1,
     });
     if (stage === "analysis") {
+      const report = await step.runAction(internal.reviewReportWorker.compose, {
+        organizationId: args.organizationId, reviewId: args.reviewId,
+        expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
+      });
       await step.runMutation(internal.reviewValidationData.finalizeDecision, {
         organizationId: args.organizationId, reviewId: args.reviewId,
         expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
+        reportArtifactId: report.artifactId,
         now: args.startedAt + index + 2,
       });
     }

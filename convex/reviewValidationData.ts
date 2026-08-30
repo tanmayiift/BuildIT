@@ -75,11 +75,12 @@ export const completeValidation = internalMutation({
 });
 
 export const finalizeDecision = internalMutation({
-  args: { ...executionArgs, now: v.number() },
+  args: { ...executionArgs, reportArtifactId: v.id("artifacts"), now: v.number() },
   handler: async (ctx, args) => {
-    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), organization = await ctx.db.get(args.organizationId);
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), organization = await ctx.db.get(args.organizationId), report = await ctx.db.get(args.reportArtifactId);
     if (!organization || organization.deletedAt) throw new ConvexError("organization_unavailable");
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
+    if (!report || report.organizationId !== args.organizationId || report.repositoryId !== review.repositoryId || report.reviewId !== review._id || report.type !== "review_message" || report.redactionStatus !== "redacted" || report.deletedAt || !report.storageKey.endsWith("/report.md")) throw new ConvexError("report_artifact_mismatch");
     if (["checks_passed", "changes_requested", "inconclusive"].includes(review.status) && review.statusReasonCode && review.completedAt) return { status: review.status, statusReasonCode: review.statusReasonCode, nextActionCode: review.nextActionCode };
     if (review.status !== "validating" || review.currentStage !== "analysis") throw new ConvexError("review_not_ready_for_decision");
     const checks = (await ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect()).filter(item => item.commitSha === review.headSha);
@@ -97,7 +98,7 @@ export const finalizeDecision = internalMutation({
     const nextActionCode = incomplete ? "retry_review" as const : failed || blocking ? "inspect_findings" as const : "none" as const;
     const githubCheckConclusion = status === "checks_passed" ? "success" as const : status === "changes_requested" ? "failure" as const : "neutral" as const;
     await ctx.db.patch(review._id, { status, statusReasonCode, nextActionCode, githubCheckConclusion, currentStage: "complete", completedAt: args.now, updatedAt: args.now });
-    await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", internalCode: `decision_${statusReasonCode}`, metadata: { count: findings.length }, createdAt: args.now });
+    await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", publicMessageArtifactId: report._id, internalCode: `decision_${statusReasonCode}`, metadata: { count: findings.length }, createdAt: args.now });
     await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, name: "review_completed", value: 1, organizationTimezone: organization.timezone, occurredAt: args.now });
     return { status, statusReasonCode, nextActionCode };
   },
