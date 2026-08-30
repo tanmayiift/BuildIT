@@ -53,7 +53,7 @@ export const create = internalMutation({
     baseRef: v.string(), isFork: v.boolean(), actorId: v.string(), actorRole: v.union(v.literal("developer"), v.literal("admin"), v.literal("owner")), expectedCredentialScopeId: v.string(), now: v.number() },
   handler: async (ctx, args) => {
     const repository = await ctx.db.get(args.repositoryId);
-    if (!repository || !repository.enabled || !Number.isInteger(args.prNumber) || args.prNumber < 1
+    if (!repository || !repository.enabled || repository.pausedAt || !Number.isInteger(args.prNumber) || args.prNumber < 1
       || !/^[0-9a-f]{40}$/.test(args.headSha) || !/^[0-9a-f]{40}$/.test(args.baseSha)) throw new ConvexError("dashboard_review_invalid");
     const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", repository.organizationId).eq("userId", args.actorId)).unique();
     if (!membership || membership.status !== "active" || !["developer", "admin", "owner"].includes(membership.role)) throw new ConvexError("not_found_or_forbidden");
@@ -95,7 +95,7 @@ export const recordPreview = internalMutation({
   args: { repositoryId: v.id("repositories"), actorId: v.string(), headSha: v.string(), now: v.number() },
   handler: async (ctx, args) => {
     const repository = await ctx.db.get(args.repositoryId);
-    if (!repository || !repository.enabled || !/^[0-9a-f]{40}$/.test(args.headSha)) throw new ConvexError("not_found_or_forbidden");
+    if (!repository || !repository.enabled || repository.pausedAt || !/^[0-9a-f]{40}$/.test(args.headSha)) throw new ConvexError("not_found_or_forbidden");
     const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", repository.organizationId).eq("userId", args.actorId)).unique();
     if (!membership || membership.status !== "active" || membership.role === "viewer") throw new ConvexError("not_found_or_forbidden");
     const requestId = `review-preview:${repository._id}:${args.headSha.slice(0, 16)}`;
