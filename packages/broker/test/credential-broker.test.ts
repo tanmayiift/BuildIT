@@ -58,7 +58,9 @@ describe("credential broker", () => {
     const f = fixtures();
     f.providers.validateKey.mockRejectedValueOnce(new Error("invalid_key") as never);
     const broker = new CredentialBroker(f.store, f.kms, "kms-key", f.providers as never);
-    await expect(broker.save({ actorId: "user-a", organizationId: "org-a", provider: "gemini", apiKey: "invalid-provider-key" })).rejects.toThrow("invalid_key");
+    await expect(broker.save({ actorId: "user-a", organizationId: "org-a", provider: "gemini", apiKey: "invalid-provider-key" })).rejects.toMatchObject({
+      message: "credential_provider_validation_failed", cause: expect.objectContaining({ message: "invalid_key" }),
+    });
     expect(f.store.insert).not.toHaveBeenCalled();
     expect(f.kms.generateDataKey).not.toHaveBeenCalled();
   });

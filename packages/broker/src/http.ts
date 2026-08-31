@@ -16,6 +16,17 @@ export type CredentialAuthorization = (input: {
   token: string; organizationId: string; repositoryId?: string;
 }) => Promise<{ actorId: string }>;
 
+function errorMessages(error: unknown) {
+  const messages: string[] = [], seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current instanceof Error && !seen.has(current)) {
+    seen.add(current);
+    messages.push(current.message);
+    current = current.cause;
+  }
+  return messages;
+}
+
 function json(status: number, body: Record<string, unknown>, origin?: string) {
   return new Response(JSON.stringify(body), { status, headers: {
     "content-type": "application/json", "cache-control": "no-store",
@@ -70,8 +81,8 @@ export async function handleCredentialSave(request: Request, input: {
     return json(201, { credential: saved }, origin);
   } catch (error) {
     input.onFailure?.(error);
-    const code = error instanceof Error && error.cause instanceof Error ? error.cause.message
-      : error instanceof Error ? error.message : "credential_save_failed";
+    const messages = errorMessages(error);
+    const code = messages.find(message => ["recent_reauthentication_required", "rate_limited", "credential_scope_already_exists", "invalid_key", "not_found_or_forbidden", "authentication_required"].includes(message)) ?? "credential_save_failed";
     const safe = code === "recent_reauthentication_required" || code === "rate_limited" || code === "credential_scope_already_exists" ? code
       : code === "invalid_key" ? code
         : code === "not_found_or_forbidden" || code === "authentication_required" ? "not_found_or_forbidden"

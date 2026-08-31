@@ -59,6 +59,14 @@ describe("credential broker HTTP boundary", () => {
     expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({ message: "credential_persistence_failed" }));
   });
 
+  it("preserves a nested invalid provider key as a safe browser response", async () => {
+    const f = fixture();
+    f.broker.save.mockRejectedValue(new Error("credential_persistence_failed", { cause: new Error("invalid_key") }));
+    const response = await handleCredentialSave(request({ organizationId: "organization-a", provider: "gemini", apiKey: "secret-provider-key-1234" }), { allowedOrigin: origin, authorize: f.authorize, broker: f.broker as never });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "invalid_key" });
+  });
+
   it("returns a stable 429 before provider validation when the tenant limit is reached", async () => {
     const f = fixture(); f.authorize.mockRejectedValue(new Error("rate_limited"));
     const response = await handleCredentialSave(request({ organizationId: "organization-a", provider: "gemini", apiKey: "secret-provider-key-1234" }), { allowedOrigin: origin, authorize: f.authorize, broker: f.broker as never });

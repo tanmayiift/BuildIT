@@ -39,6 +39,13 @@ export type CredentialAccess = {
   repositoryId?: string;
 };
 
+class CredentialPersistenceError extends Error {
+  constructor(code: "credential_provider_validation_failed" | "credential_kms_encryption_failed" | "credential_store_write_failed", cause: unknown) {
+    super(code, { cause });
+    this.name = "CredentialPersistenceError";
+  }
+}
+
 function scopeFor(value: Pick<StoredCredential, "id" | "organizationId" | "repositoryId">): CredentialAadScope {
   return {
     organizationId: value.organizationId,
@@ -64,10 +71,14 @@ export class CredentialBroker {
   ) {}
 
   async save(input: CredentialAccess & { provider: ProviderName; apiKey: string; replacesCredentialId?: string }) {
-    const validation = await this.providers.validateKey(input.provider, input.apiKey);
+    let validation;
+    try { validation = await this.providers.validateKey(input.provider, input.apiKey); }
+    catch (error) { throw new CredentialPersistenceError("credential_provider_validation_failed", error); }
     const id = randomUUID();
     const scope = scopeFor({ id, organizationId: input.organizationId, ...(input.repositoryId ? { repositoryId: input.repositoryId } : {}) });
-    const envelope = await envelopeEncryptSecret(input.apiKey, scope, this.kms, this.kmsKeyId);
+    let envelope;
+    try { envelope = await envelopeEncryptSecret(input.apiKey, scope, this.kms, this.kmsKeyId); }
+    catch (error) { throw new CredentialPersistenceError("credential_kms_encryption_failed", error); }
     const timestamp = this.now();
     const stored: StoredCredential = {
       ...envelope,
@@ -84,7 +95,8 @@ export class CredentialBroker {
       availableModels: validation.availableModels,
       ...(input.replacesCredentialId ? { replacesCredentialId: input.replacesCredentialId } : {}),
     };
-    await this.store.insert(stored);
+    try { await this.store.insert(stored); }
+    catch (error) { throw new CredentialPersistenceError("credential_store_write_failed", error); }
     return { id, provider: stored.provider, maskedSuffix: stored.maskedSuffix, status: stored.status, lastValidatedAt: timestamp, availableModels: stored.availableModels };
   }
 
