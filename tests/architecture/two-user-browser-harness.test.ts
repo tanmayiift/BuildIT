@@ -10,7 +10,7 @@ describe("two-user production browser harness", () => {
     expect(ignore).toContain(".local/");
   });
   it("covers every tenant-bearing customer surface and foreign direct review", () => {
-    for (const route of ["/account", "/repositories", "/reviews", "/metrics", "/usage", "/setup/model", "/audit-log"]) expect(test).toContain(`"${route}"`);
+    for (const route of ["/account", "/repositories", "/reviews", "/metrics", "/usage", "/setup/model", "/audit"]) expect(test).toContain(`"${route}"`);
     expect(test).toContain("foreignReview");
     expect(test).toContain("not.toContainText(values.foreignMarker");
   });
