@@ -1,4 +1,11 @@
 PLAN.md
+.git/
+node_modules/
+.next/
+**/node_modules/
+**/.next/
+.vercel/
+**/.vercel/
 .local/
 .agents/
 test-results/
