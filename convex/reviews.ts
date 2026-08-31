@@ -3,12 +3,12 @@ import { query } from "./_generated/server";
 import { requireOrganizationRole, requireRepositoryRole } from "./lib/authz";
 
 const publicReview = (review: {
-  _id: unknown; repositoryId: unknown; prNumber: number; headSha: string; status: string;
+  _id: unknown; repositoryId: unknown; prNumber: number; headSha: string; status: string; statusReasonCode?: string;
   isStale: boolean; coverageLevel: string; currentStage: string; nextActionCode: string;
   githubCheckConclusion?: string; createdAt: number; updatedAt: number;
 }) => ({
   id: review._id, repositoryId: review.repositoryId, prNumber: review.prNumber,
-  headSha: review.headSha, status: review.status, isStale: review.isStale,
+  headSha: review.headSha, status: review.status, statusReasonCode: review.statusReasonCode, isStale: review.isStale,
   coverageLevel: review.coverageLevel, currentStage: review.currentStage,
   nextActionCode: review.nextActionCode, githubCheckConclusion: review.githubCheckConclusion,
   createdAt: review.createdAt, updatedAt: review.updatedAt,
