@@ -30,9 +30,9 @@ async function route(request: Request) {
   }
 }
 
-export const GET = route;
-export const PUT = route;
-export const DELETE = route;
-import { registerBrokerTelemetry } from "../src/instrumentation.js";
+import { observedBrokerRoute, registerBrokerTelemetry } from "../src/instrumentation.js";
 
 registerBrokerTelemetry();
+export const GET = observedBrokerRoute("artifact.get", route);
+export const PUT = observedBrokerRoute("artifact.put", route);
+export const DELETE = observedBrokerRoute("artifact.delete", route);

@@ -1,0 +1,17 @@
+{
+  "id": null,
+  "uid": "buildit-overview",
+  "title": "BuildIT product and platform health",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["buildit", "source-free"],
+  "time": {"from": "now-24h", "to": "now"},
+  "panels": [
+    {"id": 1, "type": "stat", "title": "Operation rate", "datasource": {"uid": "buildit-prometheus"}, "targets": [{"refId": "A", "expr": "sum(rate(buildit_operations_total[5m]))"}], "gridPos": {"h": 7, "w": 6, "x": 0, "y": 0}},
+    {"id": 2, "type": "stat", "title": "Failure ratio", "datasource": {"uid": "buildit-prometheus"}, "targets": [{"refId": "A", "expr": "sum(rate(buildit_failures_total[10m])) / clamp_min(sum(rate(buildit_operations_total[10m])), 0.001)"}], "gridPos": {"h": 7, "w": 6, "x": 6, "y": 0}},
+    {"id": 3, "type": "timeseries", "title": "p95 latency by operation", "datasource": {"uid": "buildit-prometheus"}, "targets": [{"refId": "A", "expr": "histogram_quantile(0.95, sum by (le, buildit_operation) (rate(buildit_operation_duration_milliseconds_bucket[10m])))", "legendFormat": "{{buildit_operation}}"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}},
+    {"id": 4, "type": "timeseries", "title": "Review stages and outcomes", "datasource": {"uid": "buildit-prometheus"}, "targets": [{"refId": "A", "expr": "sum by (buildit_stage, buildit_outcome) (rate(buildit_operations_total[5m]))", "legendFormat": "{{buildit_stage}} · {{buildit_outcome}}"}], "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}},
+    {"id": 5, "type": "timeseries", "title": "Provider and sandbox reliability", "datasource": {"uid": "buildit-prometheus"}, "targets": [{"refId": "A", "expr": "sum by (buildit_operation, buildit_outcome) (rate(buildit_operations_total{buildit_operation=~\"model.*|sandbox.*|artifact.*\"}[5m]))", "legendFormat": "{{buildit_operation}} · {{buildit_outcome}}"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}}
+  ]
+}

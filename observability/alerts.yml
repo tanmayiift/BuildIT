@@ -1,0 +1,23 @@
+groups:
+  - name: buildit-release
+    rules:
+      - alert: BuildITHighFailureRate
+        expr: sum(rate(buildit_failures_total[10m])) / clamp_min(sum(rate(buildit_operations_total[10m])), 0.001) > 0.05
+        for: 10m
+        labels: {severity: page}
+        annotations: {summary: "More than 5% of BuildIT operations are failing"}
+      - alert: BuildITP95LatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(buildit_operation_duration_milliseconds_bucket[10m]))) > 120000
+        for: 15m
+        labels: {severity: ticket}
+        annotations: {summary: "BuildIT operation p95 is above two minutes"}
+      - alert: BuildITTelemetrySilent
+        expr: absent_over_time(buildit_operations_total[15m]) == 1
+        for: 5m
+        labels: {severity: ticket}
+        annotations: {summary: "No BuildIT operation telemetry has arrived"}
+      - alert: BuildITCriticalBoundaryFailure
+        expr: sum(increase(buildit_failures_total{buildit_operation=~"artifact.delete|sandbox.cleanup|webhook.verify|autofix.loop_guard|review.stale_check"}[5m])) > 0
+        for: 0m
+        labels: {severity: page}
+        annotations: {summary: "A security or safety boundary failed"}

@@ -14,7 +14,7 @@ async function route(request: Request) {
     return await handleExecution(request, { artifactBroker, grantSecret: Buffer.from(required("EXECUTION_GRANT_SECRET"), "base64url"), consume: (id, expiresAt) => consume.consume(id, expiresAt) });
   } catch { return Response.json({ error: "execution_broker_unavailable" }, { status: 503, headers: { "cache-control": "no-store" } }); }
 }
-export const POST = route;
-import { registerBrokerTelemetry } from "../src/instrumentation.js";
+import { observedBrokerRoute, registerBrokerTelemetry } from "../src/instrumentation.js";
 
 registerBrokerTelemetry();
+export const POST = observedBrokerRoute("sandbox.execute", route);

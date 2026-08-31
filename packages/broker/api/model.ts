@@ -4,7 +4,7 @@ import { AwsKmsClient } from "@buildit/security";
 import { CredentialBroker, type StoredCredential } from "../src/index.js";
 import { S3GrantConsumer } from "../src/artifacts.js";
 import { handleModelInvocation } from "../src/model-http.js";
-import { registerBrokerTelemetry } from "../src/instrumentation.js";
+import { observedBrokerRoute, registerBrokerTelemetry } from "../src/instrumentation.js";
 
 registerBrokerTelemetry();
 
@@ -28,4 +28,4 @@ async function route(request: Request) {
   }
 }
 
-export const POST = route;
+export const POST = observedBrokerRoute("model.invoke", route);

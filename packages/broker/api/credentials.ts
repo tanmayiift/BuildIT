@@ -31,8 +31,8 @@ async function route(request: Request) {
   }
 }
 
-export const POST = route;
-export const OPTIONS = route;
-import { registerBrokerTelemetry } from "../src/instrumentation.js";
+import { observedBrokerRoute, registerBrokerTelemetry } from "../src/instrumentation.js";
 
 registerBrokerTelemetry();
+export const POST = observedBrokerRoute("credential.save", route);
+export const OPTIONS = observedBrokerRoute("credential.preflight", route);
