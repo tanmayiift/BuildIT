@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { safeAttributes, safeLog, traced } from "../src/index.js";
+import { parseOtlpHeaders } from "../src/register.js";
 
 describe("source-free telemetry", () => {
   it("only retains bounded allowlisted attributes", () => {
@@ -22,5 +23,12 @@ describe("source-free telemetry", () => {
 
   it("preserves task errors", async () => {
     await expect(traced("review.test", { stage: "tests" }, async () => { throw new TypeError("private value"); })).rejects.toThrow("private value");
+  });
+
+  it("preserves padded Basic-auth values required by OTLP gateways", () => {
+    expect(parseOtlpHeaders("Authorization=Basic aWQ6dG9rZW4=,x-scope-orgid=42")).toEqual({
+      Authorization: "Basic aWQ6dG9rZW4=",
+      "x-scope-orgid": "42",
+    });
   });
 });

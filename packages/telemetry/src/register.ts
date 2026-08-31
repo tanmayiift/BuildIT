@@ -22,16 +22,21 @@ function logEndpoint(environment: NodeJS.ProcessEnv) {
   return base ? `${base}/v1/logs` : undefined;
 }
 
-function headers(value: string | undefined) {
+export function parseOtlpHeaders(value: string | undefined) {
   if (!value) return undefined;
-  return Object.fromEntries(value.split(",").map(item => item.split("=", 2).map(part => part.trim())).filter((item): item is [string, string] => Boolean(item[0] && item[1])));
+  return Object.fromEntries(value.split(",").flatMap(item => {
+    const separator = item.indexOf("=");
+    if (separator < 1) return [];
+    const name = item.slice(0, separator).trim(), headerValue = item.slice(separator + 1).trim();
+    return name && headerValue ? [[name, headerValue] as const] : [];
+  }));
 }
 
 export function registerBuildITMetrics(serviceName: "buildit-web" | "buildit-content-broker", environment: NodeJS.ProcessEnv = process.env) {
   if (provider) return provider;
   const url = metricEndpoint(environment);
   if (!url) return undefined;
-  const configuredHeaders = headers(environment.OTEL_EXPORTER_OTLP_HEADERS);
+  const configuredHeaders = parseOtlpHeaders(environment.OTEL_EXPORTER_OTLP_HEADERS);
   const exporter = new OTLPMetricExporter({ url, ...(configuredHeaders ? { headers: configuredHeaders } : {}) });
   provider = new MeterProvider({
     resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: serviceName, [ATTR_SERVICE_VERSION]: environment.VERCEL_GIT_COMMIT_SHA?.slice(0, 40) ?? "local" }),
