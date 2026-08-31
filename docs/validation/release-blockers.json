@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "verdictWhileOpen": "not_ready",
+  "blockers": [
+    {"id": "production-rollout", "owner": "buildit", "state": "open", "dependency": "Vercel broker slot and ordered Convex rollout"},
+    {"id": "live-model-evidence", "owner": "buildit", "state": "open", "dependency": "production rollout"},
+    {"id": "blind-human-labels", "owner": "human-reviewers", "state": "open", "dependency": "qualified independent reviewers"},
+    {"id": "two-real-users", "owner": "customer-testers", "state": "open", "dependency": "two independently controlled GitHub identities"},
+    {"id": "external-security-audit", "owner": "independent-auditor", "state": "open", "dependency": "contracted penetration test and optional certification audit"},
+    {"id": "tracker-and-email-integrations", "owner": "buildit-operator", "state": "open", "dependency": "provider applications and credentials"},
+    {"id": "production-alert-delivery", "owner": "buildit-operator", "state": "open", "dependency": "Grafana Cloud stack and notification destination"}
+  ]
+}
