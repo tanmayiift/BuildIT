@@ -1,5 +1,5 @@
 import { S3Client } from "@aws-sdk/client-s3";
-import { fromWebToken } from "@aws-sdk/credential-providers";
+import { awsCredentialsProvider } from "@vercel/oidc-aws-credentials-provider";
 import { ArtifactBroker, S3GrantConsumer } from "../src/artifacts.js";
 import { handleArtifactRequest } from "../src/artifact-http.js";
 
@@ -13,9 +13,7 @@ function report(error: unknown) { const cause = error instanceof Error && error.
 async function route(request: Request) {
   try {
     const region = "eu-west-1";
-    const oidcToken = request.headers.get("x-vercel-oidc-token") ?? process.env.VERCEL_OIDC_TOKEN;
-    if (!oidcToken) throw new Error("artifact_broker_configuration_missing");
-    const credentials = fromWebToken({ roleArn: required("AWS_ROLE_ARN"), webIdentityToken: oidcToken,
+    const credentials = awsCredentialsProvider({ roleArn: required("AWS_ROLE_ARN"),
       roleSessionName: `buildit-artifact-${Date.now()}`, clientConfig: { region } });
     const s3 = new S3Client({ region, credentials });
     const bucket = required("AWS_ARTIFACT_BUCKET"), kmsKeyId = required("AWS_KMS_KEY_ID");

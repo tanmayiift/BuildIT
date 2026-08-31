@@ -4,6 +4,9 @@ import { describe, expect, it } from "vitest";
 
 const template = readFileSync(fileURLToPath(new URL("../../infra/aws/artifacts.yaml", import.meta.url)), "utf8");
 const verifier = readFileSync(fileURLToPath(new URL("../../scripts/verify-aws-boundary.mjs", import.meta.url)), "utf8");
+const brokerAwsRoutes = ["credentials", "artifacts", "model", "execute", "tracker", "tracker-credentials"].map((name) =>
+  readFileSync(fileURLToPath(new URL(`../../packages/broker/api/${name}.ts`, import.meta.url)), "utf8"),
+);
 
 describe("AWS artifact and key boundary", () => {
   it("fails deployment outside Ireland and never creates a multi-region key", () => {
@@ -56,5 +59,14 @@ describe("AWS artifact and key boundary", () => {
     for (const write of ["put-object", "delete-object", "update-stack", "schedule-key-deletion"]) expect(verifier).not.toContain(write);
     expect(verifier).toContain('region !== "eu-west-1"');
     expect(verifier).toContain('item.VersionId === "null"');
+  });
+
+  it("uses Vercel's maintained request-scoped AWS OIDC provider in every broker route", () => {
+    for (const source of brokerAwsRoutes) {
+      expect(source).toContain('from "@vercel/oidc-aws-credentials-provider"');
+      expect(source).toContain("awsCredentialsProvider({");
+      expect(source).not.toContain("fromWebToken");
+      expect(source).not.toContain('get("x-vercel-oidc-token")');
+    }
   });
 });

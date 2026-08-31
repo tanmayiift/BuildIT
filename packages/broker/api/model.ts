@@ -1,5 +1,5 @@
 import { S3Client } from "@aws-sdk/client-s3";
-import { fromWebToken } from "@aws-sdk/credential-providers";
+import { awsCredentialsProvider } from "@vercel/oidc-aws-credentials-provider";
 import { AwsKmsClient } from "@buildit/security";
 import { CredentialBroker, type StoredCredential } from "../src/index.js";
 import { S3GrantConsumer } from "../src/artifacts.js";
@@ -13,9 +13,8 @@ function report(error: unknown) { const raw = error instanceof Error ? error.nam
 
 async function route(request: Request) {
   try {
-    const region = "eu-west-1", oidcToken = request.headers.get("x-vercel-oidc-token") ?? process.env.VERCEL_OIDC_TOKEN;
-    if (!oidcToken) throw new Error("model_broker_configuration_missing");
-    const credentials = fromWebToken({ roleArn: required("AWS_ROLE_ARN"), webIdentityToken: oidcToken, roleSessionName: `buildit-model-${Date.now()}`, clientConfig: { region } });
+    const region = "eu-west-1";
+    const credentials = awsCredentialsProvider({ roleArn: required("AWS_ROLE_ARN"), roleSessionName: `buildit-model-${Date.now()}`, clientConfig: { region } });
     const bucket = required("AWS_ARTIFACT_BUCKET"), kmsKeyId = required("AWS_KMS_KEY_ID"), s3 = new S3Client({ region, credentials });
     const replay = new S3GrantConsumer({ bucket, kmsKeyId, s3: s3 as never });
     const kms = new AwsKmsClient({ config: { region, credentials } });

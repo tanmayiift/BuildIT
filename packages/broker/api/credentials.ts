@@ -1,4 +1,4 @@
-import { fromWebToken } from "@aws-sdk/credential-providers";
+import { awsCredentialsProvider } from "@vercel/oidc-aws-credentials-provider";
 import { AwsKmsClient } from "@buildit/security";
 import { ConvexCredentialGateway } from "../src/convex-gateway.js";
 import { CredentialBroker } from "../src/index.js";
@@ -27,9 +27,7 @@ async function route(request: Request) {
   let runtime: Promise<{ gateway: ConvexCredentialGateway; broker: CredentialBroker }> | undefined;
   const load = () => runtime ??= Promise.resolve().then(() => {
     const region = "eu-west-1", gateway = new ConvexCredentialGateway(required("CONVEX_URL"), token);
-    const oidcToken = request.headers.get("x-vercel-oidc-token") ?? process.env.VERCEL_OIDC_TOKEN;
-    if (!oidcToken) throw new Error("broker_configuration_missing");
-    const credentials = fromWebToken({ roleArn: required("AWS_ROLE_ARN"), webIdentityToken: oidcToken,
+    const credentials = awsCredentialsProvider({ roleArn: required("AWS_ROLE_ARN"),
       roleSessionName: `buildit-broker-${Date.now()}`, clientConfig: { region } });
     return { gateway, broker: new CredentialBroker(gateway, new AwsKmsClient({ config: { region, credentials } }), required("AWS_KMS_KEY_ID")) };
   });
