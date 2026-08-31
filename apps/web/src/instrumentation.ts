@@ -1,8 +1,10 @@
 import { registerOTel } from "@vercel/otel";
+import { registerBuildITMetrics } from "@buildit/telemetry/register";
 
 export function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     registerOTel({ serviceName: "buildit-web" });
+    registerBuildITMetrics("buildit-web");
   }
 }
 

@@ -1,5 +1,6 @@
 import { registerOTel } from "@vercel/otel";
 import { recordOperation, safeLog, traced } from "@buildit/telemetry";
+import { registerBuildITMetrics } from "@buildit/telemetry/register";
 
 let registered = false;
 
@@ -7,6 +8,7 @@ export function registerBrokerTelemetry() {
   if (registered) return;
   registered = true;
   registerOTel({ serviceName: "buildit-content-broker" });
+  registerBuildITMetrics("buildit-content-broker");
 }
 
 export function observedBrokerRoute(operation: string, route: (request: Request) => Promise<Response>) {

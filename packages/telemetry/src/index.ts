@@ -1,4 +1,5 @@
 import { metrics, SpanStatusCode, trace, type Attributes } from "@opentelemetry/api";
+import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
 export type ReviewStage = "context" | "requirements" | "analysis" | "critic" | "tests" | "autofix" | "delivery";
 export type TelemetryOutcome = "started" | "succeeded" | "failed" | "cancelled" | "blocked";
@@ -25,14 +26,19 @@ export function safeAttributes(input: SafeAttributes): Attributes {
   return output;
 }
 
-const meter = metrics.getMeter("buildit");
-const operations = meter.createCounter("buildit.operations", { description: "Completed BuildIT operations" });
-const failures = meter.createCounter("buildit.failures", { description: "Failed BuildIT operations" });
-const duration = meter.createHistogram("buildit.operation.duration", { unit: "ms" });
+function instruments() {
+  const meter = metrics.getMeter("buildit");
+  return {
+    operations: meter.createCounter("buildit.operations", { description: "Completed BuildIT operations" }),
+    failures: meter.createCounter("buildit.failures", { description: "Failed BuildIT operations" }),
+    duration: meter.createHistogram("buildit.operation.duration", { unit: "ms" }),
+  };
+}
 
 export function recordOperation(attributes: SafeAttributes & { durationMs?: number }) {
   const { durationMs, ...rest } = attributes;
   const labels = safeAttributes(rest);
+  const { operations, failures, duration } = instruments();
   operations.add(1, labels);
   if (rest.outcome === "failed" || rest.outcome === "blocked") failures.add(1, labels);
   if (durationMs !== undefined && Number.isFinite(durationMs) && durationMs >= 0) duration.record(durationMs, labels);
@@ -62,9 +68,12 @@ export async function traced<T>(name: string, attributes: SafeAttributes, task: 
 export function safeLog(event: string, attributes: SafeAttributes = {}) {
   const span = trace.getActiveSpan();
   const context = span?.spanContext();
+  const safeEvent = event.replace(/[^a-z0-9_.-]/gi, "_").slice(0, 80);
+  const safeFields = safeAttributes(attributes);
+  logs.getLogger("buildit").emit({ body: safeEvent, severityNumber: SeverityNumber.INFO, attributes: safeFields });
   console.info(JSON.stringify({
-    event: event.replace(/[^a-z0-9_.-]/gi, "_").slice(0, 80),
-    ...safeAttributes(attributes),
+    event: safeEvent,
+    ...safeFields,
     ...(context?.traceId ? { traceId: context.traceId, spanId: context.spanId } : {}),
   }));
 }

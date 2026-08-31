@@ -4,7 +4,7 @@ BuildIT exports server-side traces and metrics with OpenTelemetry. Structured lo
 
 ## Local check
 
-Run `docker compose -f observability/docker-compose.yml up -d`, then set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` before starting the web app or broker. Grafana is available at `http://localhost:3001` and Prometheus at `http://localhost:9090`. Stop the stack with `docker compose -f observability/docker-compose.yml down`.
+Run `docker compose -f observability/docker-compose.yml up -d`, then set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` and `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` before starting the web app or broker. Grafana is available at `http://localhost:3001` and Prometheus at `http://localhost:9090`. Stop the stack with `docker compose -f observability/docker-compose.yml down`.
 
 ## Grafana Cloud
 
