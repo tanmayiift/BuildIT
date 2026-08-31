@@ -1,4 +1,5 @@
 import { vWorkflowId, type WorkflowId } from "@convex-dev/workflow";
+import { vResultValidator } from "@convex-dev/workpool";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
@@ -141,9 +142,72 @@ export const start = internalMutation({
       organizationId: args.organizationId, reviewId: args.reviewId,
       expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
       startedAt: args.now,
+    }, {
+      onComplete: internal.durableReview.workflowCompleted,
+      context: {
+        organizationId: args.organizationId,
+        reviewId: args.reviewId,
+        expectedGeneration: args.expectedGeneration,
+      },
     });
     await ctx.db.patch(args.reviewId, { workflowId: String(workflowId), startedAt: args.now, updatedAt: args.now });
     return String(workflowId);
+  },
+});
+
+// A workflow component records its own terminal result outside our review row.
+// Mirror only a failed/cancelled outcome into the tenant-scoped review so the
+// UI never presents a failed workflow as an indefinitely running review.
+export const workflowCompleted = internalMutation({
+  args: {
+    workflowId: vWorkflowId,
+    result: vResultValidator,
+    context: v.object({
+      organizationId: v.id("organizations"),
+      reviewId: v.id("reviews"),
+      expectedGeneration: v.number(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const review = await assertReviewParent(
+      ctx.db,
+      args.context.organizationId,
+      args.context.reviewId,
+    );
+    if (
+      review.workflowId !== String(args.workflowId) ||
+      review.executionGeneration !== args.context.expectedGeneration ||
+      terminalStatuses.has(review.status)
+    ) return;
+    if (args.result.kind === "failed") {
+      const now = Date.now();
+      await ctx.db.patch(review._id, {
+        status: "platform_failed",
+        statusReasonCode: "platform_error",
+        nextActionCode: "retry_review",
+        currentStage: "complete",
+        completedAt: now,
+        executionGeneration: review.executionGeneration + 1,
+        leaseOwner: undefined,
+        leaseExpiresAt: undefined,
+        updatedAt: now,
+      });
+      const last = await ctx.db
+        .query("reviewEvents")
+        .withIndex("by_review", (q) => q.eq("reviewId", review._id))
+        .order("desc")
+        .first();
+      await ctx.db.insert("reviewEvents", {
+        organizationId: review.organizationId,
+        reviewId: review._id,
+        sequence: (last?.sequence ?? 0) + 1,
+        type: "status_changed",
+        stage: "complete",
+        internalCode: "workflow_failed",
+        metadata: {},
+        createdAt: now,
+      });
+    }
   },
 });
 
