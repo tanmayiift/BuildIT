@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("overview leads through the review queue to exact-commit evidence", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Know what a pull request breaks before you merge it." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Give your technical lead proof before a pull request is merged." })).toBeVisible();
   await page.getByRole("link", { name: /inspect a sample review/i }).click();
   await expect(page.getByRole("heading", { name: "Review queue" })).toBeVisible();
   await Promise.all([
@@ -127,7 +127,7 @@ test("navigation exposes all promised product areas", async ({ page }) => {
 test("preview never impersonates a signed-in customer", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Preview", { exact: true })).toBeVisible();
-  await expect(page.getByText("Evidence-backed pull request review", { exact: true })).toBeVisible();
+  await expect(page.getByText("For lean B2B software teams", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Inspect a sample review" })).toHaveAttribute("href", "/reviews?tour=1");
   await expect(page.getByText("Rohan Bhatia")).toHaveCount(0);
   await page.getByRole("link", { name: "Sign in", exact: true }).first().click();
