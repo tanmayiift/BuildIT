@@ -15,8 +15,14 @@ test("overview leads through the review queue to exact-commit evidence", async (
 for (const [state, heading] of [["cancelled", "Review stopped"], ["running", "BuildIT is reviewing this change"], ["changes", "Changes are needed before merge"], ["passed", "All required checks passed"], ["empty", "A safe decision is not possible yet"], ["populated", "Changes are needed before merge"]] as const) test(`sample review state stays decision-first: ${state}`, async ({ page }) => {
   await page.goto(`/reviews/418?tour=1&state=${state}`);
   await expect(page.getByRole("heading", { name: heading })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "How far BuildIT got" })).toBeVisible();
-  await expect(page.getByText("Technical details", { exact: true })).toBeVisible();
+  if (state === "cancelled" || state === "empty") {
+    await expect(page.getByRole("heading", { name: "No review evidence" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open review queue" })).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: "How far BuildIT got" })).toHaveCount(0);
+  } else {
+    await expect(page.getByRole("heading", { name: "How far BuildIT got" })).toBeVisible();
+  }
+  if (state !== "cancelled" && state !== "empty") await expect(page.getByText("Technical details", { exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
 });
 

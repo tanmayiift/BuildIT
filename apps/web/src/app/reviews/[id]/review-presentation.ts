@@ -5,7 +5,7 @@ const words = (value: string) => value.replaceAll("_", " ").replace(/^./, first 
 export function statusPresentation(status: string, stale: boolean) {
   if (stale) return { label: "Out of date", title: "The pull request changed", summary: "This review no longer matches the latest code. Run a new review before deciding whether to merge.", tone: "warning" as ReviewTone, symbol: "↻" };
   const known: Record<string, { label: string; title: string; summary: string; tone: ReviewTone; symbol: string }> = {
-    cancelled: { label: "Stopped", title: "Review stopped", summary: "No decision was made and no code was changed. Start a new review when you are ready.", tone: "warning", symbol: "■" },
+  cancelled: { label: "Stopped", title: "Review stopped", summary: "No decision was made. BuildIT did not read code, run checks, or change this pull request. Start a new review when you are ready.", tone: "warning", symbol: "■" },
     passed: { label: "Ready for you", title: "All required checks passed", summary: "BuildIT found enough evidence for this exact commit. A human still decides whether to merge.", tone: "success", symbol: "✓" },
     checks_passed: { label: "Ready for you", title: "All required checks passed", summary: "BuildIT found enough evidence for this exact commit. A human still decides whether to merge.", tone: "success", symbol: "✓" },
     delivered: { label: "Fix ready", title: "A tested fix is ready to inspect", summary: "The fix is in a separate pull request. Review the changes and merge only if you agree.", tone: "success", symbol: "✓" },

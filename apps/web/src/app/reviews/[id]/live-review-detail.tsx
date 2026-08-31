@@ -144,6 +144,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
     "cancelled",
     "platform_failed",
   ].includes(review.status);
+  const stoppedBeforeEvidence = !hasEvidence && !canCancel;
   async function cancelReview() {
     setCancelling(true);
     setCancelError("");
@@ -181,32 +182,31 @@ export function LiveReviewDetail({ id }: { id: string }) {
             </button>
           ) : null}
           <a className="button secondary" href={`/reviews`}>
-            Back to queue
+            {stoppedBeforeEvidence ? "Open review queue" : "Back to queue"}
           </a>
           {cancelError ? <p role="alert">{cancelError}</p> : null}
         </div>
       </section>
-      <section className="commit-strip" aria-label="Review scope">
+      <section className={`commit-strip${stoppedBeforeEvidence ? " minimal" : ""}`} aria-label="Review scope">
         <Fact
           label="Repository"
           value={`${repository.owner}/${repository.name}`}
         />
         <Fact label="Pull request" value={`#${review.prNumber}`} />
         <Fact label="Head commit" value={review.headSha.slice(0, 12)} mono />
-        <Fact label="Mode" value={label(review.mode)} />
-        <Fact label="Coverage" value={label(review.coverageLevel)} />
+        {!stoppedBeforeEvidence ? <Fact label="Mode" value={label(review.mode)} /> : null}
+        {!stoppedBeforeEvidence ? <Fact label="Coverage" value={label(review.coverageLevel)} /> : null}
       </section>
-      <div className="next-action">
+      {!stoppedBeforeEvidence ? <div className="next-action">
         <span className="next-mark" aria-hidden="true">→</span>
         <div>
           <small>What to do next</small>
           <strong>{nextAction.title}</strong>
           <p>{nextAction.detail}</p>
         </div>
-      </div>
+      </div> : null}
       {hasEvidence || canCancel ? <ReviewJourney currentStage={review.currentStage} status={review.status} events={evidence.events} /> : null}
       {hasEvidence || canCancel ? <details className="technical-details"><summary>Technical details</summary><dl><div><dt>Base commit</dt><dd><code>{review.baseSha.slice(0, 12)}</code></dd></div><div><dt>Current step</dt><dd>{stagePresentation(review.currentStage)}</dd></div><div><dt>AI provider</dt><dd>{label(review.provider)} · {review.model}</dd></div><div><dt>Spend</dt><dd>{review.budgetConsumed.toFixed(2)} of {review.budgetLimit.toFixed(2)} limit</dd></div></dl></details> : null}
-      {!hasEvidence && !canCancel ? <section className="review-stopped-note"><span aria-hidden="true">○</span><p><strong>No code checks were run.</strong> This stopped before BuildIT gathered evidence, so it has no opinion about this pull request.</p></section> : null}
       {evidence.requirements.length ? <Section
         eyebrow="Intent"
         title="What this change must do"

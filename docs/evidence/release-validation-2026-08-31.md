@@ -1,67 +1,43 @@
 # BuildIT release validation — 2026-08-31
 
-Validated source commit: `ff39ada82b0b42df66dadf0fa07a70c8cf40e032`
+Validated source commit: `c0e4375`
 
-Verdict: **not ready for customer source or an accuracy claim**
+Verdict: **not ready for customer source or an accuracy claim**.
 
-The non-deployment implementation is materially stronger and its complete local gate passes. The core customer promise is still unproved in production because the coordinated broker → Convex → Gemini → sandbox → GitHub delivery has not run, and no blind human-labelled result exists. A 95% threshold in code is not a measured 95% result.
+The product has a real deployed web surface, broker, Convex workflow, GitHub App identity, repository claim, and signed webhook boundary. Its central promise has not yet been proved: a fresh customer-owned model key has not completed an exact-commit context → model → critic → checks → handoff run in production. A release threshold in code is not a measured accuracy result.
 
-## What this pass closed
+## Production evidence recorded
 
-- All 223 specification requirement IDs map exactly once to a capability, real code, tests, a dependency, and an honest state in `docs/validation/capability-inventory.json`.
-- The official pinned AACR population (196 positive, 155 negative, 2,145 comments) and all 500 SWE-bench Verified rows download privately, pass checksum/license checks, and parse through the real adapters. This fixed an AACR official-schema defect. Raw benchmark content is not committed.
-- Release requirements are now at least 95% for precision, recall, severity accuracy, stability, patch application, and patch test pass rate; Critical recall must be 100%; unsupported claims and patch regressions must each be at most 1%.
-- Blind-label assignment, independent Critical review, adjudication, agreement, Wilson confidence ranges, and model-grader calibration fail closed when human evidence is absent or weak.
-- Member invite/role/removal controls, safe repository pause/Stacked-PR policy controls, notification preferences, source-free email payload construction, credential last-used display, and effective-LOC accounting are implemented locally.
-- Every 19 locally renderable customer route is scanned at desktop and mobile sizes with no serious/critical axe finding. Six fixed screenshots remain stable.
-- The live read-only Ireland AWS probe confirms KMS encryption and rotation, blocked public access, seven-day artifact expiry, one-day replay expiry, and disabled bucket version history.
-- Hermes Agent remains intentionally excluded: it adds a second broad tool/runtime boundary without supplying exact-commit evidence, tenant-bound grants, or retry-safe GitHub effects. Convex Workflow remains the single durable workflow engine; LangGraph is permitted only as a measured replacement if Convex fails a required recovery test.
+- Web application: `pulsetrade/buildit-agentic-review`, deployment `dpl_62d6nRvsfWAH5pBDcTeWNVYANKdg`, served at `buildit-agentic-review.vercel.app`.
+- Broker: `pulsetrade/buildit-content-broker`, deployment `dpl_67dea1vW3uoKwNsBd4TK6HGgvnaJ`, health endpoint available. Anonymous artifact access is denied and protected model, execution, credential, tracker, and telemetry routes do not accept anonymous `GET` requests.
+- Convex production: `judicious-barracuda-968` is the web application's production state service.
+- GitHub App: a new installation key was minted after rotation, the App installation claimed exactly the selected public and private fixture repositories, and the product showed those repository receipts to the authorized owner.
+- Webhooks: an unsigned request was rejected with `401`. A harmless signed `@buildit cancel` command recorded one completed event. GitHub accepted a redelivery of that same event while Convex retained one completed delivery, proving replay de-duplication without running a review or changing code.
+- Model setup: the authenticated owner form offers Anthropic, OpenAI, and Google Gemini, with organization-wide or exact-repository scopes. It has a password input and never pre-fills or displays a raw key.
 
-## Exact local evidence
+## Current local release evidence
 
-- Tracked-file safety: 342 tracked files inspected.
-- Lint and TypeScript: every workspace plus Convex passed.
-- Unit/integration/architecture/browser-component tests: 526 passed across 83 files.
-- Production builds: CLI, web, Convex-adjacent packages, broker, runner, scanners, providers, GitHub, security, operations, and evaluations passed.
-- Evaluation tests: 78 passed, including 20 executable fixtures. These test the gate and fixtures; they are not live model accuracy.
-- Security release suite: 198 focused checks plus a production dependency audit with no known high-severity vulnerability.
-- Reliability release suite: 132 checks, including a 10,000-iteration bounded-decision load.
-- Browser: 66 passed; four checks requiring real production OAuth/GitHub App destinations were deliberately skipped locally.
-- CLI smoke: help/doctor and scoped read-only consent journey passed with zero provider spend and no worktree mutation.
-- AWS boundary: live read-only probe passed in `eu-west-1`.
+- GitHub quality and browser jobs passed for `c0e4375`.
+- Web typecheck, lint, and production build passed.
+- `pnpm eval` passed 78 evaluation tests. These test evidence gates, fixtures, labels, and release contracts; they do not establish live model accuracy.
+- `pnpm smoke:cli` rebuilt the CLI and passed the product-reviewer and developer consent journeys with zero provider spend and no worktree change.
+- The AWS boundary has a live read-only Ireland probe. It is not a substitute for a new full production execution run.
 
-## Implemented but awaiting the coordinated deployment
+## Still required before a launch verdict
 
-- Exact-commit context → typed Gemini stages → independent critic → deterministic evidence gate → sandbox checks/scanners → bounded Autofix → stacked-PR publication.
-- Saved-key reload/use/revoke, web/CLI parity at the same commit, current scanner image timing, production queue/retry/cancellation measurements, final rollback, and self-review.
-- Public and private fixture execution and official AACR/SWE live-model populations.
+1. An owner must save a newly rotated Gemini, OpenAI, or Anthropic key in the open production setup form. The raw key must not be sent in chat.
+2. Run public and private reviews through exact-commit context, typed model stages, independent critic, evidence gate, sandbox/scanners, and a human-readable report.
+3. Compare the web and CLI results at the same commit; prove cancellation, revocation, rollback, the three-round Autofix limit, and a human-inspected stacked pull request. BuildIT must not merge it.
+4. Complete symmetric, independent two-person/two-organization reviews and verify each sees only its own workspace.
+5. Obtain blind labels created before model runs, Critical double review and adjudication, then report measured precision, recall, agreement, and confidence ranges. Do not claim 95% until this passes.
+6. Prove BuildIT-only Grafana alert delivery. The existing Orbit project must remain unchanged.
+7. Obtain independent penetration-test evidence and any compliance certification before making those claims. Complete provider-authorized Linear/Jira and email work only when those credentials exist.
 
-## External evidence or service still required
+## Safety boundary
 
-- Human-created blind labels and adjudication records. Until supplied, measured precision, recall, reviewer agreement, confidence ranges, and the requested >95% result are unknown.
-- A second independently controlled GitHub user in a second organization for the production isolation harness.
-- An independent penetration test and any SOC 2 or ISO 27001 audit/certification. Internal ASVS-aligned tests are not substitutes.
-- Transactional-email provider credentials and delivery-domain setup for live email. Tenant preferences and the source-free adapter exist; GitHub and dashboard remain the working channels.
-- Linear and Jira OAuth app credentials and customer authorization. The product currently says these connections are unavailable and never invents ticket context.
-- Human-run backup restore, deletion, outage, incident-response, and staff break-glass exercises with signed evidence.
+BuildIT fails closed. Missing or stale evidence, unavailable provider or runner, cancellation, exhausted limits, unsupported issue context, or a failed check cannot become “ready to merge.” A human alone may merge a pull request.
 
-## Vercel-dependent release sequence
+## Launch guides when the release gate passes
 
-1. Deploy only `pulsetrade/buildit-content-broker` after the rolling quota permits it.
-2. Probe health, encrypted artifacts, credentials, model calls, scanner provenance, and deletion.
-3. Deploy the exact matching Convex production worker—never first.
-4. Run real Gemini reviews on selected public and private fixtures.
-5. Compare web and CLI findings at identical commits.
-6. Run live neutral-change, AACR, SWE, and human-labelled evaluation gates.
-7. Prove Autofix attempt/round/time/spend bounds, rollback, and the three-round maximum.
-8. Prove saved-key reload, last use, replacement, and revocation.
-9. Have BuildIT review its own delivery pull request.
-10. Deliver a human-inspected stacked pull request without BuildIT merging it.
-11. Record exact deployment IDs, source commits, image digests, and rollback points.
-
-## How to use it when the rollout passes
-
-- Web journey: `docs/guides/web-launch-guide.md`
-- CLI developer and Product reviewer journey: `docs/guides/cli-launch-guide.md`
-
-BuildIT remains fail-closed: missing checks, stale commits, unsupported evidence, unavailable issue context, provider/runner failure, cancelled work, or exhausted bounds cannot become “ready.” Only a human may merge.
+- Web: `docs/guides/web-launch-guide.md`
+- CLI: `docs/guides/cli-launch-guide.md`
