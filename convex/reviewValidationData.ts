@@ -50,7 +50,10 @@ export const completeValidation = internalMutation({
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
     if (!config || config.organizationId !== args.organizationId || config.repositoryId !== review.repositoryId) throw new ConvexError("configuration_scope_mismatch");
     if (!artifact || artifact.organizationId !== args.organizationId || artifact.repositoryId !== review.repositoryId || artifact.reviewId !== review._id || artifact.type !== "command_output" || artifact.checksum !== args.checksum || artifact.size !== args.size) throw new ConvexError("validation_artifact_mismatch");
-    if (!args.summaries.length || args.summaries.length > 12) throw new ConvexError("validation_summary_invalid");
+    // The bounded default plan has install, test, lint, and typecheck plus three
+    // scanners for both base and head commits: fourteen records. Repositories
+    // may add one trusted check, so sixteen is the explicit maximum.
+    if (!args.summaries.length || args.summaries.length > 16) throw new ConvexError("validation_summary_invalid");
     for (const item of args.summaries) if (!/^[0-9a-f]{40}$/.test(item.commitSha) || !/^[0-9a-f]{64}$/.test(item.commandFingerprint) || !/^[0-9a-f]{64}$/.test(item.nameHash) || (item.executionFingerprint&&!/^[0-9a-f]{64}$/.test(item.executionFingerprint)) || (item.outputHash&&!/^[0-9a-f]{64}$/.test(item.outputHash)) || !Number.isInteger(item.durationMs) || item.durationMs < 0 || item.durationMs > 240_000 || (item.revision === "base" ? review.baseSha : review.headSha) !== item.commitSha) throw new ConvexError("validation_summary_invalid");
     const existing = await ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
     if (artifact.redactionStatus === "redacted" && existing.length) return artifact._id;
