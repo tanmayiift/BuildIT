@@ -139,7 +139,7 @@ export const start = internalMutation({
       organizationId: args.organizationId, reviewId: args.reviewId,
       expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
       startedAt: args.now,
-    }, { startAsync: true });
+    });
     await ctx.db.patch(args.reviewId, { workflowId: String(workflowId), startedAt: args.now, updatedAt: args.now });
     return String(workflowId);
   },

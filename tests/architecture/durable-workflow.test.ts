@@ -42,4 +42,15 @@ describe("durable review crash recovery", () => {
     const source = readFileSync("convex/durableReview.ts", "utf8");
     expect(source).toContain("step.runAction(internal.reviewValidationWorker.validate");
   });
+
+  it("starts a new review through the workflow component immediately", () => {
+    const source = readFileSync("convex/durableReview.ts", "utf8");
+    const start = source.indexOf("reviewWorkflowManager.start(ctx, internal.durableReview.execute");
+    const end = source.indexOf("await ctx.db.patch(args.reviewId", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    // `startAsync` relies on the component workpool to claim the work later. A
+    // review must begin durably at creation so a queued workpool cannot strand it.
+    expect(source.slice(start, end)).not.toContain("startAsync");
+  });
 });
