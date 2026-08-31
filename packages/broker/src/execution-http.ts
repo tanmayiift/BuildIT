@@ -28,6 +28,18 @@ export function safeExecutionError(error: unknown) {
   return { status: 503, code: "execution_failed" };
 }
 
+// This is deliberately a closed list. It is safe to emit to operations logs,
+// unlike an Error message which could contain sandbox, artifact, or provider context.
+export function safeExecutionErrorCategory(error: unknown) {
+  const code = error instanceof Error ? error.message : "unknown";
+  if (/^(?:authentication_required|execution_grant_(?:invalid|scope_invalid|expired|replayed))$/.test(code)) return "grant";
+  if (/^(?:artifact_(?:integrity_failed|revision_mismatch|file_conflict)|base_head_context_incomplete)$/.test(code)) return "artifact";
+  if (/^(?:sandbox_|credential_teardown|osv_|gitleaks_)/.test(code)) return "runner_or_scanner";
+  if (/^(?:invalid_|command_not_allowed|untrusted_command)/.test(code)) return "request_policy";
+  if (/^(?:scanner_|execution_environment_invalid|paired_execution_incomplete|package_manager_)/.test(code)) return "evidence";
+  return "unexpected";
+}
+
 export async function handleExecution(request: Request, input: { artifactBroker: ArtifactBroker; grantSecret: Uint8Array; consume: (id: string, expiresAt: number) => Promise<boolean>; runner?: Runner; now?: number }) {
   try {
     if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
@@ -63,5 +75,9 @@ export async function handleExecution(request: Request, input: { artifactBroker:
       parseOsv(result.osvReport, commitSha, scannerInventory.osvScanner),
     ]);
     return json(200, { base: bounded(baseResult), head: bounded(headResult), diagnostics:{base:baseDiagnostics,head:headDiagnostics}, scanners: { base: scanner("base", body.baseSha, baseResult), head: scanner("head", body.headSha, headResult) } });
-  } catch (error) { const mapped = safeExecutionError(error); return json(mapped.status, { error: mapped.code }); }
+  } catch (error) {
+    const mapped = safeExecutionError(error);
+    console.error("buildit_execute_failure", { category: safeExecutionErrorCategory(error), code: mapped.code });
+    return json(mapped.status, { error: mapped.code });
+  }
 }
