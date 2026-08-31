@@ -2037,6 +2037,13 @@ describe("Convex review state integrity", () => {
       t.mutation(internal.reviewPublicationData.completeSideEffect, {
         ...base,
         organizationId: alpha.organizationId,
+        status: "reserved",
+      }),
+    ).rejects.toThrow("side_effect_completion_status_invalid");
+    await expect(
+      t.mutation(internal.reviewPublicationData.completeSideEffect, {
+        ...base,
+        organizationId: alpha.organizationId,
       }),
     ).resolves.toBe(sideEffectId);
     await expect(

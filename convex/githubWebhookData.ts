@@ -2,7 +2,12 @@ import { v } from "convex/values";
 import { selectProviderModel } from "@buildit/providers";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { terminalStatuses } from "./lib/lifecycle";
+
+export function webhookTelemetryOutcome(disposition: "processed" | "ignored_bot" | "ignored_edit" | "duplicate" | "rejected", status: "enqueued" | "completed" | "failed") {
+  return { operation: "webhook.process" as const, stage: "context" as const, outcome: status === "failed" ? "failed" as const : disposition === "rejected" ? "blocked" as const : "succeeded" as const };
+}
 
 export const reserve = internalMutation({
   args: {
@@ -356,6 +361,7 @@ export const complete = internalMutation({
         status: args.status,
         completedAt: args.status === "enqueued" ? undefined : args.now,
       });
+    await ctx.scheduler.runAfter(0, internal.telemetryWorker.emit, webhookTelemetryOutcome(args.disposition, args.status));
   },
 });
 

@@ -1,9 +1,19 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { assertReviewParent } from "./lib/parentConsistency";
 import { sideEffectStatus } from "./validators";
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
+const effectOperations = {
+  check_create: "github.check", check_update: "github.check",
+  comment_create: "github.comment", comment_update: "github.comment",
+  branch_create: "github.branch", commit_push: "github.branch",
+  stacked_pr_create: "github.stacked_pr", token_revoke: "credential.revoke",
+} as const;
+export function sideEffectTelemetry(type: keyof typeof effectOperations, status: "completed" | "failed" | "reconciled") {
+  return { operation: effectOperations[type], stage: "delivery" as const, outcome: status === "failed" ? "failed" as const : "succeeded" as const };
+}
 
 export const publicationScope = internalQuery({
   args: executionArgs,
@@ -24,11 +34,13 @@ export const publicationScope = internalQuery({
 export const completeSideEffect = internalMutation({
   args: { ...executionArgs, sideEffectId: v.id("githubSideEffects"), requestHash: v.string(), externalId: v.string(), status: sideEffectStatus, now: v.number() },
   handler: async (ctx, args) => {
+    if (args.status === "reserved") throw new ConvexError("side_effect_completion_status_invalid");
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), effect = await ctx.db.get(args.sideEffectId);
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || !effect || effect.organizationId !== args.organizationId || effect.repositoryId !== review.repositoryId || effect.reviewId !== review._id || effect.requestHash !== args.requestHash) throw new ConvexError("side_effect_scope_mismatch");
     if (effect.status === "completed") { if (effect.externalId !== args.externalId) throw new ConvexError("side_effect_completion_conflict"); return effect._id; }
     if (effect.status !== "reserved" && effect.status !== "failed") throw new ConvexError("side_effect_not_completable");
     await ctx.db.patch(effect._id, { status: args.status, externalId: args.externalId, updatedAt: args.now });
+    await ctx.scheduler.runAfter(0, internal.telemetryWorker.emit, sideEffectTelemetry(effect.type, args.status));
     return effect._id;
   },
 });

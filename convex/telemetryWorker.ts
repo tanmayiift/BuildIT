@@ -8,7 +8,7 @@ const operation = v.union(
   v.literal("review.context"), v.literal("review.analysis"), v.literal("review.tests"),
   v.literal("review.autofix"), v.literal("review.delivery"), v.literal("review.decision"), v.literal("webhook.process"),
   v.literal("github.comment"), v.literal("github.check"), v.literal("github.branch"), v.literal("github.stacked_pr"),
-  v.literal("artifact.delete"), v.literal("sandbox.cleanup"),
+  v.literal("credential.revoke"), v.literal("artifact.delete"), v.literal("sandbox.cleanup"),
 );
 const stage = v.union(v.literal("activation"), v.literal("context"), v.literal("analysis"), v.literal("tests"), v.literal("autofix"), v.literal("delivery"), v.literal("decision"));
 const outcome = v.union(v.literal("started"), v.literal("succeeded"), v.literal("failed"), v.literal("cancelled"), v.literal("blocked"));
