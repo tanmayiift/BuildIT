@@ -16,7 +16,8 @@ function report(error: unknown) {
   const messages: string[] = [], seen = new Set<unknown>();
   let current: unknown = error;
   while (current instanceof Error && !seen.has(current)) { seen.add(current); messages.push(current.message); current = current.cause; }
-  const stage = messages.find(message => /^credential_(?:authorization|provider_validation|kms_encryption|store_write|persistence)_failed$/.test(message));
+  const stage = messages.find(message => /^credential_(?:authorization|provider_validation|kms_encryption|store_write)_failed$/.test(message))
+    ?? messages.find(message => message === "credential_persistence_failed");
   const cause = error instanceof Error && error.cause ? error.cause : error;
   const raw = cause instanceof Error ? cause.name : typeof (cause as { name?: unknown })?.name === "string"
     ? String((cause as { name: string }).name) : "Unknown";
