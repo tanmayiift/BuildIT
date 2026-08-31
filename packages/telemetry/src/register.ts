@@ -48,7 +48,7 @@ export function registerBuildITMetrics(serviceName: "buildit-web" | "buildit-con
   const logsUrl = logEndpoint(environment);
   if (logsUrl) {
     const logExporter = new OTLPLogExporter({ url: logsUrl, ...(configuredHeaders ? { headers: configuredHeaders } : {}) });
-    loggerProvider = new LoggerProvider({ resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: serviceName, [ATTR_SERVICE_VERSION]: environment.VERCEL_GIT_COMMIT_SHA?.slice(0, 40) ?? "local" }), processors: [new BatchLogRecordProcessor(logExporter)] });
+    loggerProvider = new LoggerProvider({ resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: serviceName, [ATTR_SERVICE_VERSION]: environment.VERCEL_GIT_COMMIT_SHA?.slice(0, 40) ?? "local" }), processors: [new BatchLogRecordProcessor({ exporter: logExporter })] });
     logs.setGlobalLoggerProvider(loggerProvider);
   }
   return provider;
