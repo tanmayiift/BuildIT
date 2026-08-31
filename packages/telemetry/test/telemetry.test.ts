@@ -1,0 +1,22 @@
+import { describe, expect, it, vi } from "vitest";
+import { safeAttributes, safeLog, traced } from "../src/index.js";
+
+describe("source-free telemetry", () => {
+  it("only retains bounded allowlisted attributes", () => {
+    const result = safeAttributes({ stage: "tests", outcome: "failed", errorCode: "x".repeat(200), secret: "no" } as never);
+    expect(result).toEqual({ "buildit.stage": "tests", "buildit.outcome": "failed", "buildit.error_code": "x".repeat(80) });
+    expect(JSON.stringify(result)).not.toContain("no");
+  });
+
+  it("logs only safe fields", () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    safeLog("review.started", { provider: "gemini", repositoryVisibility: "private" });
+    expect(info).toHaveBeenCalledOnce();
+    expect(info.mock.calls[0]?.[0]).not.toContain("owner");
+    info.mockRestore();
+  });
+
+  it("preserves task errors", async () => {
+    await expect(traced("review.test", { stage: "tests" }, async () => { throw new TypeError("private value"); })).rejects.toThrow("private value");
+  });
+});
