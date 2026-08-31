@@ -578,6 +578,7 @@ describe("Convex tenant isolation", () => {
       actorId: "alice",
       actorRole: "admin",
       expectedCredentialScopeId: "credential-test",
+      budgetLimit: 2,
       now,
     });
     const asAlice = t.withIdentity({ subject: "alice|session" });
@@ -623,6 +624,7 @@ describe("Convex tenant isolation", () => {
       asAlice.action(api.dashboardReviews.prepare, {
         repositoryId: beta.repositoryId,
         prNumber: 2,
+        budgetLimit: 2,
       }),
     ).rejects.toThrow("not_found_or_forbidden");
     const created = await t.mutation(internal.dashboardReviewData.create, {
@@ -635,6 +637,7 @@ describe("Convex tenant isolation", () => {
       actorId: "alice",
       actorRole: "developer",
       expectedCredentialScopeId: "credential-test",
+      budgetLimit: 2,
       now: Date.now(),
     });
     expect(await t.run((ctx) => ctx.db.get(created.reviewId))).toMatchObject({
@@ -656,6 +659,7 @@ describe("Convex tenant isolation", () => {
       actorId: "alice",
       actorRole: "developer",
       expectedCredentialScopeId: "replaced-after-preview",
+      budgetLimit: 2,
       now: Date.now(),
     })).rejects.toThrow("provider_credential_changed_review_again");
     const [event, audit] = await t.run(async (ctx) =>
@@ -693,6 +697,7 @@ describe("Convex tenant isolation", () => {
       actorId: "alice",
       actorRole: "developer",
       expectedCredentialScopeId: "credential-test",
+      budgetLimit: 2,
       now: Date.now() + 1,
     });
     expect(retried.reviewId).not.toBe(created.reviewId);
@@ -718,6 +723,7 @@ describe("Convex tenant isolation", () => {
         .action(api.dashboardReviews.prepare, {
           repositoryId: alpha.repositoryId,
           prNumber: 2,
+          budgetLimit: 2,
         }),
     ).rejects.toThrow("not_found_or_forbidden");
     await expect(
@@ -731,6 +737,7 @@ describe("Convex tenant isolation", () => {
         actorId: "viewer",
         actorRole: "developer",
         expectedCredentialScopeId: "credential-test",
+        budgetLimit: 2,
         now: Date.now(),
       }),
     ).rejects.toThrow("not_found_or_forbidden");
@@ -1322,6 +1329,7 @@ describe("Convex tenant isolation", () => {
     const stageRun={...args,stage:"findings" as const,provider:"anthropic" as const,model:"claude-sonnet-4-5",promptVersion:"findings-v1",schemaVersion:"findings-schema-v1",finishReason:"tool_use",requestHash:"9".repeat(64),requestId:"provider-request-1",attempt:1,outcome:"valid" as const,inputTokens:10,outputTokens:2,now};
     await expect(t.mutation(internal.reviewModelData.recordStageRun,{...stageRun,organizationId:beta.organizationId})).rejects.toThrow("parent_scope_mismatch");
     await expect(t.mutation(internal.reviewModelData.recordStageRun,stageRun)).resolves.toBeNull();
+    await expect(t.mutation(internal.reviewModelData.recordStageRun,stageRun)).resolves.toBeNull();
     await expect(
       t.mutation(internal.reviewModelData.completeAnalysis, {
         ...args,
@@ -1396,6 +1404,8 @@ describe("Convex tenant isolation", () => {
         quantity: 12,
       }),
     ]);
+    expect(stored.usage[0]?.unitCost).toBeGreaterThan(0);
+    expect(await t.run(async ctx => (await ctx.db.get(alpha.reviewId))?.budgetConsumed)).toBeGreaterThan(0);
     expect(stored.requirements).toHaveLength(1);
     expect(stored.requirements[0]).toMatchObject({ sourceType: "github_issue", fetchedVersion: "issue-etag-v1" });
     expect(stored.findings).toHaveLength(1);
@@ -1408,6 +1418,26 @@ describe("Convex tenant isolation", () => {
     expect(JSON.stringify(stored.usage)).not.toContain("ciphertext");
     expect(stored.stageRuns).toEqual([expect.objectContaining({organizationId:alpha.organizationId,repositoryId:alpha.repositoryId,reviewId:alpha.reviewId,stage:"findings",model:"claude-sonnet-4-5",requestHash:"9".repeat(64),attempt:1,outcome:"valid"})]);
     expect(JSON.stringify(stored.stageRuns)).not.toContain("ciphertext");
+  });
+
+  it("stops before a model call that could cross the chosen ceiling", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "model-ceiling", "alice"), now = Date.now();
+    await t.run(async ctx => ctx.db.patch(alpha.reviewId, { budgetLimit: 1, budgetConsumed: 0 }));
+    await expect(t.mutation(internal.reviewModelData.preflightStageSpend, {
+      organizationId: alpha.organizationId,
+      reviewId: alpha.reviewId,
+      expectedHeadSha: "a".repeat(40),
+      expectedGeneration: 0,
+      inputBytes: 80_000,
+      maxOutputTokens: 8_000,
+      now,
+    })).resolves.toMatchObject({ allowed: false });
+    expect(await t.run(async ctx => ctx.db.get(alpha.reviewId))).toMatchObject({
+      status: "budget_exhausted",
+      statusReasonCode: "spend_ceiling_reached",
+      budgetCeilingId: "conservative-stage-preflight",
+      nextActionCode: "increase_budget",
+    });
   });
 
   it("keeps review filters separate for repositories with the same name", async () => {

@@ -52,11 +52,11 @@ export const cancellationScope = internalQuery({
 });
 
 export const create = internalMutation({
-  args: { repositoryId: v.id("repositories"), prNumber: v.number(), headSha: v.string(), baseSha: v.string(),
+  args: { repositoryId: v.id("repositories"), prNumber: v.number(), headSha: v.string(), baseSha: v.string(), budgetLimit: v.number(),
     baseRef: v.string(), isFork: v.boolean(), actorId: v.string(), actorRole: v.union(v.literal("developer"), v.literal("admin"), v.literal("owner")), expectedCredentialScopeId: v.string(), now: v.number() },
   handler: async (ctx, args) => {
     const repository = await ctx.db.get(args.repositoryId);
-    if (!repository || !repository.enabled || repository.pausedAt || !Number.isInteger(args.prNumber) || args.prNumber < 1
+    if (!repository || !repository.enabled || repository.pausedAt || !Number.isInteger(args.prNumber) || args.prNumber < 1 || ![1, 2, 3, 5].includes(args.budgetLimit)
       || !/^[0-9a-f]{40}$/.test(args.headSha) || !/^[0-9a-f]{40}$/.test(args.baseSha)) throw new ConvexError("dashboard_review_invalid");
     const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", repository.organizationId).eq("userId", args.actorId)).unique();
     if (!membership || membership.status !== "active" || !["developer", "admin", "owner"].includes(membership.role)) throw new ConvexError("not_found_or_forbidden");
@@ -84,7 +84,7 @@ export const create = internalMutation({
       baseSha: args.baseSha, headSha: args.headSha, requiredCheckPolicy: "fail_closed", completedRoundCount: 0, patchAttemptCount: 0,
       diagnosticRunCount: 0, providerRetryCount: 0, commandRetryCount: 0, trigger: "dashboard", triggerVerb: "review",
       triggerActor: args.actorId, triggerActorPermission: args.actorRole === "developer" ? "write" : "admin",
-      mode: "review", status: "queued", budgetLimit: 5, budgetConsumed: 0, nextActionCode: "none", isStale: false,
+      mode: "review", status: "queued", budgetLimit: args.budgetLimit, budgetConsumed: 0, nextActionCode: "none", isStale: false,
       trustedRef: args.baseRef, trustedRefSha: args.baseSha, configRevisionId: config._id, configProvenance: "defaults_only",
       provider: credential.provider, model, modelVersion: "pinned-at-execution", promptVersion: "chain-v1", evalSetVersion: "buildit-eval-v1",
       coverageLevel: "limited", currentStage: "queue", executionGeneration: 0, queuePriority: 0, runnerImageVersion: RUNNER_IMAGE_VERSION,

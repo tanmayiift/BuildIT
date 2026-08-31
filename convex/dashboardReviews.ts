@@ -8,7 +8,7 @@ import type { WorkflowId } from "@convex-dev/workflow";
 import { GitHubAppClient, pinPullRequest, reviewPolicy } from "@buildit/github";
 import { requireExecutionEnabled } from "./lib/executionGate";
 
-const args = { repositoryId: v.id("repositories"), prNumber: v.number() };
+const args = { repositoryId: v.id("repositories"), prNumber: v.number(), budgetLimit: v.number() };
 type DashboardScope = { actorId: string; actorRole: "developer" | "admin" | "owner"; organizationId: Id<"organizations">;
   repositoryId: Id<"repositories">; githubRepositoryId: number; installationId: number; owner: string; name: string; forkPolicy: "manual_review_only" | "disabled";
   credentialScopeId: string; provider: "anthropic" | "openai" | "gemini"; model: string };
@@ -38,7 +38,7 @@ export const prepare = action({ args, handler: async (ctx, input): Promise<Prepa
   return { repository: `${scope.owner}/${scope.name}`, pull, credentialScopeId: scope.credentialScopeId,
     consent: { reads: ["PR description and diff", "linked GitHub Issues", "repository files needed for impact analysis"],
       runs: ["dependency install with scripts disabled", "test", "lint", "typecheck", "Gitleaks 8.28.0", "OSV-Scanner 2.2.3", "BuildIT static rules 1.0.0"],
-      provider: scope.provider, model: `${scope.provider} · ${scope.model}. Only bounded context and evidence go to this provider through the saved key inspected now`, maximumProviderCostUsd: 5,
+      provider: scope.provider, model: `${scope.provider} · ${scope.model}. Only bounded context and evidence go to this provider through the saved key inspected now`, maximumProviderCostUsd: input.budgetLimit,
       writes: ["one BuildIT Check", "one BuildIT PR summary"], cannot: ["merge", "edit workflows", "change repository settings", "write a fix branch during review mode"] } };
 } });
 
@@ -50,7 +50,7 @@ export const start = action({ args: { ...args, expectedHeadSha: v.string(), expe
   if (scope.credentialScopeId !== input.expectedCredentialScopeId) throw new Error("provider_credential_changed_review_again");
   const review = await ctx.runMutation(internal.dashboardReviewData.create, { repositoryId: input.repositoryId, prNumber: input.prNumber,
     headSha: pull.headSha, baseSha: pull.baseSha, baseRef: pull.baseRef, isFork: pull.isFork, actorId: scope.actorId,
-    actorRole: scope.actorRole as "developer" | "admin" | "owner", expectedCredentialScopeId: input.expectedCredentialScopeId, now: Date.now() });
+    actorRole: scope.actorRole as "developer" | "admin" | "owner", expectedCredentialScopeId: input.expectedCredentialScopeId, budgetLimit: input.budgetLimit, now: Date.now() });
   await ctx.runAction(internal.telemetryWorker.emit, { operation: "activation.review", stage: "activation", outcome: "started" });
   if (review.status === "queued") await ctx.runMutation(internal.durableReview.start, { organizationId: scope.organizationId, reviewId: review.reviewId,
     expectedHeadSha: review.headSha, expectedGeneration: review.executionGeneration, now: Date.now() });
