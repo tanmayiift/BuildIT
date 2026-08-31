@@ -2,6 +2,7 @@
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { useState } from "react";
 import { makeFunctionReference } from "convex/server";
+import { eventPresentation, nextActionPresentation, stagePresentation, statusPresentation, technicalLabel as label } from "./review-presentation";
 type Evidence = {
   review: {
     id: string;
@@ -82,8 +83,6 @@ const evidenceQuery = makeFunctionReference<
     { reviewId: string },
     { status: "cancelled" | "already_finished" }
   >("dashboardReviews:cancel"),
-  label = (value: string) =>
-    value.replaceAll("_", " ").replace(/^./, (first) => first.toUpperCase()),
   tone = (value: string) =>
     ["passed", "checks_passed", "delivered", "accepted", "resolved"].includes(
       value,
@@ -133,6 +132,9 @@ export function LiveReviewDetail({ id }: { id: string }) {
       />
     );
   const { review, repository } = evidence;
+  const verdict = statusPresentation(review.status, review.isStale),
+    nextAction = nextActionPresentation(review.nextActionCode, review.isStale),
+    hasEvidence = evidence.requirements.length + evidence.findings.length + evidence.checks.length > 0;
   const canCancel = ![
     "passed",
     "changes_requested",
@@ -164,19 +166,13 @@ export function LiveReviewDetail({ id }: { id: string }) {
         <span className="status success">Live data</span>
       </div>
       <section className="verdict-card">
-        <div>
-          <span className={`status ${tone(review.status)}`}>
-            {label(review.status)}
-          </span>
-          <h1>
-            {review.isStale
-              ? "This result is stale"
-              : label(review.statusReasonCode ?? review.currentStage)}
-          </h1>
-          <p>
-            Decision for exact commit <code>{review.headSha.slice(0, 12)}</code>
-            . Missing or partial proof cannot pass.
-          </p>
+        <div className="verdict-message">
+          <span className={`verdict-symbol ${verdict.tone}`} aria-hidden="true">{verdict.symbol}</span>
+          <div>
+            <span className={`status ${verdict.tone}`}>{verdict.label}</span>
+            <h1>{verdict.title}</h1>
+            <p>{verdict.summary}</p>
+          </div>
         </div>
         <div className="verdict-actions">
           {canCancel ? (
@@ -190,31 +186,32 @@ export function LiveReviewDetail({ id }: { id: string }) {
           {cancelError ? <p role="alert">{cancelError}</p> : null}
         </div>
       </section>
-      <section className="commit-strip">
+      <section className="commit-strip" aria-label="Review scope">
         <Fact
           label="Repository"
           value={`${repository.owner}/${repository.name}`}
         />
         <Fact label="Pull request" value={`#${review.prNumber}`} />
         <Fact label="Head commit" value={review.headSha.slice(0, 12)} mono />
-        <Fact label="Base commit" value={review.baseSha.slice(0, 12)} mono />
         <Fact label="Mode" value={label(review.mode)} />
         <Fact label="Coverage" value={label(review.coverageLevel)} />
       </section>
       <div className="next-action">
-        <span className="next-mark">!</span>
+        <span className="next-mark" aria-hidden="true">→</span>
         <div>
-          <strong>Next action: {label(review.nextActionCode)}</strong>
-          <p>
-            {review.isStale
-              ? "The PR head changed. Start a fresh review; do not rely on this result."
-              : `Stage: ${label(review.currentStage)} · Provider: ${review.provider} · spend ${review.budgetConsumed.toFixed(2)} of ${review.budgetLimit.toFixed(2)} ceiling.`}
-          </p>
+          <small>What to do next</small>
+          <strong>{nextAction.title}</strong>
+          <p>{nextAction.detail}</p>
         </div>
       </div>
-      <Section
-        title="Requirements"
-        detail={`${evidence.requirements.length} gathered`}
+      <ReviewJourney currentStage={review.currentStage} status={review.status} />
+      <details className="technical-details"><summary>Technical details</summary><dl><div><dt>Base commit</dt><dd><code>{review.baseSha.slice(0, 12)}</code></dd></div><div><dt>Current step</dt><dd>{stagePresentation(review.currentStage)}</dd></div><div><dt>AI provider</dt><dd>{label(review.provider)} · {review.model}</dd></div><div><dt>Spend</dt><dd>{review.budgetConsumed.toFixed(2)} of {review.budgetLimit.toFixed(2)} limit</dd></div></dl></details>
+      {!hasEvidence ? <section className="evidence-empty"><span aria-hidden="true">◇</span><div><h2>No evidence was produced</h2><p>{review.status === "cancelled" ? "This review stopped before BuildIT gathered requirements, reported issues, or ran checks." : "BuildIT has not gathered requirements, reported issues, or completed checks yet."}</p></div></section> : null}
+      {evidence.requirements.length ? <Section
+        eyebrow="Intent"
+        title="What this change must do"
+        detail={`${evidence.requirements.length} found`}
+        foot="Each item is tied to the pull request, a linked ticket, or repository documentation."
       >
         {evidence.requirements.length ? (
           evidence.requirements.map((item, index) => (
@@ -232,13 +229,13 @@ export function LiveReviewDetail({ id }: { id: string }) {
               </span>
             </div>
           ))
-        ) : (
-          <Empty text="No requirements have been gathered yet." />
-        )}
-      </Section>
-      <Section
-        title="Findings"
-        detail={`${evidence.findings.length} evidence-gated`}
+        ) : null}
+      </Section> : null}
+      {evidence.findings.length ? <Section
+        eyebrow="Decision support"
+        title="Issues to fix"
+        detail={`${evidence.findings.length} supported by evidence`}
+        foot="BuildIT shows an issue only when it can point to supporting evidence."
       >
         {evidence.findings.length ? (
           evidence.findings.map((item) => (
@@ -257,13 +254,13 @@ export function LiveReviewDetail({ id }: { id: string }) {
               </code>
             </div>
           ))
-        ) : (
-          <Empty text="No accepted or uncertain findings are recorded." />
-        )}
-      </Section>
-      <Section
-        title="Validation matrix"
+        ) : null}
+      </Section> : null}
+      {evidence.checks.length ? <Section
+        eyebrow="Verification"
+        title="Checks run"
         detail={`${evidence.checks.filter((item) => item.required).length} required`}
+        foot="A required check needs recorded output before BuildIT can treat it as passed."
         validation
       >
         {evidence.checks.length ? (
@@ -282,14 +279,14 @@ export function LiveReviewDetail({ id }: { id: string }) {
               </span>
             </div>
           ))
-        ) : (
-          <Empty text="No checks have completed yet." />
-        )}
-      </Section>
+        ) : null}
+      </Section> : null}
       {evidence.rounds.length ? (
         <Section
-          title="Autofix rounds"
+          eyebrow="Autofix"
+          title="Fix attempts"
           detail={`${evidence.rounds.length} of 3`}
+          foot="BuildIT stops after three attempts and never merges the result."
         >
           <div>
             {evidence.rounds.map((item) => (
@@ -309,20 +306,21 @@ export function LiveReviewDetail({ id }: { id: string }) {
         </Section>
       ) : null}
       <Section
-        title="Audit timeline"
-        detail={`${evidence.events.length} durable events`}
+        eyebrow="History"
+        title="Review activity"
+        detail={`${evidence.events.length} ${evidence.events.length === 1 ? "event" : "events"}`}
+        foot="This history is saved without repository source or model prompts."
       >
-        <div>
+        <ol className="activity-list">
           {evidence.events.map((item) => (
-            <div className="validation-row" key={item.id}>
-              <code>#{item.sequence}</code>
-              <strong>{label(item.stage)}</strong>
-              <span>{label(item.type)}</span>
-              <code>{item.code}</code>
-              <time>{new Date(item.createdAt).toLocaleString()}</time>
-            </div>
+            <li className="activity-row" key={item.id}>
+              <span className="activity-dot" aria-hidden="true" />
+              <div className="activity-copy"><strong>{eventPresentation(item.type)}</strong><span>{stagePresentation(item.stage)}</span></div>
+              <time dateTime={new Date(item.createdAt).toISOString()}>{new Date(item.createdAt).toLocaleString()}</time>
+              <details><summary>Details</summary><code>Event {item.sequence} · {item.code}</code></details>
+            </li>
           ))}
-        </div>
+        </ol>
       </Section>
     </div>
   );
@@ -370,21 +368,25 @@ function Fact({
   );
 }
 function Section({
+  eyebrow,
   title,
   detail,
   children,
+  foot,
   validation = false,
 }: {
+  eyebrow: string;
   title: string;
   detail: string;
   children: React.ReactNode;
+  foot: string;
   validation?: boolean;
 }) {
   return (
     <section className="evidence-section">
       <div className="evidence-heading">
         <div>
-          <p className="eyebrow">Live evidence</p>
+          <p className="eyebrow">{eyebrow}</p>
           <h2>{title}</h2>
         </div>
         <span>{detail}</span>
@@ -393,12 +395,17 @@ function Section({
         {children}
       </div>
       <footer className="evidence-foot">
-        Source text stays encrypted. This view shows scoped metadata and exact
-        evidence availability.
+        {foot}
       </footer>
     </section>
   );
 }
-function Empty({ text }: { text: string }) {
-  return <p className="evidence-foot">{text}</p>;
+function ReviewJourney({ currentStage, status }: { currentStage: string; status: string }) {
+  const steps = [
+    { key: "context", label: "Understand", detail: "Read the PR and requirements" },
+    { key: "analysis", label: "Inspect", detail: "Look for risky code changes" },
+    { key: "validation", label: "Verify", detail: "Run required checks" },
+    { key: "delivery", label: "Hand back", detail: "Show evidence or a tested fix" },
+  ], order = ["queue", "context", "analysis", "validation", "autofix", "delivery", "complete"], current = order.indexOf(currentStage), stopped = status === "cancelled";
+  return <section className="review-journey" aria-labelledby="review-journey-title"><div><p className="eyebrow">Review journey</p><h2 id="review-journey-title">How far BuildIT got</h2></div><ol>{steps.map((step, index) => { const position = order.indexOf(step.key), complete = !stopped && current > position, active = current === position; return <li key={step.key} data-state={complete ? "complete" : active ? "active" : "waiting"}><span aria-hidden="true">{complete ? "✓" : index + 1}</span><div><strong>{step.label}</strong><small>{step.detail}</small></div></li>; })}</ol></section>;
 }
