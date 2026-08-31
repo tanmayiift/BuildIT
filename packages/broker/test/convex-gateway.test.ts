@@ -26,7 +26,13 @@ describe("user-authorized Convex credential gateway", () => {
     const gateway = new ConvexCredentialGateway("https://tenant.convex.cloud", "signed-user-token");
     await expect(gateway.authorize({ token: "other-token", organizationId: "org-a" })).rejects.toThrow("authentication_required");
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ status: "error", errorMessage: "database secret detail" }, { status: 400 })));
-    await expect(gateway.authorize({ token: "signed-user-token", organizationId: "org-a" })).rejects.toThrow("credential_store_unavailable");
+    await expect(gateway.authorize({ token: "signed-user-token", organizationId: "org-a" })).rejects.toThrow("credential_store_400");
+  });
+
+  it("uses bounded diagnostics for an unavailable Convex HTTP boundary", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ status: "error", errorMessage: "do not log this detail" }, { status: 503 })));
+    const gateway = new ConvexCredentialGateway("https://tenant.convex.cloud", "signed-user-token");
+    await expect(gateway.authorize({ token: "signed-user-token", organizationId: "org-a" })).rejects.toThrow("credential_store_5xx");
   });
 
   it("preserves the safe recent-login recovery code from nested Convex errors", async () => {

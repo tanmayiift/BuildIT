@@ -5,6 +5,13 @@ import type{StoredTrackerCredential,TrackerCredentialStore}from"./tracker-creden
 
 type ConvexResult = { status?: unknown; value?: unknown; errorMessage?: unknown; errorData?: unknown };
 
+class ConvexGatewayError extends Error {
+  constructor(readonly safeCode: string) {
+    super(safeCode);
+    this.name = "ConvexGatewayError";
+  }
+}
+
 function stableConvexError(result: ConvexResult): Error {
   const text = JSON.stringify(result);
   for (const code of ["recent_reauthentication_required", "authentication_required", "not_found_or_forbidden", "credential_scope_already_exists", "rate_limited"])
@@ -13,13 +20,23 @@ function stableConvexError(result: ConvexResult): Error {
 }
 
 async function callConvex(url: string, token: string, operation: "query" | "mutation", path: string, args: Record<string, unknown>) {
-  const response = await fetch(`${url.replace(/\/$/, "")}/api/${operation}`, {
-    method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify({ path, args, format: "json" }), signal: AbortSignal.timeout(8_000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${url.replace(/\/$/, "")}/api/${operation}`, {
+      method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ path, args, format: "json" }), signal: AbortSignal.timeout(8_000),
+    });
+  } catch {
+    throw new ConvexGatewayError("credential_store_network_unavailable");
+  }
   let result: ConvexResult;
-  try { result = await response.json() as ConvexResult; } catch { throw new Error("credential_store_unavailable"); }
-  if (!response.ok || result.status !== "success") throw stableConvexError(result);
+  try { result = await response.json() as ConvexResult; } catch { throw new ConvexGatewayError("credential_store_invalid_response"); }
+  if (!response.ok || result.status !== "success") {
+    const known = stableConvexError(result);
+    if (known.message !== "credential_store_unavailable") throw known;
+    const family = response.status >= 500 ? "5xx" : response.status >= 400 ? String(response.status) : "invalid_result";
+    throw new ConvexGatewayError(`credential_store_${family}`);
+  }
   return result.value;
 }
 
