@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { approvedProviderModels, ProviderClient, type ProviderRequest } from "@buildit/providers";
+import { approvedProviderModels, ProviderClient, ProviderError, type ProviderRequest } from "@buildit/providers";
 import { verifyModelInvocationGrant, type ModelStage } from "@buildit/security";
 import type { CredentialBroker, StoredCredential } from "./index.js";
 
@@ -19,7 +19,7 @@ function safe(error: unknown) {
   if (code === "invalid_request") return { status: 400, code };
   if (["model_grant_invalid", "model_grant_scope_invalid"].includes(code)) return { status: 403, code: "model_grant_invalid" };
   if (["model_grant_expired", "model_grant_replayed"].includes(code)) return { status: 410, code };
-  if (["invalid_key", "refused", "truncated", "malformed_response"].includes(code)) return { status: 422, code };
+  if (["invalid_key", "refused", "truncated", "malformed_response"].includes(code)) return { status: 422, code, ...(error instanceof ProviderError && typeof error.status === "number" ? { providerStatus: error.status } : {}) };
   if (code === "rate_limited") return { status: 429, code };
   return { status: 503, code: "model_invocation_failed" };
 }
@@ -70,6 +70,6 @@ export async function handleModelInvocation(request: Request, input: {
     return json(200, { result });
   } catch (error) {
     const mapped = safe(error);
-    return json(mapped.status, { error: mapped.code });
+    return json(mapped.status, { error: mapped.code, ...(mapped.providerStatus === undefined ? {} : { providerStatus: mapped.providerStatus }) });
   }
 }

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { issueModelInvocationGrant } from "@buildit/security";
 import { handleModelInvocation, type StoredCredential } from "../src/index";
+import { ProviderError } from "@buildit/providers";
 
 const secret = new Uint8Array(32).fill(6), now = 10_000;
 const credential: StoredCredential = { id: "credential-a", organizationId: "org-a", repositoryId: "repo-a", provider: "gemini", ciphertext: "cipher", nonce: "nonce", tag: "tag", wrappedDataKey: "wrapped", kmsKeyId: "kms", envelopeVersion: 1, keyVersion: 1, aadDigest: "a".repeat(64), maskedSuffix: "1234", status: "valid", createdBy: "owner-a", createdAt: 1, lastValidatedAt: 1 };
@@ -40,5 +41,11 @@ describe("model broker HTTP boundary", () => {
     const response = await handleModelInvocation(new Request("https://broker/api/model", { method: "POST", body: unsupported.body, headers: { authorization: `Bearer ${unsupported.token}` } }), { grantSecret: secret, consume: async () => true, broker: { withCredential } as never, now });
     expect(response.status).toBe(403);
     expect(JSON.stringify(await response.json())).not.toContain("secret");
+  });
+
+  it("returns only a provider HTTP status for a malformed structured response", async () => {
+    const { body, token } = fixture();
+    const response = await handleModelInvocation(new Request("https://broker/api/model", { method: "POST", body, headers: { authorization: `Bearer ${token}` } }), { grantSecret: secret, consume: async () => true, broker: { withCredential: async (_id: string, _access: unknown, use: (provider: "gemini", key: string) => Promise<unknown>) => use("gemini", "raw-provider-key") } as never, providers: { generateWithRetry: async () => { throw new ProviderError("malformed_response", 400); } } as never, now });
+    await expect(response.json()).resolves.toEqual({ error: "malformed_response", providerStatus: 400 });
   });
 });
