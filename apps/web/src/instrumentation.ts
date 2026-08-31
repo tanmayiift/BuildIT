@@ -16,7 +16,7 @@ export async function onRequestError(
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { safeLog } = await import("@buildit/telemetry");
   safeLog("next.request_error", {
-    operation: `${context.routerKind}.${context.routeType}`.slice(0, 80),
+    operation: "web.request",
     outcome: "failed",
     errorCode: error.name,
   });

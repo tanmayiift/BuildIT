@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordOperation, traced } from "@buildit/telemetry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,10 +17,13 @@ function convexWebhookUrl() {
 }
 
 export async function POST(request: Request) {
+  return traced("webhook.forward", { operation: "webhook.process" }, async () => {
+  const startedAt = Date.now();
   let destination: string;
   try {
     destination = convexWebhookUrl();
   } catch {
+    recordOperation({ operation: "webhook.process", outcome: "failed", errorCode: "configuration_missing", durationMs: Date.now() - startedAt });
     return NextResponse.json({ error: "webhook_unavailable" }, { status: 503 });
   }
 
@@ -32,11 +36,14 @@ export async function POST(request: Request) {
 
   try {
     const upstream = await fetch(destination, { method: "POST", headers, body, cache: "no-store", signal: AbortSignal.timeout(8_000) });
+    recordOperation({ operation: upstream.status === 401 ? "webhook.verify" : upstream.status === 202 ? "webhook.process" : "webhook.process", outcome: upstream.status >= 400 ? "blocked" : "succeeded", ...(upstream.status >= 400 ? { errorCode: `http_${upstream.status}` } : {}), durationMs: Date.now() - startedAt });
     return new Response(await upstream.arrayBuffer(), {
       status: upstream.status,
       headers: { "content-type": upstream.headers.get("content-type") ?? "text/plain; charset=utf-8" },
     });
   } catch {
+    recordOperation({ operation: "webhook.process", outcome: "failed", errorCode: "upstream_unavailable", durationMs: Date.now() - startedAt });
     return NextResponse.json({ error: "webhook_forward_failed" }, { status: 503 });
   }
+  });
 }

@@ -4,8 +4,12 @@ import { safeAttributes, safeLog, traced } from "../src/index.js";
 describe("source-free telemetry", () => {
   it("only retains bounded allowlisted attributes", () => {
     const result = safeAttributes({ stage: "tests", outcome: "failed", errorCode: "x".repeat(200), secret: "no" } as never);
-    expect(result).toEqual({ "buildit.stage": "tests", "buildit.outcome": "failed", "buildit.error_code": "x".repeat(80) });
+    expect(result).toEqual({ "buildit.stage": "tests", "buildit.outcome": "failed", "buildit.error_code": "other" });
     expect(JSON.stringify(result)).not.toContain("no");
+  });
+
+  it("collapses unknown operations to prevent customer-controlled metric labels", () => {
+    expect(safeAttributes({ operation: "customer/repository/name" } as never)).toEqual({ "buildit.operation": "other" });
   });
 
   it("logs only safe fields", () => {

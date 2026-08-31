@@ -1,5 +1,5 @@
 import { registerOTel } from "@vercel/otel";
-import { recordOperation, safeLog, traced } from "@buildit/telemetry";
+import { recordOperation, safeLog, traced, type OperationName } from "@buildit/telemetry";
 import { registerBuildITMetrics } from "@buildit/telemetry/register";
 
 let registered = false;
@@ -11,7 +11,7 @@ export function registerBrokerTelemetry() {
   registerBuildITMetrics("buildit-content-broker");
 }
 
-export function observedBrokerRoute(operation: string, route: (request: Request) => Promise<Response>) {
+export function observedBrokerRoute(operation: OperationName, route: (request: Request) => Promise<Response>) {
   return async (request: Request) => traced(`broker.${operation}`, { operation }, async () => {
     const startedAt = Date.now();
     const response = await route(request);

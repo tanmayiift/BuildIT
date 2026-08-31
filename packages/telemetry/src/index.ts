@@ -3,6 +3,14 @@ import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
 export type ReviewStage = "context" | "requirements" | "analysis" | "critic" | "tests" | "autofix" | "delivery";
 export type TelemetryOutcome = "started" | "succeeded" | "failed" | "cancelled" | "blocked";
+export const operationNames = [
+  "activation.identity", "activation.repository", "activation.preview", "activation.review", "activation.evidence", "activation.decision",
+  "artifact.get", "artifact.put", "artifact.delete", "credential.save", "credential.preflight", "credential.revoke", "credential.use",
+  "github.check", "github.comment", "github.branch", "github.stacked_pr", "model.invoke", "sandbox.execute", "sandbox.cleanup",
+  "review.context", "review.requirements", "review.analysis", "review.critic", "review.tests", "review.autofix", "review.delivery", "review.stale_check",
+  "tracker.fetch", "tracker.credential_save", "web.request", "webhook.verify", "webhook.process", "autofix.loop_guard", "telemetry.smoke",
+] as const;
+export type OperationName = typeof operationNames[number];
 
 export type SafeAttributes = {
   stage?: ReviewStage;
@@ -11,17 +19,22 @@ export type SafeAttributes = {
   reviewMode?: "review" | "autofix";
   repositoryVisibility?: "public" | "private";
   errorCode?: string;
-  operation?: string;
+  operation?: OperationName;
 };
 
 const forbidden = /(api.?key|authorization|cookie|credential|diff|email|file|header|owner|path|prompt|repo.?name|secret|source|stdout|token)/i;
 const allowed = new Set(["stage", "outcome", "provider", "reviewMode", "repositoryVisibility", "errorCode", "operation"]);
+const operationSet = new Set<string>(operationNames);
+const errorCodes = new Set(["TypeError", "UnknownError", "configuration_missing", "upstream_unavailable", "rate_limited", "timeout", "cancelled", "stale_head", "budget_exhausted", "loop_guard", "deletion_failed", "provider_error", "runner_error", ...Array.from({ length: 600 }, (_, index) => `http_${index}`)]);
 
 export function safeAttributes(input: SafeAttributes): Attributes {
   const output: Attributes = {};
   for (const [key, value] of Object.entries(input)) {
     if (!allowed.has(key) || forbidden.test(key) || value === undefined) continue;
-    output[`buildit.${key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)}`] = String(value).slice(0, 80);
+    const normalized = key === "operation" && !operationSet.has(String(value)) ? "other"
+      : key === "errorCode" && !errorCodes.has(String(value)) ? "other"
+        : String(value).slice(0, 80);
+    output[`buildit.${key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)}`] = normalized;
   }
   return output;
 }
