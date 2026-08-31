@@ -9,6 +9,10 @@ Parameters:
     Type: String
     Default: buildit-content-broker
     AllowedPattern: '^[a-zA-Z0-9._-]+$'
+  VercelTeamSlug:
+    Type: String
+    Default: buildit-agentic-review
+    AllowedPattern: '^[a-zA-Z0-9._-]+$'
   ArtifactRetentionDays:
     Type: Number
     Default: 7
@@ -25,9 +29,9 @@ Resources:
   VercelOidcProvider:
     Type: AWS::IAM::OIDCProvider
     Properties:
-      Url: https://oidc.vercel.com/pulsetrade
+      Url: !Sub https://oidc.vercel.com/${VercelTeamSlug}
       ClientIdList:
-        - https://vercel.com/pulsetrade
+        - !Sub https://vercel.com/${VercelTeamSlug}
       Tags:
         - Key: product
           Value: buildit
@@ -47,8 +51,8 @@ Resources:
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringEquals:
-                "oidc.vercel.com/pulsetrade:aud": https://vercel.com/pulsetrade
-                "oidc.vercel.com/pulsetrade:sub": !Sub owner:pulsetrade:project:${VercelProjectName}:environment:production
+                !Sub "oidc.vercel.com/${VercelTeamSlug}:aud": !Sub https://vercel.com/${VercelTeamSlug}
+                !Sub "oidc.vercel.com/${VercelTeamSlug}:sub": !Sub owner:${VercelTeamSlug}:project:${VercelProjectName}:environment:production
       Tags:
         - Key: product
           Value: buildit

@@ -10,7 +10,7 @@ Before deployment:
 
 1. Create or select the dedicated BuildIT Production AWS account under an AWS organization.
 2. Authenticate the AWS CLI with temporary browser credentials or an administrator role using AWS IAM Identity Center.
-3. Deploy `artifacts.yaml` in Ireland with the exact Vercel team and project names, then record the stack outputs in the deployment secret store.
+3. Deploy `artifacts.yaml` in Ireland with the exact Vercel team and project names. The production defaults are the dedicated `buildit-agentic-review` Vercel team and `buildit-content-broker` project; do not use the unrelated Pulsetrade team. Then record the stack outputs in the deployment secret store.
 4. Run the retention, cross-tenant ciphertext-swap, deletion, restore, and key-rotation drills before enabling repository execution.
 
 The bucket is intentionally non-versioned. Application deletion removes an object immediately, while the lifecycle rule is a seven-day maximum backstop. CloudFormation retains the empty bucket and KMS key during stack deletion to prevent an infrastructure command from silently destroying customer evidence or making retained ciphertext unrecoverable.
