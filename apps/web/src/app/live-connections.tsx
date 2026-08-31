@@ -90,7 +90,15 @@ export function ConnectionBanner() {
   const readiness = useQuery(readinessQuery, connection && connection.state !== "signed_out" ? {} : "skip");
   if (!connection) return <div className="preview-banner" role="status"><span className="preview-label">Checking</span><span>Confirming your private workspace before showing repository data.</span></div>;
   const connected = connection?.state === "connected";
-  return <div className="preview-banner" role="status"><span className="preview-label">{connected ? "Connected" : "Preview"}</span><span>{connected ? readiness?.executionEnabled ? `${connection.repositories.length} GitHub repositories connected. Reviews can start only after exact-scope consent.` : `${connection.repositories.length} GitHub repositories connected. Repository execution and AI review remain disabled until their safety gates pass.` : "Sample evidence is clearly marked. Connect GitHub to replace setup examples with your isolated workspace."}</span><a href={connected ? "/repositories" : "/data-handling"}>{connected ? "View access" : "Trust boundary"}</a></div>;
+  const execution = readiness?.executionEnabled;
+  const message = !connected
+    ? "Sample evidence is clearly marked. Connect GitHub to replace setup examples with your isolated workspace."
+    : execution === undefined
+      ? `${connection.repositories.length} GitHub repositories connected. Checking whether this workspace can start reviews.`
+      : execution
+        ? `${connection.repositories.length} GitHub repositories connected. Reviews can start only after exact-scope consent.`
+        : `${connection.repositories.length} GitHub repositories connected. Repository execution and AI review remain disabled until their safety gates pass.`;
+  return <div className="preview-banner" role="status"><span className="preview-label">{connected ? execution === undefined ? "Checking" : "Connected" : "Preview"}</span><span>{message}</span><a href={connected ? "/repositories" : "/data-handling"}>{connected ? "View access" : "Trust boundary"}</a></div>;
 }
 
 export function SetupProgress() {
@@ -102,9 +110,26 @@ export function SetupProgress() {
 
 export function OverviewReadiness() {
   const connection = useConnection();
+  const readiness = useQuery(readinessQuery, connection && connection.state !== "signed_out" ? {} : "skip");
   const signedIn = Boolean(connection && connection.state !== "signed_out");
   const connected = connection?.state === "connected";
-  return <section className="readiness" aria-labelledby="readiness-title"><div><p className="eyebrow">Your path to a live review</p><h2 id="readiness-title">{connected ? "Repository access is ready. Execution remains gated." : "Explore freely. Connect only when an action needs it."}</h2><p>{connected ? `${connection.repositories.length} selected repositories are visible only inside ${connection.organization?.name}. BuildIT will not execute code until sandbox and provider safety checks pass.` : "Browsing this tour needs no key. GitHub is requested when you connect a repository; a model key is requested only when you start AI analysis."}</p></div><ol><li data-state={signedIn ? "ready" : undefined}><span>1</span><div><strong>Sign in</strong><small>{signedIn ? "GitHub identity verified" : "Save your workspaces and preferences"}</small></div></li><li data-state={connected ? "ready" : undefined}><span>2</span><div><strong>Select repositories</strong><small>{connected ? `${connection.repositories.length} connected` : "Choose public or private access in GitHub"}</small></div></li><li><span>3</span><div><strong>Run a review</strong><small>{connected ? "Blocked until execution safety is ready" : "Add BYOK only when analysis starts"}</small></div></li></ol></section>;
+  const execution = readiness?.executionEnabled;
+  const title = !connected
+    ? "Explore freely. Connect only when an action needs it."
+    : execution === undefined
+      ? "Repository access is ready. Checking review readiness."
+      : execution
+        ? "Repository access is ready. Review one exact pull request."
+        : "Repository access is ready. Review execution is safety-blocked.";
+  const detail = !connected
+    ? "Browsing this tour needs no key. GitHub is requested when you connect a repository; a model key is requested only when you start AI analysis."
+    : execution === undefined
+      ? `${connection.repositories.length} selected repositories are visible only inside ${connection.organization?.name}. BuildIT is checking its execution boundary.`
+      : execution
+        ? `${connection.repositories.length} selected repositories are visible only inside ${connection.organization?.name}. Preview an exact pull request before BuildIT reads code or runs checks.`
+        : `${connection.repositories.length} selected repositories are visible only inside ${connection.organization?.name}. BuildIT will not execute code until sandbox and provider safety checks pass.`;
+  const reviewStep = !connected ? "Add BYOK only when analysis starts" : execution === undefined ? "Checking execution readiness" : execution ? "Preview one exact pull request" : "Blocked until execution safety is ready";
+  return <section className="readiness" aria-labelledby="readiness-title"><div><p className="eyebrow">Your path to a live review</p><h2 id="readiness-title">{title}</h2><p>{detail}</p></div><ol><li data-state={signedIn ? "ready" : undefined}><span>1</span><div><strong>Sign in</strong><small>{signedIn ? "GitHub identity verified" : "Save your workspaces and preferences"}</small></div></li><li data-state={connected ? "ready" : undefined}><span>2</span><div><strong>Select repositories</strong><small>{connected ? `${connection.repositories.length} connected` : "Choose public or private access in GitHub"}</small></div></li><li data-state={execution ? "ready" : undefined}><span>3</span><div><strong>Run a review</strong><small>{reviewStep}</small></div></li></ol></section>;
 }
 
 export function SetupAccessSummary({ stepIndex }: { stepIndex: number }) {
