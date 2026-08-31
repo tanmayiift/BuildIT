@@ -1,5 +1,6 @@
 import { handleTelemetryIngest } from "../src/telemetry-ingest.js";
 import { registerBrokerTelemetry } from "../src/instrumentation.js";
+import { safeLog } from "@buildit/telemetry";
 import { flushBuildITMetrics } from "@buildit/telemetry/register";
 
 registerBrokerTelemetry();
@@ -11,6 +12,10 @@ export async function POST(request: Request) {
   // A serverless invocation can end before the periodic exporter interval. A
   // telemetry delivery failure must never turn a valid review event into an
   // application failure, so this is deliberately fail-open.
-  await flushBuildITMetrics().catch(() => undefined);
+  await flushBuildITMetrics().catch(() => {
+    // The console event is deliberately source-free and lets an operator tell
+    // exporter failure from an empty Grafana query without changing the review.
+    safeLog("broker.telemetry_flush_failed");
+  });
   return response;
 }
