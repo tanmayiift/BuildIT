@@ -59,3 +59,7 @@ export async function shutdownBuildITMetrics() {
   loggerProvider = undefined;
   await Promise.all([current?.shutdown(), currentLogger?.shutdown()]);
 }
+
+export async function flushBuildITMetrics() {
+  await Promise.all([provider?.forceFlush(), loggerProvider?.forceFlush()]);
+}

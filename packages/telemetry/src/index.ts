@@ -64,13 +64,11 @@ export async function traced<T>(name: string, attributes: SafeAttributes, task: 
     try {
       const result = await task();
       span.setStatus({ code: SpanStatusCode.OK });
-      recordOperation({ ...attributes, outcome: "succeeded", durationMs: Date.now() - startedAt });
       return result;
     } catch (error) {
       const errorCode = error instanceof Error ? error.name : "UnknownError";
       span.setAttributes(safeAttributes({ ...attributes, outcome: "failed", errorCode }));
       span.setStatus({ code: SpanStatusCode.ERROR, message: errorCode });
-      recordOperation({ ...attributes, outcome: "failed", errorCode, durationMs: Date.now() - startedAt });
       throw error;
     } finally {
       span.end();

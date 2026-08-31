@@ -1,6 +1,6 @@
 import { registerOTel } from "@vercel/otel";
 import { recordOperation, safeLog, traced, type OperationName } from "@buildit/telemetry";
-import { registerBuildITMetrics } from "@buildit/telemetry/register";
+import { flushBuildITMetrics, registerBuildITMetrics } from "@buildit/telemetry/register";
 
 let registered = false;
 
@@ -19,6 +19,7 @@ export function observedBrokerRoute(operation: OperationName, route: (request: R
     const failure = response.status >= 400 ? { errorCode: `http_${response.status}` } : {};
     recordOperation({ operation, outcome, ...failure, durationMs: Date.now() - startedAt });
     safeLog("broker.request_completed", { operation, outcome, ...failure });
+    await flushBuildITMetrics();
     return response;
   });
 }
