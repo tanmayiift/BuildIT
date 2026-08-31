@@ -4,12 +4,13 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
-  NEXT_PUBLIC_CONVEX_URL: https://tacit-coyote-455.eu-west-1.convex.cloud
+  NEXT_PUBLIC_CONVEX_URL: https://judicious-barracuda-968.convex.cloud
 
 concurrency:
   group: buildit-ci-${{ github.ref }}
