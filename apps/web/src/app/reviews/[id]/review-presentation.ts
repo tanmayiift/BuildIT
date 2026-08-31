@@ -1,5 +1,18 @@
 export type ReviewTone = "success" | "danger" | "running" | "warning";
 
+export type CheckExecution = {
+  kind: string;
+  required: boolean;
+  conclusion: string;
+  durationMs: number;
+  evidenceAvailable: boolean;
+};
+
+export type CheckSummary = CheckExecution & {
+  executions: number;
+  outcomeSummary: string;
+};
+
 const words = (value: string) => value.replaceAll("_", " ").replace(/^./, first => first.toUpperCase());
 
 export function statusPresentation(status: string, stale: boolean, reason?: string) {
@@ -55,6 +68,34 @@ export function eventPresentation(type: string) {
     review_delivered: "Review handed back",
   };
   return known[type] ?? words(type);
+}
+
+// A review can run the same named check against more than one immutable worktree.
+// The audit store keeps every execution; the main result groups them so people do
+// not mistake repeated evidence for separate checks.
+export function summarizeChecks(checks: CheckExecution[]): CheckSummary[] {
+  const grouped = new Map<string, CheckExecution[]>();
+  for (const check of checks) {
+    const key = `${check.kind}\u0000${check.required}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), check]);
+  }
+  return [...grouped.values()].map((executions) => {
+    const first = executions[0]!;
+    const counts = new Map<string, number>();
+    for (const execution of executions) counts.set(execution.conclusion, (counts.get(execution.conclusion) ?? 0) + 1);
+    const outcomeSummary = [...counts.entries()]
+      .map(([outcome, count]) => `${count} ${outcome}`)
+      .join(", ");
+    return {
+      kind: first.kind,
+      required: first.required,
+      conclusion: counts.size === 1 ? first.conclusion : "mixed",
+      durationMs: executions.reduce((total, execution) => total + execution.durationMs, 0),
+      evidenceAvailable: executions.every((execution) => execution.evidenceAvailable),
+      executions: executions.length,
+      outcomeSummary,
+    };
+  });
 }
 
 export const technicalLabel = words;

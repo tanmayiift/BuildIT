@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventPresentation, nextActionPresentation, stagePresentation, statusPresentation } from "./review-presentation";
+import { eventPresentation, nextActionPresentation, stagePresentation, statusPresentation, summarizeChecks } from "./review-presentation";
 
 describe("review presentation", () => {
   it("explains cancellation without implying a code failure", () => {
@@ -27,5 +27,17 @@ describe("review presentation", () => {
     expect(statusPresentation("platform_failed", false, "provider_rate_limited")).toMatchObject({ label: "Provider is busy", title: "Your model provider is rate-limited", tone: "warning" });
     expect(statusPresentation("inconclusive", false)).toMatchObject({ label: "Not enough proof", title: "A safe decision is not possible yet" });
     expect(nextActionPresentation("await_human_approval", false).detail).toContain("never merge");
+  });
+
+  it("groups repeated immutable check executions without hiding a disagreement", () => {
+    const checks = summarizeChecks([
+      { kind: "test", required: true, conclusion: "passed", durationMs: 300, evidenceAvailable: true },
+      { kind: "test", required: true, conclusion: "failed", durationMs: 400, evidenceAvailable: true },
+      { kind: "lint", required: false, conclusion: "passed", durationMs: 50, evidenceAvailable: true },
+    ]);
+    expect(checks).toEqual([
+      expect.objectContaining({ kind: "test", required: true, conclusion: "mixed", executions: 2, durationMs: 700, outcomeSummary: "1 passed, 1 failed" }),
+      expect.objectContaining({ kind: "lint", required: false, conclusion: "passed", executions: 1 }),
+    ]);
   });
 });

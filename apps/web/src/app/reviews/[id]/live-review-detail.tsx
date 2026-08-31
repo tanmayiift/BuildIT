@@ -2,7 +2,7 @@
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { useState } from "react";
 import { makeFunctionReference } from "convex/server";
-import { eventPresentation, nextActionPresentation, stagePresentation, statusPresentation, technicalLabel as label } from "./review-presentation";
+import { eventPresentation, nextActionPresentation, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
 type Evidence = {
   review: {
     id: string;
@@ -134,6 +134,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
   const { review, repository } = evidence;
   const verdict = statusPresentation(review.status, review.isStale, review.statusReasonCode),
     nextAction = nextActionPresentation(review.nextActionCode, review.isStale),
+    checkSummaries = summarizeChecks(evidence.checks),
     hasEvidence = evidence.requirements.length + evidence.findings.length + evidence.checks.length > 0;
   const canCancel = ![
     "passed",
@@ -259,13 +260,13 @@ export function LiveReviewDetail({ id }: { id: string }) {
       {evidence.checks.length ? <Section
         eyebrow="Verification"
         title="Checks run"
-        detail={`${evidence.checks.filter((item) => item.required).length} required`}
-        foot="A required check needs recorded output before BuildIT can treat it as passed."
+        detail={`${checkSummaries.filter((item) => item.required).length} required · ${evidence.checks.length} executions`}
+        foot="Repeated executions are grouped here. Every individual run remains in the encrypted audit record."
         validation
       >
-        {evidence.checks.length ? (
-          evidence.checks.map((item) => (
-            <div className="validation-row" key={item.id}>
+        {checkSummaries.length ? (
+          checkSummaries.map((item) => (
+            <div className="validation-row" key={`${item.kind}-${item.required}`}>
               <strong>{label(item.kind)}</strong>
               <span>{item.required ? "Required" : "Optional"}</span>
               <span className={`status ${tone(item.conclusion)}`}>
@@ -274,9 +275,10 @@ export function LiveReviewDetail({ id }: { id: string }) {
               <time>{(item.durationMs / 1000).toFixed(1)}s</time>
               <span>
                 {item.evidenceAvailable
-                  ? "Encrypted stdout recorded"
-                  : "No stdout evidence"}
+                  ? `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · encrypted output recorded`
+                  : `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · output incomplete`}
               </span>
+              {item.executions > 1 ? <span>{item.outcomeSummary}</span> : null}
             </div>
           ))
         ) : null}
