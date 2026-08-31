@@ -275,10 +275,9 @@ export function LiveReviewDetail({ id }: { id: string }) {
               <time>{(item.durationMs / 1000).toFixed(1)}s</time>
               <span>
                 {item.evidenceAvailable
-                  ? `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · encrypted output recorded`
-                  : `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · output incomplete`}
+                  ? `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · encrypted output recorded${item.executions > 1 ? ` · ${item.outcomeSummary}` : ""}`
+                  : `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · output incomplete${item.executions > 1 ? ` · ${item.outcomeSummary}` : ""}`}
               </span>
-              {item.executions > 1 ? <span>{item.outcomeSummary}</span> : null}
             </div>
           ))
         ) : null}
