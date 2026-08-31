@@ -24,6 +24,7 @@ describe("review presentation", () => {
     expect(statusPresentation("passed", false)).toMatchObject({ label: "Ready for you", title: "All required checks passed" });
     expect(statusPresentation("delivered", false)).toMatchObject({ label: "Fix ready", title: "A tested fix is ready to inspect" });
     expect(statusPresentation("platform_failed", false)).toMatchObject({ label: "Could not complete", title: "BuildIT hit a service problem" });
+    expect(statusPresentation("platform_failed", false, "provider_rate_limited")).toMatchObject({ label: "Provider is busy", title: "Your model provider is rate-limited", tone: "warning" });
     expect(statusPresentation("inconclusive", false)).toMatchObject({ label: "Not enough proof", title: "A safe decision is not possible yet" });
     expect(nextActionPresentation("await_human_approval", false).detail).toContain("never merge");
   });

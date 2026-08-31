@@ -132,7 +132,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
       />
     );
   const { review, repository } = evidence;
-  const verdict = statusPresentation(review.status, review.isStale),
+  const verdict = statusPresentation(review.status, review.isStale, review.statusReasonCode),
     nextAction = nextActionPresentation(review.nextActionCode, review.isStale),
     hasEvidence = evidence.requirements.length + evidence.findings.length + evidence.checks.length > 0;
   const canCancel = ![

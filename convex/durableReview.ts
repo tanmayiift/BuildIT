@@ -181,9 +181,10 @@ export const workflowCompleted = internalMutation({
     ) return;
     if (args.result.kind === "failed") {
       const now = Date.now();
+      const providerRateLimited = args.result.error.includes("rate_limited");
       await ctx.db.patch(review._id, {
         status: "platform_failed",
-        statusReasonCode: "platform_error",
+        statusReasonCode: providerRateLimited ? "provider_rate_limited" : "platform_error",
         nextActionCode: "retry_review",
         currentStage: "complete",
         completedAt: now,

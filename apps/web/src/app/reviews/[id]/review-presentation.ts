@@ -2,8 +2,9 @@ export type ReviewTone = "success" | "danger" | "running" | "warning";
 
 const words = (value: string) => value.replaceAll("_", " ").replace(/^./, first => first.toUpperCase());
 
-export function statusPresentation(status: string, stale: boolean) {
+export function statusPresentation(status: string, stale: boolean, reason?: string) {
   if (stale) return { label: "Out of date", title: "The pull request changed", summary: "This review no longer matches the latest code. Run a new review before deciding whether to merge.", tone: "warning" as ReviewTone, symbol: "↻" };
+  if (status === "platform_failed" && reason === "provider_rate_limited") return { label: "Provider is busy", title: "Your model provider is rate-limited", summary: "BuildIT made no code decision. Wait for the provider limit to clear, then retry this exact review.", tone: "warning" as ReviewTone, symbol: "⏳" };
   const known: Record<string, { label: string; title: string; summary: string; tone: ReviewTone; symbol: string }> = {
   cancelled: { label: "Stopped", title: "Review stopped", summary: "No decision was made. BuildIT did not read code, run checks, or change this pull request. Start a new review when you are ready.", tone: "warning", symbol: "■" },
     passed: { label: "Ready for you", title: "All required checks passed", summary: "BuildIT found enough evidence for this exact commit. A human still decides whether to merge.", tone: "success", symbol: "✓" },
