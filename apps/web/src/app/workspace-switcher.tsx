@@ -2,7 +2,7 @@
 
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Organization = { id: string; name: string; slug: string; timezone: string; region: "eu-west-1"; role: string };
 type ActiveOrganization = Pick<Organization, "id" | "name" | "slug" | "role"> | null;
@@ -13,13 +13,17 @@ const selectActive = makeFunctionReference<"mutation", { organizationId: string 
 
 export function WorkspaceSwitcher() {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const [hydrated, setHydrated] = useState(false);
   const organizations = useQuery(organizationsQuery, isAuthenticated ? {} : "skip");
   const active = useQuery(activeQuery, isAuthenticated ? {} : "skip");
   const select = useMutation(selectActive);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
-  if (isLoading) return <div className="workspace-switcher" aria-live="polite"><span><strong>Checking workspace…</strong><small>Confirming your private session</small></span></div>;
+  useEffect(() => setHydrated(true), []);
+  // The server cannot know the browser's OAuth session. Keep its first client
+  // render identical, then resolve the workspace after hydration.
+  if (!hydrated || isLoading) return <div className="workspace-switcher" aria-live="polite"><span><strong>Checking workspace…</strong><small>Confirming your private session</small></span></div>;
   if (!isAuthenticated) return <div className="workspace-switcher preview-workspace"><span><strong>Sample workspace</strong><small>Interactive product tour</small></span></div>;
   if (!organizations) return <div className="workspace-switcher" aria-live="polite">Loading workspaces…</div>;
   if (!organizations.length) return <a className="workspace-switcher" href="/setup/install"><span><strong>No workspace yet</strong><small>Install the GitHub App to begin</small></span><span>→</span></a>;
