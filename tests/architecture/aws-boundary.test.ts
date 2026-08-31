@@ -4,9 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const template = readFileSync(fileURLToPath(new URL("../../infra/aws/artifacts.yaml", import.meta.url)), "utf8");
 const verifier = readFileSync(fileURLToPath(new URL("../../scripts/verify-aws-boundary.mjs", import.meta.url)), "utf8");
-const brokerAwsRoutes = ["credentials", "artifacts", "model", "execute", "tracker", "tracker-credentials"].map((name) =>
-  readFileSync(fileURLToPath(new URL(`../../packages/broker/api/${name}.ts`, import.meta.url)), "utf8"),
-);
+const brokerAwsRoutes = ["credentials", "artifacts", "model", "tracker", "tracker-credentials"].map((name) =>
+    readFileSync(fileURLToPath(new URL(`../../packages/broker/api/${name}.ts`, import.meta.url)), "utf8"),
+  ),
+  executeRoute = readFileSync(fileURLToPath(new URL("../../packages/broker/api/execute.ts", import.meta.url)), "utf8");
 
 describe("AWS artifact and key boundary", () => {
   it("fails deployment outside Ireland and never creates a multi-region key", () => {
@@ -68,5 +69,15 @@ describe("AWS artifact and key boundary", () => {
       expect(source).not.toContain("fromWebToken");
       expect(source).not.toContain('get("x-vercel-oidc-token")');
     }
+    expect(executeRoute).toContain('from "@vercel/oidc-aws-credentials-provider"');
+    expect(executeRoute).toContain("awsCredentialsProvider({");
+    expect(executeRoute).not.toContain("fromWebToken");
+  });
+
+  it("passes Vercel's request OIDC token only to the sandbox control plane", () => {
+    expect(executeRoute).toContain('get("x-vercel-oidc-token")');
+    expect(executeRoute).toContain("sandboxCredentials: sandboxCredentials(request)");
+    expect(executeRoute).not.toContain("AWS_WEB_IDENTITY_TOKEN_FILE");
+    expect(executeRoute).not.toContain("process.env.VERCEL_OIDC_TOKEN");
   });
 });
