@@ -33,3 +33,6 @@ async function route(request: Request) {
 export const GET = route;
 export const PUT = route;
 export const DELETE = route;
+import { registerBrokerTelemetry } from "../src/instrumentation.js";
+
+registerBrokerTelemetry();

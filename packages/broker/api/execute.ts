@@ -15,3 +15,6 @@ async function route(request: Request) {
   } catch { return Response.json({ error: "execution_broker_unavailable" }, { status: 503, headers: { "cache-control": "no-store" } }); }
 }
 export const POST = route;
+import { registerBrokerTelemetry } from "../src/instrumentation.js";
+
+registerBrokerTelemetry();

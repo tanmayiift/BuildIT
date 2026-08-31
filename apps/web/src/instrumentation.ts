@@ -1,0 +1,21 @@
+import { registerOTel } from "@vercel/otel";
+
+export function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    registerOTel({ serviceName: "buildit-web" });
+  }
+}
+
+export async function onRequestError(
+  error: { digest?: string } & Error,
+  _request: { path: string; method: string; headers: Record<string, string> },
+  context: { routerKind: string; routePath: string; routeType: string },
+) {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  const { safeLog } = await import("@buildit/telemetry");
+  safeLog("next.request_error", {
+    operation: `${context.routerKind}.${context.routeType}`.slice(0, 80),
+    outcome: "failed",
+    errorCode: error.name,
+  });
+}

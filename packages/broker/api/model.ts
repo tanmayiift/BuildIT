@@ -4,6 +4,9 @@ import { AwsKmsClient } from "@buildit/security";
 import { CredentialBroker, type StoredCredential } from "../src/index.js";
 import { S3GrantConsumer } from "../src/artifacts.js";
 import { handleModelInvocation } from "../src/model-http.js";
+import { registerBrokerTelemetry } from "../src/instrumentation.js";
+
+registerBrokerTelemetry();
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error("model_broker_configuration_missing"); return value; }
 function report(error: unknown) { const raw = error instanceof Error ? error.name : "Unknown", allowed = new Set(["CredentialsProviderError", "AccessDenied", "AccessDeniedException", "KMSInvalidStateException", "NoSuchBucket", "Error"]); const status = (error as { $metadata?: { httpStatusCode?: unknown } })?.$metadata?.httpStatusCode; console.error(JSON.stringify({ event: "model_broker_unavailable", errorClass: allowed.has(raw) ? raw : "Other", ...(typeof status === "number" ? { status } : {}) })); }
