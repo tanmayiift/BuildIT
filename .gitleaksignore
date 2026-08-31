@@ -1,0 +1,13 @@
+# Exact historical test-fixture false positives. These fingerprints are scoped
+# to one commit, path, rule, and line; they do not suppress new findings.
+1fba50b88965db3ce30a429e25639b136d1ba80a:packages/orchestrator/test/patchPolicy.test.ts:generic-api-key:18
+275d31523a3084e8b68baf887a0916e9ef9fbb4c:convex/tenantIsolation.test.ts:generic-api-key:251
+5d589b23ddd813903a8813df621b678d5bd11bf3:packages/orchestrator/test/modelChain.test.ts:generic-api-key:33
+879308f0b00b7b9d8bd2b5e70ee2b3fcf64a3e68:convex/tenantIsolation.test.ts:generic-api-key:284
+879308f0b00b7b9d8bd2b5e70ee2b3fcf64a3e68:convex/tenantIsolation.test.ts:generic-api-key:291
+a998f054c99a09b40b9413ce27576f515187aedc:convex/tenantIsolation.test.ts:generic-api-key:261
+debfa4cfe74a5993d117ded969435d2de30eb175:convex/reviewAnalysisWorker.test.ts:generic-api-key:35
+ee78661b42aeb4ddc946aa9b063e388424fe8420:convex/tenantIsolation.test.ts:generic-api-key:759
+ee78661b42aeb4ddc946aa9b063e388424fe8420:convex/tenantIsolation.test.ts:generic-api-key:791
+ee78661b42aeb4ddc946aa9b063e388424fe8420:convex/tenantIsolation.test.ts:generic-api-key:859
+ee78661b42aeb4ddc946aa9b063e388424fe8420:convex/tenantIsolation.test.ts:generic-api-key:898
