@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { defaultExecutionPlans, runFlakyDiagnostics, validatePlan, VercelSandboxRunner, type CommandPlan } from "@buildit/runner";
+import { defaultExecutionPlans, runFlakyDiagnostics, validatePlan, VercelSandboxRunner, type CommandPlan, type SandboxCredentials } from "@buildit/runner";
 import { combineScannerRuns, parseGitleaks, parseOsv, scanBuildITRules, scannerInventory } from "@buildit/scanners";
 import { verifyExecutionGrant } from "@buildit/security";
 import type { ArtifactBroker } from "./artifacts.js";
@@ -40,7 +40,7 @@ export function safeExecutionErrorCategory(error: unknown) {
   return "unexpected";
 }
 
-export async function handleExecution(request: Request, input: { artifactBroker: ArtifactBroker; grantSecret: Uint8Array; consume: (id: string, expiresAt: number) => Promise<boolean>; runner?: Runner; now?: number }) {
+export async function handleExecution(request: Request, input: { artifactBroker: ArtifactBroker; grantSecret: Uint8Array; consume: (id: string, expiresAt: number) => Promise<boolean>; runner?: Runner; sandboxCredentials?: SandboxCredentials; now?: number }) {
   try {
     if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
     const token = bearer(request), raw = await request.text();
@@ -64,7 +64,7 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     if (!files.base.size || !files.head.size) throw new Error("base_head_context_incomplete");
     const runner = input.runner ?? new VercelSandboxRunner(), image = input.runner ? undefined : pinnedSandboxImage(process.env.BUILDIT_SANDBOX_IMAGE);
     if (image && image !== body.runnerImageVersion) throw new Error("execution_image_mismatch");
-    const execute = async (revision: "base" | "head") => runner.run({ runtime: body.runtime, ...(image ? { image } : {}), files: [...files[revision]].map(([path, content]) => ({ path, content })), install, checks });
+    const execute = async (revision: "base" | "head") => runner.run({ runtime: body.runtime, ...(image ? { image } : {}), ...(input.sandboxCredentials ? { credentials: input.sandboxCredentials } : {}), files: [...files[revision]].map(([path, content]) => ({ path, content })), install, checks });
     const [baseResult, headResult] = await Promise.all([execute("base"), execute("head")]);
     const diagnosticsFor=async(revision:"base"|"head",initial:Awaited<ReturnType<Runner["run"]>>)=>{const executions=[initial],toRun=(result:Awaited<ReturnType<Runner["run"]>>)=>{const failed=result.results.filter(item=>item.required&&item.conclusion==="failed"),failureFingerprint=failed.length?hash({failed:failed.map(item=>item.planId),outputs:result.outputs.filter(item=>failed.some(check=>check.planId===item.planId)).map(item=>({planId:item.planId,textHash:hash(item.text)}))}):undefined;return{conclusion:failed.length?"failed" as const:"passed" as const,...(failureFingerprint?{failureFingerprint}:{})}};await runFlakyDiagnostics(toRun(initial),async()=>{const next=await execute(revision);executions.push(next);return toRun(next)});return Object.fromEntries([...new Set(executions.flatMap(result=>result.results.map(item=>item.planId)))].map(planId=>[planId,executions.flatMap(result=>{const item=result.results.find(candidate=>candidate.planId===planId);if(!item)return[];const found=result.outputs.find(output=>output.planId===planId);return[{conclusion:item.conclusion==="passed"?"passed" as const:"failed" as const,...(item.conclusion==="failed"?{failureFingerprint:hash(found?.text??"")}:{})}]} )]))};
     const [baseDiagnostics,headDiagnostics]=await Promise.all([diagnosticsFor("base",baseResult),diagnosticsFor("head",headResult)]);

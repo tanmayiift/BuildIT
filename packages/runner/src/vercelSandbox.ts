@@ -10,7 +10,8 @@ export type SandboxLike = {
   updateNetworkPolicy(policy: "deny-all" | { allow: string[] }): Promise<unknown>;
   stop(): Promise<unknown>;
 };
-export type SandboxFactory = (input: { runtime?: "node22" | "node24"; image?: string; timeout: number; resources: { vcpus: number }; networkPolicy: "deny-all"; env: Record<string, string>; region: string; persistent: false }) => Promise<SandboxLike>;
+export type SandboxCredentials = { token: string; teamId: string; projectId: string };
+export type SandboxFactory = (input: { runtime?: "node22" | "node24"; image?: string; timeout: number; resources: { vcpus: number }; networkPolicy: "deny-all"; env: Record<string, string>; region: string; persistent: false } & Partial<SandboxCredentials>) => Promise<SandboxLike>;
 
 const registryDomains = ["registry.npmjs.org", "registry.yarnpkg.com"];
 const sensitive = /(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|GITHUB_|VERCEL_|CONVEX_|ANTHROPIC_|OPENAI_|GEMINI_|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)/i;
@@ -32,6 +33,7 @@ export class VercelSandboxRunner {
   async run(input: {
     runtime: "node22" | "node24";
     image?: string;
+    credentials?: SandboxCredentials;
     files: Array<{ path: string; content: string }>;
     install: CommandPlan;
     checks: CommandPlan[];
@@ -41,7 +43,7 @@ export class VercelSandboxRunner {
     const timeout = Math.min(45 * 60_000, input.install.timeoutMs + input.checks.reduce((sum, plan) => sum + plan.timeoutMs, 0) + 60_000);
     if (input.image && !/@sha256:[0-9a-f]{64}$/.test(input.image)) throw new Error("sandbox_image_must_be_digest_pinned");
     const environment = { timeout, resources: { vcpus: 2 }, networkPolicy: "deny-all" as const, env: { CI: "true" }, region: "cdg1", persistent: false as const };
-    const sandbox = await this.create(input.image ? { ...environment, image: input.image } : { ...environment, runtime: input.runtime });
+    const sandbox = await this.create(input.image ? { ...environment, image: input.image, ...(input.credentials ?? {}) } : { ...environment, runtime: input.runtime, ...(input.credentials ?? {}) });
     const results: CheckResult[] = [], outputs: Array<{ planId: CommandPlan["planId"]; text: string; truncated: boolean }> = [];
     try {
       const workspace: Workspace = { files: new Map(), environment: { CI: "true" }, tokenRevoked: true };

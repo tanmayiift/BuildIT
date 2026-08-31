@@ -73,6 +73,14 @@ describe("Vercel sandbox runner", () => {
     expect(f.create.mock.calls[0]![0]).not.toHaveProperty("runtime");
   });
 
+  it("passes short-lived control-plane credentials to the sandbox API without placing them in sandbox env", async () => {
+    const f = fixture(), runner = new VercelSandboxRunner(f.create);
+    await runner.run({ runtime: "node24", credentials: { token: "test-oidc-token", teamId: "team-test", projectId: "project-test" }, files: [{ path: "pnpm-lock.yaml", content: "lockfileVersion: '9.0'" }], install, checks: [test] });
+    const create = f.create.mock.calls[0]?.[0];
+    expect(create).toMatchObject({ token: "test-oidc-token", teamId: "team-test", projectId: "project-test", env: { CI: "true" } });
+    expect(JSON.stringify(create)).not.toContain("VERCEL_OIDC_TOKEN");
+  });
+
   it("rejects repository-owned package-manager hooks and credential configuration", async () => {
     for (const path of [".git/config", ".npmrc", ".yarnrc.yml", ".yarn/plugins/attack.cjs", ".pnpmfile.cjs", ".gitleaks.toml", ".gitleaksignore", ".osv-scanner.toml", "osv-scanner.json"]) {
       const f = fixture();
