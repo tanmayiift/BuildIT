@@ -13,13 +13,14 @@ function required(name: string) {
 // Keep production diagnostics useful without ever recording a customer key,
 // bearer token, source text, or an upstream error message.
 function report(error: unknown) {
+  const stage = error instanceof Error && /^credential_(?:authorization|persistence)_failed$/.test(error.message) ? error.message : undefined;
   const cause = error instanceof Error && error.cause ? error.cause : error;
   const raw = cause instanceof Error ? cause.name : typeof (cause as { name?: unknown })?.name === "string"
     ? String((cause as { name: string }).name) : "Unknown";
   const allowed = new Set(["CredentialsProviderError", "AccessDenied", "AccessDeniedException", "KMSInvalidStateException", "Error"]);
   const candidate = cause instanceof Error ? cause.message : undefined;
-  const code = candidate && (new Set(["broker_configuration_missing", "credential_gateway_configuration_invalid", "credential_store_unavailable", "invalid_key", "recent_reauthentication_required", "rate_limited", "credential_scope_already_exists"]).has(candidate)
-    || /^credential_store_(?:401|403|404|429|5xx|invalid_result|invalid_response|network_unavailable)$/.test(candidate)) ? candidate : undefined;
+  const code = stage ?? (candidate && (new Set(["broker_configuration_missing", "credential_gateway_configuration_invalid", "credential_store_unavailable", "invalid_key", "recent_reauthentication_required", "rate_limited", "credential_scope_already_exists"]).has(candidate)
+    || /^credential_store_(?:401|403|404|429|5xx|invalid_result|invalid_response|network_unavailable)$/.test(candidate)) ? candidate : undefined);
   const status = (cause as { $metadata?: { httpStatusCode?: unknown } })?.$metadata?.httpStatusCode;
   console.error(JSON.stringify({ event: "credential_broker_unavailable", errorClass: allowed.has(raw) ? raw : "Other", ...(code ? { code } : {}), ...(typeof status === "number" ? { status } : {}) }));
 }

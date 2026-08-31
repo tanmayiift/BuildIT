@@ -5,6 +5,13 @@ const providers = new Set<ProviderName>(["anthropic", "openai", "gemini"]);
 const maxBodyBytes = 16 * 1024;
 export const credentialContractVersion = "2026-08-30.1";
 
+class CredentialSaveStageError extends Error {
+  constructor(stage: "authorization" | "persistence", cause: unknown) {
+    super(`credential_${stage}_failed`, { cause });
+    this.name = "CredentialSaveStageError";
+  }
+}
+
 export type CredentialAuthorization = (input: {
   token: string; organizationId: string; repositoryId?: string;
 }) => Promise<{ actorId: string }>;
@@ -51,14 +58,20 @@ export async function handleCredentialSave(request: Request, input: {
   const apiKey = body.apiKey as string;
   try {
     const scope = { token, organizationId, ...(repositoryId ? { repositoryId } : {}) };
-    const { actorId } = await input.authorize(scope);
-    const saved = await input.broker.save({ actorId, organizationId,
-      ...(repositoryId ? { repositoryId } : {}), provider, apiKey,
-      ...(typeof body.replacesCredentialId === "string" ? { replacesCredentialId: body.replacesCredentialId } : {}) });
+    let actorId: string;
+    try { ({ actorId } = await input.authorize(scope)); }
+    catch (error) { throw new CredentialSaveStageError("authorization", error); }
+    let saved: Awaited<ReturnType<CredentialBroker["save"]>>;
+    try {
+      saved = await input.broker.save({ actorId, organizationId,
+        ...(repositoryId ? { repositoryId } : {}), provider, apiKey,
+        ...(typeof body.replacesCredentialId === "string" ? { replacesCredentialId: body.replacesCredentialId } : {}) });
+    } catch (error) { throw new CredentialSaveStageError("persistence", error); }
     return json(201, { credential: saved }, origin);
   } catch (error) {
     input.onFailure?.(error);
-    const code = error instanceof Error ? error.message : "credential_save_failed";
+    const code = error instanceof Error && error.cause instanceof Error ? error.cause.message
+      : error instanceof Error ? error.message : "credential_save_failed";
     const safe = code === "recent_reauthentication_required" || code === "rate_limited" || code === "credential_scope_already_exists" ? code
       : code === "invalid_key" ? code
         : code === "not_found_or_forbidden" || code === "authentication_required" ? "not_found_or_forbidden"

@@ -47,7 +47,16 @@ describe("credential broker HTTP boundary", () => {
     const response = await handleCredentialSave(request({ organizationId: "organization-a", provider: "gemini", apiKey: "secret-provider-key-1234" }), { allowedOrigin: origin, authorize: f.authorize, broker: f.broker as never, onFailure });
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: "credential_save_failed" });
-    expect(onFailure).toHaveBeenCalledWith(expect.any(Error));
+    expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({ message: "credential_authorization_failed" }));
+  });
+
+  it("labels persistence separately for trusted diagnostics while keeping the browser response generic", async () => {
+    const f = fixture(), onFailure = vi.fn();
+    f.broker.save.mockRejectedValue(new Error("kms detail that must not reach the browser"));
+    const response = await handleCredentialSave(request({ organizationId: "organization-a", provider: "gemini", apiKey: "secret-provider-key-1234" }), { allowedOrigin: origin, authorize: f.authorize, broker: f.broker as never, onFailure });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "credential_save_failed" });
+    expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({ message: "credential_persistence_failed" }));
   });
 
   it("returns a stable 429 before provider validation when the tenant limit is reached", async () => {
