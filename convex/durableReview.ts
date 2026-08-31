@@ -102,7 +102,9 @@ export const execute = reviewWorkflowManager.define({
     }
     await step.runAction(internal.telemetryWorker.emit, { ...telemetry, outcome: "succeeded" });
     await step.runMutation(internal.durableReview.checkpoint, {
-      ...args, stage, sequence: index + 2, now: args.startedAt + index + 1,
+      organizationId: args.organizationId, reviewId: args.reviewId,
+      expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
+      stage, sequence: index + 2, now: args.startedAt + index + 1,
     });
     if (stage === "analysis") {
       const mode = await step.runQuery(internal.reviewAutofixData.mode,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});
@@ -174,6 +176,28 @@ export const restart = internalMutation({
   args: { workflowId: vWorkflowId },
   handler: async (ctx, args) => reviewWorkflowManager.restart(ctx, args.workflowId),
 });
+
+// This is internal-only operational state. It deliberately maps a component
+// failure to a short code: workflow errors can contain provider or source
+// details and must never be exposed to a browser or telemetry stream.
+export const workflowRuntimeStatus = internalQuery({
+  args: { reviewId: v.id("reviews") },
+  handler: async (ctx, args) => {
+    const review = await ctx.db.get(args.reviewId);
+    if (!review?.workflowId) return { state: "not_started" as const };
+    const status = await reviewWorkflowManager.status(ctx, review.workflowId as WorkflowId);
+    if (status.type === "inProgress") return { state: "in_progress" as const, runningStepCount: status.running.length };
+    if (status.type === "completed") return { state: "completed" as const };
+    if (status.type === "canceled") return { state: "cancelled" as const };
+    return { state: "failed" as const, failureCode: safeWorkflowFailureCode(status.error) };
+  },
+});
+
+function safeWorkflowFailureCode(error: string): "configuration_missing" | "upstream_unavailable" | "unknown" {
+  if (error.includes("missing_")) return "configuration_missing";
+  if (error.includes("artifact_") || error.includes("github_") || error.includes("provider_") || error.includes("execution_")) return "upstream_unavailable";
+  return "unknown";
+}
 
 export const reconcileStuck = internalMutation({
   args: { organizationId: v.id("organizations"), olderThan: v.number(), now: v.number() },

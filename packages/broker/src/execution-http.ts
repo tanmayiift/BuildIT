@@ -13,7 +13,20 @@ const descriptorsForHash = (items: Descriptor[]) => items.map(({ readGrant: _, .
 function json(status: number, body: Record<string, unknown>) { return Response.json(body, { status, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } }); }
 function bearer(request: Request) { const value = request.headers.get("authorization") ?? ""; if (!value.startsWith("Bearer ") || value.length > 8_200) throw new Error("authentication_required"); return value.slice(7); }
 function parse(raw: string): Body { let body: Body; try { body = JSON.parse(raw) as Body; } catch { throw new Error("invalid_execution_request"); } if (!body || ![body.organizationId, body.repositoryId, body.reviewId].every(value => typeof value === "string" && value.length) || !/^[0-9a-f]{40}$/.test(body.baseSha) || !/^[0-9a-f]{40}$/.test(body.headSha) || !/@sha256:[0-9a-f]{64}$/.test(body.runnerImageVersion) || !["node22", "node24"].includes(body.runtime) || !Array.isArray(body.artifacts) || !body.artifacts.length || body.artifacts.length > 64 || !Array.isArray(body.checks) || body.checks.length > 4) throw new Error("invalid_execution_request"); return body; }
-function safe(error: unknown) { const code = error instanceof Error ? error.message : "execution_failed"; if (code === "authentication_required") return { status: 401, code }; if (["execution_grant_invalid", "execution_grant_scope_invalid"].includes(code)) return { status: 403, code: "execution_grant_invalid" }; if (["execution_grant_expired", "execution_grant_replayed"].includes(code)) return { status: 410, code }; if (code.startsWith("invalid_") || code.includes("command_not_allowed") || code.includes("untrusted_command")) return { status: 400, code: "invalid_execution_request" }; return { status: 503, code: "execution_failed" }; }
+export function safeExecutionError(error: unknown) {
+  const code = error instanceof Error ? error.message : "execution_failed";
+  if (code === "authentication_required") return { status: 401, code };
+  if (["execution_grant_invalid", "execution_grant_scope_invalid"].includes(code)) return { status: 403, code: "execution_grant_invalid" };
+  if (["execution_grant_expired", "execution_grant_replayed"].includes(code)) return { status: 410, code };
+  if (code.startsWith("invalid_") || code.includes("command_not_allowed") || code.includes("untrusted_command")) return { status: 400, code: "invalid_execution_request" };
+  // Only stable operational categories cross this API boundary. Raw sandbox
+  // failures can include provider request context and must stay server-side.
+  if (code.includes("credential_teardown") || code.includes("sandbox_")) return { status: 503, code: "runner_safety_failed" };
+  if (code.includes("gitleaks") || code.includes("osv_")) return { status: 503, code: "scanner_unavailable" };
+  if (code.includes("Sandbox") || code.includes("sandbox")) return { status: 503, code: "sandbox_unavailable" };
+  if (code.includes("execution_image")) return { status: 503, code: "runner_image_unavailable" };
+  return { status: 503, code: "execution_failed" };
+}
 
 export async function handleExecution(request: Request, input: { artifactBroker: ArtifactBroker; grantSecret: Uint8Array; consume: (id: string, expiresAt: number) => Promise<boolean>; runner?: Runner; now?: number }) {
   try {
@@ -50,5 +63,5 @@ export async function handleExecution(request: Request, input: { artifactBroker:
       parseOsv(result.osvReport, commitSha, scannerInventory.osvScanner),
     ]);
     return json(200, { base: bounded(baseResult), head: bounded(headResult), diagnostics:{base:baseDiagnostics,head:headDiagnostics}, scanners: { base: scanner("base", body.baseSha, baseResult), head: scanner("head", body.headSha, headResult) } });
-  } catch (error) { const mapped = safe(error); return json(mapped.status, { error: mapped.code }); }
+  } catch (error) { const mapped = safeExecutionError(error); return json(mapped.status, { error: mapped.code }); }
 }

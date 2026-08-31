@@ -53,4 +53,19 @@ describe("durable review crash recovery", () => {
     // review must begin durably at creation so a queued workpool cannot strand it.
     expect(source.slice(start, end)).not.toContain("startAsync");
   });
+
+  it("keeps workflow failure detail internal and source-free", () => {
+    const source = readFileSync("convex/durableReview.ts", "utf8");
+    expect(source).toContain("export const workflowRuntimeStatus = internalQuery");
+    expect(source).toContain("safeWorkflowFailureCode(status.error)");
+    expect(source).not.toContain("failureError: status.error");
+  });
+
+  it("passes only the checkpoint contract after a completed worker", () => {
+    const source = readFileSync("convex/durableReview.ts", "utf8");
+    const checkpoint = source.indexOf("step.runMutation(internal.durableReview.checkpoint");
+    const nextBranch = source.indexOf('if (stage === "analysis")', checkpoint);
+    expect(source.slice(checkpoint, nextBranch)).not.toContain("...args");
+    expect(source.slice(checkpoint, nextBranch)).toContain("expectedGeneration: args.expectedGeneration");
+  });
 });

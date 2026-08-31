@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { issueExecutionGrant } from "@buildit/security";
 import { defaultExecutionPlans } from "@buildit/runner";
-import { handleExecution, pinnedSandboxImage } from "../src/execution-http";
+import { handleExecution, pinnedSandboxImage, safeExecutionError } from "../src/execution-http";
 
 const secret = new Uint8Array(32).fill(3), now = 1_000, baseSha = "b".repeat(40), headSha = "a".repeat(40), plans = defaultExecutionPlans("pnpm");
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -20,6 +20,10 @@ function dependencies() {
 }
 
 describe("native base/head execution boundary", () => {
+  it("returns only a source-free operational category for runner failures", () => {
+    expect(safeExecutionError(new Error("credential_teardown_failed for internal environment"))).toEqual({ status: 503, code: "runner_safety_failed" });
+    expect(safeExecutionError(new Error("gitleaks_execution_failed: internal output"))).toEqual({ status: 503, code: "scanner_unavailable" });
+  });
   it("fails closed unless the hosted scanner image uses an immutable digest", () => {
     expect(() => pinnedSandboxImage(undefined)).toThrow("sandbox_image_unavailable");
     expect(() => pinnedSandboxImage("buildit-runner:latest")).toThrow("sandbox_image_unavailable");
