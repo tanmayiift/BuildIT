@@ -5,7 +5,10 @@ test("overview leads through the review queue to exact-commit evidence", async (
   await expect(page.getByRole("heading", { name: "Know what a pull request breaks before you merge it." })).toBeVisible();
   await page.getByRole("link", { name: /inspect a sample review/i }).click();
   await expect(page.getByRole("heading", { name: "Review queue" })).toBeVisible();
-  await page.getByText("nexus/api #418").click();
+  await Promise.all([
+    page.waitForURL(/\/reviews\/418\?tour=1/),
+    page.getByRole("row", { name: /nexus\/api #418/i }).click(),
+  ]);
   const pinnedContext = page.getByRole("region", { name: "Pinned review context" });
   await expect(pinnedContext.getByText("a3f91c2", { exact: true })).toBeVisible();
   await expect(pinnedContext.getByText("Full", { exact: true })).toBeVisible();
