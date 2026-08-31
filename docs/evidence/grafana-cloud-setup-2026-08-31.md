@@ -14,3 +14,5 @@ This record contains no access token, authorization header, customer identifier,
 - Local end-to-end proof accepted eight web spans, one safe OTLP log, and BuildIT counter/histogram metrics before the local stack was torn down.
 
 The production projects have not been redeployed with these variables and the new telemetry code yet. Consequently, live Grafana data and notification delivery are not claimed. Notification policy was deliberately not changed because the stack also serves Orbit.
+
+An authenticated browser check on 2026-08-31 confirmed that dashboard `buildit-overview` is visible and that folder `BuildIT` → group `BuildIT release` contains exactly the four provisioned BuildIT rules. The existing Orbit folders and rules remained separate and were not edited. Live signal and notification proof still waits for the coordinated production deployment and a BuildIT-only contact point.
