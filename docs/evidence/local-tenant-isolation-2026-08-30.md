@@ -17,4 +17,4 @@ No repository source, credential, session value, or customer identifier is store
 
 ## Remaining production proof
 
-A second independent GitHub identity and authenticated browser session are not available. Therefore BuildIT has not proved this boundary with two real users in production. Release remains blocked until that test is run without copying cookies or sharing credentials between identities.
+This statement was superseded on 2026-08-31: two independent GitHub identities are now available and the partial live proof is recorded in `two-real-user-isolation-2026-08-31.md`. Symmetric review-object proof remains open until the production webhook/worker creates a review for identity B.

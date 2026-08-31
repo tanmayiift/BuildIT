@@ -13,7 +13,7 @@ BuildIT uses GitHub OAuth to identify a human and GitHub App installation tokens
 - OAuth callback: `https://tacit-coyote-455.eu-west-1.convex.site/api/auth/callback/github`
 - Post-install setup: `https://buildit-agentic-review.vercel.app/setup/install`
 - Webhook: `https://buildit-agentic-review.vercel.app/api/github/webhooks`
-- Visibility during development: installable only by the owner
+- Visibility: public, so customers can authorize it through GitHub's normal installation flow. Repository access remains limited to repositories each installer explicitly selects.
 
 App IDs and Client IDs identify an application and are not credentials. The client secret, private key, and webhook secret are credentials. They must remain in the deployment secret stores or the operator's keychain and must never be committed.
 
