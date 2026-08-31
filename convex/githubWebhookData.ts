@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { selectProviderModel } from "@buildit/providers";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { terminalStatuses } from "./lib/lifecycle";
@@ -243,13 +244,8 @@ export const materializeReview = internalMutation({
       credentials.find((item) => item.repositoryId === repository._id) ??
       credentials.find((item) => item.repositoryId === undefined);
     const provider = credential?.provider ?? "anthropic";
-    const model =
-      provider === "gemini"
-        ? "gemini-2.5-pro"
-        : provider === "openai"
-          ? "gpt-5"
-          : "claude-sonnet-4-5";
-    const status = credential ? ("queued" as const) : ("blocked" as const);
+    const model = credential ? selectProviderModel(provider, credential.availableModels) : null;
+    const status = credential && model ? ("queued" as const) : ("blocked" as const);
     const reviewId = await ctx.db.insert("reviews", {
       organizationId: args.organizationId,
       repositoryId: repository._id,
@@ -281,7 +277,7 @@ export const materializeReview = internalMutation({
       configRevisionId: config._id,
       configProvenance: "defaults_only",
       provider,
-      model,
+      model: model ?? "unavailable",
       modelVersion: "pinned-at-execution",
       promptVersion: "chain-v1",
       evalSetVersion: "buildit-eval-v1",

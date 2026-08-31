@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { approvedProviderModels, ProviderClient, ProviderError, type ProviderRequest } from "@buildit/providers";
+import { approvedProviderModels, ProviderClient, ProviderError, selectProviderModel, type ProviderRequest } from "@buildit/providers";
 import { verifyModelInvocationGrant, type ModelStage } from "@buildit/security";
 import type { CredentialBroker, StoredCredential } from "./index.js";
 
@@ -28,6 +28,7 @@ function validCredential(value: unknown): value is StoredCredential {
   const item = value as Record<string, unknown>;
   return ["id", "organizationId", "provider", "ciphertext", "nonce", "tag", "wrappedDataKey", "kmsKeyId", "aadDigest", "maskedSuffix", "status", "createdBy"].every(key => typeof item[key] === "string")
     && item.envelopeVersion === 1 && item.keyVersion === 1 && typeof item.createdAt === "number" && typeof item.lastValidatedAt === "number"
+    && Array.isArray(item.availableModels) && item.availableModels.every(model => typeof model === "string")
     && (item.repositoryId === undefined || typeof item.repositoryId === "string");
 }
 function validRequest(value: unknown): value is ProviderRequest {
@@ -65,8 +66,23 @@ export async function handleModelInvocation(request: Request, input: {
       || grant.stage !== body.stage || grant.credentialScopeId !== body.credential.id || grant.provider !== body.credential.provider
       || grant.model !== body.request.model || grant.requestHash !== requestHash) throw new Error("model_grant_scope_invalid");
     const broker = typeof input.broker === "function" ? input.broker(body.credential) : input.broker;
+    const providers = input.providers ?? new ProviderClient();
     const result = await broker.withCredential(body.credential.id, { actorId: "review-worker", organizationId: body.organizationId, repositoryId: body.repositoryId },
-      (provider, apiKey) => (input.providers ?? new ProviderClient()).generateWithRetry(provider, apiKey, body.request, approvedProviderModels[provider]));
+      async (provider, apiKey) => {
+        const generate = (request: ProviderRequest) => providers.generateWithRetry(provider, apiKey, request, approvedProviderModels[provider]);
+        try {
+          return await generate(body.request);
+        } catch (error) {
+          // Older encrypted credentials predate capability metadata. A 404 from
+          // their legacy model is recovered once, inside this tenant-bound call,
+          // using only models the same key exposes through its provider catalog.
+          if (provider !== "gemini" || !(error instanceof ProviderError) || error.status !== 404) throw error;
+          const validation = await providers.validateKey(provider, apiKey);
+          const fallback = selectProviderModel(provider, validation.availableModels);
+          if (!fallback || fallback === body.request.model) throw error;
+          return generate({ ...body.request, model: fallback });
+        }
+      });
     return json(200, { result });
   } catch (error) {
     const mapped = safe(error);

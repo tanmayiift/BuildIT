@@ -5,7 +5,7 @@ import { handleModelInvocation, type StoredCredential } from "../src/index";
 import { ProviderError } from "@buildit/providers";
 
 const secret = new Uint8Array(32).fill(6), now = 10_000;
-const credential: StoredCredential = { id: "credential-a", organizationId: "org-a", repositoryId: "repo-a", provider: "gemini", ciphertext: "cipher", nonce: "nonce", tag: "tag", wrappedDataKey: "wrapped", kmsKeyId: "kms", envelopeVersion: 1, keyVersion: 1, aadDigest: "a".repeat(64), maskedSuffix: "1234", status: "valid", createdBy: "owner-a", createdAt: 1, lastValidatedAt: 1 };
+const credential: StoredCredential = { id: "credential-a", organizationId: "org-a", repositoryId: "repo-a", provider: "gemini", ciphertext: "cipher", nonce: "nonce", tag: "tag", wrappedDataKey: "wrapped", kmsKeyId: "kms", envelopeVersion: 1, keyVersion: 1, aadDigest: "a".repeat(64), maskedSuffix: "1234", availableModels: [], status: "valid", createdBy: "owner-a", createdAt: 1, lastValidatedAt: 1 };
 const providerRequest = { model: "gemini-2.5-pro", system: "Return evidence only", input: "pinned context", schemaName: "result", schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"], additionalProperties: false }, maxOutputTokens: 100 };
 function fixture(changes: Record<string, unknown> = {}) {
   const body = JSON.stringify({ organizationId: "org-a", repositoryId: "repo-a", reviewId: "review-a", stage: "findings", credential, request: providerRequest, ...changes });
@@ -47,5 +47,19 @@ describe("model broker HTTP boundary", () => {
     const { body, token } = fixture();
     const response = await handleModelInvocation(new Request("https://broker/api/model", { method: "POST", body, headers: { authorization: `Bearer ${token}` } }), { grantSecret: secret, consume: async () => true, broker: { withCredential: async (_id: string, _access: unknown, use: (provider: "gemini", key: string) => Promise<unknown>) => use("gemini", "raw-provider-key") } as never, providers: { generateWithRetry: async () => { throw new ProviderError("malformed_response", 400); } } as never, now });
     await expect(response.json()).resolves.toEqual({ error: "malformed_response", providerStatus: 400 });
+  });
+
+  it("recovers a legacy Gemini model once using the same key's catalog", async () => {
+    const { body, token } = fixture(), generateWithRetry = vi.fn(async (_provider: string, _key: string, request: { model: string }) => {
+      if (request.model === "gemini-2.5-pro") throw new ProviderError("malformed_response", 404);
+      return { value: { ok: true }, provider: "gemini", model: request.model, finishReason: "STOP", inputTokens: 1, outputTokens: 1 };
+    });
+    const response = await handleModelInvocation(new Request("https://broker/api/model", { method: "POST", body, headers: { authorization: `Bearer ${token}` } }), {
+      grantSecret: secret, consume: async () => true,
+      broker: { withCredential: async (_id: string, _access: unknown, use: (provider: "gemini", key: string) => Promise<unknown>) => use("gemini", "raw-provider-key") } as never,
+      providers: { generateWithRetry, validateKey: async () => ({ availableModels: ["gemini-3.1-pro-preview"] }) } as never, now,
+    });
+    expect(response.status).toBe(200);
+    expect(generateWithRetry.mock.calls.map(call => call[2].model)).toEqual(["gemini-2.5-pro", "gemini-3.1-pro-preview"]);
   });
 });

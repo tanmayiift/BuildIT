@@ -18,7 +18,7 @@ export const listProviderCredentials = query({
       id: credential._id, provider: credential.provider, maskedSuffix: credential.maskedSuffix,
       status: credential.status, createdBy: credential.createdBy, createdAt: credential.createdAt,
       lastValidatedAt: credential.lastValidatedAt, lastUsedAt: credential.lastUsedAt,
-      revokedAt: credential.revokedAt,
+      revokedAt: credential.revokedAt, availableModels: credential.availableModels,
       repositoryId: credential.repositoryId,
     }));
   },
@@ -48,7 +48,7 @@ export const storeEncryptedCredential = mutation({
     organizationId: v.id("organizations"), repositoryId: v.optional(v.id("repositories")),
     credentialScopeId: v.string(), provider, encryptedCiphertext: v.string(), nonce: v.string(),
     authTag: v.string(), aadDigest: v.string(), wrappedDataKey: v.string(), kmsKeyId: v.string(),
-    envelopeVersion: v.literal(1), keyVersion: v.number(), maskedSuffix: v.string(),
+    envelopeVersion: v.literal(1), keyVersion: v.number(), maskedSuffix: v.string(), availableModels: v.array(v.string()),
     lastValidatedAt: v.number(), requestId: v.string(),
     replacesCredentialId: v.optional(v.id("providerCredentials")),
   },
@@ -60,7 +60,8 @@ export const storeEncryptedCredential = mutation({
     // provider saw the key. Re-check membership and repository scope here, but
     // do not let provider response time invalidate the approved write.
     if (!/^[0-9a-f-]{36}$/i.test(args.credentialScopeId) || !/^[0-9a-f]{64}$/i.test(args.aadDigest)
-      || args.maskedSuffix.length !== 4 || args.keyVersion !== 1 || args.lastValidatedAt > Date.now() + 5_000) {
+      || args.maskedSuffix.length !== 4 || args.keyVersion !== 1 || args.lastValidatedAt > Date.now() + 5_000
+      || !args.availableModels.length || args.availableModels.length > 10 || args.availableModels.some(model => !/^[-.a-z0-9]{3,100}$/i.test(model))) {
       throw new Error("invalid_encrypted_credential");
     }
     const existing = await ctx.db.query("providerCredentials").withIndex("by_scope", q => q.eq("credentialScopeId", args.credentialScopeId)).unique();

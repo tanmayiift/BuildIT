@@ -20,6 +20,7 @@ export type StoredCredential = EnvelopeCiphertext & {
   createdBy: string;
   createdAt: number;
   lastValidatedAt: number;
+  availableModels: string[];
   lastUsedAt?: number;
   revokedAt?: number;
   replacesCredentialId?: string;
@@ -63,7 +64,7 @@ export class CredentialBroker {
   ) {}
 
   async save(input: CredentialAccess & { provider: ProviderName; apiKey: string; replacesCredentialId?: string }) {
-    await this.providers.validateKey(input.provider, input.apiKey);
+    const validation = await this.providers.validateKey(input.provider, input.apiKey);
     const id = randomUUID();
     const scope = scopeFor({ id, organizationId: input.organizationId, ...(input.repositoryId ? { repositoryId: input.repositoryId } : {}) });
     const envelope = await envelopeEncryptSecret(input.apiKey, scope, this.kms, this.kmsKeyId);
@@ -80,10 +81,11 @@ export class CredentialBroker {
       createdBy: input.actorId,
       createdAt: timestamp,
       lastValidatedAt: timestamp,
+      availableModels: validation.availableModels,
       ...(input.replacesCredentialId ? { replacesCredentialId: input.replacesCredentialId } : {}),
     };
     await this.store.insert(stored);
-    return { id, provider: stored.provider, maskedSuffix: stored.maskedSuffix, status: stored.status, lastValidatedAt: timestamp };
+    return { id, provider: stored.provider, maskedSuffix: stored.maskedSuffix, status: stored.status, lastValidatedAt: timestamp, availableModels: stored.availableModels };
   }
 
   async withCredential<T>(credentialId: string, access: CredentialAccess, use: (provider: ProviderName, apiKey: string) => Promise<T>) {

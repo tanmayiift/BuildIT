@@ -29,7 +29,7 @@ export const analysisScope = internalQuery({
       credential: { id: credential.credentialScopeId, organizationId: String(credential.organizationId), ...(credential.repositoryId ? { repositoryId: String(credential.repositoryId) } : {}),
         provider: credential.provider, ciphertext: credential.encryptedCiphertext, nonce: credential.nonce, tag: credential.authTag,
         wrappedDataKey: credential.wrappedDataKey, kmsKeyId: credential.kmsKeyId, envelopeVersion: credential.envelopeVersion,
-        keyVersion: credential.keyVersion, aadDigest: credential.aadDigest, maskedSuffix: credential.maskedSuffix, status: "valid" as const,
+        keyVersion: credential.keyVersion, aadDigest: credential.aadDigest, maskedSuffix: credential.maskedSuffix, availableModels: credential.availableModels ?? [], status: "valid" as const,
         createdBy: credential.createdBy, createdAt: credential.createdAt, lastValidatedAt: credential.lastValidatedAt },
       credentialDocumentId: credential._id,
       artifacts: artifacts.map(item => ({ id: item._id, storageKey: item.storageKey, checksum: item.checksum, size: item.size })),

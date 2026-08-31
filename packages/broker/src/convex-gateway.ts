@@ -44,7 +44,7 @@ export class ConvexCredentialGateway implements CredentialStore,TrackerCredentia
       credentialScopeId: value.id, provider: value.provider, encryptedCiphertext: value.ciphertext,
       nonce: value.nonce, authTag: value.tag, aadDigest: value.aadDigest, wrappedDataKey: value.wrappedDataKey,
       kmsKeyId: value.kmsKeyId, envelopeVersion: value.envelopeVersion, keyVersion: value.keyVersion,
-      maskedSuffix: value.maskedSuffix, lastValidatedAt: value.lastValidatedAt,
+      maskedSuffix: value.maskedSuffix, lastValidatedAt: value.lastValidatedAt, availableModels: value.availableModels,
       requestId: `credential-create:${randomUUID()}`,
       ...(value.replacesCredentialId ? { replacesCredentialId: value.replacesCredentialId } : {}),
     });

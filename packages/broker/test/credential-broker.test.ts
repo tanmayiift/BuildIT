@@ -17,7 +17,7 @@ function fixtures() {
     decryptDataKey: vi.fn(async () => key.slice()),
     rewrapDataKey: vi.fn(async () => new Uint8Array([10])),
   };
-  const providers = { validateKey: vi.fn(async () => true) };
+  const providers = { validateKey: vi.fn(async () => ({ availableModels: ["gemini-2.5-pro"] })) };
   return { store, kms, providers, getSaved: () => saved };
 }
 
@@ -27,11 +27,12 @@ describe("credential broker", () => {
     const broker = new CredentialBroker(f.store, f.kms, "kms-key", f.providers as never, () => 100);
     const result = await broker.save({ actorId: "user-a", organizationId: "org-a", repositoryId: "repo-a", provider: "gemini", apiKey: "a-secret-provider-key", replacesCredentialId: "old-credential" });
     expect(f.providers.validateKey).toHaveBeenCalledWith("gemini", "a-secret-provider-key");
-    expect(result).toMatchObject({ provider: "gemini", maskedSuffix: "-key", status: "valid" });
+    expect(result).toMatchObject({ provider: "gemini", maskedSuffix: "-key", status: "valid", availableModels: ["gemini-2.5-pro"] });
     expect(f.getSaved()).not.toHaveProperty("apiKey");
     expect(f.getSaved()!.ciphertext).not.toContain("a-secret-provider-key");
     expect(f.getSaved()!.repositoryId).toBe("repo-a");
     expect(f.getSaved()!.replacesCredentialId).toBe("old-credential");
+    expect(f.getSaved()!.availableModels).toEqual(["gemini-2.5-pro"]);
   });
 
   it("decrypts for exactly one authorized provider callback", async () => {

@@ -4,6 +4,7 @@ import { requireRepositoryRole } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { terminalStatuses } from "./lib/lifecycle";
+import { selectProviderModel } from "@buildit/providers";
 
 export const scope = internalQuery({
   args: { repositoryId: v.id("repositories") },
@@ -13,7 +14,8 @@ export const scope = internalQuery({
     const credentials = await ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", access.repository.organizationId).eq("status", "valid")).collect();
     const credential = credentials.find(item => item.repositoryId === access.repository._id) ?? credentials.find(item => item.repositoryId === undefined);
     if (!credential) throw new ConvexError("provider_credential_invalid");
-    const model = credential.provider === "gemini" ? "gemini-2.5-pro" : credential.provider === "openai" ? "gpt-5" : "claude-sonnet-4-5";
+    const model = selectProviderModel(credential.provider, credential.availableModels);
+    if (!model) throw new ConvexError("provider_credential_invalid");
     return { actorId: access.userId, actorRole: access.role, organizationId: access.repository.organizationId,
       repositoryId: access.repository._id, githubRepositoryId: access.repository.githubRepositoryId,
       installationId: access.installation.installationId, owner: access.repository.owner, name: access.repository.name,
@@ -75,7 +77,8 @@ export const create = internalMutation({
     const credentials = await ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", repository.organizationId).eq("status", "valid")).collect();
     const credential = credentials.find(item => item.repositoryId === repository._id) ?? credentials.find(item => item.repositoryId === undefined);
     if (!credential || credential.credentialScopeId !== args.expectedCredentialScopeId) throw new ConvexError("provider_credential_changed_review_again");
-    const model = credential.provider === "gemini" ? "gemini-2.5-pro" : credential.provider === "openai" ? "gpt-5" : "claude-sonnet-4-5";
+    const model = selectProviderModel(credential.provider, credential.availableModels);
+    if (!model) throw new ConvexError("provider_credential_invalid");
     const reviewId = await ctx.db.insert("reviews", { organizationId: repository.organizationId, repositoryId: repository._id,
       githubRepositoryId: repository.githubRepositoryId, prNumber: args.prNumber, isFork: args.isFork, baseRef: args.baseRef,
       baseSha: args.baseSha, headSha: args.headSha, requiredCheckPolicy: "fail_closed", completedRoundCount: 0, patchAttemptCount: 0,

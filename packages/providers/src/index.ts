@@ -3,6 +3,17 @@ export type JsonSchema = Record<string, unknown>;
 export type ProviderRequest = { model: string; system: string; input: string; schemaName: string; schema: JsonSchema; maxOutputTokens: number };
 export type ProviderResult = { value: unknown; provider: ProviderName; model: string; finishReason: string; inputTokens: number; outputTokens: number; requestId?: string | undefined };
 export const approvedProviderModels:Record<ProviderName,ReadonlySet<string>>={anthropic:new Set(["claude-sonnet-4-5","claude-sonnet-4-6","claude-opus-4-6"]),openai:new Set(["gpt-5","gpt-5.4","gpt-5.4-mini"]),gemini:new Set(["gemini-2.5-pro","gemini-2.5-flash","gemini-3.1-pro-preview"])};
+const preferredProviderModels: Record<ProviderName, readonly string[]> = {
+  anthropic: ["claude-sonnet-4-6", "claude-sonnet-4-5", "claude-opus-4-6"],
+  openai: ["gpt-5.4", "gpt-5", "gpt-5.4-mini"],
+  gemini: ["gemini-2.5-pro", "gemini-3.1-pro-preview", "gemini-2.5-flash"],
+};
+export type ProviderKeyValidation = { availableModels: string[] };
+
+export function selectProviderModel(provider: ProviderName, availableModels?: readonly string[]) {
+  const available = availableModels ? new Set(availableModels) : approvedProviderModels[provider];
+  return preferredProviderModels[provider].find(model => available.has(model)) ?? null;
+}
 type Http = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export class ProviderError extends Error {
@@ -26,15 +37,26 @@ function usageNumber(value: unknown) { return typeof value === "number" && Numbe
 export class ProviderClient {
   constructor(private readonly http: Http = fetch) {}
 
-  async validateKey(provider: ProviderName, apiKey: string) {
+  async validateKey(provider: ProviderName, apiKey: string): Promise<ProviderKeyValidation> {
     if (!apiKey || apiKey.length < 16) throw new ProviderError("invalid_key");
     const config: { url: string; headers: Record<string, string> } = provider === "anthropic"
-      ? { url: "https://api.anthropic.com/v1/models?limit=1", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" } }
+      ? { url: "https://api.anthropic.com/v1/models?limit=100", headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" } }
       : provider === "openai"
         ? { url: "https://api.openai.com/v1/models", headers: { authorization: `Bearer ${apiKey}` } }
-        : { url: "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", headers: { "x-goog-api-key": apiKey } };
-    await checked(await this.http(config.url, { headers: config.headers, signal: AbortSignal.timeout(8_000) }));
-    return true;
+        : { url: "https://generativelanguage.googleapis.com/v1beta/models?pageSize=100", headers: { "x-goog-api-key": apiKey } };
+    const response = await checked(await this.http(config.url, { headers: config.headers, signal: AbortSignal.timeout(8_000) }));
+    const records = Array.isArray(response.models) ? response.models : Array.isArray(response.data) ? response.data : [];
+    const availableModels = records.flatMap(item => {
+      if (!item || typeof item !== "object") return [];
+      const record = item as Record<string, unknown>, raw = typeof record.name === "string" ? record.name : typeof record.id === "string" ? record.id : "";
+      const model = raw.replace(/^models\//, "");
+      const methods = record.supportedGenerationMethods;
+      return approvedProviderModels[provider].has(model)
+        && (provider !== "gemini" || !Array.isArray(methods) || methods.includes("generateContent")) ? [model] : [];
+    });
+    const unique = [...new Set(availableModels)].sort((a, b) => preferredProviderModels[provider].indexOf(a) - preferredProviderModels[provider].indexOf(b));
+    if (!selectProviderModel(provider, unique)) throw new ProviderError("malformed_response");
+    return { availableModels: unique };
   }
 
   async generate(provider: ProviderName, apiKey: string, request: ProviderRequest, allowlist: ReadonlySet<string>): Promise<ProviderResult> {

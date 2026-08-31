@@ -14,11 +14,11 @@ describe("user-authorized Convex credential gateway", () => {
     await expect(gateway.authorize({ token: "signed-user-token", organizationId: "org-a", repositoryId: "repo-a" })).resolves.toEqual({ actorId: "user-a" });
     await gateway.insert({ id: "123e4567-e89b-12d3-a456-426614174000", organizationId: "org-a", repositoryId: "repo-a", provider: "gemini",
       ciphertext: "cipher", nonce: "nonce", tag: "tag", wrappedDataKey: "wrapped", kmsKeyId: "kms", envelopeVersion: 1,
-      keyVersion: 1, aadDigest: "a".repeat(64), maskedSuffix: "1234", status: "valid", createdBy: "user-a", createdAt: 1, lastValidatedAt: 1 });
+      keyVersion: 1, aadDigest: "a".repeat(64), maskedSuffix: "1234", availableModels: ["gemini-2.5-pro"], status: "valid", createdBy: "user-a", createdAt: 1, lastValidatedAt: 1 });
     expect(fetch).toHaveBeenCalledTimes(2);
     for (const [, init] of fetch.mock.calls) expect((init.headers as Record<string, string>).authorization).toBe("Bearer signed-user-token");
     const stored = JSON.parse(String(fetch.mock.calls[1]![1].body)) as { args: Record<string, unknown> };
-    expect(stored.args).toMatchObject({ encryptedCiphertext: "cipher", authTag: "tag", organizationId: "org-a", repositoryId: "repo-a" });
+    expect(stored.args).toMatchObject({ encryptedCiphertext: "cipher", authTag: "tag", organizationId: "org-a", repositoryId: "repo-a", availableModels: ["gemini-2.5-pro"] });
     expect(JSON.stringify(stored)).not.toContain("provider-key");
   });
 

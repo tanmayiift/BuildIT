@@ -204,9 +204,9 @@ export function LiveReviewDetail({ id }: { id: string }) {
           <p>{nextAction.detail}</p>
         </div>
       </div>
-      <ReviewJourney currentStage={review.currentStage} status={review.status} events={evidence.events} />
-      <details className="technical-details"><summary>Technical details</summary><dl><div><dt>Base commit</dt><dd><code>{review.baseSha.slice(0, 12)}</code></dd></div><div><dt>Current step</dt><dd>{stagePresentation(review.currentStage)}</dd></div><div><dt>AI provider</dt><dd>{label(review.provider)} · {review.model}</dd></div><div><dt>Spend</dt><dd>{review.budgetConsumed.toFixed(2)} of {review.budgetLimit.toFixed(2)} limit</dd></div></dl></details>
-      {!hasEvidence ? <section className="evidence-empty"><span aria-hidden="true">◇</span><div><h2>No evidence was produced</h2><p>{review.status === "cancelled" ? "This review stopped before BuildIT gathered requirements, reported issues, or ran checks." : "BuildIT has not gathered requirements, reported issues, or completed checks yet."}</p></div></section> : null}
+      {hasEvidence || canCancel ? <ReviewJourney currentStage={review.currentStage} status={review.status} events={evidence.events} /> : null}
+      {hasEvidence || canCancel ? <details className="technical-details"><summary>Technical details</summary><dl><div><dt>Base commit</dt><dd><code>{review.baseSha.slice(0, 12)}</code></dd></div><div><dt>Current step</dt><dd>{stagePresentation(review.currentStage)}</dd></div><div><dt>AI provider</dt><dd>{label(review.provider)} · {review.model}</dd></div><div><dt>Spend</dt><dd>{review.budgetConsumed.toFixed(2)} of {review.budgetLimit.toFixed(2)} limit</dd></div></dl></details> : null}
+      {!hasEvidence && !canCancel ? <section className="review-stopped-note"><span aria-hidden="true">○</span><p><strong>No code checks were run.</strong> This stopped before BuildIT gathered evidence, so it has no opinion about this pull request.</p></section> : null}
       {evidence.requirements.length ? <Section
         eyebrow="Intent"
         title="What this change must do"
