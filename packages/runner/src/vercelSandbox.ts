@@ -62,9 +62,18 @@ export class VercelSandboxRunner {
       const gitleaksReport = await sandbox.readFileToBuffer({ path: "/tmp/buildit-gitleaks.json" });
       if (!gitleaksReport || gitleaksReport.byteLength > 2_000_000) throw new Error("gitleaks_report_invalid");
 
-      const osv = await sandbox.runCommand({ cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", ...lockfiles.flatMap(path => ["--lockfile", path])], cwd: "/vercel/sandbox/repo", timeoutMs: 120_000 });
-      if (![0, 1].includes(osv.exitCode)) throw new Error("osv_execution_failed");
-      const osvReport = await sandbox.readFileToBuffer({ path: "/tmp/buildit-osv.json" });
+      // Keep lockfile paths absolute. The SDK honours cwd, but the scanner itself
+      // resolves lockfiles before it changes working directory in some runtimes.
+      // An absolute, sandbox-owned path prevents a false scanner failure while
+      // preserving the same no-network, read-only scan boundary.
+      const osv = await sandbox.runCommand({ cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", ...lockfiles.flatMap(path => ["--lockfile", `/vercel/sandbox/repo/${path}`])], cwd: "/vercel/sandbox/repo", timeoutMs: 120_000 });
+      const osvOutput = await output(osv, 8_192);
+      // OSV-Scanner exits 128 and writes no report for a valid lockfile with no
+      // package sources. That is a complete empty dependency scan, not a scanner
+      // outage. Every other non-result remains a hard failure.
+      const noPackageSources = osv.exitCode === 128 && /No package sources found/.test(osvOutput.text);
+      if (![0, 1].includes(osv.exitCode) && !noPackageSources) throw new Error("osv_execution_failed");
+      const osvReport = noPackageSources ? Buffer.from('{"results":[]}') : await sandbox.readFileToBuffer({ path: "/tmp/buildit-osv.json" });
       if (!osvReport || osvReport.byteLength > 4_000_000) throw new Error("osv_report_invalid");
 
       await sandbox.updateNetworkPolicy({ allow: registryDomains });

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createNamedPlan } from "../src/index";
 import { VercelSandboxRunner, type SandboxFactory, type SandboxLike } from "../src/vercelSandbox";
 
-function fixture(options: { env?: string; installExit?: number } = {}) {
+function fixture(options: { env?: string; installExit?: number; osvExit?: number; osvOutput?: string } = {}) {
   const calls: Array<unknown> = [], stop = vi.fn(async () => ({}));
   const sandbox: SandboxLike = {
     writeFiles: vi.fn(async files => { calls.push(["files", files]); }),
@@ -10,8 +10,8 @@ function fixture(options: { env?: string; installExit?: number } = {}) {
     updateNetworkPolicy: vi.fn(async policy => { calls.push(["network", policy]); }),
     runCommand: vi.fn(async command => {
       calls.push(["command", command]);
-      const isEnv = command.cmd === "env", exitCode = isEnv ? 0 : command.cmd === "pnpm" && command.args[0] === "install" ? options.installExit ?? 0 : 0;
-      return { exitCode, durationMs: 10, stdout: async () => isEnv ? options.env ?? "CI=true\n" : "ok", stderr: async () => "" };
+      const isEnv = command.cmd === "env", isOsv = command.cmd === "osv-scanner", exitCode = isEnv ? 0 : isOsv ? options.osvExit ?? 0 : command.cmd === "pnpm" && command.args[0] === "install" ? options.installExit ?? 0 : 0;
+      return { exitCode, durationMs: 10, stdout: async () => isEnv ? options.env ?? "CI=true\n" : isOsv ? options.osvOutput ?? "ok" : "ok", stderr: async () => "" };
     }),
     stop,
   };
@@ -32,7 +32,7 @@ describe("Vercel sandbox runner", () => {
     expect(f.calls).toContainEqual(["network", { allow: ["registry.npmjs.org", "registry.yarnpkg.com"] }]);
     expect(f.calls).toContainEqual(["network", "deny-all"]);
     expect(f.calls).toContainEqual(["command", { cmd: "pnpm", args: ["install", "--frozen-lockfile", "--ignore-scripts"], cwd: "/vercel/sandbox/repo", timeoutMs: 600_000 }]);
-    expect(f.calls).toContainEqual(["command", { cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", "--lockfile", "pnpm-lock.yaml"], cwd: "/vercel/sandbox/repo", timeoutMs: 120_000 }]);
+    expect(f.calls).toContainEqual(["command", { cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", "--lockfile", "/vercel/sandbox/repo/pnpm-lock.yaml"], cwd: "/vercel/sandbox/repo", timeoutMs: 120_000 }]);
     expect(f.create.mock.calls[0]![0]).toMatchObject({ networkPolicy: "deny-all", env: { CI: "true" }, region: "cdg1", persistent: false });
     expect(f.stop).toHaveBeenCalledOnce();
   });
@@ -84,6 +84,13 @@ describe("Vercel sandbox runner", () => {
   it("fails closed without a supported Node lockfile", async () => {
     const f = fixture();
     await expect(new VercelSandboxRunner(f.create).run({ runtime: "node24", files: [{ path: "package.json", content: "{}" }], install, checks: [test] })).rejects.toThrow("osv_lockfile_required");
+    expect(f.stop).toHaveBeenCalledOnce();
+  });
+
+  it("records a complete empty dependency scan for a valid lockfile with no packages", async () => {
+    const f = fixture({ osvExit: 128, osvOutput: "No package sources found, --help for usage information." });
+    const result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files: [{ path: "package-lock.json", content: '{"lockfileVersion":3,"packages":{"":{}}}' }], install, checks: [test] });
+    expect(result.osvReport).toBe('{"results":[]}');
     expect(f.stop).toHaveBeenCalledOnce();
   });
 });
