@@ -62,4 +62,13 @@ describe("model broker HTTP boundary", () => {
     expect(response.status).toBe(200);
     expect(generateWithRetry.mock.calls.map(call => call[2].model)).toEqual(["gemini-2.5-pro", "gemini-3.1-pro-preview"]);
   });
+  it("does not retry a retired Gemini alias when the same key exposes no alternative", async () => {
+    const source = fixture(), generateWithRetry = vi.fn(async () => { throw new ProviderError("malformed_response", 404); });
+    await expect(handleModelInvocation(new Request("https://broker/api/model", { method: "POST", body: source.body, headers: { authorization: `Bearer ${source.token}` } }), {
+      grantSecret: secret, consume: async () => true,
+      broker: { withCredential: async (_id: string, _access: unknown, use: (provider: "gemini", key: string) => Promise<unknown>) => use("gemini", "raw-provider-key") } as never,
+      providers: { generateWithRetry, validateKey: async () => ({ availableModels: ["gemini-2.5-pro"] }) } as never, now,
+    }).then(response => response.json())).resolves.toEqual({ error: "malformed_response", providerStatus: 404 });
+    expect(generateWithRetry).toHaveBeenCalledTimes(1);
+  });
 });

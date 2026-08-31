@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { approvedProviderModels, ProviderClient, ProviderError, selectProviderModel, type ProviderRequest } from "@buildit/providers";
+import { approvedProviderModels, ProviderClient, ProviderError, type ProviderRequest } from "@buildit/providers";
 import { verifyModelInvocationGrant, type ModelStage } from "@buildit/security";
 import type { CredentialBroker, StoredCredential } from "./index.js";
 
@@ -78,9 +78,17 @@ export async function handleModelInvocation(request: Request, input: {
           // using only models the same key exposes through its provider catalog.
           if (provider !== "gemini" || !(error instanceof ProviderError) || error.status !== 404) throw error;
           const validation = await providers.validateKey(provider, apiKey);
-          const fallback = selectProviderModel(provider, validation.availableModels);
-          if (!fallback || fallback === body.request.model) throw error;
-          return generate({ ...body.request, model: fallback });
+          // A catalog may still include a retired alias. Try each other model
+          // that this exact key currently exposes, and never step outside that
+          // key's provider-verified capabilities.
+          for (const fallback of validation.availableModels) {
+            if (fallback === body.request.model) continue;
+            try { return await generate({ ...body.request, model: fallback }); }
+            catch (fallbackError) {
+              if (!(fallbackError instanceof ProviderError) || fallbackError.status !== 404) throw fallbackError;
+            }
+          }
+          throw error;
         }
       });
     return json(200, { result });
