@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "verdictWhileOpen": "not_ready",
   "blockers": [
-    {"id": "production-rollout", "owner": "buildit", "state": "open", "dependency": "Vercel broker slot and ordered Convex rollout"},
-    {"id": "live-model-evidence", "owner": "buildit", "state": "open", "dependency": "production rollout"},
+    {"id": "github-credential-rotation", "owner": "buildit-operator", "state": "open", "dependency": "GitHub OAuth client secret, App private key, and webhook secret reissue plus protected Convex replacement"},
+    {"id": "live-model-evidence", "owner": "buildit", "state": "open", "dependency": "GitHub credential rotation, enabled execution gate, and live public/private review matrix"},
     {"id": "blind-human-labels", "owner": "human-reviewers", "state": "open", "dependency": "qualified independent reviewers"},
     {"id": "two-real-users", "owner": "customer-testers", "state": "open", "dependency": "two independently controlled GitHub identities"},
     {"id": "external-security-audit", "owner": "independent-auditor", "state": "open", "dependency": "contracted penetration test and optional certification audit"},
