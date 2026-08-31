@@ -204,7 +204,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
           <p>{nextAction.detail}</p>
         </div>
       </div>
-      <ReviewJourney currentStage={review.currentStage} status={review.status} />
+      <ReviewJourney currentStage={review.currentStage} status={review.status} events={evidence.events} />
       <details className="technical-details"><summary>Technical details</summary><dl><div><dt>Base commit</dt><dd><code>{review.baseSha.slice(0, 12)}</code></dd></div><div><dt>Current step</dt><dd>{stagePresentation(review.currentStage)}</dd></div><div><dt>AI provider</dt><dd>{label(review.provider)} · {review.model}</dd></div><div><dt>Spend</dt><dd>{review.budgetConsumed.toFixed(2)} of {review.budgetLimit.toFixed(2)} limit</dd></div></dl></details>
       {!hasEvidence ? <section className="evidence-empty"><span aria-hidden="true">◇</span><div><h2>No evidence was produced</h2><p>{review.status === "cancelled" ? "This review stopped before BuildIT gathered requirements, reported issues, or ran checks." : "BuildIT has not gathered requirements, reported issues, or completed checks yet."}</p></div></section> : null}
       {evidence.requirements.length ? <Section
@@ -400,12 +400,21 @@ function Section({
     </section>
   );
 }
-function ReviewJourney({ currentStage, status }: { currentStage: string; status: string }) {
+function ReviewJourney({ currentStage, status, events }: { currentStage: string; status: string; events: Evidence["events"] }) {
   const steps = [
     { key: "context", label: "Understand", detail: "Read the PR and requirements" },
-    { key: "analysis", label: "Inspect", detail: "Look for risky code changes" },
-    { key: "validation", label: "Verify", detail: "Run required checks" },
+    { key: "validation", label: "Verify", detail: "Run required safety checks" },
+    { key: "analysis", label: "Inspect", detail: "Review code against the evidence" },
     { key: "delivery", label: "Hand back", detail: "Show evidence or a tested fix" },
-  ], order = ["queue", "context", "analysis", "validation", "autofix", "delivery", "complete"], current = order.indexOf(currentStage), stopped = status === "cancelled";
-  return <section className="review-journey" aria-labelledby="review-journey-title"><div><p className="eyebrow">Review journey</p><h2 id="review-journey-title">How far BuildIT got</h2></div><ol>{steps.map((step, index) => { const position = order.indexOf(step.key), complete = !stopped && current > position, active = current === position; return <li key={step.key} data-state={complete ? "complete" : active ? "active" : "waiting"}><span aria-hidden="true">{complete ? "✓" : index + 1}</span><div><strong>{step.label}</strong><small>{step.detail}</small></div></li>; })}</ol></section>;
+  ];
+  const completed = new Set(events.filter((event) => event.type === "stage_completed").map((event) => event.stage));
+  const successful = ["passed", "checks_passed", "changes_requested", "inconclusive", "delivered", "failed_after_bounds"].includes(status);
+  const stopped = ["cancelled", "platform_failed", "budget_exhausted"].includes(status);
+  const activeKey = steps.find((step) => !completed.has(step.key))?.key;
+  return <section className="review-journey" aria-labelledby="review-journey-title"><div><p className="eyebrow">Review journey</p><h2 id="review-journey-title">What BuildIT completed</h2></div><ol>{steps.map((step, index) => {
+    const complete = successful || completed.has(step.key);
+    const failed = stopped && !complete && activeKey === step.key;
+    const active = !stopped && !successful && currentStage === step.key;
+    return <li key={step.key} data-state={complete ? "complete" : failed ? "failed" : active ? "active" : "waiting"}><span aria-hidden="true">{complete ? "✓" : failed ? "!" : index + 1}</span><div><strong>{failed ? `${step.label} stopped` : step.label}</strong><small>{failed ? "No decision was made after this point." : step.detail}</small></div></li>;
+  })}</ol></section>;
 }
