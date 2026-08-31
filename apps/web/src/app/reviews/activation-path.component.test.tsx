@@ -22,4 +22,10 @@ describe("activation path", () => {
     expect(screen.getByText("First evidence is ready. Open a result and inspect every claim.")).not.toBeNull();
     expect(document.body.textContent?.toLowerCase()).not.toContain("bug-free");
   });
+  it("does not call a finished review running", () => {
+    state.funnel = { repositoryConnected: true, modelKeyReady: true, pullRequestPreviewed: true, reviewStarted: true, firstEvidenceReady: false };
+    render(<ActivationPath organizationId="org-a" />);
+    expect(screen.getByRole("link", { name: "Review started" })).not.toBeNull();
+    expect(document.body.textContent).not.toContain("Review running");
+  });
 });
