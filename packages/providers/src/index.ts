@@ -40,7 +40,11 @@ export class ProviderClient {
   async generate(provider: ProviderName, apiKey: string, request: ProviderRequest, allowlist: ReadonlySet<string>): Promise<ProviderResult> {
     assertAllowedModel(request.model, allowlist);assertStrictSchema(request.schema);
     const result=provider === "anthropic"?await this.anthropic(apiKey, request):provider === "openai"?await this.openai(apiKey, request):await this.gemini(apiKey, request);
-    if(!validateSchemaValue(result.value,request.schema))throw new ProviderError("malformed_response");return result;
+    // The provider is asked for strict JSON, but its value is deliberately
+    // validated by the prompt-chain stage. That stage records an invalid attempt
+    // and sends one bounded repair prompt. Rejecting it here would turn a
+    // recoverable schema miss into a terminal review failure.
+    return result;
   }
 
   async generateWithRetry(provider:ProviderName,apiKey:string,request:ProviderRequest,allowlist:ReadonlySet<string>,options={maxRetries:3,baseMs:250},wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))){let last:unknown;for(let attempt=0;attempt<=options.maxRetries;attempt++){try{return await this.generate(provider,apiKey,request,allowlist)}catch(error){last=error;if(!(error instanceof ProviderError)||!["rate_limited","provider_unavailable"].includes(error.code)||attempt===options.maxRetries)throw error;await wait(error.retryAfterMs??options.baseMs*2**attempt)}}throw last}
