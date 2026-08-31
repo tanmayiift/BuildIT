@@ -71,35 +71,55 @@ export const execute = reviewWorkflowManager.define({
   returns: v.null(),
 }).handler(async (step, args): Promise<null> => {
   for (const [index, stage] of durableReviewStages.entries()) {
-    if (stage === "context") {
-      await step.runAction(internal.reviewContextWorker.gather, {
-        organizationId: args.organizationId, reviewId: args.reviewId,
-        expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
-      });
+    const telemetry = stage === "context"
+      ? { operation: "review.context" as const, stage: "context" as const }
+      : stage === "analysis"
+        ? { operation: "review.analysis" as const, stage: "analysis" as const }
+        : { operation: "review.tests" as const, stage: "tests" as const };
+    await step.runAction(internal.telemetryWorker.emit, { ...telemetry, outcome: "started" });
+    try {
+      if (stage === "context") {
+        await step.runAction(internal.reviewContextWorker.gather, {
+          organizationId: args.organizationId, reviewId: args.reviewId,
+          expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
+        });
+      }
+      if (stage === "analysis") {
+        await step.runAction(internal.reviewAnalysisWorker.analyze, {
+          organizationId: args.organizationId, reviewId: args.reviewId,
+          expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
+        });
+      }
+      if (stage === "validation") {
+        await step.runAction(internal.reviewValidationWorker.validate, {
+          organizationId: args.organizationId, reviewId: args.reviewId,
+          expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
+        });
+      }
+    } catch (error) {
+      await step.runAction(internal.telemetryWorker.emit, { ...telemetry, outcome: "failed" });
+      throw error;
     }
-    if (stage === "analysis") {
-      await step.runAction(internal.reviewAnalysisWorker.analyze, {
-        organizationId: args.organizationId, reviewId: args.reviewId,
-        expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
-      });
-    }
-    if (stage === "validation") {
-      await step.runAction(internal.reviewValidationWorker.validate, {
-        organizationId: args.organizationId, reviewId: args.reviewId,
-        expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
-      });
-    }
+    await step.runAction(internal.telemetryWorker.emit, { ...telemetry, outcome: "succeeded" });
     await step.runMutation(internal.durableReview.checkpoint, {
       ...args, stage, sequence: index + 2, now: args.startedAt + index + 1,
     });
     if (stage === "analysis") {
       const mode = await step.runQuery(internal.reviewAutofixData.mode,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});
       if(mode==="autofix"){
-        try{const result=await step.runAction(internal.reviewAutofixWorker.runConvergence,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});if(result.outcome==="passed")await step.runAction(internal.reviewAutofixWorker.deliverPassed,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});else await step.runAction(internal.reviewAutofixWorker.publishFailure,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration})}catch(error){await step.runMutation(internal.reviewAutofixData.failPlatform,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration,code:error instanceof Error?error.message:"autofix_failed",now:args.startedAt+index+3})}
+        await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"started"});
+        try{const result=await step.runAction(internal.reviewAutofixWorker.runConvergence,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});if(result.outcome==="passed")await step.runAction(internal.reviewAutofixWorker.deliverPassed,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});else await step.runAction(internal.reviewAutofixWorker.publishFailure,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"succeeded"})}catch(error){await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"failed"});await step.runMutation(internal.reviewAutofixData.failPlatform,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration,code:error instanceof Error?error.message:"autofix_failed",now:args.startedAt+index+3})}
       }else{
-        const report = await step.runAction(internal.reviewReportWorker.compose, { organizationId: args.organizationId, reviewId: args.reviewId, expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration });
-        await step.runMutation(internal.reviewValidationData.finalizeDecision, { organizationId: args.organizationId, reviewId: args.reviewId, expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration, reportArtifactId: report.artifactId, now: args.startedAt + index + 2 });
-        await step.runAction(internal.reviewPublicationWorker.publish, { organizationId: args.organizationId, reviewId: args.reviewId, expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration });
+        await step.runAction(internal.telemetryWorker.emit,{operation:"review.delivery",stage:"delivery",outcome:"started"});
+        try {
+          const report = await step.runAction(internal.reviewReportWorker.compose, { organizationId: args.organizationId, reviewId: args.reviewId, expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration });
+          await step.runMutation(internal.reviewValidationData.finalizeDecision, { organizationId: args.organizationId, reviewId: args.reviewId, expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration, reportArtifactId: report.artifactId, now: args.startedAt + index + 2 });
+          await step.runAction(internal.reviewPublicationWorker.publish, { organizationId: args.organizationId, reviewId: args.reviewId, expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration });
+          await step.runAction(internal.telemetryWorker.emit,{operation:"review.delivery",stage:"delivery",outcome:"succeeded"});
+        } catch (error) {
+          await step.runAction(internal.telemetryWorker.emit,{operation:"review.delivery",stage:"delivery",outcome:"failed"});
+          throw error;
+        }
       }
     }
   }
