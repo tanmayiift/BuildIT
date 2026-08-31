@@ -10,6 +10,17 @@ function required(name: string) {
   return value;
 }
 
+// Keep production diagnostics useful without ever recording a customer key,
+// bearer token, source text, or an upstream error message.
+function report(error: unknown) {
+  const cause = error instanceof Error && error.cause ? error.cause : error;
+  const raw = cause instanceof Error ? cause.name : typeof (cause as { name?: unknown })?.name === "string"
+    ? String((cause as { name: string }).name) : "Unknown";
+  const allowed = new Set(["CredentialsProviderError", "AccessDenied", "AccessDeniedException", "KMSInvalidStateException", "Error"]);
+  const status = (cause as { $metadata?: { httpStatusCode?: unknown } })?.$metadata?.httpStatusCode;
+  console.error(JSON.stringify({ event: "credential_broker_unavailable", errorClass: allowed.has(raw) ? raw : "Other", ...(typeof status === "number" ? { status } : {}) }));
+}
+
 async function route(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "unauthenticated-request";
@@ -26,7 +37,8 @@ async function route(request: Request) {
     return await handleCredentialSave(request, { allowedOrigin: required("BUILDIT_WEB_ORIGIN"),
       authorize: async input => (await load()).gateway.authorize(input),
       broker: { save: async input => (await load()).broker.save(input) } as CredentialBroker });
-  } catch {
+  } catch (error) {
+    report(error);
     return Response.json({ error: "broker_unavailable" }, { status: 503, headers: { "cache-control": "no-store" } });
   }
 }
