@@ -188,6 +188,10 @@ describe("Convex tenant isolation", () => {
     const progressedAt = Date.now() + 100;
     await t.mutation(recordPreview, { repositoryId: alpha.repositoryId, actorId: "alice", headSha: "a".repeat(40), now: progressedAt });
     await t.run(ctx => ctx.db.insert("reviewEvents", { organizationId: alpha.organizationId, reviewId: alpha.reviewId, sequence: 2, type: "stage_completed", stage: "analysis", internalCode: "analysis_complete", metadata: {}, createdAt: progressedAt + 1 }));
+    const attempted = await asAlice.query(activationFunnel, { organizationId: alpha.organizationId });
+    expect(attempted).toMatchObject({ pullRequestPreviewed: true, firstEvidenceReady: false, chronologyValid: true });
+    const reportArtifactId = await t.run(ctx => ctx.db.insert("artifacts", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId, type: "review_message", storageKey: "activation-alpha/report.md", encrypted: true, checksum: "report-hash", size: 10, redactionStatus: "redacted", expiresAt: progressedAt + 60_000, deletionAttempts: 0 }));
+    await t.run(async ctx => { await ctx.db.patch(alpha.reviewId, { status: "inconclusive", completedAt: progressedAt + 2 }); await ctx.db.insert("reviewEvents", { organizationId: alpha.organizationId, reviewId: alpha.reviewId, sequence: 3, type: "status_changed", stage: "complete", publicMessageArtifactId: reportArtifactId, internalCode: "decision_required_check_missing", metadata: {}, createdAt: progressedAt + 3 }); });
     const progressed = await asAlice.query(activationFunnel, { organizationId: alpha.organizationId });
     expect(progressed).toMatchObject({ pullRequestPreviewed: true, firstEvidenceReady: true, chronologyValid: true, durationMs: { repositoryToPreview: expect.any(Number), identityToFirstEvidence: expect.any(Number) } });
     expect(JSON.stringify(progressed)).not.toContain("activation-alpha");

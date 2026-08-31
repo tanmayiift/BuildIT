@@ -3,6 +3,7 @@ import { query } from "./_generated/server";
 import { requireOrganizationRole } from "./lib/authz";
 
 type StageTimes = { identityAt?: number; repositoryAt?: number; modelKeyAt?: number; previewAt?: number; reviewAt?: number; evidenceAt?: number; humanDecisionAt?: number };
+const completedEvidenceStatuses = new Set(["checks_passed", "changes_requested", "inconclusive", "delivered", "failed_after_bounds"]);
 const duration = (from?: number, to?: number) => from !== undefined && to !== undefined && to >= from ? to - from : undefined;
 export function summarizeActivation(times: StageTimes, outcomes: string[]) {
   const ordered = [times.identityAt, times.repositoryAt, times.previewAt, times.reviewAt, times.evidenceAt, times.humanDecisionAt].filter((value): value is number => value !== undefined);
@@ -27,11 +28,14 @@ export const funnel = query({
       ctx.db.query("findings").filter(q => q.eq(q.field("organizationId"), args.organizationId)).collect(),
     ]);
     const reviewIds = new Set(reviews.map(item => item._id));
+    // An internal stage event means only that work was attempted. First value is an
+    // inspectable report attached to a completed review, never a failed attempt.
+    const completedEvidenceReviewIds = new Set(reviews.filter(item => completedEvidenceStatuses.has(item.status)).map(item => item._id));
     const minimum = (values: Array<number | undefined>) => { const present = values.filter((value): value is number => value !== undefined); return present.length ? Math.min(...present) : undefined; };
     const previewAt = minimum(audits.filter(item => item.action === "review.previewed" && item.result === "allowed").map(item => item.createdAt));
     const reviewAt = minimum(reviews.filter(item => previewAt === undefined || item.createdAt >= previewAt).map(item => item.createdAt));
     const evidenceFloor = reviewAt ?? previewAt ?? membership.createdAt;
-    const times = { identityAt: membership.createdAt, repositoryAt: minimum(repositories.map(item => item.createdAt)), modelKeyAt: minimum(credentials.map(item => item.lastValidatedAt ?? item.createdAt)), previewAt, reviewAt, evidenceAt: minimum(reviewEvents.filter(item => item.createdAt >= evidenceFloor && reviewIds.has(item.reviewId) && (item.publicMessageArtifactId !== undefined || !["queue", "context"].includes(item.stage))).map(item => item.createdAt)), humanDecisionAt: minimum(findings.filter(item => reviewIds.has(item.reviewId) && ["accepted", "dismissed", "fixed"].includes(item.resolution)).map(item => item.updatedAt)) };
+    const times = { identityAt: membership.createdAt, repositoryAt: minimum(repositories.map(item => item.createdAt)), modelKeyAt: minimum(credentials.map(item => item.lastValidatedAt ?? item.createdAt)), previewAt, reviewAt, evidenceAt: minimum(reviewEvents.filter(item => item.createdAt >= evidenceFloor && completedEvidenceReviewIds.has(item.reviewId) && item.publicMessageArtifactId !== undefined).map(item => item.createdAt)), humanDecisionAt: minimum(findings.filter(item => reviewIds.has(item.reviewId) && ["accepted", "dismissed", "fixed"].includes(item.resolution)).map(item => item.updatedAt)) };
     return { repositoryConnected: repositories.length > 0, modelKeyReady: credentials.length > 0,
       pullRequestPreviewed: audits.some(item => item.action === "review.previewed" && item.result === "allowed"), reviewStarted: reviews.length > 0,
       firstEvidenceReady: times.evidenceAt !== undefined, ...summarizeActivation(times, reviews.map(item => item.status)) };
