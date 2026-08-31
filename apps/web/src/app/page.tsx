@@ -11,10 +11,10 @@ export default function Overview() {
   return <div className="content landing">
     <section className="landing-hero" aria-labelledby="landing-title">
       <div className="landing-promise">
-        <p className="eyebrow">Evidence-backed pull request review</p>
-        <h1 id="landing-title">Know what a pull request breaks before you merge it.</h1>
-        <p>BuildIT checks the proposed code against its linked requirements, repository context, tests, and security rules. You get cited findings, clear limits, and—when you approve it—an independently reviewable fix.</p>
-        <div className="button-row landing-actions"><a className="button" href="/setup/install">Connect a repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
+        <p className="eyebrow">For lean B2B software teams</p>
+        <h1 id="landing-title">Give your technical lead proof before a pull request is merged.</h1>
+        <p>BuildIT compares the proposed code with its linked requirements, repository context, tests, and security rules. It hands back cited findings, clear limits, and—only with your consent—an independently reviewable fix.</p>
+        <div className="button-row landing-actions"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
         <small className="landing-boundary">GitHub sign-in identifies you. Repository installation controls code access. A model key is requested only for AI analysis or Autofix.</small>
       </div>
       <aside className="review-proof" aria-label="What a BuildIT decision contains">
