@@ -8,7 +8,15 @@ test("overview leads through the review queue to exact-commit evidence", async (
   await page.getByText("nexus/api #418").click();
   const pinnedContext = page.getByRole("region", { name: "Pinned review context" });
   await expect(pinnedContext.getByText("a3f91c2", { exact: true })).toBeVisible();
-  await expect(pinnedContext.getByText("main @ 7b2e004", { exact: true })).toBeVisible();
+  await expect(pinnedContext.getByText("Full", { exact: true })).toBeVisible();
+  await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
+});
+
+for (const [state, heading] of [["cancelled", "Review stopped"], ["running", "BuildIT is reviewing this change"], ["changes", "Changes are needed before merge"], ["passed", "All required checks passed"], ["empty", "A safe decision is not possible yet"], ["populated", "Changes are needed before merge"]] as const) test(`sample review state stays decision-first: ${state}`, async ({ page }) => {
+  await page.goto(`/reviews/418?tour=1&state=${state}`);
+  await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "How far BuildIT got" })).toBeVisible();
+  await expect(page.getByText("Technical details", { exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
 });
 
