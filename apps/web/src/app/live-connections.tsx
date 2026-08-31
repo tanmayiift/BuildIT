@@ -24,7 +24,7 @@ const removeMember = makeFunctionReference<"mutation", { organizationId: string;
 const setReviewPolicy = makeFunctionReference<"mutation", { organizationId: string; repositoryId: string; paused: boolean; autofixMode: "disabled" | "stacked"; requestId: string }, null>("repositoryConnections:setReviewPolicy");
 
 const signedOutConnection: Connection = { state: "signed_out", organization: null, installations: [], repositories: [] };
-function useConnection() {
+export function useConnection() {
   const [hydrated, setHydrated] = useState(false);
   const { isAuthenticated, isLoading } = useConvexAuth();
   const sampleTour = useSampleTour();
@@ -36,11 +36,11 @@ function useConnection() {
   return connection;
 }
 
-function useCredentialReadiness(connection: Connection | undefined) {
+export function useCredentialReadiness(connection: Connection | undefined) {
   const role = connection?.organization?.role;
   const canManage = role === "owner" || role === "admin";
   const credentials = useQuery(credentialQuery, canManage && connection?.organization ? { organizationId: connection.organization.id } : "skip");
-  return { canManage, ready: credentials?.some(item => item.status === "valid") ?? false };
+  return { canManage, checking: Boolean(canManage && connection?.organization && credentials === undefined), ready: credentials?.some(item => item.status === "valid") ?? false };
 }
 
 const stateCopy: Record<Connection["state"], { title: string; body: string }> = {
