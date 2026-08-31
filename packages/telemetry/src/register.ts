@@ -9,6 +9,7 @@ import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic
 
 let provider: MeterProvider | undefined;
 let loggerProvider: LoggerProvider | undefined;
+const meterProviderKey = Symbol.for("buildit.telemetry.meter-provider");
 
 function metricEndpoint(environment: NodeJS.ProcessEnv) {
   if (environment.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT) return environment.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT;
@@ -42,6 +43,7 @@ export function registerBuildITMetrics(serviceName: "buildit-web" | "buildit-con
     resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: serviceName, [ATTR_SERVICE_VERSION]: environment.VERCEL_GIT_COMMIT_SHA?.slice(0, 40) ?? "local" }),
     readers: [new PeriodicExportingMetricReader({ exporter, exportIntervalMillis: 15_000 })],
   });
+  (globalThis as typeof globalThis & { [meterProviderKey]?: MeterProvider })[meterProviderKey] = provider;
   metrics.setGlobalMeterProvider(provider);
   const logsUrl = logEndpoint(environment);
   if (logsUrl) {
