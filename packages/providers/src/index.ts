@@ -44,7 +44,12 @@ export class ProviderClient {
       : provider === "openai"
         ? { url: "https://api.openai.com/v1/models", headers: { authorization: `Bearer ${apiKey}` } }
         : { url: "https://generativelanguage.googleapis.com/v1beta/models?pageSize=100", headers: { "x-goog-api-key": apiKey } };
-    const response = await checked(await this.http(config.url, { headers: config.headers, signal: AbortSignal.timeout(8_000) }));
+    const validationResponse = await this.http(config.url, { headers: config.headers, signal: AbortSignal.timeout(8_000) });
+    // Gemini returns HTTP 400 for an invalid API key. This request has a fixed
+    // URL and no customer-controlled request body, so 400 here is a safe
+    // credential-validation result rather than a generic model-request error.
+    if (provider === "gemini" && validationResponse.status === 400) throw new ProviderError("invalid_key", 400);
+    const response = await checked(validationResponse);
     const records = Array.isArray(response.models) ? response.models : Array.isArray(response.data) ? response.data : [];
     const availableModels = records.flatMap(item => {
       if (!item || typeof item !== "object") return [];
