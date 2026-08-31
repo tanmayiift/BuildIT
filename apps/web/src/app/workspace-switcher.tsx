@@ -29,6 +29,7 @@ export function WorkspaceSwitcher() {
   if (!organizations.length) return <a className="workspace-switcher" href="/setup/install"><span><strong>No workspace yet</strong><small>Install the GitHub App to begin</small></span><span>→</span></a>;
 
   const selected = active?.id ?? organizations[0]!.id;
+  const selectedOrganization = organizations.find((organization) => organization.id === selected) ?? organizations[0]!;
   return <div>
     <label className="workspace-select"><span className="sr-only">Active organization</span><select value={selected} disabled={pending} onChange={async (event) => {
       setPending(true); setError("");
@@ -39,7 +40,7 @@ export function WorkspaceSwitcher() {
         setError("That organization is no longer available. Reload and choose another.");
         setPending(false);
       }
-    }}>{organizations.map((organization) => <option value={organization.id} key={organization.id}>{organization.name} · {organization.role}</option>)}</select><small>{pending ? "Switching securely…" : "Active organization"}</small></label>
+    }}>{organizations.map((organization) => <option value={organization.id} key={organization.id}>{organization.name}</option>)}</select><small>{pending ? "Switching securely…" : `Active organization · ${selectedOrganization.role}`}</small></label>
     {error ? <p className="workspace-error" role="alert">{error}</p> : null}
   </div>;
 }
