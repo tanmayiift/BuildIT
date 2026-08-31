@@ -86,6 +86,10 @@ export async function handleModelInvocation(request: Request, input: {
     return json(200, { result });
   } catch (error) {
     const mapped = safe(error);
+    // Production diagnostics deliberately contain only stable categories. Model
+    // responses, prompts, repository data, grants, and credentials must never
+    // be written to function logs.
+    console.info(JSON.stringify({ component: "model_broker", event: "invocation_failed", category: mapped.code, providerStatus: mapped.providerStatus ?? null }));
     return json(mapped.status, { error: mapped.code, ...(mapped.providerStatus === undefined ? {} : { providerStatus: mapped.providerStatus }) });
   }
 }
