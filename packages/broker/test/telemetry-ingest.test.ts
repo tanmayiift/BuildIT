@@ -11,6 +11,11 @@ describe("signed telemetry ingest boundary", () => {
     expect(await response.json()).toEqual({ accepted: true });
   });
 
+  it("accepts activation and decision events without customer identifiers", () => {
+    expect(parseTelemetryEvent({ operation: "activation.preview", outcome: "succeeded", stage: "activation" })).toEqual({ operation: "activation.preview", outcome: "succeeded", stage: "activation" });
+    expect(parseTelemetryEvent({ operation: "review.decision", outcome: "succeeded", stage: "decision" })).toEqual({ operation: "review.decision", outcome: "succeeded", stage: "decision" });
+  });
+
   it("rejects altered bodies, source-like fields, and unknown labels", async () => {
     expect(verifyTelemetrySignature(secret, `${body}x`, signTelemetryEvent(secret, body))).toBe(false);
     expect(parseTelemetryEvent({ operation: "review.context", outcome: "succeeded", source: "never" })).toBeUndefined();

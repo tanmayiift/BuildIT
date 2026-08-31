@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { operationNames, recordOperation, type OperationName, type ReviewStage, type SafeAttributes, type TelemetryOutcome } from "@buildit/telemetry";
 
 const operations = new Set<string>(operationNames);
-const stages = new Set<ReviewStage>(["context", "requirements", "analysis", "critic", "tests", "autofix", "delivery"]);
+const stages = new Set<ReviewStage>(["activation", "context", "requirements", "analysis", "critic", "tests", "autofix", "delivery", "decision"]);
 const outcomes = new Set<TelemetryOutcome>(["started", "succeeded", "failed", "cancelled", "blocked"]);
 const providers = new Set(["anthropic", "openai", "gemini"]);
 const modes = new Set(["review", "autofix"]);

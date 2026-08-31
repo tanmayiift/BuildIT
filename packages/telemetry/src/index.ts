@@ -1,13 +1,13 @@
 import { metrics, SpanStatusCode, trace, type Attributes } from "@opentelemetry/api";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
-export type ReviewStage = "context" | "requirements" | "analysis" | "critic" | "tests" | "autofix" | "delivery";
+export type ReviewStage = "activation" | "context" | "requirements" | "analysis" | "critic" | "tests" | "autofix" | "delivery" | "decision";
 export type TelemetryOutcome = "started" | "succeeded" | "failed" | "cancelled" | "blocked";
 export const operationNames = [
   "activation.identity", "activation.repository", "activation.preview", "activation.review", "activation.evidence", "activation.decision",
   "artifact.get", "artifact.put", "artifact.delete", "credential.save", "credential.preflight", "credential.revoke", "credential.use",
   "github.check", "github.comment", "github.branch", "github.stacked_pr", "model.invoke", "sandbox.execute", "sandbox.cleanup",
-  "review.context", "review.requirements", "review.analysis", "review.critic", "review.tests", "review.autofix", "review.delivery", "review.stale_check",
+  "review.context", "review.requirements", "review.analysis", "review.critic", "review.tests", "review.autofix", "review.delivery", "review.decision", "review.stale_check",
   "tracker.fetch", "tracker.credential_save", "web.request", "webhook.verify", "webhook.process", "autofix.loop_guard", "telemetry.smoke",
 ] as const;
 export type OperationName = typeof operationNames[number];

@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { checkConclusion, checkKind } from "./validators";
 import { assertReviewParent } from "./lib/parentConsistency";
@@ -108,6 +109,7 @@ export const finalizeDecision = internalMutation({
     await ctx.db.patch(review._id, { status, statusReasonCode, nextActionCode, githubCheckConclusion, currentStage: "complete", completedAt: args.now, updatedAt: args.now });
     await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", publicMessageArtifactId: report._id, internalCode: `decision_${statusReasonCode}`, metadata: { count: findings.length }, createdAt: args.now });
     await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, name: "review_completed", value: 1, organizationTimezone: organization.timezone, occurredAt: args.now });
+    await ctx.scheduler.runAfter(0, internal.telemetryWorker.emit, { operation: "review.decision", stage: "decision", outcome: "succeeded" });
     return { status, statusReasonCode, nextActionCode };
   },
 });

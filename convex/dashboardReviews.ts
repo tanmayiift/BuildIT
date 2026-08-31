@@ -34,6 +34,7 @@ export const prepare = action({ args, handler: async (ctx, input): Promise<Prepa
   const scope: DashboardScope = await ctx.runQuery(internal.dashboardReviewData.scope, { repositoryId: input.repositoryId });
   const pull = await snapshot(scope, input.prNumber);
   await ctx.runMutation(recordPreview, { repositoryId: input.repositoryId, actorId: scope.actorId, headSha: pull.headSha, now: Date.now() });
+  await ctx.runAction(internal.telemetryWorker.emit, { operation: "activation.preview", stage: "activation", outcome: "succeeded" });
   return { repository: `${scope.owner}/${scope.name}`, pull, credentialScopeId: scope.credentialScopeId,
     consent: { reads: ["PR description and diff", "linked GitHub Issues", "repository files needed for impact analysis"],
       runs: ["dependency install with scripts disabled", "test", "lint", "typecheck", "Gitleaks 8.28.0", "OSV-Scanner 2.2.3", "BuildIT static rules 1.0.0"],
@@ -50,6 +51,7 @@ export const start = action({ args: { ...args, expectedHeadSha: v.string(), expe
   const review = await ctx.runMutation(internal.dashboardReviewData.create, { repositoryId: input.repositoryId, prNumber: input.prNumber,
     headSha: pull.headSha, baseSha: pull.baseSha, baseRef: pull.baseRef, isFork: pull.isFork, actorId: scope.actorId,
     actorRole: scope.actorRole as "developer" | "admin" | "owner", expectedCredentialScopeId: input.expectedCredentialScopeId, now: Date.now() });
+  await ctx.runAction(internal.telemetryWorker.emit, { operation: "activation.review", stage: "activation", outcome: "started" });
   if (review.status === "queued") await ctx.runMutation(internal.durableReview.start, { organizationId: scope.organizationId, reviewId: review.reviewId,
     expectedHeadSha: review.headSha, expectedGeneration: review.executionGeneration, now: Date.now() });
   return { reviewId: String(review.reviewId) };
@@ -75,6 +77,7 @@ export const cancel = action({
         now,
       });
     }
+    await ctx.runAction(internal.telemetryWorker.emit, { operation: "activation.decision", stage: "decision", outcome: "cancelled" });
     return { status: "cancelled" };
   },
 });
