@@ -1,5 +1,6 @@
-import { metrics, SpanStatusCode, trace, type Attributes } from "@opentelemetry/api";
+import { SpanStatusCode, trace, type Attributes } from "@opentelemetry/api";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
+import { getBuildITMeter } from "./register.js";
 
 export type ReviewStage = "context" | "requirements" | "analysis" | "critic" | "tests" | "autofix" | "delivery";
 export type TelemetryOutcome = "started" | "succeeded" | "failed" | "cancelled" | "blocked";
@@ -40,7 +41,7 @@ export function safeAttributes(input: SafeAttributes): Attributes {
 }
 
 function instruments() {
-  const meter = metrics.getMeter("buildit");
+  const meter = getBuildITMeter();
   return {
     operations: meter.createCounter("buildit.operations", { description: "Completed BuildIT operations" }),
     failures: meter.createCounter("buildit.failures", { description: "Failed BuildIT operations" }),

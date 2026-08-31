@@ -52,6 +52,10 @@ export function registerBuildITMetrics(serviceName: "buildit-web" | "buildit-con
   return provider;
 }
 
+export function getBuildITMeter() {
+  return provider?.getMeter("buildit") ?? metrics.getMeter("buildit");
+}
+
 export async function shutdownBuildITMetrics() {
   const current = provider;
   provider = undefined;
