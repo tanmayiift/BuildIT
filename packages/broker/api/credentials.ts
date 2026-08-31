@@ -17,8 +17,9 @@ function report(error: unknown) {
   const raw = cause instanceof Error ? cause.name : typeof (cause as { name?: unknown })?.name === "string"
     ? String((cause as { name: string }).name) : "Unknown";
   const allowed = new Set(["CredentialsProviderError", "AccessDenied", "AccessDeniedException", "KMSInvalidStateException", "Error"]);
+  const code = cause instanceof Error && ["broker_configuration_missing", "credential_gateway_configuration_invalid", "credential_store_unavailable", "invalid_key", "recent_reauthentication_required", "rate_limited", "credential_scope_already_exists"].includes(cause.message) ? cause.message : undefined;
   const status = (cause as { $metadata?: { httpStatusCode?: unknown } })?.$metadata?.httpStatusCode;
-  console.error(JSON.stringify({ event: "credential_broker_unavailable", errorClass: allowed.has(raw) ? raw : "Other", ...(typeof status === "number" ? { status } : {}) }));
+  console.error(JSON.stringify({ event: "credential_broker_unavailable", errorClass: allowed.has(raw) ? raw : "Other", ...(code ? { code } : {}), ...(typeof status === "number" ? { status } : {}) }));
 }
 
 async function route(request: Request) {
@@ -34,7 +35,8 @@ async function route(request: Request) {
   try {
     return await handleCredentialSave(request, { allowedOrigin: required("BUILDIT_WEB_ORIGIN"),
       authorize: async input => (await load()).gateway.authorize(input),
-      broker: { save: async input => (await load()).broker.save(input) } as CredentialBroker });
+      broker: { save: async input => (await load()).broker.save(input) } as CredentialBroker,
+      onFailure: report });
   } catch (error) {
     report(error);
     return Response.json({ error: "broker_unavailable" }, { status: 503, headers: { "cache-control": "no-store" } });

@@ -18,7 +18,7 @@ function json(status: number, body: Record<string, unknown>, origin?: string) {
 }
 
 export async function handleCredentialSave(request: Request, input: {
-  allowedOrigin: string; authorize: CredentialAuthorization; broker: CredentialBroker;
+  allowedOrigin: string; authorize: CredentialAuthorization; broker: CredentialBroker; onFailure?: (error: unknown) => void;
 }) {
   const origin = request.headers.get("origin");
   if (origin !== input.allowedOrigin) return json(403, { error: "origin_not_allowed" });
@@ -57,6 +57,7 @@ export async function handleCredentialSave(request: Request, input: {
       ...(typeof body.replacesCredentialId === "string" ? { replacesCredentialId: body.replacesCredentialId } : {}) });
     return json(201, { credential: saved }, origin);
   } catch (error) {
+    input.onFailure?.(error);
     const code = error instanceof Error ? error.message : "credential_save_failed";
     const safe = code === "recent_reauthentication_required" || code === "rate_limited" || code === "credential_scope_already_exists" ? code
       : code === "invalid_key" ? code
