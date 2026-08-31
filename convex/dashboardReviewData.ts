@@ -3,6 +3,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { requireRepositoryRole } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
+import { terminalStatuses } from "./lib/lifecycle";
 
 export const scope = internalQuery({
   args: { repositoryId: v.id("repositories") },
@@ -57,7 +58,8 @@ export const create = internalMutation({
       || !/^[0-9a-f]{40}$/.test(args.headSha) || !/^[0-9a-f]{40}$/.test(args.baseSha)) throw new ConvexError("dashboard_review_invalid");
     const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", repository.organizationId).eq("userId", args.actorId)).unique();
     if (!membership || membership.status !== "active" || !["developer", "admin", "owner"].includes(membership.role)) throw new ConvexError("not_found_or_forbidden");
-    const existing = await ctx.db.query("reviews").withIndex("by_repo_pr_head_mode", q => q.eq("repositoryId", repository._id).eq("prNumber", args.prNumber).eq("headSha", args.headSha).eq("mode", "review")).unique();
+    const matching = await ctx.db.query("reviews").withIndex("by_repo_pr_head_mode", q => q.eq("repositoryId", repository._id).eq("prNumber", args.prNumber).eq("headSha", args.headSha).eq("mode", "review")).collect();
+    const existing = matching.find(item => !terminalStatuses.has(item.status));
     if (existing) return { reviewId: existing._id, status: existing.status, headSha: existing.headSha, executionGeneration: existing.executionGeneration };
     let config = repository.configRevisionId ? await ctx.db.get(repository.configRevisionId) : null;
     if (!config || config.repositoryId !== repository._id) {

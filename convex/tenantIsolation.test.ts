@@ -678,6 +678,21 @@ describe("Convex tenant isolation", () => {
     });
     expect(audit?.resourceIdHash).toMatch(/^[0-9a-f]{64}$/);
     expect(audit?.resourceIdHash).not.toBe(created.reviewId);
+    await t.run((ctx) => ctx.db.patch(created.reviewId, { status: "cancelled", completedAt: Date.now() }));
+    const retried = await t.mutation(internal.dashboardReviewData.create, {
+      repositoryId: alpha.repositoryId,
+      prNumber: 2,
+      headSha: "c".repeat(40),
+      baseSha: "b".repeat(40),
+      baseRef: "main",
+      isFork: false,
+      actorId: "alice",
+      actorRole: "developer",
+      expectedCredentialScopeId: "credential-test",
+      now: Date.now() + 1,
+    });
+    expect(retried.reviewId).not.toBe(created.reviewId);
+    expect(await t.run((ctx) => ctx.db.get(retried.reviewId))).toMatchObject({ status: "queued", headSha: "c".repeat(40) });
   });
 
   it("does not let a viewer prepare or forge a dashboard review", async () => {
