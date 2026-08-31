@@ -103,7 +103,7 @@ export class ProviderClient {
     const candidates = Array.isArray(body.candidates) ? body.candidates : [], candidate = candidates[0] as Record<string, unknown> | undefined, finish = String(candidate?.finishReason ?? "unknown");
     if (finish === "MAX_TOKENS") throw new ProviderError("truncated");
     if (finish === "SAFETY" || finish === "BLOCKLIST" || finish === "PROHIBITED_CONTENT") throw new ProviderError("refused");
-    const content = candidate?.content as Record<string, unknown> | undefined, parts = Array.isArray(content?.parts) ? content.parts : [], text = (parts.find(part => part && typeof part === "object" && typeof (part as Record<string, unknown>).text === "string") as Record<string, unknown> | undefined)?.text;
+    const content = candidate?.content as Record<string, unknown> | undefined, parts = Array.isArray(content?.parts) ? content.parts : [], text = (parts.find(part => part && typeof part === "object" && (part as Record<string, unknown>).thought !== true && typeof (part as Record<string, unknown>).text === "string") as Record<string, unknown> | undefined)?.text;
     const usage = body.usageMetadata as Record<string, unknown> | undefined;
     return { value: parseJson(text), provider: "gemini", model: request.model, finishReason: finish, inputTokens: usageNumber(usage?.promptTokenCount), outputTokens: usageNumber(usage?.candidatesTokenCount), requestId: response.headers.get("x-request-id") ?? undefined };
   }
