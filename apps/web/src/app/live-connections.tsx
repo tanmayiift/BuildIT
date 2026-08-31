@@ -88,12 +88,14 @@ export function GitHubIntegrationState() {
 export function ConnectionBanner() {
   const connection = useConnection();
   const readiness = useQuery(readinessQuery, connection && connection.state !== "signed_out" ? {} : "skip");
+  if (!connection) return <div className="preview-banner" role="status"><span className="preview-label">Checking</span><span>Confirming your private workspace before showing repository data.</span></div>;
   const connected = connection?.state === "connected";
   return <div className="preview-banner" role="status"><span className="preview-label">{connected ? "Connected" : "Preview"}</span><span>{connected ? readiness?.executionEnabled ? `${connection.repositories.length} GitHub repositories connected. Reviews can start only after exact-scope consent.` : `${connection.repositories.length} GitHub repositories connected. Repository execution and AI review remain disabled until their safety gates pass.` : "Sample evidence is clearly marked. Connect GitHub to replace setup examples with your isolated workspace."}</span><a href={connected ? "/repositories" : "/data-handling"}>{connected ? "View access" : "Trust boundary"}</a></div>;
 }
 
 export function SetupProgress() {
   const connection = useConnection();
+  if (!connection) return <span className="setup-state" aria-live="polite"><span className="setup-dot" />Checking access</span>;
   const connected = connection?.state === "connected";
   return <a className="setup-state" href={connected ? "/setup/repository" : "/setup/install"}><span className={`setup-dot${connected ? " ready" : ""}`} />{connected ? "GitHub connected" : "Setup 1 of 4"}</a>;
 }

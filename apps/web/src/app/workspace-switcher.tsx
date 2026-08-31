@@ -19,7 +19,8 @@ export function WorkspaceSwitcher() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
-  if (isLoading || !isAuthenticated) return <div className="workspace-switcher preview-workspace"><span><strong>Sample workspace</strong><small>Interactive product tour</small></span></div>;
+  if (isLoading) return <div className="workspace-switcher" aria-live="polite"><span><strong>Checking workspace…</strong><small>Confirming your private session</small></span></div>;
+  if (!isAuthenticated) return <div className="workspace-switcher preview-workspace"><span><strong>Sample workspace</strong><small>Interactive product tour</small></span></div>;
   if (!organizations) return <div className="workspace-switcher" aria-live="polite">Loading workspaces…</div>;
   if (!organizations.length) return <a className="workspace-switcher" href="/setup/install"><span><strong>No workspace yet</strong><small>Install the GitHub App to begin</small></span><span>→</span></a>;
 
