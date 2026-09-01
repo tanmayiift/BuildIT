@@ -10,7 +10,7 @@ This record contains no access token, authorization header, customer identifier,
 - BuildIT-only alert group: `BuildIT release`
 - Rules: high failure rate, p95 latency, telemetry silence, and critical safety-boundary failure.
 - A 90-day BuildIT collector token authenticated successfully against the OTLP gateway. The token was passed directly to Vercel and was not printed or committed.
-- `OTEL_EXPORTER_OTLP_ENDPOINT`, secret `OTEL_EXPORTER_OTLP_HEADERS`, and `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` exist in Production for only `pulsetrade/buildit-agentic-review` and `pulsetrade/buildit-content-broker`.
+- `OTEL_EXPORTER_OTLP_ENDPOINT`, secret `OTEL_EXPORTER_OTLP_HEADERS`, and `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` exist in Production for only the dedicated `buildit-agentic-review/buildit-agentic-review` and `buildit-agentic-review/buildit-content-broker` projects. They were moved out of the earlier PulseTrade team without changing Orbit.
 - Local end-to-end proof accepted eight web spans, one safe OTLP log, and BuildIT counter/histogram metrics before the local stack was torn down.
 
 Both BuildIT production Vercel projects were later redeployed with their BuildIT-only telemetry settings. The broker deployment is `dpl_67dea1vW3uoKwNsBd4TK6HGgvnaJ`; anonymous telemetry remains unavailable. A safe BuildIT operation series has been observed without using the collector credential for dashboard administration. Notification delivery is still not claimed. Notification policy remains unchanged because the stack also serves Orbit.

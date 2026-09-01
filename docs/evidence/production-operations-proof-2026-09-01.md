@@ -61,13 +61,22 @@ The isolated Grafana folder `buildit` was updated without modifying Orbit resour
 - A 24-hour production range query returned retained successful `github.check` and `github.comment` series, each with 23 samples and counter value 1. This proves the deployed review worker emitted both side-effect signals.
 - A controlled unsupported webhook command produced the bounded `webhook.process / blocked` series without a model call, code change, or GitHub write.
 - A separate `BuildIT alerts (Tanmay)` email contact point exists, and all 12 BuildIT rules route directly to it. Orbit's notification policy was not edited.
-
-Grafana's current receiver test endpoint returned HTTP 500 with an empty object, and the contact-point screen remained stuck on `Loading`. No delivery receipt exists. Alert delivery must remain open until Grafana accepts a test and a human confirms receipt.
+- On 2026-09-01 the contact page loaded normally and Grafana reported `Test notification sent successfully`, proving accepted dispatch.
+- The BuildIT-only OTLP credential was rotated to one stack-scoped token with a 90-day expiry. Secret stdin updates changed only the dedicated BuildIT web and broker Vercel projects. Ready deployments `dpl_F3z7UgXuAHbBKQ43SGrwEYhR7kyb` and `dpl_6ifVhkKFuW8aQh5vacGJbnvoDZKN` activated it.
+- Three controlled production credential preflights returned HTTP 204. Visible Grafana Explore then showed a last-five-minute BuildIT operation increase of exactly `3`. Both older BuildIT tokens were revoked; one non-expired token remains. Orbit resources and credentials were not changed.
 
 ## GitHub App key state
 
-The ignored local replacement key is mode `0600`. Its public fingerprint matches one of the two GitHub App keys currently displayed. It authenticated the expected App, minted an installation-scoped token, and read metadata from the selected controlled repository. The older displayed key has not been deleted because GitHub redirects the delete action to owner password confirmation. No key or token was printed, committed, or stored in product data.
+GitHub now reports one App private key and one OAuth client secret. The final ignored local private key is mode `0600`, is loaded into Convex production through stdin-only transport, authenticates the expected App, and reads only the three repositories selected across the two controlled installations. The obsolete local key was irreversibly deleted.
+
+The OAuth client secret was rotated from GitHub's visible App settings directly into Convex without printing or local persistence. A fresh visible sign-out/sign-in flow returned to the authenticated owner account. The first generated private key was revoked immediately after an unsafe CLI diagnostic echoed it; the exposed value and its local file were deleted and never used as the final runtime key. The broker and web project do not receive the App private key because they do not perform App authentication. No key, OAuth secret, session token, or installation token was committed or stored in product data.
+
+## Provider credential revocation proof
+
+After the final authorized Anthropic run, the authenticated owner revoked exactly the saved Anthropic test credential. The saved row changed to `Revoked`, its control became disabled, and the normal dashboard provider selector exposed only the separate valid Gemini credential.
+
+Source-free counts for the controlled public pull request were captured before and after a revoked-Anthropic attempt. Both snapshots contained exactly 14 review records, 31 model-stage records, 154 check records, 44 encrypted artifact references, and 5 GitHub side-effect records. No review, source artifact, model stage, runner check, or GitHub write was created after revocation. Production repository execution was verified at exact value `false` after the test. No raw key, session token, or browser storage was read.
 
 ## Honest verdict
 
-The product has performed real evidence-backed web and CLI code reviews in production and correctly failed closed when Autofix lacked an independently accepted finding. It has not yet delivered a tested Autofix branch and is not ready for a broad launch or a `>95% accuracy` claim. The remaining evidence requires qualified blind human labels, a second tenant's independently consented model run, a bounded live Autofix candidate and stacked-PR handoff, GitHub owner confirmation for old-key deletion, accepted alert delivery, and design-partner sessions.
+The product has performed real evidence-backed web and CLI code reviews in production and correctly failed closed when Autofix lacked an independently accepted finding. It has not yet delivered a tested Autofix branch and is not ready for a broad launch or a `>95% accuracy` claim. The remaining evidence requires qualified blind human labels, a second tenant's independently consented model run, a bounded live Autofix candidate and stacked-PR handoff, and design-partner sessions.
