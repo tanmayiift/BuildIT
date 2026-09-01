@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { assertStrictSchema, ProviderClient, ProviderError } from "../src/index.js";
+import { assertStrictSchema, conservativeProviderModelCost, conservativeProviderStageCost, ProviderClient, ProviderError, selectProviderModel } from "../src/index.js";
 const request={model:"allowed",system:"policy",input:"data",schemaName:"result",schema:{type:"object",properties:{ok:{type:"boolean"}},required:["ok"],additionalProperties:false},maxOutputTokens:100};
 describe("provider adapters",()=>{
+  it("prefers the cost-effective OpenAI review model when the key can use it",()=>{
+    expect(selectProviderModel("openai",["gpt-5.4","gpt-5.4-mini"])).toBe("gpt-5.4-mini");
+  });
+  it("uses pinned model prices with a safety margin and a fail-closed fallback",()=>{
+    expect(conservativeProviderModelCost("openai","gpt-5.4-mini",1_000_000,1_000_000)).toBe(6.5625);
+    expect(conservativeProviderModelCost("openai","gpt-5.4",1_000_000,1_000_000)).toBe(21.875);
+    expect(conservativeProviderModelCost("openai","unpriced-model",1_000_000,1_000_000)).toBe(90);
+    expect(conservativeProviderStageCost("openai","gpt-5.4-mini",1_000,800)).toBe(conservativeProviderModelCost("openai","gpt-5.4-mini",5_096,800));
+  });
   it("validates Gemini keys in a header, never a URL, and records only supported models",async()=>{const http=vi.fn(async(input:string|URL,init?:RequestInit)=>{expect(String(input)).not.toContain("secret-key-value");expect(new Headers(init?.headers).get("x-goog-api-key")).toBe("secret-key-value");return new Response(JSON.stringify({models:[{name:"models/gemini-2.5-pro",supportedGenerationMethods:["generateContent"]},{name:"models/gemini-2.5-flash",supportedGenerationMethods:["embedContent"]},{name:"models/not-approved",supportedGenerationMethods:["generateContent"]}]}))});await expect(new ProviderClient(http).validateKey("gemini","secret-key-value")).resolves.toEqual({availableModels:["gemini-2.5-pro"]})});
   it("normalizes Anthropic tool output",async()=>{const http=vi.fn(async()=>new Response(JSON.stringify({stop_reason:"tool_use",content:[{type:"tool_use",name:"result",input:{ok:true}}],usage:{input_tokens:4,output_tokens:2}})));await expect(new ProviderClient(http).generate("anthropic","key",request,new Set(["allowed"]))).resolves.toMatchObject({value:{ok:true},inputTokens:4,outputTokens:2})});
   it("normalizes OpenAI structured output",async()=>{const http=vi.fn(async()=>new Response(JSON.stringify({status:"completed",output:[{type:"message",content:[{type:"output_text",text:"{\"ok\":true}"}]}],usage:{input_tokens:3,output_tokens:1}})));await expect(new ProviderClient(http).generate("openai","key",request,new Set(["allowed"]))).resolves.toMatchObject({value:{ok:true},finishReason:"completed"})});

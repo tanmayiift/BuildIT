@@ -1,8 +1,8 @@
 import { LiveReviewDetail } from "./live-review-detail";
 import { nextActionPresentation, stagePresentation, statusPresentation, technicalLabel } from "./review-presentation";
 
-type TourState = "cancelled" | "running" | "changes" | "passed" | "delivered" | "empty" | "populated";
-const states: TourState[] = ["cancelled", "running", "changes", "passed", "delivered", "empty", "populated"];
+type TourState = "cancelled" | "running" | "changes" | "passed" | "delivered" | "budget" | "empty" | "populated";
+const states: TourState[] = ["cancelled", "running", "changes", "passed", "delivered", "budget", "empty", "populated"];
 
 const sample = {
   cancelled: { status: "cancelled", stage: "queue", action: "start_new_review", detail: "No decision was made. BuildIT did not read code, run checks, or change this pull request.", evidence: "empty" },
@@ -10,6 +10,7 @@ const sample = {
   changes: { status: "changes_requested", stage: "validation", action: "fix_findings", detail: "One acceptance criterion lacks proof and a required check failed at this exact commit.", evidence: "findings" },
   passed: { status: "passed", stage: "complete", action: "human_review", detail: "Requirements and required checks have evidence for this exact commit. A person still makes the merge decision.", evidence: "checks" },
   delivered: { status: "delivered", stage: "delivery", action: "await_human_approval", detail: "A tested fix is ready in a separate pull request for a person to inspect.", evidence: "checks" },
+  budget: { status: "budget_exhausted", stage: "analysis", action: "increase_budget", detail: "The next model step could have crossed this review's chosen limit, so BuildIT stopped before making that call.", evidence: "checks" },
   empty: { status: "inconclusive", stage: "queue", action: "start_new_review", detail: "This example shows how BuildIT behaves when it cannot gather enough proof to make a safe decision.", evidence: "empty" },
   populated: { status: "changes_requested", stage: "validation", action: "fix_findings", detail: "This example includes requirements, an evidence-backed issue, and the check that needs attention.", evidence: "findings" },
 } as const;

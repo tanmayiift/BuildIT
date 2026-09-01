@@ -5,14 +5,35 @@ export type ProviderResult = { value: unknown; provider: ProviderName; model: st
 export const approvedProviderModels:Record<ProviderName,ReadonlySet<string>>={anthropic:new Set(["claude-sonnet-4-5","claude-sonnet-4-6","claude-opus-4-6"]),openai:new Set(["gpt-5","gpt-5.4","gpt-5.4-mini"]),gemini:new Set(["gemini-2.5-pro","gemini-2.5-flash","gemini-3.1-pro-preview"])};
 const preferredProviderModels: Record<ProviderName, readonly string[]> = {
   anthropic: ["claude-sonnet-4-6", "claude-sonnet-4-5", "claude-opus-4-6"],
-  openai: ["gpt-5.4", "gpt-5", "gpt-5.4-mini"],
+  openai: ["gpt-5.4-mini", "gpt-5.4", "gpt-5"],
   gemini: ["gemini-2.5-pro", "gemini-3.1-pro-preview", "gemini-2.5-flash"],
 };
+const genericCeiling = { inputPerMillion: 15, outputPerMillion: 75 } as const;
+const pinnedPrices: Readonly<Record<string, { inputPerMillion: number; outputPerMillion: number }>> = {
+  // OpenAI public API prices checked on 2026-09-01:
+  // https://developers.openai.com/api/docs/models/gpt-5.4-mini
+  // A 25% margin protects the user ceiling from rounding and small price
+  // changes. Unlisted models keep
+  // the older, higher ceiling.
+  "openai:gpt-5.4-mini": { inputPerMillion: 0.75, outputPerMillion: 4.5 },
+  "openai:gpt-5.4": { inputPerMillion: 2.5, outputPerMillion: 15 },
+};
+const priceSafetyMargin = 1.25;
 export type ProviderKeyValidation = { availableModels: string[] };
 
 export function selectProviderModel(provider: ProviderName, availableModels?: readonly string[]) {
   const available = availableModels ? new Set(availableModels) : approvedProviderModels[provider];
   return preferredProviderModels[provider].find(model => available.has(model)) ?? null;
+}
+export function conservativeProviderModelCost(provider: ProviderName, model: string, inputTokens: number, outputTokens: number) {
+  if (!Number.isSafeInteger(inputTokens) || inputTokens < 0 || !Number.isSafeInteger(outputTokens) || outputTokens < 0) throw new Error("model_usage_invalid");
+  const price = pinnedPrices[`${provider}:${model}`];
+  if (!price) return inputTokens * genericCeiling.inputPerMillion / 1_000_000 + outputTokens * genericCeiling.outputPerMillion / 1_000_000;
+  return (inputTokens * price.inputPerMillion / 1_000_000 + outputTokens * price.outputPerMillion / 1_000_000) * priceSafetyMargin;
+}
+export function conservativeProviderStageCost(provider: ProviderName, model: string, inputBytes: number, maxOutputTokens: number, overheadTokens = 4_096) {
+  if (!Number.isSafeInteger(inputBytes) || inputBytes < 0 || !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 0 || !Number.isSafeInteger(overheadTokens) || overheadTokens < 0) throw new Error("model_stage_cost_invalid");
+  return conservativeProviderModelCost(provider, model, inputBytes + overheadTokens, maxOutputTokens);
 }
 type Http = (input: string | URL, init?: RequestInit) => Promise<Response>;
 

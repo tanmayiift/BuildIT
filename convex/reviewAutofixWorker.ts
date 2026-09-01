@@ -14,7 +14,6 @@ import {
 } from "@buildit/github";
 import {
   assertAutofixBounds,
-  conservativeModelCost,
   candidateWorsened,
   contentHash,
   runModelPatchChain,
@@ -30,7 +29,7 @@ import {
   redact,
   redactForModel,
 } from "@buildit/security";
-import type { ProviderResult } from "@buildit/providers";
+import { conservativeProviderModelCost, type ProviderResult } from "@buildit/providers";
 import { calculateEffectiveLoc } from "@buildit/operations";
 import {
   detectPackageManager,
@@ -441,13 +440,8 @@ export const runConvergence = internalAction({
                 if (!response.ok || !result.result){await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,roundNumber,stage:"patch",provider:scope.provider,model:scope.model,promptVersion:"patch-v1",schemaVersion:"patch-schema-v1",finishReason:(result.error??`http_${response.status}`).slice(0,100),requestHash:createHash("sha256").update(request.system).update("\0").update(request.input).update("\0").update(JSON.stringify(stageSchemas.patch)).digest("hex"),attempt:request.repairOf===undefined?1:2,outcome:"provider_error",inputTokens:0,outputTokens:0,now:Date.now()});throw new Error(result.error ?? `autofix_model_${response.status}`)}
                 return result.result;
               },
-              onUsage: async result => { await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,roundNumber,stage:result.stage,provider:result.provider,model:result.model,promptVersion:result.promptVersion,schemaVersion:result.schemaVersion,finishReason:result.finishReason,requestHash:result.requestFingerprint,...(result.requestId?{requestId:result.requestId}:{}),attempt:result.attempt,outcome:result.outcome,inputTokens:result.inputTokens,outputTokens:result.outputTokens,now:Date.now()});await ctx.runMutation(internal.reviewAutofixData.recordModelUsage, {
-            ...args,
-            credentialId: scope.credentialDocumentId,
-            inputTokens: result.inputTokens,
-            outputTokens: result.outputTokens,
-            now: Date.now(),
-              });budgetConsumed+=conservativeModelCost(result.inputTokens,result.outputTokens); },
+              onUsage: async result => { await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,roundNumber,stage:result.stage,provider:result.provider,model:result.model,promptVersion:result.promptVersion,schemaVersion:result.schemaVersion,finishReason:result.finishReason,requestHash:result.requestFingerprint,...(result.requestId?{requestId:result.requestId}:{}),attempt:result.attempt,outcome:result.outcome,inputTokens:result.inputTokens,outputTokens:result.outputTokens,now:Date.now()});// recordStageRun owns the single durable ledger write.
+                budgetConsumed+=conservativeProviderModelCost(result.provider,result.model,result.inputTokens,result.outputTokens); },
             }),
             proposals = (patchRecords[0]?.value.patches as PatchProposal[] | undefined);
         if (!Array.isArray(proposals) || !proposals.length)
