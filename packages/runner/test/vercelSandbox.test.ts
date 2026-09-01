@@ -32,7 +32,7 @@ describe("Vercel sandbox runner", () => {
     expect(f.calls).toContainEqual(["network", "deny-all"]);
     expect(f.calls).toContainEqual(["command", { cmd: "pnpm", args: ["install", "--frozen-lockfile", "--ignore-scripts"], cwd: "/vercel/sandbox/repo", timeoutMs: 60_000 }]);
     expect(f.calls).toContainEqual(["command", { cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", "--lockfile", "/vercel/sandbox/repo/pnpm-lock.yaml"], cwd: "/vercel/sandbox/repo", timeoutMs: 35_000 }]);
-    expect(f.create.mock.calls[0]![0]).toMatchObject({ timeout: 175_000, networkPolicy: "deny-all", env: { CI: "true" }, region: "cdg1", persistent: false });
+    expect(f.create.mock.calls[0]![0]).toMatchObject({ timeout: 210_000, networkPolicy: "deny-all", env: { CI: "true" }, region: "cdg1", persistent: false });
     expect(f.stop).toHaveBeenCalledOnce();
   });
 
