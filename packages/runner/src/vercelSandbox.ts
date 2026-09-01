@@ -16,6 +16,7 @@ export type SandboxFactory = (input: { runtime?: "node22" | "node24"; image?: st
 const registryDomains = ["registry.npmjs.org", "registry.yarnpkg.com"];
 const sensitive = /(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|GITHUB_|VERCEL_|CONVEX_|ANTHROPIC_|OPENAI_|GEMINI_|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)/i;
 const unsafeInstallControl = /(^|\/)(?:\.git|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfile\.cjs|pnpmfile\.cjs|\.pnp\.(?:cjs|js)|\.yarn\/plugins|\.gitleaks\.toml|\.gitleaksignore|\.?osv-scanner\.(?:toml|json))(\/|$)/i;
+export function isUnsafeInstallControlPath(path: string) { return unsafeInstallControl.test(path); }
 const nodeLockfile = /(^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock)$/;
 
 async function output(result: Finished, limit: number) {
@@ -50,7 +51,7 @@ export class VercelSandboxRunner {
       if (!executionReady(workspace)) throw new Error("credential_teardown_failed");
       for (const file of input.files) {
         if (!file.path || file.path.startsWith("/") || file.path.split("/").includes("..")) throw new Error("sandbox_unsafe_path");
-        if (unsafeInstallControl.test(file.path)) throw new Error("sandbox_untrusted_install_control");
+        if (isUnsafeInstallControlPath(file.path)) throw new Error("sandbox_untrusted_install_control");
       }
       const lockfiles = input.files.map(file => file.path).filter(path => nodeLockfile.test(path));
       if (!lockfiles.length || lockfiles.length > 32) throw new Error("osv_lockfile_required");
