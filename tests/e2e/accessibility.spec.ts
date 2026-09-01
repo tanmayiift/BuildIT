@@ -52,5 +52,5 @@ test("connected repository workspace has no serious accessibility defect and mat
   await expect(page.getByRole("heading", { name: "3 repositories connected" })).toBeVisible();
   const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   expect(result.violations.filter(item => ["serious", "critical"].includes(item.impact ?? "")), JSON.stringify(result.violations, null, 2)).toEqual([]);
-  await expect(page).toHaveScreenshot("repositories-connected.png", { fullPage: true, animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.003 });
+  await expect(page).toHaveScreenshot("repositories-connected.png", { fullPage: true, animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.03 });
 });

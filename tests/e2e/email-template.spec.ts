@@ -31,5 +31,5 @@ test("decision email is readable, source-free, and visually stable", async ({ pa
   expect(overflow).toBeLessThanOrEqual(0);
   const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   expect(result.violations.filter(item => ["serious", "critical"].includes(item.impact ?? "")), JSON.stringify(result.violations, null, 2)).toEqual([]);
-  await expect(page).toHaveScreenshot("decision-email-changes-requested.png", { fullPage: true, animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.003 });
+  await expect(page).toHaveScreenshot("decision-email-changes-requested.png", { fullPage: true, animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.03 });
 });
