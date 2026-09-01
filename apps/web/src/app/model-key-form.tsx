@@ -223,9 +223,10 @@ export function ModelKeyForm() {
         <Heading />
         <div className="credential-state">
           <strong>Verify with GitHub before entering a key</strong>
-          <p>Your repository access is unchanged. BuildIT requires a fresh GitHub login before an Owner or Admin can add an encrypted model-provider key. This prevents someone using an unattended session from replacing your organization’s key.</p>
+          <p>Your session and repository access are still active. BuildIT requires a fresh GitHub check only before an Owner or Admin changes a model key. Existing masked key status remains visible below.</p>
           <a className="button" href={reauthenticationHref}>Verify with GitHub</a>
         </div>
+        {credentials?.length ? <SavedCredentials credentials={credentials} repositories={connection.repositories} working={working} confirmRevokeId={confirmRevokeId} manageHref={reauthenticationHref} onRotate={beginRotation} onAskRevoke={setConfirmRevokeId} onCancelRevoke={() => setConfirmRevokeId("")} onRevoke={(credential) => void revoke(credential)} /> : null}
         <KeyTrust />
         <Boundary />
       </section>
@@ -328,37 +329,14 @@ export function ModelKeyForm() {
           </div>
         ) : null}
       </form>
-      {credentials?.length ? (
-        <section className="saved-credentials" aria-labelledby="saved-credentials-title">
-          <div className="saved-credentials-heading">
-            <div>
-              <p className="eyebrow">Ready for reviews</p>
-              <h3 id="saved-credentials-title">Saved model keys</h3>
-            </div>
-            <span className="status success">{credentials.filter(item => item.status !== "revoked").length} active</span>
-          </div>
-          {credentials.map((credential) => (
-            <article className="credential-row" key={credential.id}>
-              <span className="provider-mark">
-                {names[credential.provider].slice(0, 2).toUpperCase()}
-              </span>
-              <span className="credential-identity">
-                <strong>{names[credential.provider]}</strong>
-                <code aria-label={`Key ending in ${credential.maskedSuffix}`}>•••• {credential.maskedSuffix}</code>
-              </span>
-              <dl className="credential-metadata">
-                <div><dt>Scope</dt><dd>{credential.repositoryId ? (() => { const repository = connection?.repositories.find(item => item.id === credential.repositoryId); return repository ? `${repository.owner}/${repository.name}` : "Removed repository"; })() : "All connected repositories"}</dd></div>
-                <div><dt>Status</dt><dd>{credential.status === "revoked" ? "Revoked" : "Validated"}</dd></div>
-                <div><dt>Activity</dt><dd>{credential.status === "revoked" ? "No longer usable" : `${new Date(credential.lastValidatedAt).toLocaleDateString()} · ${credential.lastUsedAt ? `used ${new Date(credential.lastUsedAt).toLocaleDateString()}` : "not used yet"}`}</dd></div>
-              </dl>
-              {confirmRevokeId === credential.id ? <span className="credential-confirm"><small>Stop BuildIT from using this key?</small><button className="button tertiary compact" type="button" disabled={working} onClick={() => setConfirmRevokeId("")}>Cancel</button><button className="button destructive compact" type="button" disabled={working} onClick={() => void revoke(credential)}>Confirm revoke</button></span> : <span className="credential-actions"><button className="button secondary compact" type="button" disabled={working || credential.status === "revoked"} onClick={() => beginRotation(credential)}>Replace</button><button className="button destructive compact" type="button" disabled={working || credential.status === "revoked"} onClick={() => setConfirmRevokeId(credential.id)}>{credential.status === "revoked" ? "Revoked" : "Revoke"}</button></span>}
-            </article>
-          ))}
-        </section>
-      ) : null}
+      {credentials?.length ? <SavedCredentials credentials={credentials} repositories={connection.repositories} working={working} confirmRevokeId={confirmRevokeId} onRotate={beginRotation} onAskRevoke={setConfirmRevokeId} onCancelRevoke={() => setConfirmRevokeId("")} onRevoke={(credential) => void revoke(credential)} /> : null}
       <Boundary />
     </section>
   );
+}
+
+function SavedCredentials({ credentials, repositories, working, confirmRevokeId, manageHref, onRotate, onAskRevoke, onCancelRevoke, onRevoke }: { credentials: SavedCredential[]; repositories: Connection["repositories"]; working: boolean; confirmRevokeId: string; manageHref?: string; onRotate: (credential: SavedCredential) => void; onAskRevoke: (id: string) => void; onCancelRevoke: () => void; onRevoke: (credential: SavedCredential) => void }) {
+  return <section className="saved-credentials" aria-labelledby="saved-credentials-title"><div className="saved-credentials-heading"><div><p className="eyebrow">Ready for reviews</p><h3 id="saved-credentials-title">Saved model keys</h3></div><span className="status success">{credentials.filter(item => item.status !== "revoked").length} active</span></div>{credentials.map(credential => <article className="credential-row" key={credential.id}><span className="provider-mark">{names[credential.provider].slice(0, 2).toUpperCase()}</span><span className="credential-identity"><strong>{names[credential.provider]}</strong><code aria-label={`Key ending in ${credential.maskedSuffix}`}>•••• {credential.maskedSuffix}</code></span><dl className="credential-metadata"><div><dt>Scope</dt><dd>{credential.repositoryId ? (() => { const repository = repositories.find(item => item.id === credential.repositoryId); return repository ? `${repository.owner}/${repository.name}` : "Removed repository"; })() : "All connected repositories"}</dd></div><div><dt>Status</dt><dd>{credential.status === "revoked" ? "Revoked" : "Validated"}</dd></div><div><dt>Activity</dt><dd>{credential.status === "revoked" ? "No longer usable" : `${new Date(credential.lastValidatedAt).toLocaleDateString()} · ${credential.lastUsedAt ? `used ${new Date(credential.lastUsedAt).toLocaleDateString()}` : "not used yet"}`}</dd></div></dl>{manageHref ? <span className="credential-actions"><a className="button secondary compact" href={manageHref}>Verify to manage</a></span> : confirmRevokeId === credential.id ? <span className="credential-confirm"><small>Stop BuildIT from using this key?</small><button className="button tertiary compact" type="button" disabled={working} onClick={onCancelRevoke}>Cancel</button><button className="button destructive compact" type="button" disabled={working} onClick={() => onRevoke(credential)}>Confirm revoke</button></span> : <span className="credential-actions"><button className="button secondary compact" type="button" disabled={working || credential.status === "revoked"} onClick={() => onRotate(credential)}>Replace</button><button className="button destructive compact" type="button" disabled={working || credential.status === "revoked"} onClick={() => onAskRevoke(credential.id)}>{credential.status === "revoked" ? "Revoked" : "Revoke"}</button></span>}</article>)}</section>;
 }
 function Heading() {
   return (
