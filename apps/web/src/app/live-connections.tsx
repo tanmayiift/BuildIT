@@ -59,22 +59,85 @@ function ConnectionAction({ connection, returnTo = "/repositories" }: { connecti
     const href = installation.accountType === "organization"
       ? `https://github.com/organizations/${encodeURIComponent(installation.accountLogin)}/settings/installations/${installation.installationId}`
       : `https://github.com/settings/installations/${installation.installationId}`;
-    return <ActionLink priority="secondary" href={href} external>Manage access</ActionLink>;
+    return <ActionLink priority="secondary" href={href} external>Manage GitHub access</ActionLink>;
   }
   return <ActionLink href="https://github.com/apps/buildit-agentic-review/installations/new" external>Choose repositories</ActionLink>;
 }
 
+type ConnectedRepository = Connection["repositories"][number];
+
+function visibilityLabel(visibility: ConnectedRepository["visibility"]) {
+  if (visibility === "public") return "Public repository";
+  if (visibility === "private") return "Private repository";
+  if (visibility === "internal") return "Internal repository";
+  return "Repository";
+}
+
+function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
+  repository: ConnectedRepository;
+  canManage: boolean;
+  saving: boolean;
+  onSave: (next: { paused?: boolean; autofixMode?: "disabled" | "stacked" }) => Promise<void>;
+}) {
+  const fullName = `${repository.owner}/${repository.name}`;
+  const stacked = repository.autofixMode !== "disabled";
+  return <article className="repository-row" aria-label={`Repository policy for ${fullName}`}>
+    <div className="repository-identity">
+      <span className="repository-mark" aria-hidden="true">{repository.visibility === "private" ? "PR" : repository.visibility === "public" ? "PU" : "RE"}</span>
+      <div>
+        <h2>{fullName}</h2>
+        <p>{visibilityLabel(repository.visibility)} <span aria-hidden="true">·</span> Default branch <code>{repository.defaultBranch}</code></p>
+      </div>
+    </div>
+    <div className="repository-control-group">
+      <label className="repository-policy">
+        <span>Autofix delivery</span>
+        {canManage ? <select className="repository-policy-select" aria-label={`Autofix delivery for ${fullName}`} value={stacked ? "stacked" : "disabled"} disabled={saving} onChange={event => void onSave({ autofixMode: event.target.value as "disabled" | "stacked" })}>
+          <option value="disabled">Suggestions only</option>
+          <option value="stacked">Separate fix PR</option>
+        </select> : <strong>{stacked ? "Separate fix PR" : "Suggestions only"}</strong>}
+        <small>{stacked ? "Fixes open as a separate pull request" : "BuildIT reports changes without writing code"}</small>
+      </label>
+      <div className="repository-review-state">
+        <span className={`status ${repository.paused ? "warning" : "success"}`}>{repository.paused ? "Reviews paused" : "Reviews active"}</span>
+        {canManage ? <button className="button secondary" type="button" disabled={saving} aria-label={`${repository.paused ? "Resume" : "Pause"} reviews for ${fullName}`} onClick={() => void onSave({ paused: !repository.paused })}>{saving ? "Saving…" : repository.paused ? "Resume" : "Pause"}</button> : null}
+      </div>
+      <div className="repository-actions">
+        <ActionLink priority="tertiary" size="compact" external href={`https://github.com/${fullName}`} label={`Open ${fullName} on GitHub`}>Open in GitHub</ActionLink>
+      </div>
+    </div>
+  </article>;
+}
+
 export function RepositoryConnectionView() {
   const connection = useConnection();
-  const updatePolicy = useMutation(setReviewPolicy), [policyMessage, setPolicyMessage] = useState("");
+  const updatePolicy = useMutation(setReviewPolicy), [policyMessage, setPolicyMessage] = useState(""), [savingRepositoryId, setSavingRepositoryId] = useState<string | null>(null);
   if (!connection) return <section className="live-state" aria-live="polite"><span className="state-pulse" /><div><strong>Loading repository access…</strong><p>Checking your active workspace on the server.</p></div></section>;
   const copy = stateCopy[connection.state];
   if (connection.state !== "connected") return <section className="split-layout"><article className="empty-state live-empty"><span className="empty-mark">GH</span><h2>{copy.title}</h2><p>{copy.body}</p><div className="button-row"><ConnectionAction connection={connection} /><ActionLink priority="tertiary" href="/data-handling">How isolation works</ActionLink></div></article><aside className="explain-panel"><p className="eyebrow">Current state</p><strong className="connection-state-name">{connection.state.replaceAll("_", " ")}</strong><p>Repository content is never inferred from public visibility. BuildIT requires the selected GitHub installation for both public and private repositories.</p></aside></section>;
   const installation = connection.installations.find(item => item.status === "active")!;
+  const organization = connection.organization!;
+  const canManage = organization.role === "owner" || organization.role === "admin";
+  const save = async (repository: ConnectedRepository, next: { paused?: boolean; autofixMode?: "disabled" | "stacked" }) => {
+    setPolicyMessage("");
+    setSavingRepositoryId(repository.id);
+    try {
+      await updatePolicy({ organizationId: organization.id, repositoryId: repository.id, paused: next.paused ?? repository.paused, autofixMode: next.autofixMode ?? (repository.autofixMode === "disabled" ? "disabled" : "stacked"), requestId: crypto.randomUUID() });
+      setPolicyMessage(`Policy saved for ${repository.owner}/${repository.name}. New reviews will use it.`);
+    } catch {
+      setPolicyMessage("The policy change was refused. Refresh your GitHub identity and active workspace, then try again.");
+    } finally {
+      setSavingRepositoryId(null);
+    }
+  };
   return <>
-    <section className="connection-hero" aria-live="polite"><div><span className="status success">Connected</span><h2>{copy.title}</h2><p>{connection.organization?.name} · GitHub account {installation.accountLogin}</p></div><ConnectionAction connection={connection} /></section>
-    <section className="context-strip"><span><small>Workspace</small><strong>{connection.organization?.name}</strong></span><span><small>Installation</small><strong>#{installation.installationId}</strong></span><span><small>Repository access</small><strong>{connection.repositories.length} selected</strong></span><span><small>Processing regions</small><strong>Ireland storage · Paris tests</strong></span></section>
-    {policyMessage?<p className="form-result" role="status">{policyMessage}</p>:null}<section className="repository-list" aria-label="Connected repositories">{connection.repositories.map(repository => { const canManage=connection.organization?.role==="owner"||connection.organization?.role==="admin"; const save=async(next:{paused?:boolean;autofixMode?:"disabled"|"stacked"})=>{if(!connection.organization)return;setPolicyMessage("");try{await updatePolicy({organizationId:connection.organization.id,repositoryId:repository.id,paused:next.paused??repository.paused,autofixMode:next.autofixMode??(repository.autofixMode==="disabled"?"disabled":"stacked"),requestId:crypto.randomUUID()});setPolicyMessage("Repository policy updated. New reviews will use the new setting.");}catch{setPolicyMessage("The policy change was refused. Refresh your GitHub identity and active workspace, then try again.");}};return <article className="repository-row" key={repository.id}><span className="repository-mark">{repository.visibility === "private" ? "PR" : repository.visibility === "public" ? "PU" : "RE"}</span><div><h2>{repository.owner}/{repository.name}</h2><p>{repository.visibility} repository · default branch <code>{repository.defaultBranch}</code>{repository.paused?" · paused":""}</p></div><div className="repository-policy"><span>Autofix</span>{canManage?<select aria-label={`Autofix policy for ${repository.owner}/${repository.name}`} value={repository.autofixMode==="disabled"?"disabled":"stacked"} onChange={event=>void save({autofixMode:event.target.value as "disabled"|"stacked"})}><option value="disabled">Disabled</option><option value="stacked">Stacked PR only</option></select>:<strong>{repository.autofixMode === "stacked" ? "Stacked PR" : repository.autofixMode.replaceAll("_", " ")}</strong>}</div><div className="repository-policy"><span>Reviews</span>{canManage?<button className="button secondary" type="button" onClick={()=>void save({paused:!repository.paused})}>{repository.paused?"Resume":"Pause"}</button>:<strong>{repository.paused?"Paused":"Active"}</strong>}</div><ActionLink priority="secondary" size="compact" external href={`https://github.com/${repository.owner}/${repository.name}`} label={`View ${repository.owner}/${repository.name} on GitHub`}>View on GitHub</ActionLink></article>})}</section>
+    <section className="connection-overview" aria-label="GitHub connection" aria-live="polite">
+      <div className="connection-summary"><span className="status success">Connected</span><h2>{connection.repositories.length} {connection.repositories.length === 1 ? "repository" : "repositories"} connected</h2><p>GitHub account <strong>{installation.accountLogin}</strong></p></div>
+      <div className="connection-facts"><span><small>Workspace</small><strong>{organization.name}</strong></span><span><small>Installation</small><strong>#{installation.installationId}</strong></span><span><small>Encrypted source</small><strong>Ireland</strong></span><span><small>Isolated tests</small><strong>Paris</strong></span></div>
+      <ConnectionAction connection={connection} />
+    </section>
+    {policyMessage ? <p className="form-result" role="status">{policyMessage}</p> : null}
+    <section className="repository-list" aria-label="Connected repositories">{connection.repositories.map(repository => <RepositoryPolicyRow key={repository.id} repository={repository} canManage={canManage} saving={savingRepositoryId === repository.id} onSave={next => save(repository, next)} />)}</section>
   </>;
 }
 
