@@ -281,16 +281,15 @@ export function ModelKeyForm() {
           </label>
         </div>
         <div className="scope-trail" aria-label="Credential scope">
-          <span>Organization</span>
-          <strong>{organization.name}</strong>
-          <b>→</b>
-          <span>Repository</span>
+          <span>This key can be used by</span>
           <strong>
-            {repositoryId
+            {organization.name} · {repositoryId
               ? connection.repositories.find((item) => item.id === repositoryId)
                   ?.name
-              : "All connected"}
+              : "all connected repositories"}
           </strong>
+          <small>Only after a person approves a review</small>
+          <span className="scope-check" aria-hidden="true">✓</span>
         </div>
         <label className="field">
           <span>{names[provider]} API key</span>
@@ -330,10 +329,16 @@ export function ModelKeyForm() {
         ) : null}
       </form>
       {credentials?.length ? (
-        <div className="saved-credentials">
-          <h3>Saved for this organization</h3>
+        <section className="saved-credentials" aria-labelledby="saved-credentials-title">
+          <div className="saved-credentials-heading">
+            <div>
+              <p className="eyebrow">Ready for reviews</p>
+              <h3 id="saved-credentials-title">Saved model keys</h3>
+            </div>
+            <span className="status success">{credentials.filter(item => item.status !== "revoked").length} active</span>
+          </div>
           {credentials.map((credential) => (
-            <div key={credential.id}>
+            <article className="credential-row" key={credential.id}>
               <span className="provider-mark">
                 {names[credential.provider].slice(0, 2).toUpperCase()}
               </span>
@@ -341,14 +346,15 @@ export function ModelKeyForm() {
                 <strong>{names[credential.provider]}</strong>
                 <code aria-label={`Key ending in ${credential.maskedSuffix}`}>•••• {credential.maskedSuffix}</code>
               </span>
-              <span className="credential-scope">
-                <span>{credential.repositoryId ? (() => { const repository = connection?.repositories.find(item => item.id === credential.repositoryId); return repository ? `${repository.owner}/${repository.name}` : "Removed repository"; })() : "All connected repositories"}</span>
-                <small>{credential.status === "revoked" ? "Revoked" : `Validated ${new Date(credential.lastValidatedAt).toLocaleDateString()} · ${credential.lastUsedAt ? `last used ${new Date(credential.lastUsedAt).toLocaleDateString()}` : "never used"}`}</small>
-              </span>
+              <dl className="credential-metadata">
+                <div><dt>Scope</dt><dd>{credential.repositoryId ? (() => { const repository = connection?.repositories.find(item => item.id === credential.repositoryId); return repository ? `${repository.owner}/${repository.name}` : "Removed repository"; })() : "All connected repositories"}</dd></div>
+                <div><dt>Status</dt><dd>{credential.status === "revoked" ? "Revoked" : "Validated"}</dd></div>
+                <div><dt>Activity</dt><dd>{credential.status === "revoked" ? "No longer usable" : `${new Date(credential.lastValidatedAt).toLocaleDateString()} · ${credential.lastUsedAt ? `used ${new Date(credential.lastUsedAt).toLocaleDateString()}` : "not used yet"}`}</dd></div>
+              </dl>
               {confirmRevokeId === credential.id ? <span className="credential-confirm"><small>Stop BuildIT from using this key?</small><button className="button tertiary compact" type="button" disabled={working} onClick={() => setConfirmRevokeId("")}>Cancel</button><button className="button destructive compact" type="button" disabled={working} onClick={() => void revoke(credential)}>Confirm revoke</button></span> : <span className="credential-actions"><button className="button secondary compact" type="button" disabled={working || credential.status === "revoked"} onClick={() => beginRotation(credential)}>Replace</button><button className="button destructive compact" type="button" disabled={working || credential.status === "revoked"} onClick={() => setConfirmRevokeId(credential.id)}>{credential.status === "revoked" ? "Revoked" : "Revoke"}</button></span>}
-            </div>
+            </article>
           ))}
-        </div>
+        </section>
       ) : null}
       <Boundary />
     </section>
@@ -378,5 +384,5 @@ function Boundary() {
 }
 
 function KeyTrust() {
-  return <div className="key-trust"><strong>Two separate connections, two separate jobs</strong><p>GitHub proves who you are and gives BuildIT access only to repositories selected in GitHub. This model-provider key is not a GitHub key: it pays Google, OpenAI, or Anthropic for the AI calls you choose.</p><dl className="trust-answers"><div><dt>What reaches the AI provider?</dt><dd>The exact PR context and bounded evidence shown in the review consent screen—not another repository. Deterministic checks can run without this key.</dd></div><div><dt>What can this key change?</dt><dd>Nothing in GitHub. Autofix requires separate consent and a separate, short-lived GitHub App token for one stacked PR.</dd></div><div><dt>How does a review earn trust?</dt><dd>BuildIT pins both commits, runs named checks, requires source or test evidence for every finding, sends model claims through a critic, and returns inconclusive when proof is missing.</dd></div><div><dt>Who can merge?</dt><dd>Only a human. BuildIT has no merge permission and cannot edit workflows, repository settings, or unselected repositories.</dd></div><div><dt>How is the key protected?</dt><dd>The broker validates it, encrypts it with AWS KMS in Ireland, never shows it again, and never stores plaintext in Convex.</dd></div><div><dt>How do I stop access?</dt><dd>An organization Owner or Admin can revoke or replace the key here and remove repository access in GitHub. BuildIT cannot recover the original key.</dd></div></dl></div>;
+  return <details className="key-trust"><summary><span><strong>GitHub login and model key stay separate</strong><small>See exactly what BuildIT can read, use, and change</small></span></summary><p>GitHub proves who you are. This key only pays the selected AI provider for reviews you approve.</p><dl className="trust-answers"><div><dt>Sent to the model</dt><dd>Only the exact PR context and bounded evidence shown before consent—not another repository.</dd></div><div><dt>GitHub changes</dt><dd>None from this key. A stacked PR needs separate consent and a short-lived GitHub App token.</dd></div><div><dt>Evidence required</dt><dd>Every finding requires source or test evidence, an independent critic, and deterministic checks. Missing proof is inconclusive.</dd></div><div><dt>Merge authority</dt><dd>Only a human can merge. BuildIT has no merge, workflow, settings, or unselected-repository permission.</dd></div><div><dt>Storage</dt><dd>The broker validates and encrypts the key with AWS KMS in Ireland. Plaintext is never stored in Convex.</dd></div><div><dt>Control</dt><dd>An Owner or Admin can replace or revoke it here. BuildIT cannot recover the original key.</dd></div></dl></details>;
 }
