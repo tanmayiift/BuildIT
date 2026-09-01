@@ -62,6 +62,10 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   return { ...base, coverage: excluded.length || patchPaths.length || bodyTruncated || requirementTruncated || pull.requirementCoverage !== "complete" || pull.omitted.length || headChunks.some(chunk => chunk.snapshot.coverage !== "full") ? "partial" as const : "full" as const };
 }
 export function selectCriticModel(provider:ProviderName,primary:string,availableModels?:readonly string[]){const preferred=provider==="gemini"?(primary==="gemini-2.5-flash"?"gemini-2.5-pro":"gemini-2.5-flash"):provider==="openai"?(primary==="gpt-5.4-mini"?"gpt-5.4":"gpt-5.4-mini"):(primary==="claude-sonnet-4-5"?"claude-sonnet-4-6":"claude-sonnet-4-5"),available=availableModels?new Set(availableModels):approvedProviderModels[provider],independent=Boolean(availableModels)&&available.has(preferred)&&preferred!==primary;return{model:independent?preferred:primary,independent}}
+export function selectFindingsModel(provider: ProviderName, primary: string, availableModels?: readonly string[]) {
+  if (provider !== "openai" || primary !== "gpt-5.4-mini" || !availableModels?.includes("gpt-5.4")) return primary;
+  return "gpt-5.4";
+}
 export function requireIndependentCritic(findings:FindingCandidate[],decisions:CriticDecision[],independent:boolean){if(independent)return decisions;const risky=new Set(findings.filter(item=>item.origin==="model"&&["critical","high"].includes(item.severity)).map(item=>item.id));return decisions.map(item=>risky.has(item.findingId)?{...item,verdict:"uncertain" as const,missingEvidenceIds:[...new Set([...item.missingEvidenceIds,"independent-critic-unavailable"])],explanation:"An independent approved critic model was unavailable."}:item)}
 
 export const analyze = internalAction({
@@ -85,10 +89,14 @@ export const analyze = internalAction({
     const validationBody = Buffer.from(await validationResponse.arrayBuffer());
     if (validationBody.byteLength !== validation.size || createHash("sha256").update(validationBody).digest("hex") !== validation.checksum) throw new Error("validation_artifact_integrity_failed");
     const validationValue = JSON.parse(validationBody.toString("utf8")) as ValidationArtifact;
-    const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }) }, usage: Array<{ inputTokens: number; outputTokens: number }> = [],criticRoute=selectCriticModel(scope.provider,scope.model,scope.credential.availableModels.length?scope.credential.availableModels:undefined);
+    const availableModels = scope.credential.availableModels.length ? scope.credential.availableModels : undefined;
+    const findingsModel = selectFindingsModel(scope.provider, scope.model, availableModels);
+    const criticRoute = selectCriticModel(scope.provider, findingsModel, availableModels);
+    const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }) }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
     const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
       invoke: async (stageRequest: ModelStageRequest): Promise<ProviderResult> => {
-        const stage = stageRequest.stage as PromptStage, model = stage === "critic" ? criticRoute.model : scope.model;
+        const stage = stageRequest.stage as PromptStage;
+        const model = stage === "findings" ? findingsModel : stage === "critic" ? criticRoute.model : scope.model;
         const request = { model, system: stageRequest.system, input: stageRequest.input, schemaName: stageRequest.schemaName, schema: stageRequest.schema, maxOutputTokens: stageRequest.maxOutputTokens };
         const spend = await ctx.runMutation(internal.reviewModelData.preflightStageSpend,{...args,provider:scope.provider,model,inputBytes:Buffer.byteLength(request.system)+Buffer.byteLength(request.input)+Buffer.byteLength(JSON.stringify(request.schema)),maxOutputTokens:request.maxOutputTokens,now:Date.now()});
         if (!spend.allowed) throw new Error("budget_preflight_exceeded");
