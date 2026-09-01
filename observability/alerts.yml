@@ -2,7 +2,7 @@ groups:
   - name: buildit-release
     rules:
       - alert: BuildITHighFailureRate
-        expr: sum(rate(buildit_failures_total[10m])) / clamp_min(sum(rate(buildit_operations_total[10m])), 0.001) > 0.05
+        expr: (sum(rate(buildit_failures_total{buildit_outcome="failed"}[10m])) or vector(0)) / clamp_min((sum(rate(buildit_operations_total{buildit_outcome=~"succeeded|failed"}[10m])) or vector(0)), 0.001) > 0.05
         for: 10m
         labels: {severity: page, service: buildit}
         annotations:
@@ -18,7 +18,7 @@ groups:
           action: "Compare provider, runner, and queue latency; reduce intake if the slow boundary is saturated."
           runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditp95latencyhigh"
       - alert: BuildITTelemetrySilent
-        expr: absent_over_time(buildit_operations_total[15m]) == 1
+        expr: max(absent_over_time(buildit_operations_total[15m]) or vector(0)) > 0.5
         for: 5m
         labels: {severity: ticket, service: buildit}
         annotations:
