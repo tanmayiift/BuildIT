@@ -24,13 +24,27 @@ const removeMember = makeFunctionReference<"mutation", { organizationId: string;
 const setReviewPolicy = makeFunctionReference<"mutation", { organizationId: string; repositoryId: string; paused: boolean; autofixMode: "disabled" | "stacked"; requestId: string }, null>("repositoryConnections:setReviewPolicy");
 
 const signedOutConnection: Connection = { state: "signed_out", organization: null, installations: [], repositories: [] };
+const connectedDesignFixture: Connection = {
+  state: "connected",
+  organization: { id: "fixture-organization", name: "Northstar workspace", slug: "northstar", role: "owner", region: "eu-west-1", retentionHours: 24 },
+  installations: [{ id: "fixture-installation", installationId: 42, accountLogin: "northstar", accountType: "organization", status: "active", updatedAt: 1 }],
+  repositories: [
+    { id: "fixture-api", installationId: "fixture-installation", githubRepositoryId: 1, owner: "northstar", name: "api", defaultBranch: "main", visibility: "private", autofixMode: "stacked", paused: false, indexState: "ready", updatedAt: 1 },
+    { id: "fixture-web", installationId: "fixture-installation", githubRepositoryId: 2, owner: "northstar", name: "web", defaultBranch: "main", visibility: "public", autofixMode: "disabled", paused: false, indexState: "ready", updatedAt: 1 },
+    { id: "fixture-worker", installationId: "fixture-installation", githubRepositoryId: 3, owner: "northstar", name: "worker", defaultBranch: "main", visibility: "private", autofixMode: "stacked", paused: true, indexState: "ready", updatedAt: 1 },
+  ],
+};
 export function useConnection() {
   const [hydrated, setHydrated] = useState(false);
   const { isAuthenticated, isLoading } = useConvexAuth();
   const sampleTour = useSampleTour();
   const connection = useQuery(connectionQuery, hydrated && isAuthenticated && !sampleTour ? {} : "skip");
   useEffect(() => setHydrated(true), []);
-  if (sampleTour) return signedOutConnection;
+  const designFixtureRequested = process.env.NEXT_PUBLIC_BUILDIT_E2E === "1"
+    && sampleTour
+    && typeof window !== "undefined"
+    && new URLSearchParams(window.location.search).get("fixture") === "connected";
+  if (sampleTour) return hydrated && designFixtureRequested ? connectedDesignFixture : signedOutConnection;
   if (!hydrated) return undefined;
   if (!isLoading && !isAuthenticated) return signedOutConnection;
   return connection;

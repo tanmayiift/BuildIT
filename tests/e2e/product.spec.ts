@@ -182,6 +182,24 @@ test("repository and integration screens use truthful live connection states", a
   await page.screenshot({ path: `.local/ui-evidence/integrations-${testInfo.project.name}.png`, fullPage: true });
 });
 
+test("connected repository controls stay aligned and readable", async ({ page }, testInfo) => {
+  test.skip(Boolean(process.env.BUILDIT_E2E_BASE_URL), "The connected design fixture exists only in the local development server.");
+  const browserErrors: string[] = [];
+  page.on("console", message => {
+    if (message.type() === "error" && /Hydration failed|hydration mismatch|Uncaught Error/i.test(message.text())) browserErrors.push(message.text());
+  });
+  await page.goto("/repositories?tour=1&fixture=connected");
+  await expect(page.getByRole("heading", { name: "3 repositories connected" })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Repository policy for northstar/api" }).getByText("Reviews active")).toBeVisible();
+  await expect(page.getByRole("article", { name: "Repository policy for northstar/worker" }).getByText("Reviews paused")).toBeVisible();
+  await expect(page.getByLabel("Autofix delivery for northstar/api")).toHaveCSS("min-height", "44px");
+  await expect(page.getByRole("button", { name: "Pause reviews for northstar/api" })).toHaveCSS("min-height", "44px");
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  expect(browserErrors).toEqual([]);
+  await page.screenshot({ path: `.local/ui-evidence/repositories-connected-${testInfo.project.name}.png`, fullPage: true, scale: "css" });
+});
+
 test("workspace routes require authentication unless sample tour is explicit", async ({ page }) => {
   await page.goto("/repositories");
   await expect(page.getByRole("heading", { name: "Sign in to open your workspace" })).toBeVisible();
