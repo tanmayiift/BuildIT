@@ -15,7 +15,7 @@ test("overview leads through the review queue to exact-commit evidence", async (
   await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
 });
 
-for (const [state, heading] of [["cancelled", "Review stopped"], ["running", "BuildIT is reviewing this change"], ["changes", "Changes are needed before merge"], ["passed", "All required checks passed"], ["empty", "A safe decision is not possible yet"], ["populated", "Changes are needed before merge"]] as const) test(`sample review state stays decision-first: ${state}`, async ({ page }) => {
+for (const [state, heading] of [["cancelled", "Review stopped"], ["running", "BuildIT is reviewing this change"], ["changes", "Changes are needed before merge"], ["passed", "All required checks passed"], ["budget", "Review stopped before the next model step"], ["empty", "A safe decision is not possible yet"], ["populated", "Changes are needed before merge"]] as const) test(`sample review state stays decision-first: ${state}`, async ({ page }) => {
   await page.goto(`/reviews/418?tour=1&state=${state}`);
   await expect(page.getByRole("heading", { name: heading })).toBeVisible();
   if (state === "cancelled" || state === "empty") {
@@ -26,6 +26,10 @@ for (const [state, heading] of [["cancelled", "Review stopped"], ["running", "Bu
     await expect(page.getByRole("heading", { name: "How far BuildIT got" })).toBeVisible();
   }
   if (state !== "cancelled" && state !== "empty") await expect(page.getByText("Technical details", { exact: true })).toBeVisible();
+  if (state === "budget") {
+    await expect(page.getByText("Increase the review budget", { exact: true })).toBeVisible();
+    await expect(page.getByText("In progress", { exact: true })).toHaveCount(0);
+  }
   await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
 });
 

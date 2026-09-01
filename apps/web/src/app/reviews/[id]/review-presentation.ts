@@ -26,6 +26,7 @@ export function statusPresentation(status: string, stale: boolean, reason?: stri
     changes_requested: { label: "Action needed", title: "Changes are needed before merge", summary: "BuildIT found evidence-backed issues or failed checks. Review the items below with the author.", tone: "danger", symbol: "!" },
     failed_after_bounds: { label: "Needs a developer", title: "BuildIT could not finish the fix", summary: "Three fix rounds were used. The remaining issues are listed below for a developer.", tone: "danger", symbol: "!" },
     platform_failed: { label: "Could not complete", title: "BuildIT hit a service problem", summary: "This is not a code verdict. Retry after the service problem is resolved.", tone: "danger", symbol: "×" },
+    budget_exhausted: { label: "Budget reached", title: "Review stopped before the next model step", summary: "BuildIT made no code decision and did not make the model call that could cross your chosen limit.", tone: "warning", symbol: "$" },
     inconclusive: { label: "Not enough proof", title: "A safe decision is not possible yet", summary: "Some required evidence is missing or unclear. Treat this review as not approved.", tone: "warning", symbol: "?" },
   };
   return known[status] ?? { label: "In progress", title: "BuildIT is reviewing this change", summary: "Evidence will appear here as each review step completes.", tone: "running" as ReviewTone, symbol: "●" };
@@ -39,6 +40,7 @@ export function nextActionPresentation(code: string, stale: boolean) {
     fix_findings: { title: "Ask the author to fix the issues", detail: "Then run BuildIT again on the new commit." },
     await_human_approval: { title: "Inspect the proposed fix", detail: "BuildIT will never merge it for you." },
     retry: { title: "Retry the review", detail: "The previous run ended because of a service problem." },
+    increase_budget: { title: "Increase the review budget", detail: "No further model call was made. Choose a higher ceiling, then start a new review." },
   };
   return known[code] ?? { title: words(code), detail: "Open the evidence below before taking action." };
 }
