@@ -40,6 +40,7 @@
   .metric-explainer > div { border-right: 0; border-bottom: 1px solid var(--line); }
   .integration-grid { grid-template-columns: 1fr; }
   .setting-row { grid-template-columns: 1fr; gap: 7px; }
+  .notification-settings .setting-row, .notification-settings.has-actions .setting-row { grid-template-columns: 1fr; }
   .setting-row button { width: max-content; }
   .audit-row { grid-template-columns: 90px 1fr; }
   .audit-row > :nth-child(3), .audit-row > :nth-child(4) { grid-column: 1 / -1; }

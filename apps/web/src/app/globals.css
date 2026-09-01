@@ -231,6 +231,9 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .setting-row p { margin: 3px 0 0; color: var(--muted); font-size: 11px; }
 .setting-row code { font-size: 11px; }
 .setting-row button { min-height: 44px; color: var(--muted); background: var(--workbench); border: 1px solid var(--line); border-radius: 5px; }
+.notification-settings .setting-row { grid-template-columns: minmax(280px, 1fr) minmax(180px, max-content); }
+.notification-settings.has-actions .setting-row { grid-template-columns: minmax(280px, 1fr) minmax(180px, max-content) 140px; }
+.recipient-scope { color: var(--ink-2); font: 650 11px "JetBrains Mono Variable", monospace; }
 .compact-empty { min-height: 300px; }
 .audit-row { min-height: 58px; display: grid; grid-template-columns: 100px 170px 1fr 90px; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 12px; }
 .audit-row:last-child { border-bottom: 0; }
