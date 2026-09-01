@@ -3082,6 +3082,65 @@ describe("GitHub webhook durability", () => {
       ),
     ).toHaveLength(1);
   });
+  it("creates a fresh GitHub-comment review after an earlier exact-head run is terminal", async () => {
+    const t = convexTest(schema, modules),
+      tenant = await seedTenant(t, "github-retry", "alice");
+    const materialize = async (deliveryId: string, now: number) => {
+      await t.mutation(internal.githubWebhookData.reserve, {
+        deliveryId,
+        event: "issue_comment",
+        action: "created",
+        installationId: 20,
+        disposition: "processed",
+        now,
+      });
+      await t.mutation(internal.githubWebhookData.recordPinnedSnapshot, {
+        deliveryId,
+        prNumber: 7,
+        headSha: "a".repeat(40),
+        baseSha: "b".repeat(40),
+        headRefHash: "c".repeat(64),
+        baseRefHash: "d".repeat(64),
+        isFork: false,
+        triggerVerb: "review",
+      });
+      return t.mutation(internal.githubWebhookData.materializeReview, {
+        deliveryId,
+        organizationId: tenant.organizationId,
+        repositoryId: tenant.repositoryId,
+        baseRef: "main",
+        triggerActor: "e".repeat(64),
+        actorPermission: "admin",
+        now: now + 1,
+      });
+    };
+
+    const first = await materialize("delivery-first", 1);
+    await t.run((ctx) =>
+      ctx.db.patch(first.reviewId, {
+        status: "changes_requested",
+        updatedAt: 3,
+      }),
+    );
+    const retry = await materialize("delivery-retry", 4);
+
+    expect(retry).toMatchObject({ status: "queued" });
+    expect(retry.reviewId).not.toBe(first.reviewId);
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("reviews")
+          .withIndex("by_repo_pr_head_mode", (q) =>
+            q
+              .eq("repositoryId", tenant.repositoryId)
+              .eq("prNumber", 7)
+              .eq("headSha", "a".repeat(40))
+              .eq("mode", "review"),
+          )
+          .collect(),
+      ),
+    ).toHaveLength(2);
+  });
   it("does not start a blocked, stale, or replaced review workflow", async () => {
     const t = convexTest(schema, modules),
       tenant = await seedTenant(t, "not-runnable", "alice"),

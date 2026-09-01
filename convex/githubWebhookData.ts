@@ -191,7 +191,7 @@ export const materializeReview = internalMutation({
     )
       throw new Error("review_request_not_materializable");
     const mode = delivery.triggerVerb === "autofix" ? "autofix" : "review";
-    const existing = await ctx.db
+    const matching = await ctx.db
       .query("reviews")
       .withIndex("by_repo_pr_head_mode", (q) =>
         q
@@ -200,7 +200,8 @@ export const materializeReview = internalMutation({
           .eq("headSha", delivery.headSha!)
           .eq("mode", mode),
       )
-      .unique();
+      .collect();
+    const existing = matching.find((review) => !terminalStatuses.has(review.status));
     if (existing) {
       await ctx.db.patch(delivery._id, { reviewId: existing._id });
       return {
