@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const root = resolve(import.meta.dirname, "../.."),
   web = readFileSync(resolve(root, "docs/guides/web-launch-guide.md"), "utf8"),
   cli = readFileSync(resolve(root, "docs/guides/cli-launch-guide.md"), "utf8"),
+  secondUser = readFileSync(resolve(root, "docs/guides/second-user-production-review.md"), "utf8"),
   source = readFileSync(resolve(root, "apps/cli/src/index.ts"), "utf8");
 
 describe("launch guides", () => {
@@ -28,5 +29,11 @@ describe("launch guides", () => {
     for (const phrase of ["exact commit", "evidence", "inconclusive", "revoke", "cancel", "three", "stacked pull request"]) {
       expect(combined).toContain(phrase);
     }
+  });
+
+  it("keeps the second user's key, session, workspace, and review proof separate", () => {
+    for (const phrase of ["their own model key", "their own workspace", "their own repository", "spend ceiling", "masked", "must never", "cross-workspace denial", "customer email"] ) expect(secondUser.toLowerCase()).toContain(phrase);
+    expect(secondUser).toMatch(/operator[^.]*never[^.]*raw key/i);
+    expect(secondUser).toMatch(/owner's key[^.]*never[^.]*second/i);
   });
 });
