@@ -99,3 +99,8 @@ export function summarizeChecks(checks: CheckExecution[]): CheckSummary[] {
 }
 
 export const technicalLabel = words;
+
+export function pullRequestHref(owner: string, name: string, prNumber: number) {
+  if (!owner || !name || !Number.isSafeInteger(prNumber) || prNumber < 1) return undefined;
+  return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pull/${prNumber}`;
+}

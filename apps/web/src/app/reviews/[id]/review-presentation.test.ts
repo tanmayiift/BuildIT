@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventPresentation, nextActionPresentation, stagePresentation, statusPresentation, summarizeChecks } from "./review-presentation";
+import { eventPresentation, nextActionPresentation, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks } from "./review-presentation";
 
 describe("review presentation", () => {
   it("explains cancellation without implying a code failure", () => {
@@ -39,5 +39,11 @@ describe("review presentation", () => {
       expect.objectContaining({ kind: "test", required: true, conclusion: "mixed", executions: 2, durationMs: 700, outcomeSummary: "1 passed, 1 failed" }),
       expect.objectContaining({ kind: "lint", required: false, conclusion: "passed", executions: 1 }),
     ]);
+  });
+
+  it("links an authorized person to the exact pull request without inventing a URL", () => {
+    expect(pullRequestHref("tanmayiift", "buildit-public-fixture", 2)).toBe("https://github.com/tanmayiift/buildit-public-fixture/pull/2");
+    expect(pullRequestHref("", "repository", 2)).toBeUndefined();
+    expect(pullRequestHref("owner", "repository", 0)).toBeUndefined();
   });
 });

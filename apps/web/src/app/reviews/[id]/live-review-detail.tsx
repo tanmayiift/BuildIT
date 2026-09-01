@@ -2,7 +2,7 @@
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { useState } from "react";
 import { makeFunctionReference } from "convex/server";
-import { eventPresentation, nextActionPresentation, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
+import { eventPresentation, nextActionPresentation, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
 type Evidence = {
   review: {
     id: string;
@@ -134,6 +134,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
   const { review, repository } = evidence;
   const verdict = statusPresentation(review.status, review.isStale, review.statusReasonCode),
     nextAction = nextActionPresentation(review.nextActionCode, review.isStale),
+    pullRequestUrl = pullRequestHref(repository.owner, repository.name, review.prNumber),
     checkSummaries = summarizeChecks(evidence.checks),
     hasEvidence = evidence.requirements.length + evidence.findings.length + evidence.checks.length > 0;
   const canCancel = ![
@@ -185,6 +186,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
           <a className="button secondary" href={`/reviews`}>
             {stoppedBeforeEvidence ? "Open review queue" : "Back to queue"}
           </a>
+          {pullRequestUrl ? <a className="button secondary" href={pullRequestUrl} target="_blank" rel="noreferrer">Open pull request</a> : null}
           {cancelError ? <p role="alert">{cancelError}</p> : null}
         </div>
       </section>
@@ -236,7 +238,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
         eyebrow="Decision support"
         title="Issues to fix"
         detail={`${evidence.findings.length} supported by evidence`}
-        foot="BuildIT shows an issue only when it can point to supporting evidence."
+        foot="BuildIT shows an issue only when it can point to supporting evidence. Open the pull request for the plain-language report and exact source locations."
       >
         {evidence.findings.length ? (
           evidence.findings.map((item) => (
