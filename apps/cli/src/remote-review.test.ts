@@ -205,6 +205,15 @@ describe("remote GitHub CLI review commands", () => {
         3,
         "running",
       ],
+      [
+        {
+          name: "BuildIT / review",
+          status: "COMPLETED",
+          conclusion: "NEUTRAL",
+        },
+        3,
+        "inconclusive",
+      ],
     ] as const) {
       const f = fixture([
         { code: 0, stdout: JSON.stringify({ nameWithOwner: "acme/service" }) },

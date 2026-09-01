@@ -149,12 +149,11 @@ export async function remoteStatus(input: {
     ? "not_started"
     : checks.some((check) => check.status !== "COMPLETED")
       ? "running"
-      : checks.some(
-            (check) =>
-              !["SUCCESS", "NEUTRAL"].includes(String(check.conclusion)),
-          )
-        ? "action_required"
-        : "passed";
+      : checks.every((check) => String(check.conclusion) === "SUCCESS")
+        ? "passed"
+        : checks.some((check) => String(check.conclusion) === "NEUTRAL")
+          ? "inconclusive"
+          : "action_required";
   input.emit(
     event("remote_status", {
       repository: repo,

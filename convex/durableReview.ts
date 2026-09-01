@@ -182,13 +182,14 @@ export const workflowCompleted = internalMutation({
     if (args.result.kind === "failed") {
       const now = Date.now();
       const providerRateLimited = args.result.error.includes("rate_limited");
+      const nextGeneration = review.executionGeneration + 1;
       await ctx.db.patch(review._id, {
         status: "platform_failed",
         statusReasonCode: providerRateLimited ? "provider_rate_limited" : "platform_error",
         nextActionCode: "retry_review",
         currentStage: "complete",
         completedAt: now,
-        executionGeneration: review.executionGeneration + 1,
+        executionGeneration: nextGeneration,
         leaseOwner: undefined,
         leaseExpiresAt: undefined,
         updatedAt: now,
@@ -208,6 +209,16 @@ export const workflowCompleted = internalMutation({
         metadata: {},
         createdAt: now,
       });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.reviewPublicationWorker.publishPlatformFailure,
+        {
+          organizationId: review.organizationId,
+          reviewId: review._id,
+          expectedHeadSha: review.headSha,
+          expectedGeneration: nextGeneration,
+        },
+      );
     }
   },
 });

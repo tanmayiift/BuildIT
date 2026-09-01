@@ -31,6 +31,51 @@ export const publicationScope = internalQuery({
   },
 });
 
+export const platformFailureScope = internalQuery({
+  args: executionArgs,
+  handler: async (ctx, args) => {
+    const review = await assertReviewParent(
+        ctx.db,
+        args.organizationId,
+        args.reviewId,
+      ),
+      repository = await ctx.db.get(review.repositoryId),
+      installation = repository
+        ? await ctx.db.get(repository.installationId)
+        : null;
+    if (
+      review.headSha !== args.expectedHeadSha ||
+      review.executionGeneration !== args.expectedGeneration ||
+      review.isStale ||
+      review.status !== "platform_failed" ||
+      !review.completedAt
+    )
+      throw new ConvexError("platform_failure_not_publishable");
+    if (
+      !repository ||
+      !repository.enabled ||
+      repository.organizationId !== args.organizationId ||
+      !installation ||
+      installation.organizationId !== args.organizationId ||
+      installation.status !== "active"
+    )
+      throw new ConvexError("repository_unavailable");
+    return {
+      organizationId: review.organizationId,
+      repositoryId: repository._id,
+      reviewId: review._id,
+      installationId: installation.installationId,
+      githubRepositoryId: repository.githubRepositoryId,
+      prNumber: review.prNumber,
+      headSha: review.headSha,
+      reason:
+        review.statusReasonCode === "provider_rate_limited"
+          ? ("provider_rate_limited" as const)
+          : ("platform_error" as const),
+    };
+  },
+});
+
 export const completeSideEffect = internalMutation({
   args: { ...executionArgs, sideEffectId: v.id("githubSideEffects"), requestHash: v.string(), externalId: v.string(), status: sideEffectStatus, now: v.number() },
   handler: async (ctx, args) => {

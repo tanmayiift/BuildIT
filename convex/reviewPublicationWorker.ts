@@ -6,6 +6,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { GitHubAppClient, GitHubRepositoryWriter, sideEffectKey } from "@buildit/github";
 import { issueArtifactGrant } from "@buildit/security";
+import { platformFailureReport } from "./lib/platformFailureReport";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; status: string; reason: string; report: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number } };
@@ -28,7 +29,7 @@ export const publish = internalAction({
       const value = await current.json() as { head?: { sha?: unknown } };
       if (value.head?.sha !== scope.headSha) throw new Error("stale_head");
       const writer = new GitHubRepositoryWriter({ repositoryId: scope.githubRepositoryId, installationToken: token }), requestHash = createHash("sha256").update(`${scope.conclusion}\0${body}`).digest("hex"), now = Date.now();
-      const checkKey = sideEffectKey({ repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, headSha: scope.headSha, kind: "check" }), commentKey = sideEffectKey({ repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, headSha: scope.headSha, kind: "comment" });
+      const slot = String(scope.reviewId), checkKey = sideEffectKey({ repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, headSha: scope.headSha, kind: "check", slot }), commentKey = sideEffectKey({ repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, headSha: scope.headSha, kind: "comment", slot });
       const checkEffect: Id<"githubSideEffects"> = await ctx.runMutation(internal.reviewState.reserveSideEffect, { ...args, operationKey: checkKey, type: "check_update", requestHash, now });
       const check = await writer.upsertCheckRun({ name: "BuildIT / review", headSha: scope.headSha, conclusion: scope.conclusion, title: `BuildIT: ${scope.status.replaceAll("_", " ")}`, summary: body });
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, { ...args, sideEffectId: checkEffect, requestHash, externalId: String(check.id), status: "completed", now: Date.now() });
@@ -37,5 +38,106 @@ export const publish = internalAction({
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, { ...args, sideEffectId: commentEffect, requestHash, externalId: String(comment.id), status: "completed", now: Date.now() });
       return { checkId: String(check.id), commentId: String(comment.id) };
     } finally { github.revoke(tokenScope); }
+  },
+});
+
+type FailureScope = {
+  organizationId: Id<"organizations">;
+  repositoryId: Id<"repositories">;
+  reviewId: Id<"reviews">;
+  installationId: number;
+  githubRepositoryId: number;
+  prNumber: number;
+  headSha: string;
+  reason: "provider_rate_limited" | "platform_error";
+};
+
+export const publishPlatformFailure = internalAction({
+  args: {
+    organizationId: v.id("organizations"),
+    reviewId: v.id("reviews"),
+    expectedHeadSha: v.string(),
+    expectedGeneration: v.number(),
+  },
+  handler: async (ctx, args): Promise<{ checkId: string }> => {
+    const scope: FailureScope = await ctx.runQuery(
+        internal.reviewPublicationData.platformFailureScope,
+        args,
+      ),
+      report = platformFailureReport({
+        headSha: scope.headSha,
+        reason: scope.reason,
+      }),
+      github = new GitHubAppClient({
+        appId: required("GITHUB_APP_ID"),
+        privateKey: required("GITHUB_APP_PRIVATE_KEY"),
+      }),
+      tokenScope = {
+        installationId: scope.installationId,
+        repositoryId: scope.githubRepositoryId,
+        stage: "review" as const,
+      },
+      token = await github.tokenFor(tokenScope),
+      writer = new GitHubRepositoryWriter({
+        repositoryId: scope.githubRepositoryId,
+        installationToken: token,
+      }),
+      requestHash = createHash("sha256")
+        .update(`${report.conclusion}\0${report.title}\0${report.summary}`)
+        .digest("hex"),
+      operationKey = sideEffectKey({
+        repositoryId: scope.githubRepositoryId,
+        prNumber: scope.prNumber,
+        headSha: scope.headSha,
+        kind: "check",
+        slot: String(scope.reviewId),
+      });
+    try {
+      const current = await fetch(
+        `https://api.github.com/repositories/${scope.githubRepositoryId}/pulls/${scope.prNumber}`,
+        {
+          headers: {
+            Accept: "application/vnd.github+json",
+            Authorization: `Bearer ${token}`,
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "BuildIT",
+          },
+        },
+      );
+      if (!current.ok) throw new Error(`github_pull_${current.status}`);
+      const value = (await current.json()) as { head?: { sha?: unknown } };
+      if (value.head?.sha !== scope.headSha) throw new Error("stale_head");
+      const sideEffectId: Id<"githubSideEffects"> = await ctx.runMutation(
+          internal.reviewState.reserveSideEffect,
+          {
+            ...args,
+            operationKey,
+            type: "check_update",
+            requestHash,
+            now: Date.now(),
+          },
+        ),
+        check = await writer.upsertCheckRun({
+          name: "BuildIT / review",
+          headSha: scope.headSha,
+          conclusion: report.conclusion,
+          title: report.title,
+          summary: report.summary,
+        });
+      await ctx.runMutation(
+        internal.reviewPublicationData.completeSideEffect,
+        {
+          ...args,
+          sideEffectId,
+          requestHash,
+          externalId: String(check.id),
+          status: "completed",
+          now: Date.now(),
+        },
+      );
+      return { checkId: String(check.id) };
+    } finally {
+      github.revoke(tokenScope);
+    }
   },
 });
