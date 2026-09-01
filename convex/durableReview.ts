@@ -6,6 +6,10 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { durableReviewStages } from "./lib/durableStages";
 import { terminalStatuses } from "./lib/lifecycle";
 import { reviewWorkflowManager } from "./workflowManager";
+
+export function isSafeAutofixDecline(error: unknown) {
+  return error instanceof Error && error.message === "autofix_no_accepted_findings";
+}
 import { assertReviewParent } from "./lib/parentConsistency";
 
 const executionArgs = {
@@ -111,7 +115,17 @@ export const execute = reviewWorkflowManager.define({
       const mode = await step.runQuery(internal.reviewAutofixData.mode,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});
       if(mode==="autofix"){
         await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"started"});
-        try{const result=await step.runAction(internal.reviewAutofixWorker.runConvergence,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});if(result.outcome==="passed")await step.runAction(internal.reviewAutofixWorker.deliverPassed,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});else await step.runAction(internal.reviewAutofixWorker.publishFailure,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"succeeded"})}catch(error){await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"failed"});await step.runMutation(internal.reviewAutofixData.failPlatform,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration,code:error instanceof Error?error.message:"autofix_failed",now:args.startedAt+index+3})}
+        try{const result=await step.runAction(internal.reviewAutofixWorker.runConvergence,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});if(result.outcome==="passed")await step.runAction(internal.reviewAutofixWorker.deliverPassed,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});else await step.runAction(internal.reviewAutofixWorker.publishFailure,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"succeeded"})}catch(error){
+          if(isSafeAutofixDecline(error)){
+            const report=await step.runAction(internal.reviewReportWorker.compose,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});
+            await step.runMutation(internal.reviewValidationData.finalizeDecision,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration,reportArtifactId:report.artifactId,now:args.startedAt+index+3});
+            await step.runAction(internal.reviewPublicationWorker.publish,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});
+            await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"succeeded"});
+          }else{
+            await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"failed"});
+            await step.runMutation(internal.reviewAutofixData.failPlatform,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration,code:error instanceof Error?error.message:"autofix_failed",now:args.startedAt+index+3});
+          }
+        }
       }else{
         await step.runAction(internal.telemetryWorker.emit,{operation:"review.delivery",stage:"delivery",outcome:"started"});
         try {

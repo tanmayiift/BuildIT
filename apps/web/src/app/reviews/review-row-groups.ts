@@ -16,6 +16,7 @@ export type QueueReviewGroup = {
   review: QueueReview;
   attemptCount: number;
   failedAttemptCount: number;
+  latestAttempt: QueueReview;
 };
 
 function pullCommitKey(review: QueueReview) {
@@ -30,16 +31,23 @@ export function groupQueueReviews(reviews: QueueReview[]): QueueReviewGroup[] {
     if (existing) {
       existing.attemptCount += 1;
       if (review.status === "platform_failed") existing.failedAttemptCount += 1;
-      if (review.updatedAt > existing.review.updatedAt) existing.review = review;
+      if (review.updatedAt > existing.latestAttempt.updatedAt) existing.latestAttempt = review;
       continue;
     }
     groups.set(key, {
       review,
       attemptCount: 1,
       failedAttemptCount: review.status === "platform_failed" ? 1 : 0,
+      latestAttempt: review,
     });
   }
-  return [...groups.values()].sort((a, b) => b.review.updatedAt - a.review.updatedAt);
+  for (const group of groups.values()) {
+    const matching = reviews.filter(review => pullCommitKey(review) === pullCommitKey(group.review));
+    const latestActive = matching.filter(review => active.has(review.status)).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    const latestDecision = matching.filter(review => !active.has(review.status) && !retry.has(review.status)).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    group.review = latestActive ?? latestDecision ?? group.latestAttempt;
+  }
+  return [...groups.values()].sort((a, b) => b.latestAttempt.updatedAt - a.latestAttempt.updatedAt);
 }
 
 const active = new Set([

@@ -74,15 +74,16 @@ function LiveGroup({ copy, groups, connection }: { copy: { title: string; descri
   return <section className="review-group">
     <div className="section-heading compact review-group-heading"><div><h2>{copy.title}</h2><p>{copy.description}</p></div><div className="review-group-counts"><span className="count">{groups.length} current</span>{earlierAttempts ? <a href="/audit">{earlierAttempts} earlier {earlierAttempts === 1 ? "attempt" : "attempts"} in audit log</a> : null}</div></div>
     <div className="review-table" role="table" aria-label={copy.title}>
-      {groups.map(({ review, attemptCount }) => {
+      {groups.map(({ review, attemptCount, latestAttempt }) => {
         const repository = connection.repositories.find(item => item.id === review.repositoryId);
         const updated = new Date(review.updatedAt);
+        const preservedDecision = latestAttempt.id !== review.id;
         return <a role="row" className="review-row" href={`/reviews/${review.id}`} key={review.id}>
           <span role="cell" className={`status ${tone(review.status)}`}>{queueStatusLabel(review)}</span>
           <span role="cell" className="review-name">
             <strong>{repository ? `${repository.owner}/${repository.name}` : "Authorized repository"} #{review.prNumber}</strong>
             <small>{queueStatusDetail(review)}</small>
-            <span className="review-meta"><code title="Exact head commit">{review.headSha.slice(0, 7)}</code><time dateTime={updated.toISOString()}>Updated {updated.toLocaleString()}</time>{attemptCount > 1 ? <span>{attemptCount} attempts · latest shown</span> : null}</span>
+            <span className="review-meta"><code title="Exact head commit">{review.headSha.slice(0, 7)}</code><time dateTime={updated.toISOString()}>Decision {updated.toLocaleString()}</time>{attemptCount > 1 ? <span>{attemptCount - 1} other {attemptCount === 2 ? "attempt" : "attempts"} in audit</span> : null}{preservedDecision ? <span>Latest retry stopped; decision preserved</span> : null}</span>
           </span>
           <span className="row-arrow" aria-hidden="true">→</span>
         </a>;

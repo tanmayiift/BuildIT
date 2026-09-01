@@ -6,7 +6,7 @@ const retry = (id: string, updatedAt: number): QueueReview => ({ id, repositoryI
 describe("review queue presentation", () => {
   it("shows one latest result per pull request and exact commit", () => {
     const newest = { ...retry("newest", 3), status: "changes_requested", statusReasonCode: "required_check_failed" }, grouped = groupQueueReviews([retry("older", 2), newest, retry("oldest", 1)]);
-    expect(grouped).toEqual([{ review: newest, attemptCount: 3, failedAttemptCount: 2 }]);
+    expect(grouped).toEqual([{ review: newest, latestAttempt: newest, attemptCount: 3, failedAttemptCount: 2 }]);
   });
 
   it("keeps different commits separate and sorts their latest results", () => {
@@ -22,5 +22,19 @@ describe("review queue presentation", () => {
     expect(queueSection(decision)).toBe("decision");
     expect(queueStatusLabel(decision)).toBe("Changes needed");
     expect(queueStatusDetail(decision)).toBe("At least one required check failed.");
+  });
+
+  it("does not let a later retry failure hide a real code decision", () => {
+    const decision = { ...retry("decision", 2), status: "changes_requested", statusReasonCode: "required_check_failed" }, laterFailure = retry("later-failure", 3);
+    const [group] = groupQueueReviews([decision, laterFailure]);
+    expect(group).toMatchObject({ review: decision, latestAttempt: laterFailure, attemptCount: 2 });
+    expect(queueSection(group!.review)).toBe("decision");
+  });
+
+  it("shows a running retry over an older decision", () => {
+    const decision = { ...retry("decision", 2), status: "changes_requested", statusReasonCode: "required_check_failed" }, running = { ...retry("running", 3), status: "analyzing" };
+    const [group] = groupQueueReviews([decision, running]);
+    expect(group).toMatchObject({ review: running, latestAttempt: running });
+    expect(queueSection(group!.review)).toBe("running");
   });
 });
