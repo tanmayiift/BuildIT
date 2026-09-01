@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { arbitrateFindings, reconcileArbitration, runModelReviewChain, validateFindingCandidates, type ArbitrationDecision, type CriticDecision, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, type PromptStage } from "@buildit/orchestrator";
+import { arbitrateFindings, normalizeFindingCriteria, reconcileArbitration, runModelReviewChain, validateFindingCandidates, type ArbitrationDecision, type CriticDecision, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, type PromptStage } from "@buildit/orchestrator";
 import { approvedProviderModels, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact, redactForModel } from "@buildit/security";
 
@@ -119,7 +119,8 @@ export const analyze = internalAction({
     const sourceById = new Map(untrusted.pull.requirementSources.map(source => [source.id, source]));
     const provenanceByRequirementId = new Map(untrusted.pull.requirements.flatMap(requirement => { const source = sourceById.get(requirement.sourceId); return source ? [[requirement.id, source] as const] : []; }));
     const requirements = ((stage("requirements").requirements ?? []) as Array<{ id: string; status: "resolved" | "missing" | "inaccessible" | "conflicting" | "excluded"; confidence: number }>).filter(item => item && typeof item.id === "string" && provenanceByRequirementId.has(item.id) && Number.isFinite(item.confidence) && item.confidence >= 0 && item.confidence <= 1);
-    const modelFindings = ((stage("findings").findings ?? []) as FindingCandidate[]).map(item => ({ ...item, origin: "model" as const }));
+    const criteriaIds = new Set(requirements.map(item => item.id));
+    const modelFindings = normalizeFindingCriteria(((stage("findings").findings ?? []) as FindingCandidate[]).map(item => ({ ...item, origin: "model" as const })), criteriaIds);
     const critic = requireIndependentCritic(modelFindings,((stage("critic").decisions ?? []) as CriticDecision[]),criticRoute.independent);
     const scannerHead = (validationValue.output?.scanners as { head?: { findings?: Array<{ ruleId?: string; severity?: "critical" | "warning" | "info"; path?: string; startLine?: number; endLine?: number; summary?: string }> } } | undefined)?.head?.findings ?? [];
     const scannerFindings: FindingCandidate[] = scannerHead.flatMap((item, index) => {
@@ -128,7 +129,7 @@ export const analyze = internalAction({
       if (!evidence) return [];
       return [{ id: `scanner-${index}-${item.ruleId}`, title: item.summary ?? item.ruleId, category: "security", severity: item.severity, confidence: 1, path: item.path, startLine: item.startLine!, endLine: item.endLine!, evidenceIds: [evidence.record.id], impact: item.summary ?? "Deterministic scanner finding", explanation: `${item.ruleId} was detected by the pinned BuildIT scanner.`, origin: "scanner" as const }];
     });
-    const candidates = validateFindingCandidates({ findings: [...modelFindings, ...scannerFindings], criteriaIds: new Set(requirements.map(item => item.id)), allowedPaths: new Set([...headEvidence.values()].flatMap(item => item.record.path ? [item.record.path] : [])), evidence: [...headEvidence.values()].map(item => item.record), pinnedCommit: scope.headSha });
+    const candidates = validateFindingCandidates({ findings: [...modelFindings, ...scannerFindings], criteriaIds, allowedPaths: new Set([...headEvidence.values()].flatMap(item => item.record.path ? [item.record.path] : [])), evidence: [...headEvidence.values()].map(item => item.record), pinnedCommit: scope.headSha });
     const arbitration = ((stage("arbitration").findings ?? []) as ArbitrationDecision[]), arbitrated = reconcileArbitration(arbitrateFindings(candidates, critic), arbitration), fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
     if (fingerprintKey.byteLength < 32) throw new Error("finding_fingerprint_secret_invalid");
     const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, coverage: untrusted.coverage, validation: untrusted.validation, records, arbitrated }));

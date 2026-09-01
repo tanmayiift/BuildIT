@@ -26,6 +26,19 @@ describe("executable model review chain", () => {
     expect(invoke.mock.calls[0]![0].schema).toEqual(stageSchemas.requirements);
   });
 
+  it("gives each stage an explicit grounding task instead of relying on the stage name", async () => {
+    const invoke = vi.fn(async request => ({ value: values[request.stage], provider: "openai" as const, model: "test", finishReason: "completed", inputTokens: 1, outputTokens: 1 }));
+    await runModelReviewChain({ invoke, pinned, untrusted: {} });
+    const systems=Object.fromEntries(invoke.mock.calls.map(([request])=>[request.stage,request.system]));
+    expect(systems.requirements).toContain("Preserve each supplied requirement id exactly");
+    expect(systems.requirements).toContain("return an empty requirements array");
+    expect(systems.findings).toContain("criterionId must be an exact id");
+    expect(systems.findings).toContain("use the empty string");
+    expect(systems.critic).toContain("one decision for every supplied finding id");
+    expect(systems.arbitration).toContain("Do not invent or rename finding ids");
+    expect(systems.report).toContain("Do not claim a passing check without supplied stdout evidence");
+  });
+
   it("runs the patch stage only through the separate Autofix chain", async () => {
     const invoke = vi.fn(async request => ({ value: values[request.stage], provider: "gemini" as const, model: "gemini-test", finishReason: "STOP", inputTokens: 3, outputTokens: 2 }));
     const records = await runModelPatchChain({ invoke, pinned, untrusted: { authorized: true, acceptedFindings: [], files: [], latestChecks: [] } });
