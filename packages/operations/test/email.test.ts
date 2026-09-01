@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { decisionEmail, sendDecisionEmail } from "../src/email.js";
+import { decisionEmail, sendDecisionEmail, type DecisionEmail } from "../src/email.js";
 
-const message = { recipient: { email: "rohan@example.com", organizationId: "org_12345678", userId: "user_12345678", verifiedAt: 1, consentedAt: 2 }, status: "changes_requested", repository: "acme/api", prNumber: 42, commit: "a".repeat(40), url: "https://buildit.example/reviews/42", githubUrl: "https://github.com/acme/api/pull/42", dedupeKey: "review:42:decision" };
+const message: DecisionEmail = { recipient: { email: "rohan@example.com", organizationId: "org_12345678", userId: "user_12345678", verifiedAt: 1, consentedAt: 2 }, status: "changes_requested", repository: "acme/api", prNumber: 42, commit: "a".repeat(40), url: "https://buildit.example/reviews/42", githubUrl: "https://github.com/acme/api/pull/42", dedupeKey: "review:42:decision" };
 
 describe("source-free decision email", () => {
   it("leads with the outcome, next human action, and exact source-free receipt", () => {
@@ -23,8 +23,8 @@ describe("source-free decision email", () => {
     expect(result.html).not.toMatch(/<img|tracking|pixel|script/i);
   });
   it("rejects source-like, unknown-status, or unsafe action fields", () => {
-    expect(() => decisionEmail({ ...message, status: "```diff" })).toThrow("email_status_invalid");
-    expect(() => decisionEmail({ ...message, status: "unknown_state" })).toThrow("email_status_invalid");
+    expect(() => decisionEmail({ ...message, status: "```diff" } as unknown as DecisionEmail)).toThrow("email_status_invalid");
+    expect(() => decisionEmail({ ...message, status: "unknown_state" } as unknown as DecisionEmail)).toThrow("email_status_invalid");
     expect(() => decisionEmail({ ...message, repository: "acme/api\ndiff --git" })).toThrow("email_repository_invalid");
     expect(() => decisionEmail({ ...message, url: "http://buildit.example/reviews/42" })).toThrow("email_url_invalid");
     expect(() => decisionEmail({ ...message, githubUrl: "https://example.com/acme/api/pull/42" })).toThrow("email_github_url_invalid");
