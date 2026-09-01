@@ -90,7 +90,7 @@ export const analyze = internalAction({
       invoke: async (stageRequest: ModelStageRequest): Promise<ProviderResult> => {
         const stage = stageRequest.stage as PromptStage, model = stage === "critic" ? criticRoute.model : scope.model;
         const request = { model, system: stageRequest.system, input: stageRequest.input, schemaName: stageRequest.schemaName, schema: stageRequest.schema, maxOutputTokens: stageRequest.maxOutputTokens };
-        const spend = await ctx.runMutation(internal.reviewModelData.preflightStageSpend,{...args,inputBytes:Buffer.byteLength(request.system)+Buffer.byteLength(request.input)+Buffer.byteLength(JSON.stringify(request.schema)),maxOutputTokens:request.maxOutputTokens,now:Date.now()});
+        const spend = await ctx.runMutation(internal.reviewModelData.preflightStageSpend,{...args,provider:scope.provider,model,inputBytes:Buffer.byteLength(request.system)+Buffer.byteLength(request.input)+Buffer.byteLength(JSON.stringify(request.schema)),maxOutputTokens:request.maxOutputTokens,now:Date.now()});
         if (!spend.allowed) throw new Error("budget_preflight_exceeded");
         const body = JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), stage, credential: scope.credential, request });
         const grant = issueModelInvocationGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), credentialScopeId: scope.credential.id,

@@ -1452,6 +1452,8 @@ describe("Convex tenant isolation", () => {
       reviewId: alpha.reviewId,
       expectedHeadSha: "a".repeat(40),
       expectedGeneration: 0,
+      provider: "anthropic",
+      model: "claude-sonnet-4-5",
       inputBytes: 80_000,
       maxOutputTokens: 8_000,
       now,
@@ -1462,6 +1464,23 @@ describe("Convex tenant isolation", () => {
       budgetCeilingId: "conservative-stage-preflight",
       nextActionCode: "increase_budget",
     });
+  });
+
+  it("allows a small approved OpenAI Mini stage within the same ceiling", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "mini-ceiling", "alice"), now = Date.now();
+    await t.run(async ctx => ctx.db.patch(alpha.reviewId, { provider: "openai", model: "gpt-5.4-mini", budgetLimit: 1, budgetConsumed: 0 }));
+    await expect(t.mutation(internal.reviewModelData.preflightStageSpend, {
+      organizationId: alpha.organizationId,
+      reviewId: alpha.reviewId,
+      expectedHeadSha: "a".repeat(40),
+      expectedGeneration: 0,
+      provider: "openai",
+      model: "gpt-5.4-mini",
+      inputBytes: 80_000,
+      maxOutputTokens: 8_000,
+      now,
+    })).resolves.toMatchObject({ allowed: true });
+    expect(await t.run(async ctx => ctx.db.get(alpha.reviewId))).not.toMatchObject({ status: "budget_exhausted" });
   });
 
   it("keeps review filters separate for repositories with the same name", async () => {
