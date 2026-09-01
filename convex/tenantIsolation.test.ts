@@ -578,6 +578,7 @@ describe("Convex tenant isolation", () => {
       actorId: "alice",
       actorRole: "admin",
       expectedCredentialScopeId: "credential-test",
+      expectedProvider: "anthropic",
       budgetLimit: 2,
       now,
     });
@@ -625,8 +626,12 @@ describe("Convex tenant isolation", () => {
         repositoryId: beta.repositoryId,
         prNumber: 2,
         budgetLimit: 2,
+        provider: "anthropic",
       }),
     ).rejects.toThrow("not_found_or_forbidden");
+    await expect(asAlice.query(api.dashboardReviewData.availableProviders, {
+      repositoryId: alpha.repositoryId,
+    })).resolves.toEqual(["anthropic"]);
     const created = await t.mutation(internal.dashboardReviewData.create, {
       repositoryId: alpha.repositoryId,
       prNumber: 2,
@@ -637,6 +642,7 @@ describe("Convex tenant isolation", () => {
       actorId: "alice",
       actorRole: "developer",
       expectedCredentialScopeId: "credential-test",
+      expectedProvider: "anthropic",
       budgetLimit: 2,
       now: Date.now(),
     });
@@ -659,6 +665,21 @@ describe("Convex tenant isolation", () => {
       actorId: "alice",
       actorRole: "developer",
       expectedCredentialScopeId: "replaced-after-preview",
+      expectedProvider: "anthropic",
+      budgetLimit: 2,
+      now: Date.now(),
+    })).rejects.toThrow("provider_credential_changed_review_again");
+    await expect(t.mutation(internal.dashboardReviewData.create, {
+      repositoryId: alpha.repositoryId,
+      prNumber: 4,
+      headSha: "e".repeat(40),
+      baseSha: "b".repeat(40),
+      baseRef: "main",
+      isFork: false,
+      actorId: "alice",
+      actorRole: "developer",
+      expectedCredentialScopeId: "credential-test",
+      expectedProvider: "gemini",
       budgetLimit: 2,
       now: Date.now(),
     })).rejects.toThrow("provider_credential_changed_review_again");
@@ -697,6 +718,7 @@ describe("Convex tenant isolation", () => {
       actorId: "alice",
       actorRole: "developer",
       expectedCredentialScopeId: "credential-test",
+      expectedProvider: "anthropic",
       budgetLimit: 2,
       now: Date.now() + 1,
     });
@@ -724,6 +746,7 @@ describe("Convex tenant isolation", () => {
           repositoryId: alpha.repositoryId,
           prNumber: 2,
           budgetLimit: 2,
+          provider: "anthropic",
         }),
     ).rejects.toThrow("not_found_or_forbidden");
     await expect(
@@ -737,6 +760,7 @@ describe("Convex tenant isolation", () => {
         actorId: "viewer",
         actorRole: "developer",
         expectedCredentialScopeId: "credential-test",
+        expectedProvider: "anthropic",
         budgetLimit: 2,
         now: Date.now(),
       }),

@@ -1,18 +1,25 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, query } from "./_generated/server";
 import { requireRepositoryRole } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { terminalStatuses } from "./lib/lifecycle";
-import { selectProviderModel } from "@buildit/providers";
+import { selectProviderModel, type ProviderName } from "@buildit/providers";
+
+const supportedProviders: ProviderName[] = ["anthropic", "openai", "gemini"];
+
+function credentialForProvider<T extends { provider: ProviderName; repositoryId?: unknown }>(credentials: T[], repositoryId: unknown, selectedProvider: ProviderName): T | undefined {
+  return credentials.find(item => item.provider === selectedProvider && item.repositoryId === repositoryId)
+    ?? credentials.find(item => item.provider === selectedProvider && item.repositoryId === undefined);
+}
 
 export const scope = internalQuery({
-  args: { repositoryId: v.id("repositories") },
+  args: { repositoryId: v.id("repositories"), provider: v.union(v.literal("anthropic"), v.literal("openai"), v.literal("gemini")) },
   handler: async (ctx, args) => {
     const access = await requireRepositoryRole(ctx, args.repositoryId, "developer");
     if (access.role === "viewer") throw new ConvexError("not_found_or_forbidden");
     const credentials = await ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", access.repository.organizationId).eq("status", "valid")).collect();
-    const credential = credentials.find(item => item.repositoryId === access.repository._id) ?? credentials.find(item => item.repositoryId === undefined);
+    const credential = credentialForProvider(credentials, access.repository._id, args.provider);
     if (!credential) throw new ConvexError("provider_credential_invalid");
     const model = selectProviderModel(credential.provider, credential.availableModels);
     if (!model) throw new ConvexError("provider_credential_invalid");
@@ -20,6 +27,21 @@ export const scope = internalQuery({
       repositoryId: access.repository._id, githubRepositoryId: access.repository.githubRepositoryId,
       installationId: access.installation.installationId, owner: access.repository.owner, name: access.repository.name,
       forkPolicy: access.repository.forkPolicy, credentialScopeId: credential.credentialScopeId, provider: credential.provider, model };
+  },
+});
+
+export const availableProviders = query({
+  args: { repositoryId: v.id("repositories") },
+  handler: async (ctx, args) => {
+    const access = await requireRepositoryRole(ctx, args.repositoryId, "developer");
+    if (access.role === "viewer") throw new ConvexError("not_found_or_forbidden");
+    const credentials = await ctx.db.query("providerCredentials")
+      .withIndex("by_org_status", q => q.eq("organizationId", access.repository.organizationId).eq("status", "valid"))
+      .collect();
+    return supportedProviders.filter(selectedProvider => {
+      const credential = credentialForProvider(credentials, access.repository._id, selectedProvider);
+      return Boolean(credential && selectProviderModel(credential.provider, credential.availableModels));
+    });
   },
 });
 
@@ -53,7 +75,7 @@ export const cancellationScope = internalQuery({
 
 export const create = internalMutation({
   args: { repositoryId: v.id("repositories"), prNumber: v.number(), headSha: v.string(), baseSha: v.string(), budgetLimit: v.number(),
-    baseRef: v.string(), isFork: v.boolean(), actorId: v.string(), actorRole: v.union(v.literal("developer"), v.literal("admin"), v.literal("owner")), expectedCredentialScopeId: v.string(), now: v.number() },
+    baseRef: v.string(), isFork: v.boolean(), actorId: v.string(), actorRole: v.union(v.literal("developer"), v.literal("admin"), v.literal("owner")), expectedCredentialScopeId: v.string(), expectedProvider: v.union(v.literal("anthropic"), v.literal("openai"), v.literal("gemini")), now: v.number() },
   handler: async (ctx, args) => {
     const repository = await ctx.db.get(args.repositoryId);
     if (!repository || !repository.enabled || repository.pausedAt || !Number.isInteger(args.prNumber) || args.prNumber < 1 || ![1, 2, 3, 5].includes(args.budgetLimit)
@@ -75,7 +97,7 @@ export const create = internalMutation({
     }
     if (!config) throw new ConvexError("configuration_unavailable");
     const credentials = await ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", repository.organizationId).eq("status", "valid")).collect();
-    const credential = credentials.find(item => item.repositoryId === repository._id) ?? credentials.find(item => item.repositoryId === undefined);
+    const credential = credentialForProvider(credentials, repository._id, args.expectedProvider);
     if (!credential || credential.credentialScopeId !== args.expectedCredentialScopeId) throw new ConvexError("provider_credential_changed_review_again");
     const model = selectProviderModel(credential.provider, credential.availableModels);
     if (!model) throw new ConvexError("provider_credential_invalid");

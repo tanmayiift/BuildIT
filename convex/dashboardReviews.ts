@@ -8,7 +8,8 @@ import type { WorkflowId } from "@convex-dev/workflow";
 import { GitHubAppClient, pinPullRequest, reviewPolicy } from "@buildit/github";
 import { requireExecutionEnabled } from "./lib/executionGate";
 
-const args = { repositoryId: v.id("repositories"), prNumber: v.number(), budgetLimit: v.number() };
+const provider = v.union(v.literal("anthropic"), v.literal("openai"), v.literal("gemini"));
+const args = { repositoryId: v.id("repositories"), prNumber: v.number(), budgetLimit: v.number(), provider };
 type DashboardScope = { actorId: string; actorRole: "developer" | "admin" | "owner"; organizationId: Id<"organizations">;
   repositoryId: Id<"repositories">; githubRepositoryId: number; installationId: number; owner: string; name: string; forkPolicy: "manual_review_only" | "disabled";
   credentialScopeId: string; provider: "anthropic" | "openai" | "gemini"; model: string };
@@ -44,7 +45,7 @@ async function snapshot(scope: { installationId: number; githubRepositoryId: num
 }
 
 export const prepare = action({ args, handler: async (ctx, input): Promise<PreparedReview> => {
-  const scope: DashboardScope = await ctx.runQuery(internal.dashboardReviewData.scope, { repositoryId: input.repositoryId });
+  const scope: DashboardScope = await ctx.runQuery(internal.dashboardReviewData.scope, { repositoryId: input.repositoryId, provider: input.provider });
   let pull: Awaited<ReturnType<typeof snapshot>>;
   try { pull = await snapshot(scope, input.prNumber); }
   catch (error) {
@@ -63,13 +64,13 @@ export const prepare = action({ args, handler: async (ctx, input): Promise<Prepa
 
 export const start = action({ args: { ...args, expectedHeadSha: v.string(), expectedBaseSha: v.string(), expectedCredentialScopeId: v.string(), consent: v.literal(true) }, handler: async (ctx, input): Promise<{ reviewId: string }> => {
   requireExecutionEnabled();
-  const scope: DashboardScope = await ctx.runQuery(internal.dashboardReviewData.scope, { repositoryId: input.repositoryId });
+  const scope: DashboardScope = await ctx.runQuery(internal.dashboardReviewData.scope, { repositoryId: input.repositoryId, provider: input.provider });
   const pull = await snapshot(scope, input.prNumber);
   if (pull.headSha !== input.expectedHeadSha || pull.baseSha !== input.expectedBaseSha) throw new Error("pull_request_changed_review_again");
   if (scope.credentialScopeId !== input.expectedCredentialScopeId) throw new Error("provider_credential_changed_review_again");
   const review = await ctx.runMutation(internal.dashboardReviewData.create, { repositoryId: input.repositoryId, prNumber: input.prNumber,
     headSha: pull.headSha, baseSha: pull.baseSha, baseRef: pull.baseRef, isFork: pull.isFork, actorId: scope.actorId,
-    actorRole: scope.actorRole as "developer" | "admin" | "owner", expectedCredentialScopeId: input.expectedCredentialScopeId, budgetLimit: input.budgetLimit, now: Date.now() });
+    actorRole: scope.actorRole as "developer" | "admin" | "owner", expectedCredentialScopeId: input.expectedCredentialScopeId, expectedProvider: input.provider, budgetLimit: input.budgetLimit, now: Date.now() });
   await ctx.runAction(internal.telemetryWorker.emit, { operation: "activation.review", stage: "activation", outcome: "started" });
   if (review.status === "queued") await ctx.runMutation(internal.durableReview.start, { organizationId: scope.organizationId, reviewId: review.reviewId,
     expectedHeadSha: review.headSha, expectedGeneration: review.executionGeneration, now: Date.now() });
