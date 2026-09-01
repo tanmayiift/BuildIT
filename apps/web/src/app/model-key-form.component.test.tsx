@@ -69,6 +69,16 @@ describe("authenticated model-key controls", () => {
     expect(screen.getByText(/not used yet/)).not.toBeNull();
   });
 
+  it("keeps masked key status visible when a fresh GitHub check is required for changes", async () => {
+    state.connection = { ...connection, credentialReauthenticationExpiresAt: Date.now() - 1 };
+    render(<ModelKeyForm />);
+    expect(await screen.findByText("Verify with GitHub before entering a key")).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Saved model keys" })).not.toBeNull();
+    expect(screen.getByLabelText("Key ending in nmiQ")).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Verify to manage" })).not.toBeNull();
+    expect(screen.queryByLabelText("Google Gemini API key")).toBeNull();
+  });
+
   it("requires a reversible confirmation before revocation", async () => {
     const user = userEvent.setup();
     render(<ModelKeyForm />);
