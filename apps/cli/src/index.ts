@@ -90,10 +90,14 @@ async function main() {
       });
     const directory = value("--dir"),
       baseRef = value("--base"),
-      result = await runLocalReview({
+      managerValue = value("--manager"),
+      packageManager = managerValue === undefined ? undefined : (["npm", "pnpm", "yarn"] as const).find(item => item === managerValue);
+    if (managerValue !== undefined && !packageManager) throw new Error("package_manager_invalid");
+    const result = await runLocalReview({
         cwd: process.cwd(),
         ...(directory ? { directory } : {}),
         ...(baseRef ? { baseRef } : {}),
+        ...(packageManager ? { packageManager } : {}),
         trustWorkingConfig: args.includes("--trust-working-config"),
         confirmed: args.includes("--confirm-run"),
         emit,
@@ -132,7 +136,7 @@ async function main() {
     });
   }
   process.stdout.write(
-    "BuildIT CLI\n\nCommands:\n  buildit configure --provider <anthropic|openai|gemini> [--from-env|--revoke]\n  buildit review [--dir path] [--base ref] [--trust-working-config] [--confirm-run] [--json]\n  buildit review --remote --pr <number> [--repo owner/name] [--json]\n  buildit autofix --remote --stacked --confirm-stacked-pr --pr <number> [--repo owner/name] [--json]\n  buildit status --pr <number> [--repo owner/name] [--watch] [--interval seconds] [--timeout seconds] [--json]\n  buildit cancel --pr <number> [--repo owner/name] [--json]\n  buildit doctor [--json]\n\nNever pass a key as a command argument. Local review first prints the exact zero-provider-cost command plan and runs it only with --confirm-run; it includes committed, staged, unstaged, and untracked files without uploading or writing to the worktree. Remote commands use your existing GitHub CLI login; BuildIT rechecks collaborator permission and the PR head. Status --watch reads GitHub Checks repeatedly and is resumable by rerunning the same command. Autofix is limited to a stacked PR and never merges.\n",
+    "BuildIT CLI\n\nCommands:\n  buildit configure --provider <anthropic|openai|gemini> [--from-env|--revoke]\n  buildit review [--dir path] [--base ref] [--manager npm|pnpm|yarn] [--trust-working-config] [--confirm-run] [--json]\n  buildit review --remote --pr <number> [--repo owner/name] [--json]\n  buildit autofix --remote --stacked --confirm-stacked-pr --pr <number> [--repo owner/name] [--json]\n  buildit status --pr <number> [--repo owner/name] [--watch] [--interval seconds] [--timeout seconds] [--json]\n  buildit cancel --pr <number> [--repo owner/name] [--json]\n  buildit doctor [--json]\n\nNever pass a key as a command argument. Local review first prints the exact zero-provider-cost command plan and runs it only with --confirm-run; if a repository has more than one lockfile, pass --manager only after choosing the intended package manager. It includes committed, staged, unstaged, and untracked files without uploading or writing to the worktree. Remote commands use your existing GitHub CLI login; BuildIT rechecks collaborator permission and the PR head. Status --watch reads GitHub Checks repeatedly and is resumable by rerunning the same command. Autofix is limited to a stacked PR and never merges.\n",
   );
   return command === "help" || command === "--help" ? 0 : 4;
 }

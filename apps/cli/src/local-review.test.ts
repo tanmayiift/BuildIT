@@ -59,6 +59,27 @@ describe("BuildIT local CLI", () => {
     expect(redactCliOutput(`failed with ${value}`)).toBe("failed with [REDACTED]");
   });
 
+  it("requires an explicit package-manager choice when lockfiles disagree", async () => {
+    const root = await mkdtemp(join(tmpdir(), "buildit-cli-manager-"));
+    try {
+      await writeFile(join(root, "package.json"), JSON.stringify({ scripts: { test: "node --test" } }));
+      await writeFile(join(root, "package-lock.json"), "{}");
+      await writeFile(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'");
+      const exec: Exec = async (_file, args) => {
+        const joined = args.join(" ");
+        if (joined === "rev-parse --show-toplevel") return { code: 0, stdout: `${root}\n`, stderr: "" };
+        if (joined === "status --porcelain" || args[0] === "diff" || args[0] === "ls-files") return { code: 0, stdout: "", stderr: "" };
+        if (joined === "rev-parse HEAD") return { code: 0, stdout: `${"a".repeat(40)}\n`, stderr: "" };
+        if (joined === "merge-base HEAD origin/HEAD") return { code: 0, stdout: `${"b".repeat(40)}\n`, stderr: "" };
+        return { code: 0, stdout: "ok", stderr: "" };
+      };
+      await expect(runLocalReview({ cwd: root, emit: () => {}, exec })).rejects.toThrow("package_manager_unsupported_or_ambiguous");
+      const events: CliEvent[] = [];
+      await expect(runLocalReview({ cwd: root, packageManager: "npm", emit: item => events.push(item), exec })).resolves.toMatchObject({ status: "consent_required" });
+      expect(events[1]?.data).toMatchObject({ manager: "npm" });
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it("prints a zero-cost no-upload plan and runs no repository command without consent", async () => {
     const root = await mkdtemp(join(tmpdir(), "buildit-cli-consent-"));
     try {
