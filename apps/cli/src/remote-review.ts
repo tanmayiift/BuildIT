@@ -5,6 +5,11 @@ type Result = { code: number; stdout: string; stderr: string };
 export type RemoteExec = (file: string, args: string[]) => Promise<Result>;
 export type RemoteProvider = "anthropic" | "openai" | "gemini";
 export type RemoteBudget = 1 | 2 | 3 | 5;
+const builditCheckNames = new Set([
+  "BuildIT / review",
+  "BuildIT / Autofix",
+  "BuildIT / validated candidate",
+]);
 const execute: RemoteExec = (file, args) =>
   new Promise((resolve, reject) => {
     const child = spawn(file, args, {
@@ -54,6 +59,58 @@ async function currentRepository(exec: RemoteExec, requested?: string) {
   return repository(
     (JSON.parse(result.stdout) as { nameWithOwner?: unknown }).nameWithOwner,
   );
+}
+
+function reportText(value: unknown, maximum: number, multiline: boolean) {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.replace(/\r\n?/g, "\n").trim(),
+    unsafe = multiline
+      ? /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/
+      : /[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/;
+  if (!normalized || unsafe.test(normalized)) return undefined;
+  return normalized.slice(0, maximum);
+}
+
+async function exactCommitReport(
+  exec: RemoteExec,
+  repo: string,
+  headSha: unknown,
+) {
+  if (typeof headSha !== "string" || !/^[0-9a-f]{40}$/.test(headSha))
+    return undefined;
+  try {
+    const result = await exec("gh", [
+      "api",
+      `repos/${repo}/commits/${headSha}/check-runs`,
+      "-H",
+      "Accept: application/vnd.github+json",
+    ]);
+    if (result.code !== 0) return undefined;
+    const value = JSON.parse(result.stdout) as { check_runs?: unknown };
+    if (!Array.isArray(value.check_runs)) return undefined;
+    for (const raw of value.check_runs) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+      const run = raw as {
+          name?: unknown;
+          head_sha?: unknown;
+          app?: { slug?: unknown };
+          output?: { title?: unknown; summary?: unknown };
+        },
+        title = reportText(run.output?.title, 500, false),
+        summary = reportText(run.output?.summary, 60_000, true);
+      if (
+        run.app?.slug === "buildit-agentic-review" &&
+        run.head_sha === headSha &&
+        builditCheckNames.has(String(run.name)) &&
+        title &&
+        summary
+      )
+        return { title, summary };
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }
 
 export async function requestRemoteCommand(input: {
@@ -147,11 +204,7 @@ export async function remoteStatus(input: {
       }>;
     },
     checks = (response.statusCheckRollup ?? []).filter((check) =>
-      [
-        "BuildIT / review",
-        "BuildIT / Autofix",
-        "BuildIT / validated candidate",
-      ].includes(String(check.name)),
+      builditCheckNames.has(String(check.name)),
     );
   const status = !checks.length
     ? "not_started"
@@ -162,6 +215,9 @@ export async function remoteStatus(input: {
         : checks.some((check) => String(check.conclusion) === "NEUTRAL")
           ? "inconclusive"
           : "action_required";
+  const report = checks.some((check) => check.status === "COMPLETED")
+    ? await exactCommitReport(exec, repo, response.headRefOid)
+    : undefined;
   input.emit(
     event("remote_status", {
       repository: repo,
@@ -170,6 +226,7 @@ export async function remoteStatus(input: {
       headSha: response.headRefOid,
       status,
       checks,
+      ...(report ? { report } : {}),
     }),
   );
   return status === "passed" ? 0 : status === "action_required" ? 2 : 3;
