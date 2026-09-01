@@ -12,7 +12,7 @@ type ArtifactRef = { id: Id<"artifacts">; storageKey: string; checksum: string; 
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; environmentAvailable: boolean; isStale: boolean; expiresAt: number; costUsd: number; analysis: ArtifactRef; validation: ArtifactRef; completedArtifactId?: Id<"artifacts"> };
 type RunResult = { planId: string; required: boolean; conclusion: ReviewCheckDecision["conclusion"] };
 type Validation = { version?: number; pinned?: { headSha?: string; baseSha?: string }; output?: { head?: { results?: RunResult[]; outputs?: Array<{ planId: string; text?: string; truncated?: boolean; evidenceTruncated?: boolean }> }; scanners?: { head?: { scanner?: string; complete?: boolean; commitSha?: string; runs?: Array<{ scanner?: string; scannerVersion?: string }>; findings?: Array<{ scanner?: string; severity?: string }> } } } };
-type Finding = { title: string; severity: "critical" | "high" | "warning" | "info"; resolution: "accepted" | "rejected" | "uncertain"; blocking: boolean; evidenceIds: string[] };
+type Finding = { title: string; severity: "critical" | "high" | "warning" | "info"; resolution: "accepted" | "rejected" | "uncertain"; blocking: boolean; evidenceIds: string[]; path?: string; startLine?: number; endLine?: number; impact?: string; explanation?: string };
 type Analysis = { version?: number; pinned?: { headSha?: string; baseSha?: string }; arbitrated?: Finding[] };
 
 async function download(scope: Scope, artifact: ArtifactRef, brokerUrl: string, secret: Buffer) {
