@@ -41,6 +41,9 @@ describe("observability release assets", () => {
     expect(template).toContain('define "buildit.operator.subject.v1"');
     expect(template).toContain('define "buildit.operator.body.v1"');
     for (const field of [".Status", ".CommonLabels.severity", ".CommonAnnotations.summary", ".CommonAnnotations.action", ".CommonAnnotations.runbook_url"]) expect(template).toContain(field);
+    expect(template).toContain("Environment: production");
+    expect(template).toContain(".Alerts.Firing");
+    expect(template).toContain(".StartsAt");
     expect(template).not.toMatch(/\.Labels|\.ValueString|\.GeneratorURL|organization|workspace|repository|pull request|review id|member|customer|source|prompt|finding|credential|token/i);
     const runbooks = read("docs/operations/alert-runbooks.md");
     for (const alert of ["BuildITHighFailureRate", "BuildITP95LatencyHigh", "BuildITTelemetrySilent", "BuildITCriticalBoundaryFailure", "BuildITQueueDepthHigh", "BuildITProviderFailure", "BuildITRunnerFailure", "BuildITArtifactDeletionBacklog", "BuildITWebhookSignatureSpike", "BuildITLoopGuardTrip", "BuildITStaleCheck", "BuildITBudgetExhaustionSpike"]) expect(runbooks).toContain(`## ${alert}`);

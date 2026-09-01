@@ -1,18 +1,20 @@
 {{ define "buildit.operator.subject.v1" -}}
-[{{ if eq .Status "firing" }}ACTION REQUIRED{{ else }}RECOVERED{{ end }}] BuildIT · {{ .CommonLabels.severity }}
+[{{ if eq .Status "firing" }}ACTION REQUIRED{{ else }}RECOVERED{{ end }}] BuildIT · {{ .CommonAnnotations.summary }}
 {{- end }}
 
 {{ define "buildit.operator.body.v1" -}}
-BuildIT operator alert
+BuildIT service alert
 
 Status: {{ if eq .Status "firing" }}Firing{{ else }}Recovered{{ end }}
 Severity: {{ .CommonLabels.severity }}
-Service: BuildIT
+Environment: production
+{{ range .Alerts.Firing }}Started: {{ .StartsAt }}
+{{ end }}
 
 What happened
 {{ .CommonAnnotations.summary }}
 
-What to do now
+Next action
 {{ .CommonAnnotations.action }}
 
 Runbook
