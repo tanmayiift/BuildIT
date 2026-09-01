@@ -39,6 +39,7 @@ function pinnedCommit(commitSha: string) {
 }
 function parseJson(raw: string) { try { return JSON.parse(raw) as unknown; } catch { throw new Error("scanner_output_malformed"); } }
 function safePath(path: unknown): path is string { return typeof path === "string" && path.length > 0 && !path.startsWith("/") && !path.split("/").includes(".."); }
+function scannerPath(path: unknown) { const prefix = "/vercel/sandbox/repo/", relative = typeof path === "string" && path.startsWith(prefix) ? path.slice(prefix.length) : path; return safePath(relative) ? relative : undefined; }
 
 export function parseGitleaks(raw: string, commitSha: string, version: string): ScannerRun {
   if (version !== scannerInventory.gitleaks) throw new Error("scanner_version_untrusted");
@@ -46,8 +47,8 @@ export function parseGitleaks(raw: string, commitSha: string, version: string): 
   if (!Array.isArray(value)) throw new Error("scanner_output_malformed");
   const findings = value.map((item): ScannerFinding => {
     if (!item || typeof item !== "object") throw new Error("scanner_output_malformed");
-    const record = item as Record<string, unknown>, path = record.File, line = record.StartLine, rule = record.RuleID, fingerprint = record.Fingerprint;
-    if (!safePath(path) || !Number.isInteger(line) || (line as number) < 1 || typeof rule !== "string" || typeof fingerprint !== "string") throw new Error("scanner_output_malformed");
+    const record = item as Record<string, unknown>, path = scannerPath(record.File), line = record.StartLine, rule = record.RuleID, fingerprint = record.Fingerprint;
+    if (!path || !Number.isInteger(line) || (line as number) < 1 || typeof rule !== "string" || typeof fingerprint !== "string") throw new Error("scanner_output_malformed");
     return { scanner: "gitleaks", scannerVersion: version, ruleId: rule, severity: "critical", path, startLine: line as number, endLine: Number.isInteger(record.EndLine) ? record.EndLine as number : line as number, fingerprint, summary: "Potential secret detected by Gitleaks" };
   });
   return { scanner: "gitleaks", scannerVersion: version, commitSha: pinnedCommit(commitSha), complete: true, findings };
@@ -59,8 +60,8 @@ export function parseOsv(raw: string, commitSha: string, version: string): Scann
   if (!value || !Array.isArray(value.results)) throw new Error("scanner_output_malformed");
   const findings: ScannerFinding[] = [];
   for (const result of value.results) {
-    const path = result.source?.path;
-    if (!safePath(path) || !Array.isArray(result.packages)) throw new Error("scanner_output_malformed");
+    const path = scannerPath(result.source?.path);
+    if (!path || !Array.isArray(result.packages)) throw new Error("scanner_output_malformed");
     for (const pkg of result.packages) for (const vulnerability of pkg.vulnerabilities ?? []) {
       if (typeof vulnerability.id !== "string") throw new Error("scanner_output_malformed");
       findings.push({ scanner: "osvScanner", scannerVersion: version, ruleId: vulnerability.id, severity: "warning", path, startLine: 1, endLine: 1, fingerprint: `${path}:${vulnerability.id}`, summary: `Known dependency vulnerability ${vulnerability.id}` });

@@ -16,6 +16,17 @@ describe("deterministic scanner evidence", () => {
     expect(parseOsv(raw, sha, scannerInventory.osvScanner).findings.map(item => item.ruleId)).toEqual(["GHSA-test", "CVE-test"]);
   });
 
+  it("removes only the sandbox-owned absolute prefix from scanner evidence", () => {
+    const gitleaks = JSON.stringify([{ File: "/vercel/sandbox/repo/src/config.ts", StartLine: 4, RuleID: "generic-api-key", Fingerprint: "fp" }]);
+    const osv = JSON.stringify({ results: [{ source: { path: "/vercel/sandbox/repo/pnpm-lock.yaml" }, packages: [{ vulnerabilities: [{ id: "GHSA-test" }] }] }] });
+    expect(parseGitleaks(gitleaks, sha, scannerInventory.gitleaks).findings[0]?.path).toBe("src/config.ts");
+    expect(parseOsv(osv, sha, scannerInventory.osvScanner).findings[0]?.path).toBe("pnpm-lock.yaml");
+    for (const unsafe of ["/etc/passwd", "/vercel/sandbox/repository/file", "/vercel/sandbox/repo/../escape"]) {
+      const unsafeOsv = JSON.stringify({ results: [{ source: { path: unsafe }, packages: [] }] });
+      expect(() => parseOsv(unsafeOsv, sha, scannerInventory.osvScanner)).toThrow("scanner_output_malformed");
+    }
+  });
+
   it("runs BuildIT-owned rules with exact lines", () => {
     const run = scanBuildITRules([{ path: "src/server.ts", content: "const ok = 1;\neval(userInput);\nconst agent = { rejectUnauthorized: false };" }], sha);
     expect(run.findings.map(item => [item.ruleId, item.startLine, item.severity])).toEqual([
