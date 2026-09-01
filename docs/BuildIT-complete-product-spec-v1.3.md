@@ -617,9 +617,9 @@ Priority labels: **P0** blocks a safe launch of the release the requirement belo
 
 ### 7.15 Notifications
 
-- **REQ-270 P0 (new):** BuildIT sends an email notification for: a review that finished and needs a human decision, an Autofix delivery, an Autofix failure after the final bound, a budget threshold crossing at 80 percent and 100 percent, an invalid or revoked provider credential, a suspended installation, and a failed retention-deletion job.
+- **REQ-270 P0 (new):** Once a transactional-email provider is connected and production-proven, BuildIT sends an email notification for: a review that finished and needs a human decision, an Autofix delivery, an Autofix failure after the final bound, a budget threshold crossing at 80 percent and 100 percent, an invalid or revoked provider credential, a suspended installation, and a failed retention-deletion job. Each recipient is the exact active BuildIT member whose email address was separately verified and who explicitly opted in inside that organization. The GitHub App owner, installation account, organization owner, PR author, or another member is never used as a fallback recipient. Until the provider and recipient verification are live, no customer email is sent and the UI says `Not connected`.
 - **REQ-271 P0 (new):** Notifications contain status, repository, pull request, commit, and a link. They never contain source code, diffs, log output, finding evidence, or secrets.
-- **REQ-272 P1:** Per-user notification preferences, including digest mode and per-repository muting.
+- **REQ-272 P1:** Per-user, per-organization notification preferences, including explicit email opt-in, digest mode, and per-repository muting. Delivery rechecks active membership, current address verification, consent, repository scope, and muting immediately before sending; the browser never supplies the recipient address.
 - **REQ-273 P1:** Slack delivery for the same event set, added in V1.1.
 
 ### 7.16 Cost, budgets, and commercial enforcement
@@ -1074,7 +1074,7 @@ Time is a bound, not a budget. A review that exceeds the review wall-clock limit
 
 ### Notifications, cost, and capacity
 
-- **AC-223 (new):** Given a review finishes needing a decision, when notification preferences are default, then exactly one email is sent containing status, repository, PR, commit, and link, and containing no code, diff, or log content.
+- **AC-223 (revised):** Given a review finishes needing a decision, when the exact active member has a separately verified BuildIT email, explicitly opted in inside that organization, has not muted the repository, and production email delivery is available, then exactly one email is sent to that member containing status, repository, PR, commit, and link, and containing no code, diff, log, finding evidence, or secret. Given any boundary is absent or changed, no email is sent. The GitHub App or installation owner is never substituted.
 - **AC-224 (new):** Given monthly spend crosses 80 percent, when the crossing is detected, then admins are notified once at that threshold and again at 100 percent, and not on every subsequent review.
 - **AC-225 (new):** Given the pre-flight estimate exceeds the remaining budget, when a trigger arrives, then no sandbox is created, no provider call is made, and the status is `budget_exhausted` with the ceiling and consumption shown.
 - **AC-226 (new):** Given a completed review, when the usage ledger is inspected, then model tokens, model spend, sandbox seconds, vCPU-minutes, and artifact bytes are all attributed to that review.

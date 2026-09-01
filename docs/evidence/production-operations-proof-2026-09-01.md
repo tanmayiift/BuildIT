@@ -67,6 +67,14 @@ The isolated Grafana folder `buildit` was updated without modifying Orbit resour
 - The BuildIT-only OTLP credential was rotated to one stack-scoped token with a 90-day expiry. Secret stdin updates changed only the dedicated BuildIT web and broker Vercel projects. Ready deployments `dpl_F3z7UgXuAHbBKQ43SGrwEYhR7kyb` and `dpl_6ifVhkKFuW8aQh5vacGJbnvoDZKN` activated it.
 - Three controlled production credential preflights returned HTTP 204. Visible Grafana Explore then showed a last-five-minute BuildIT operation increase of exactly `3`. Both older BuildIT tokens were revoked; one non-expired token remains. Orbit resources and credentials were not changed.
 
+Grafana email is an operator alert channel, not a customer review-notification channel. Its twelve summaries use fixed global BuildIT operation/measurement labels only. The telemetry API rejects organization, tenant, workspace, repository, pull request, review, user, member, email, owner, source, prompt, finding, credential, and token fields before export. Therefore the operator contact may learn that a global service boundary is failing, but it cannot receive a customer's review identity or content through this path.
+
+## Customer email recipient boundary
+
+Customer review email is not connected in this release, so no signed-in member or GitHub installation owner currently receives it. The Notifications screen reports `Not connected`; GitHub checks and the tenant-authorized dashboard are the live customer channels.
+
+Before a future email can be sent, BuildIT's internal recipient resolver requires the exact organization, repository, and user IDs; active membership; a separately verified current BuildIT email; timestamped opt-in inside that organization; and an unmuted enabled repository. It returns no recipient after membership removal, verification removal, consent removal, repository muting, or a cross-organization substitution. Neither preferences nor notification records store the plaintext address, and recipient selection never reads the GitHub App installation account.
+
 ## GitHub App key state
 
 GitHub now reports one App private key and one OAuth client secret. The final ignored local private key is mode `0600`, is loaded into Convex production through stdin-only transport, authenticates the expected App, and reads only the three repositories selected across the two controlled installations. The obsolete local key was irreversibly deleted.

@@ -104,7 +104,8 @@ describe("tenant-safe notification recipients", () => {
       mutedRepositoryIds: [],
       requestId: "notification-consent-0001",
     });
-    await expect(t.query(internal.notifications.resolveDecisionRecipient, { organizationId, repositoryId, userId: String(userId), now })).resolves.toMatchObject({
+    const deliveryTime = Date.now() + 1_000;
+    await expect(t.query(internal.notifications.resolveDecisionRecipient, { organizationId, repositoryId, userId: String(userId), now: deliveryTime })).resolves.toMatchObject({
       organizationId,
       repositoryId,
       userId: String(userId),
@@ -125,7 +126,7 @@ describe("tenant-safe notification recipients", () => {
       mutedRepositoryIds: [],
       requestId: "notification-consent-0002",
     });
-    const args = { organizationId, repositoryId, userId: String(userId), now };
+    const args = { organizationId, repositoryId, userId: String(userId), now: Date.now() + 1_000 };
     const membershipId = await t.run(async ctx => (await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", organizationId).eq("userId", String(userId))).unique())!._id);
     await t.run(ctx => ctx.db.patch(membershipId, { status: "removed", updatedAt: now }));
     await expect(t.query(internal.notifications.resolveDecisionRecipient, args)).resolves.toBeNull();
@@ -156,6 +157,6 @@ describe("tenant-safe notification recipients", () => {
       const installationId = await ctx.db.insert("githubInstallations", { organizationId: foreignOrganizationId, installationId: 999, accountLogin: "foreign-owner", accountType: "user", permissionSnapshot: { metadata: "read", contents: "read", pullRequests: "write", issues: "read", checks: "write" }, status: "active", createdAt: now, updatedAt: now });
       return ctx.db.insert("repositories", { organizationId: foreignOrganizationId, installationId, githubRepositoryId: 999, owner: "foreign-owner", name: "private", defaultBranch: "main", visibility: "private", enabled: true, autofixMode: "stacked", forkPolicy: "manual_review_only", indexState: "ready", concurrencyLimit: 1, createdAt: now, updatedAt: now });
     });
-    await expect(t.query(internal.notifications.resolveDecisionRecipient, { organizationId, repositoryId: foreignRepositoryId, userId: String(userId), now })).resolves.toBeNull();
+    await expect(t.query(internal.notifications.resolveDecisionRecipient, { organizationId, repositoryId: foreignRepositoryId, userId: String(userId), now: Date.now() + 1_000 })).resolves.toBeNull();
   });
 });

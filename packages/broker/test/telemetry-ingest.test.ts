@@ -31,6 +31,12 @@ describe("signed telemetry ingest boundary", () => {
     expect(response.status).toBe(401);
   });
 
+  it("rejects every tenant or customer field before Grafana export", () => {
+    for (const field of ["organizationId", "tenantId", "workspaceId", "repositoryId", "repositoryName", "prNumber", "reviewId", "userId", "memberId", "email", "owner", "source", "prompt", "finding", "credentialId", "token"]) {
+      expect(parseTelemetryEvent({ operation: "review.decision", outcome: "succeeded", [field]: "customer-value" })).toBeUndefined();
+    }
+  });
+
   it("never reads a request body before authenticating it", async () => {
     const text = vi.fn(async () => "{\"source\":\"private\"}");
     const request = { method: "POST", headers: new Headers(), text } as unknown as Request;

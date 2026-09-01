@@ -36,5 +36,7 @@ describe("observability release assets", () => {
   it("does not put forbidden customer fields in telemetry configuration", () => {
     const assets = ["observability/alerts.yml", "observability/otel-collector.yaml", "observability/grafana/dashboards/buildit-overview.json"].map(read).join("\n");
     expect(assets).not.toMatch(/api.?key|authorization|credential|email|github.?token|repo.?name|source.?code/i);
+    expect(assets).not.toMatch(/buildit_(?:organization|tenant|workspace|repository|repo|review_id|pr_number|user|member|email|owner|source|prompt|finding|credential|token)/i);
+    expect(read("observability/alerts.yml")).not.toMatch(/annotations:[^\n]*\{\{[^}]+\}\}/i);
   });
 });

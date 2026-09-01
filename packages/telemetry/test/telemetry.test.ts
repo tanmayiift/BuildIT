@@ -9,6 +9,12 @@ describe("source-free telemetry", () => {
     expect(JSON.stringify(result)).not.toContain("no");
   });
 
+  it("drops every customer and tenant identifier from operator telemetry", () => {
+    for (const field of ["organizationId", "tenantId", "workspaceId", "repositoryId", "repositoryName", "prNumber", "reviewId", "userId", "memberId", "email", "owner", "source", "prompt", "finding", "credentialId", "token"]) {
+      expect(safeAttributes({ [field]: "customer-value", operation: "review.decision" } as never)).toEqual({ "buildit.operation": "review.decision" });
+    }
+  });
+
   it("collapses unknown operations to prevent customer-controlled metric labels", () => {
     expect(safeAttributes({ operation: "customer/repository/name" } as never)).toEqual({ "buildit.operation": "other" });
   });
