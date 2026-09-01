@@ -5,8 +5,8 @@
     {"id": "live-model-matrix", "owner": "buildit-and-consenting-user", "state": "open", "dependency": "approved spend for one private review, live neutral/AACR/SWE populations, a failed three-round stop and rollback proof; human inspection of the delivered unmerged stacked PR"},
     {"id": "blind-human-labels", "owner": "human-reviewers", "state": "open", "dependency": "qualified independent reviewers"},
     {"id": "two-real-users", "owner": "customer-testers", "state": "open", "dependency": "the second person independently connects a provider key and consents to one bounded review in their isolated workspace"},
-    {"id": "external-security-audit", "owner": "independent-auditor", "state": "open", "dependency": "contracted penetration test and optional certification audit"},
-    {"id": "tracker-and-email-integrations", "owner": "buildit-operator", "state": "open", "dependency": "provider applications and credentials"},
+    {"id": "external-security-audit", "owner": "independent-auditor", "state": "deferred", "dependency": "required before an enterprise-assurance or certification claim; explicitly outside the initial engineering-preview release"},
+    {"id": "tracker-and-email-integrations", "owner": "buildit-operator", "state": "deferred", "dependency": "optional provider applications and credentials; core GitHub review does not depend on these integrations"},
     {"id": "design-partner-evidence", "owner": "founder", "state": "open", "dependency": "3 to 10 observed first-review sessions and repeat-use evidence; validate source-free records with pnpm eval:partners"}
   ]
 }
