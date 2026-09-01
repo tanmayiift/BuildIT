@@ -261,6 +261,7 @@ export default defineSchema({
 
   notificationPreferences: defineTable({
     organizationId: v.id("organizations"), userId: v.string(), emailEnabled: v.boolean(),
+    emailConsentedAt: v.optional(v.number()),
     digestMode: v.union(v.literal("immediate"), v.literal("daily")),
     mutedRepositoryIds: v.array(v.id("repositories")), updatedAt: v.number(),
   }).index("by_org_user", ["organizationId", "userId"]),
