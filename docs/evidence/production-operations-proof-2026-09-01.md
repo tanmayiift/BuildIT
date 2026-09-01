@@ -13,11 +13,13 @@ This record contains identifiers and bounded operating results only. It does not
 - Convex production: `judicious-barracuda-968`
 - Public alias: `https://buildit-agentic-review.vercel.app`
 
+The later result-truthfulness release is source `18ddf41fda652c296306ed5a7371abb34d5c21e4`, Convex production `judicious-barracuda-968`, and Ready BuildIT web deployment `dpl_ASDuiwBePrVyED8ix7q5VUtJksHW`. GitHub Build and test run `33476127513` passed its browser, Node 22, and Node 24 jobs; Security run `33476127358` passed. The requested public alias was explicitly assigned to that Ready deployment and `/reviews` returned HTTP 200. It changes result classification and queue presentation only; the broker deployment is unchanged.
+
 The public alias was explicitly reassigned to the latest Ready web deployment after the documentation release. `/reviews` returned HTTP 200.
 
 ## Review outcome proof
 
-The production queue was refreshed in an authenticated browser. It showed one current result for the controlled public fixture and grouped 10 earlier attempts into the audit trail. The current result was `Changes needed`, not `Platform failed`.
+The production queue was refreshed in an authenticated browser after the result-truthfulness release. It showed one current result for the controlled public fixture and grouped 13 other attempts into the audit trail. The current result was `Changes needed`, not `Platform failed`. It named the failed required check as the reason, preserved exact head `682805e`, and explained that the latest retry stopped while the code decision remained visible. The screenshot is retained locally and contains no source, credential, or browser-session data.
 
 The current review completed at the pinned head commit. Its authenticated detail page showed:
 
@@ -31,9 +33,13 @@ The completed Anthropic run used `claude-sonnet-4-6`, consumed `$1.0371` under a
 
 One preceding Anthropic run reached all six typed model stages and then failed during finding persistence because the production finding-fingerprint setting was absent. The setting was added before the successful retry. Earlier Gemini attempts stopped before a code decision because the provider/model path was unavailable or rate-limited.
 
-## CLI parity proof
+## CLI parity and bounded Autofix proof
 
-The production CLI status command read the exact same GitHub check at the same head commit and returned `action_required` with the completed BuildIT check and its details link. This proves web/GitHub/CLI result-status parity without a second provider call. It does not yet prove a CLI-triggered live model run or live CLI Autofix.
+The production CLI status command read the exact same GitHub check at the same head commit and returned `action_required` with the completed BuildIT check and its details link.
+
+An explicit-provider CLI review then ran the deployed Anthropic path at that exact head under a `$2.00` ceiling. It completed the six typed review stages, spent `$0.97884`, found the same seeded excess-tax regression and failed head test, and published the GitHub result without changing or merging code. This proves web/GitHub/CLI finding and status parity on one controlled fixture; it is not a statistical accuracy result.
+
+A separately consented CLI Autofix ran under its own `$2.00` ceiling and spent `$0.92127`. It completed the six typed analysis stages but made zero patch attempts and zero rounds because all high-risk model findings remained uncertain when no separately approved Claude critic model was available. No branch, commit, stacked pull request, or merge was created. Source `18ddf41` now treats this outcome as a normal deterministic failed-check handoff instead of a platform outage. The queue preserves the earlier real code decision while keeping the stopped attempt in the audit log. A successful candidate/rollback/three-round live path remains open.
 
 ## Two-user isolation proof
 
@@ -64,4 +70,4 @@ The ignored local replacement key is mode `0600`. Its public fingerprint matches
 
 ## Honest verdict
 
-The product has performed a real evidence-backed code review in production. It is not ready for a broad launch or a `>95% accuracy` claim. The remaining evidence requires qualified blind human labels, a second tenant's independently consented model run, bounded live Autofix and stacked-PR handoff, GitHub owner confirmation for old-key deletion, accepted alert delivery, and design-partner sessions.
+The product has performed real evidence-backed web and CLI code reviews in production and correctly failed closed when Autofix lacked an independently accepted finding. It has not yet delivered a tested Autofix branch and is not ready for a broad launch or a `>95% accuracy` claim. The remaining evidence requires qualified blind human labels, a second tenant's independently consented model run, a bounded live Autofix candidate and stacked-PR handoff, GitHub owner confirmation for old-key deletion, accepted alert delivery, and design-partner sessions.
