@@ -38,8 +38,8 @@ test("setup protects the model key and permits skipping it", async ({ page }, te
   await expect(page.getByLabel("API key")).toHaveCount(0);
   await expect(page.getByText(/sign in before adding a key/i)).toBeVisible();
   await expect(page.getByText(/separate credential broker/i)).toBeVisible();
-  await expect(page.getByText(/github login and model key stay separate/i)).toBeVisible();
-  await expect(page.getByText(/requires source or test evidence for every finding/i)).toBeVisible();
+  await page.getByText(/github login and model key stay separate/i).click();
+  await expect(page.getByText(/every finding requires source or test evidence/i)).toBeVisible();
   await expect(page.getByText(/only a human/i)).toBeVisible();
   await expect(page.getByText("Optional now")).toBeVisible();
   await page.screenshot({path:`.local/ui-evidence/model-key-${testInfo.project.name}.png`,fullPage:true});
