@@ -13,9 +13,9 @@ function fixture(changes: Record<string, unknown> = {}) {
   const descriptors = artifacts.map(({ readGrant: _, ...item }) => item), grant = issueExecutionGrant({ organizationId: "org-a", repositoryId: "repo-a", reviewId: "review-a", baseSha, headSha, artifactsHash: hash(descriptors), plansHash: hash({ runnerImageVersion: body.runnerImageVersion, runtime: body.runtime, install: body.install, checks: body.checks }) }, secret, now);
   return { body, grant };
 }
-function dependencies() {
+function dependencies(requiredConclusion: "passed" | "failed" = "passed") {
   const artifactBroker = { get: vi.fn(async (readGrant: string) => { const revision = readGrant.startsWith("base") ? "base" as const : "head" as const, body = artifactBody(revision); return { artifactId: `${revision}-artifact`, body, checksum: createHash("sha256").update(body).digest("hex") }; }) };
-  const runner = { run: vi.fn(async (_input: { files: Array<{ path: string; content: string }> }) => ({ credentialTeardownProved: true, stopped: true, gitleaksReport: "[]", osvReport: '{"results":[]}', results: [{ ...plans.checks[0]!, conclusion: "passed" as const, exitCode: 0, durationMs: 2 }], outputs: [{ planId: "test" as const, text: "passed", truncated: false }] })) };
+  const runner = { run: vi.fn(async (_input: { files: Array<{ path: string; content: string }> }) => ({ credentialTeardownProved: true, stopped: true, gitleaksReport: "[]", osvReport: '{"results":[]}', results: [{ ...plans.checks[0]!, conclusion: requiredConclusion, exitCode: requiredConclusion === "passed" ? 0 : 1, durationMs: 2 }], outputs: [{ planId: "test" as const, text: requiredConclusion, truncated: false }] })) };
   return { artifactBroker, runner };
 }
 
@@ -41,6 +41,13 @@ describe("native base/head execution boundary", () => {
       expect(run.files.map((file: { path: string }) => file.path)).toEqual(["src/a.ts", "package-lock.json"]);
     }
     expect(output).toMatchObject({ base: { credentialTeardownProved: true }, head: { credentialTeardownProved: true }, scanners: { head: { runs: [{ scanner: "builditRules", scannerVersion: "1.0.0" }, { scanner: "gitleaks", scannerVersion: "8.28.0" }, { scanner: "osvScanner", scannerVersion: "2.2.3" }], findings: [expect.objectContaining({ ruleId: "buildit-js-eval" })] } } });
+  });
+
+  it("never recreates a full sandbox to diagnose a failed required check", async () => {
+    const f = fixture(), deps = dependencies("failed");
+    const response = await handleExecution(new Request("https://broker/api/execute", { method: "POST", headers: { authorization: `Bearer ${f.grant}` }, body: JSON.stringify(f.body) }), { artifactBroker: deps.artifactBroker as never, runner: deps.runner as never, grantSecret: secret, consume: async () => true, now });
+    expect(response.status).toBe(200);
+    expect(deps.runner.run).toHaveBeenCalledTimes(2);
   });
 
   it("rejects tenant, plan, and artifact changes before sandbox execution", async () => {

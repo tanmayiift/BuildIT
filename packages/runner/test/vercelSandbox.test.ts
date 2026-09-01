@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { createNamedPlan } from "../src/index";
+import { defaultExecutionPlans } from "../src/index";
 import { VercelSandboxRunner, type SandboxFactory, type SandboxLike } from "../src/vercelSandbox";
 
-function fixture(options: { env?: string; installExit?: number; osvExit?: number; osvOutput?: string } = {}) {
+function fixture(options: { env?: string; installExit?: number; testExits?: number[]; osvExit?: number; osvOutput?: string } = {}) {
   const calls: Array<unknown> = [], stop = vi.fn(async () => ({}));
   const sandbox: SandboxLike = {
     writeFiles: vi.fn(async files => { calls.push(["files", files]); }),
@@ -10,7 +10,7 @@ function fixture(options: { env?: string; installExit?: number; osvExit?: number
     updateNetworkPolicy: vi.fn(async policy => { calls.push(["network", policy]); }),
     runCommand: vi.fn(async command => {
       calls.push(["command", command]);
-      const isEnv = command.cmd === "env", isOsv = command.cmd === "osv-scanner", exitCode = isEnv ? 0 : isOsv ? options.osvExit ?? 0 : command.cmd === "pnpm" && command.args[0] === "install" ? options.installExit ?? 0 : 0;
+      const isEnv = command.cmd === "env", isOsv = command.cmd === "osv-scanner", isTest = command.cmd === "pnpm" && command.args[0] === "run" && command.args[1] === "test", exitCode = isEnv ? 0 : isOsv ? options.osvExit ?? 0 : command.cmd === "pnpm" && command.args[0] === "install" ? options.installExit ?? 0 : isTest ? options.testExits?.shift() ?? 0 : 0;
       return { exitCode, durationMs: 10, stdout: async () => isEnv ? options.env ?? "CI=true\n" : isOsv ? options.osvOutput ?? "ok" : "ok", stderr: async () => "" };
     }),
     stop,
@@ -19,8 +19,7 @@ function fixture(options: { env?: string; installExit?: number; osvExit?: number
 }
 
 describe("Vercel sandbox runner", () => {
-  const install = createNamedPlan({ planId: "install", manager: "pnpm", origin: "built_in", required: true });
-  const test = createNamedPlan({ planId: "test", manager: "pnpm", origin: "built_in", required: true });
+  const plans = defaultExecutionPlans("pnpm"), install = plans.install, test = plans.checks[0]!;
 
   it("writes fetched files without a GitHub token, permits only install registries, then denies all network", async () => {
     const f = fixture(), runner = new VercelSandboxRunner(f.create);
@@ -31,10 +30,26 @@ describe("Vercel sandbox runner", () => {
     expect(result.outputs).toEqual([{ planId: "install", text: "ok", truncated: false }, { planId: "test", text: "ok", truncated: false }]);
     expect(f.calls).toContainEqual(["network", { allow: ["registry.npmjs.org", "registry.yarnpkg.com"] }]);
     expect(f.calls).toContainEqual(["network", "deny-all"]);
-    expect(f.calls).toContainEqual(["command", { cmd: "pnpm", args: ["install", "--frozen-lockfile", "--ignore-scripts"], cwd: "/vercel/sandbox/repo", timeoutMs: 600_000 }]);
-    expect(f.calls).toContainEqual(["command", { cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", "--lockfile", "/vercel/sandbox/repo/pnpm-lock.yaml"], cwd: "/vercel/sandbox/repo", timeoutMs: 120_000 }]);
-    expect(f.create.mock.calls[0]![0]).toMatchObject({ networkPolicy: "deny-all", env: { CI: "true" }, region: "cdg1", persistent: false });
+    expect(f.calls).toContainEqual(["command", { cmd: "pnpm", args: ["install", "--frozen-lockfile", "--ignore-scripts"], cwd: "/vercel/sandbox/repo", timeoutMs: 60_000 }]);
+    expect(f.calls).toContainEqual(["command", { cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", "--lockfile", "/vercel/sandbox/repo/pnpm-lock.yaml"], cwd: "/vercel/sandbox/repo", timeoutMs: 35_000 }]);
+    expect(f.create.mock.calls[0]![0]).toMatchObject({ timeout: 175_000, networkPolicy: "deny-all", env: { CI: "true" }, region: "cdg1", persistent: false });
     expect(f.stop).toHaveBeenCalledOnce();
+  });
+
+  it("starts both read-only scanners before either scanner is allowed to finish", async () => {
+    const f = fixture(), original = f.sandbox.runCommand, started: string[] = [];
+    let release = () => {};
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    f.sandbox.runCommand = vi.fn(async command => {
+      if (["gitleaks", "osv-scanner"].includes(command.cmd)) {
+        started.push(command.cmd);
+        if (started.length === 2) release();
+        await gate;
+      }
+      return original(command);
+    });
+    await new VercelSandboxRunner(f.create).run({ runtime: "node24", files: [{ path: "pnpm-lock.yaml", content: "lockfileVersion: '9.0'" }], install, checks: [test] });
+    expect(started).toEqual(["gitleaks", "osv-scanner"]);
   });
 
   it("stops before install when a secret-like environment name is reachable", async () => {
@@ -56,6 +71,14 @@ describe("Vercel sandbox runner", () => {
     expect(result.results[0]!.conclusion).toBe("failed");
     expect(f.calls.filter(call => Array.isArray(call) && call[0] === "command")).toHaveLength(4);
     expect(f.stop).toHaveBeenCalledOnce();
+  });
+
+  it("reruns a failed required check inside the same sandbox and stops once it proves flakiness", async () => {
+    const f = fixture({ testExits: [1, 0] });
+    const result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files: [{ path: "pnpm-lock.yaml", content: "lockfileVersion: '9.0'" }], install, checks: [test] });
+    expect(f.create).toHaveBeenCalledOnce();
+    expect(f.calls.filter(call => Array.isArray(call) && call[0] === "command" && (call[1] as { args?: string[] }).args?.[1] === "test")).toHaveLength(2);
+    expect(result.diagnostics.test).toHaveLength(2);
   });
 
   it("rejects unsafe file paths and network-enabled checks", async () => {
