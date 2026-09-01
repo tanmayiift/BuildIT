@@ -3,7 +3,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuthToken } from "@convex-dev/auth/react";
 import { makeFunctionReference } from "convex/server";
 import { type FormEvent, useEffect, useState } from "react";
-import { credentialErrorCode, credentialErrorMessage, credentialNeedsIdentityRecovery, credentialReauthenticationHref, needsFreshCredentialAuthentication, type CredentialErrorCode } from "./model-key-state";
+import { credentialErrorCode, credentialErrorMessage, credentialNeedsIdentityRecovery, credentialReauthenticationHref, credentialSignInHref, needsFreshCredentialAuthentication, type CredentialErrorCode } from "./model-key-state";
 type Provider = "anthropic" | "openai" | "gemini";
 type Connection = {
   organization: null | { id: string; name: string; role: string };
@@ -184,7 +184,7 @@ export function ModelKeyForm() {
             This binds the encrypted credential to one verified organization.
             Signing in alone does not grant repository access.
           </p>
-          <a className="button" href="/sign-in?returnTo=%2Fsetup%2Fmodel">
+          <a className="button" href={credentialSignInHref(provider, repositoryId)}>
             Sign in with GitHub
           </a>
         </div>

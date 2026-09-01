@@ -31,9 +31,29 @@ export function needsFreshCredentialAuthentication(expiresAt: number | undefined
   return !expiresAt || expiresAt <= now;
 }
 
-export function credentialReauthenticationHref(provider: string, repositoryId: string) {
+function credentialReturnPath(provider: string, repositoryId: string) {
   const returnPath = new URL("https://buildit.invalid/setup/model");
-  returnPath.searchParams.set("provider", provider);
+  returnPath.searchParams.set("provider", ["anthropic", "openai", "gemini"].includes(provider) ? provider : "anthropic");
   if (repositoryId) returnPath.searchParams.set("repository", repositoryId);
-  return `/sign-in?reauth=1&returnTo=${encodeURIComponent(`${returnPath.pathname}${returnPath.search}`)}`;
+  return `${returnPath.pathname}${returnPath.search}`;
+}
+
+export function credentialSignInHref(provider: string, repositoryId: string) {
+  return `/sign-in?returnTo=${encodeURIComponent(credentialReturnPath(provider, repositoryId))}`;
+}
+
+export function credentialReauthenticationHref(provider: string, repositoryId: string) {
+  return `/sign-in?reauth=1&returnTo=${encodeURIComponent(credentialReturnPath(provider, repositoryId))}`;
+}
+
+export function safeSignInReturnPath(requested: string | null | undefined) {
+  if (!requested?.startsWith("/") || requested.startsWith("//")) return "/";
+  try {
+    const resolved = new URL(requested, "https://buildit.invalid");
+    return resolved.origin === "https://buildit.invalid"
+      ? `${resolved.pathname}${resolved.search}${resolved.hash}`
+      : "/";
+  } catch {
+    return "/";
+  }
 }

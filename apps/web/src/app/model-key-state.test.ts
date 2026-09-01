@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { credentialErrorCode, credentialErrorMessage, credentialNeedsIdentityRecovery, credentialReauthenticationHref, needsFreshCredentialAuthentication } from "./model-key-state";
+import { credentialErrorCode, credentialErrorMessage, credentialNeedsIdentityRecovery, credentialReauthenticationHref, credentialSignInHref, needsFreshCredentialAuthentication, safeSignInReturnPath } from "./model-key-state";
 
 describe("model-key recovery", () => {
   it("expires the entry form at the exact server-provided time", () => {
@@ -10,6 +10,16 @@ describe("model-key recovery", () => {
 
   it("keeps safe provider and repository choices through reauthentication", () => {
     expect(credentialReauthenticationHref("gemini", "repo-1")).toBe("/sign-in?reauth=1&returnTo=%2Fsetup%2Fmodel%3Fprovider%3Dgemini%26repository%3Drepo-1");
+  });
+
+  it("keeps the OpenAI and repository choices through initial sign-in", () => {
+    expect(credentialSignInHref("openai", "repo-1")).toBe("/sign-in?returnTo=%2Fsetup%2Fmodel%3Fprovider%3Dopenai%26repository%3Drepo-1");
+  });
+
+  it("rejects external and protocol-relative sign-in returns", () => {
+    expect(safeSignInReturnPath("https://attacker.example/collect")).toBe("/");
+    expect(safeSignInReturnPath("//attacker.example/collect")).toBe("/");
+    expect(safeSignInReturnPath("/setup/model?provider=openai")).toBe("/setup/model?provider=openai");
   });
 
   it("states that an expired or forbidden submission was not stored", () => {
