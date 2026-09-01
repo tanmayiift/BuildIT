@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundedAnalysisContext, boundedValidationEvidence, redactModelOutput,requireIndependentCritic,selectCriticModel } from "./reviewAnalysisWorker";
+import { boundedAnalysisContext, boundedValidationEvidence, redactModelOutput,requireIndependentCritic,selectCriticModel,selectFindingsModel } from "./reviewAnalysisWorker";
 
 const pull = { title: "Fix transfer limit", body: "Must reject amounts above the daily limit", files: [{ path: "src/changed.ts", status: "modified", patch: "@@ guard" }], omitted: [], urlHash: "a".repeat(64) };
 describe("bounded model evidence selection", () => {
@@ -58,4 +58,27 @@ describe("model output retention", () => {
     expect(safe.value.findings[0]?.title).toBe("Leaked [REDACTED]");
   });
 });
-describe("critic independence",()=>{it("chooses a different model only when the saved key proved both models available",()=>{expect(selectCriticModel("gemini","gemini-2.5-pro",["gemini-2.5-pro","gemini-2.5-flash"])).toEqual({model:"gemini-2.5-flash",independent:true});expect(selectCriticModel("openai","not-approved",["gpt-5.4-mini"])).toEqual({model:"gpt-5.4-mini",independent:true});expect(selectCriticModel("gemini","gemini-2.5-pro")).toEqual({model:"gemini-2.5-pro",independent:false})});it("forces risky model findings uncertain when independence is unavailable",()=>{const findings=[{id:"f1",severity:"critical",origin:"model"},{id:"s1",severity:"critical",origin:"scanner"}] as never;const decisions=[{findingId:"f1",verdict:"supported",missingEvidenceIds:[],injectionDetected:false,explanation:"ok"},{findingId:"s1",verdict:"supported",missingEvidenceIds:[],injectionDetected:false,explanation:"ok"}] as never;expect(requireIndependentCritic(findings,decisions,false)).toEqual([expect.objectContaining({findingId:"f1",verdict:"uncertain"}),expect.objectContaining({findingId:"s1",verdict:"supported"})])})});
+describe("critic independence",()=>{
+  it("uses the strongest approved OpenAI model only for findings",()=>{
+    expect(selectFindingsModel("openai","gpt-5.4-mini",["gpt-5.4-mini","gpt-5.4"])).toBe("gpt-5.4");
+    expect(selectCriticModel("openai","gpt-5.4",["gpt-5.4-mini","gpt-5.4"])).toEqual({model:"gpt-5.4-mini",independent:true});
+  });
+
+  it("keeps the primary model when the stronger OpenAI model was not validated",()=>{
+    expect(selectFindingsModel("openai","gpt-5.4-mini",["gpt-5.4-mini"])).toBe("gpt-5.4-mini");
+    expect(selectCriticModel("openai","gpt-5.4-mini",["gpt-5.4-mini"])).toEqual({model:"gpt-5.4-mini",independent:false});
+  });
+
+  it("does not change findings routing for Gemini or Anthropic",()=>{
+    expect(selectFindingsModel("gemini","gemini-2.5-pro",["gemini-2.5-pro","gemini-2.5-flash"])).toBe("gemini-2.5-pro");
+    expect(selectFindingsModel("anthropic","claude-sonnet-4-5",["claude-sonnet-4-5","claude-sonnet-4-6"])).toBe("claude-sonnet-4-5");
+  });
+
+  it("chooses a different critic only when the saved key proved both models available",()=>{
+    expect(selectCriticModel("gemini","gemini-2.5-pro",["gemini-2.5-pro","gemini-2.5-flash"])).toEqual({model:"gemini-2.5-flash",independent:true});
+    expect(selectCriticModel("openai","not-approved",["gpt-5.4-mini"])).toEqual({model:"gpt-5.4-mini",independent:true});
+    expect(selectCriticModel("gemini","gemini-2.5-pro")).toEqual({model:"gemini-2.5-pro",independent:false});
+  });
+
+  it("forces risky model findings uncertain when independence is unavailable",()=>{const findings=[{id:"f1",severity:"critical",origin:"model"},{id:"s1",severity:"critical",origin:"scanner"}] as never;const decisions=[{findingId:"f1",verdict:"supported",missingEvidenceIds:[],injectionDetected:false,explanation:"ok"},{findingId:"s1",verdict:"supported",missingEvidenceIds:[],injectionDetected:false,explanation:"ok"}] as never;expect(requireIndependentCritic(findings,decisions,false)).toEqual([expect.objectContaining({findingId:"f1",verdict:"uncertain"}),expect.objectContaining({findingId:"s1",verdict:"supported"})])});
+});
