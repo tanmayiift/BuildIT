@@ -1,0 +1,22 @@
+{{ define "buildit.operator.subject.v1" -}}
+[{{ if eq .Status "firing" }}ACTION REQUIRED{{ else }}RECOVERED{{ end }}] BuildIT · {{ .CommonLabels.severity }}
+{{- end }}
+
+{{ define "buildit.operator.body.v1" -}}
+BuildIT operator alert
+
+Status: {{ if eq .Status "firing" }}Firing{{ else }}Recovered{{ end }}
+Severity: {{ .CommonLabels.severity }}
+Service: BuildIT
+
+What happened
+{{ .CommonAnnotations.summary }}
+
+What to do now
+{{ .CommonAnnotations.action }}
+
+Runbook
+{{ .CommonAnnotations.runbook_url }}
+
+This alert contains only global BuildIT service health.
+{{- end }}

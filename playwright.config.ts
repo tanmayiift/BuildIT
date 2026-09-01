@@ -21,7 +21,7 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command: "npx pnpm@10.15.0 --filter @buildit/web dev --port 3107",
+        command: "NEXT_PUBLIC_BUILDIT_E2E=1 npx pnpm@10.15.0 --filter @buildit/web build && NEXT_PUBLIC_BUILDIT_E2E=1 npx pnpm@10.15.0 --filter @buildit/web exec next start -p 3107",
         url: baseURL,
         reuseExistingServer: false,
         timeout: 120_000,

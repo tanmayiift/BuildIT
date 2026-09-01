@@ -5,15 +5,25 @@
 .live-state p,.connection-hero p{margin:6px 0 0;color:var(--muted)}
 .state-pulse{width:10px;height:10px;border-radius:50%;background:var(--warning);box-shadow:0 0 0 6px color-mix(in srgb,var(--warning) 14%,transparent)}
 .live-empty{margin-top:24px}.connection-state-name{text-transform:capitalize;font-size:20px}
-.repository-list{display:grid;margin-top:16px;border-top:1px solid var(--line)}
-.repository-row{display:grid;grid-template-columns:44px minmax(220px,1fr) minmax(110px,auto) minmax(110px,auto) auto;align-items:center;gap:16px;padding:18px 4px;border-bottom:1px solid var(--line)}
-.repository-row h2{font-size:16px;margin:0 0 4px}.repository-row p{margin:0;color:var(--muted);font-size:13px}.repository-row>.action{white-space:nowrap}
-.repository-mark{width:40px;height:40px;display:grid;place-items:center;border:1px solid var(--line);font:600 11px/1 "JetBrains Mono Variable",monospace;color:var(--navy);background:var(--surface-inset)}
-.repository-policy{display:grid;gap:4px}.repository-policy span{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.repository-policy strong{font-size:13px;text-transform:capitalize}
+.connection-overview{display:grid;grid-template-columns:minmax(240px,.75fr) minmax(460px,1.35fr) auto;align-items:center;gap:24px;margin-top:20px;padding:18px 20px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.connection-summary{display:grid;gap:5px}.connection-summary .status{margin-bottom:3px}.connection-summary h2{margin:0;font-size:20px;line-height:1.25;letter-spacing:-.025em}.connection-summary p{margin:0;color:var(--muted);font-size:12px}.connection-summary p strong{color:var(--ink-2)}
+.connection-facts{display:grid;grid-template-columns:repeat(4,minmax(92px,1fr));border-left:1px solid var(--line)}.connection-facts span{display:grid;gap:4px;min-width:0;padding:3px 14px}.connection-facts small{color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.connection-facts strong{overflow-wrap:anywhere;font-size:11px}
+.repository-list{display:grid;gap:10px;margin-top:20px}
+.repository-row{display:grid;grid-template-columns:minmax(280px,1fr) minmax(570px,auto);align-items:center;gap:24px;padding:17px 18px;border:1px solid var(--line);border-radius:8px;background:var(--surface);transition:border-color 120ms,box-shadow 120ms}
+.repository-row:focus-within{border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-soft)}
+.repository-identity{display:grid;grid-template-columns:40px minmax(0,1fr);align-items:center;gap:13px;min-width:0}.repository-identity h2{overflow-wrap:anywhere;font-size:15px;margin:0 0 4px;letter-spacing:-.015em}.repository-identity p{margin:0;color:var(--muted);font-size:11px;line-height:1.45}.repository-identity p span{padding:0 3px;color:var(--line-strong)}
+.repository-mark{width:40px;height:40px;display:grid;place-items:center;border:1px solid #c7d7ea;border-radius:6px;font:700 10px/1 "JetBrains Mono Variable",monospace;color:var(--navy);background:var(--navy-soft)}
+.repository-control-group{display:grid;grid-template-columns:minmax(210px,1fr) minmax(116px,auto) auto;align-items:end;gap:14px;min-width:0}
+.repository-policy{display:grid;gap:4px}.repository-policy>span{color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}.repository-policy strong{font-size:12px}.repository-policy small{color:var(--muted);font-size:9px;line-height:1.35}
+.repository-policy-select{width:100%;min-height:44px;padding:0 34px 0 11px;color:var(--ink);background-color:var(--workbench);border:1px solid var(--line-strong);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer}.repository-policy-select:focus-visible{outline:3px solid var(--navy-soft);outline-offset:1px;border-color:var(--navy)}.repository-policy-select:disabled{color:var(--faint);cursor:wait}
+.repository-review-state{display:grid;gap:6px;justify-items:start}.repository-review-state .button{min-width:116px}.repository-review-state .status{font-size:9px}
+.repository-actions{display:flex;align-items:center;min-height:44px}.repository-actions .action{white-space:nowrap}
 .access-row small{margin-left:auto;color:var(--muted);font-size:10px;text-align:right}
 .integration-card[data-connected]{box-shadow:inset 3px 0 0 var(--success)}
 .integration-card .action-primary{color:#fff}.integration-card .action-secondary,.integration-card .action-tertiary{color:var(--navy)}
-@media(max-width:800px){.connection-hero{align-items:flex-start;flex-direction:column}.repository-row{grid-template-columns:40px 1fr}.repository-policy,.repository-row>a{grid-column:2}.repository-row>a{justify-self:start}}
+@media(max-width:1100px){.connection-overview{grid-template-columns:minmax(220px,.8fr) minmax(360px,1.2fr)}.connection-overview>.action{grid-column:1/-1;width:max-content}.repository-row{grid-template-columns:1fr}.repository-control-group{grid-template-columns:minmax(210px,1fr) minmax(116px,auto) auto}}
+@media(max-width:760px){.connection-hero{align-items:flex-start;flex-direction:column}.connection-overview{grid-template-columns:1fr;gap:16px}.connection-facts{grid-template-columns:repeat(2,1fr);border-top:1px solid var(--line);border-left:0;padding-top:12px}.connection-facts span{padding:6px 10px}.connection-overview>.action{grid-column:auto}.repository-row{grid-template-columns:1fr;gap:16px}.repository-control-group{grid-template-columns:1fr}.repository-review-state{grid-template-columns:1fr auto;align-items:center}.repository-review-state .button{min-width:108px}.repository-actions{justify-content:flex-start}.repository-actions .action{padding-left:0}}
+@media(max-width:480px){.connection-facts{grid-template-columns:1fr}.connection-overview>.action{width:100%}.repository-review-state{grid-template-columns:1fr}.repository-review-state .button{width:100%}.repository-actions .action{width:100%;justify-content:flex-start}}
 .sample-route-note {
   margin: 18px 40px 0;
   color: var(--muted);

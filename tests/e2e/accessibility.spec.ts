@@ -45,3 +45,12 @@ for (const route of ["/", "/reviews?tour=1", "/setup/model", "/reviews/418?tour=
   await page.locator("body").waitFor();
   await expect(page).toHaveScreenshot(`${route.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "landing"}.png`, { fullPage: false, animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.08 });
 });
+
+test("connected repository workspace has no serious accessibility defect and matches its release screenshot", async ({ page }) => {
+  test.skip(Boolean(process.env.BUILDIT_E2E_BASE_URL), "The connected design fixture exists only in the local development server.");
+  await page.goto("/repositories?tour=1&fixture=connected");
+  await expect(page.getByRole("heading", { name: "3 repositories connected" })).toBeVisible();
+  const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(result.violations.filter(item => ["serious", "critical"].includes(item.impact ?? "")), JSON.stringify(result.violations, null, 2)).toEqual([]);
+  await expect(page).toHaveScreenshot("repositories-connected.png", { fullPage: true, animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.03 });
+});
