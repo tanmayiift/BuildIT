@@ -33,7 +33,18 @@ describe("authenticated model-key controls", () => {
     state.credentials = [credential];
     state.revoke.mockReset().mockResolvedValue({ id: "cred-a", status: "revoked" });
   });
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("returns a signed-out user to the selected OpenAI and repository scope", async () => {
+    state.authenticated = false;
+    state.connection = undefined;
+    window.history.replaceState({}, "", "/setup/model?provider=openai&repository=repo-a");
+    render(<ModelKeyForm />);
+    await waitFor(() => expect(screen.getByRole("link", { name: "Sign in with GitHub" }).getAttribute("href")).toBe("/sign-in?returnTo=%2Fsetup%2Fmodel%3Fprovider%3Dopenai%26repository%3Drepo-a"));
+  });
 
   it("shows tenant scope, masked metadata, and safe action order without returning a key", async () => {
     const user = userEvent.setup();

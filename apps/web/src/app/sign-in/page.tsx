@@ -2,6 +2,7 @@
 
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useEffect, useState } from "react";
+import { safeSignInReturnPath } from "../model-key-state";
 
 export default function SignIn() {
   const { signIn, signOut } = useAuthActions();
@@ -17,7 +18,7 @@ export default function SignIn() {
     setPending(true);
     setError("");
     try {
-      const requested=new URLSearchParams(window.location.search).get("returnTo"),redirectTo=requested?.startsWith("/")&&!requested.startsWith("//")?requested:"/";
+      const requested = new URLSearchParams(window.location.search).get("returnTo"), redirectTo = safeSignInReturnPath(requested);
       if (new URLSearchParams(window.location.search).get("reauth") === "1") await signOut();
       await signIn("github", { redirectTo });
     } catch {

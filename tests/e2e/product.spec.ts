@@ -41,6 +41,14 @@ test("setup protects the model key and permits skipping it", async ({ page }, te
   await page.screenshot({path:`.local/ui-evidence/model-key-${testInfo.project.name}.png`,fullPage:true});
 });
 
+test("model setup preserves OpenAI and repository scope through GitHub sign-in", async ({ page }) => {
+  await page.goto("/setup/model?provider=openai&repository=repo-a");
+  await expect(page.locator(".setup-card").getByRole("link", { name: "Sign in with GitHub" })).toHaveAttribute(
+    "href",
+    "/sign-in?returnTo=%2Fsetup%2Fmodel%3Fprovider%3Dopenai%26repository%3Drepo-a",
+  );
+});
+
 test("GitHub installation return preserves sign-in and claim context",async({page})=>{await page.goto("/setup/install?installation_id=157557707");const link=page.getByRole("link",{name:"Sign in and return"});await expect(link).toBeVisible();await expect(link).toHaveAttribute("href",/returnTo=.*installation_id%3D157557707/)});
 
 test("GitHub callback failures are visible and recoverable", async ({ page }) => {
