@@ -12,23 +12,95 @@ export type QueueReview = {
   updatedAt: number;
 };
 
-export type QueueReviewGroup = { review: QueueReview; matchingAttemptCount: number };
+export type QueueReviewGroup = {
+  review: QueueReview;
+  attemptCount: number;
+  failedAttemptCount: number;
+};
 
-function retryKey(review: QueueReview) {
-  return `${review.repositoryId}:${review.prNumber}:${review.headSha}:${review.status}:${review.statusReasonCode}`;
+function pullCommitKey(review: QueueReview) {
+  return `${review.repositoryId}:${review.prNumber}:${review.headSha}`;
 }
 
 export function groupQueueReviews(reviews: QueueReview[]): QueueReviewGroup[] {
   const groups = new Map<string, QueueReviewGroup>();
   for (const review of reviews) {
-    const canGroup = review.status === "platform_failed" && review.statusReasonCode === "provider_rate_limited";
-    const key = canGroup ? retryKey(review) : review.id;
+    const key = pullCommitKey(review);
     const existing = groups.get(key);
     if (existing) {
-      existing.matchingAttemptCount += 1;
+      existing.attemptCount += 1;
+      if (review.status === "platform_failed") existing.failedAttemptCount += 1;
+      if (review.updatedAt > existing.review.updatedAt) existing.review = review;
       continue;
     }
-    groups.set(key, { review, matchingAttemptCount: 1 });
+    groups.set(key, {
+      review,
+      attemptCount: 1,
+      failedAttemptCount: review.status === "platform_failed" ? 1 : 0,
+    });
   }
-  return [...groups.values()];
+  return [...groups.values()].sort((a, b) => b.review.updatedAt - a.review.updatedAt);
+}
+
+const active = new Set([
+  "queued", "gathering_context", "analyzing", "validating", "autofix_queued",
+  "autofixing", "validating_round", "validating_final", "cancelling",
+]);
+const retry = new Set(["inconclusive", "blocked", "cancelled", "budget_exhausted", "platform_failed"]);
+
+export type QueueSection = "running" | "decision" | "retry";
+export function queueSection(review: QueueReview): QueueSection {
+  if (active.has(review.status)) return "running";
+  if (retry.has(review.status)) return "retry";
+  return "decision";
+}
+
+const statusLabels: Record<string, string> = {
+  queued: "Queued",
+  gathering_context: "Reading context",
+  analyzing: "Reviewing code",
+  validating: "Running checks",
+  checks_passed: "Checks passed",
+  changes_requested: "Changes needed",
+  inconclusive: "Review incomplete",
+  autofix_queued: "Fix queued",
+  autofixing: "Preparing fix",
+  validating_round: "Testing fix",
+  validating_final: "Final checks",
+  delivered: "Fix ready",
+  failed_after_bounds: "Human review needed",
+  blocked: "Setup needed",
+  cancelling: "Stopping",
+  cancelled: "Stopped",
+  budget_exhausted: "Budget reached",
+  platform_failed: "Review didn't run",
+};
+
+const reasonLabels: Record<string, string> = {
+  checks_complete: "Required checks finished at this exact commit.",
+  blocking_findings: "Evidence-backed findings need a human decision.",
+  required_check_failed: "At least one required check failed.",
+  required_check_missing: "A required check did not produce complete evidence.",
+  unsupported_check: "The repository asks for a check BuildIT cannot run yet.",
+  environment_unavailable: "The isolated runner was unavailable. No code decision was made.",
+  review_timeout: "The review reached its time limit. No code decision was made.",
+  final_validation_incomplete: "The fix candidate did not complete final validation.",
+  provider_credential_invalid: "Reconnect the selected model provider before retrying.",
+  installation_suspended: "Restore the GitHub App installation before retrying.",
+  permission_revoked: "Restore repository permission before retrying.",
+  user_cancelled: "A person stopped this run before it reached a decision.",
+  blocked_expired: "The blocked review expired before access was restored.",
+  spend_ceiling_reached: "The review stopped before exceeding its approved model budget.",
+  provider_rate_limited: "The model provider was rate-limited. No code decision was made.",
+  platform_error: "BuildIT stopped before it could make a code decision.",
+  delivery_complete: "The tested candidate is ready for human inspection.",
+};
+
+export function queueStatusLabel(review: QueueReview) {
+  return statusLabels[review.status] ?? "Review update";
+}
+
+export function queueStatusDetail(review: QueueReview) {
+  if (review.isStale) return "The pull request changed. Start a review at the latest commit.";
+  return review.statusReasonCode ? reasonLabels[review.statusReasonCode] ?? "Open the result for details." : "Open the result for details.";
 }

@@ -27,9 +27,12 @@
   .metric:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
   .decision-row { grid-template-columns: 1fr 24px; gap: 8px; }
   .decision-row > :not(:nth-child(2)):not(.row-arrow) { display: none; }
+  .review-group-heading { align-items: flex-start !important; flex-direction: column; }
+  .review-group-counts { align-items: flex-start; flex-wrap: wrap; }
   .review-row { grid-template-columns: 1fr auto; padding: 12px; }
   .review-row > :not(.review-name):not(.status) { display: none; }
-  .review-row .status { grid-column: 2; grid-row: 1; }
+  .review-row .review-name { grid-column: 1; grid-row: 1; }
+  .review-row .status { grid-column: 2; grid-row: 1; align-self: start; }
   .context-strip { grid-template-columns: repeat(2, 1fr); }
   .context-strip span:nth-child(2) { border-right: 0; }
   .context-strip span:nth-child(-n+2) { border-bottom: 1px solid var(--line); }

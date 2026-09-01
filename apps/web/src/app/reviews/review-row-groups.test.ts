@@ -1,16 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { groupQueueReviews, type QueueReview } from "./review-row-groups.js";
+import { groupQueueReviews, queueSection, queueStatusDetail, queueStatusLabel, type QueueReview } from "./review-row-groups.js";
 
 const retry = (id: string, updatedAt: number): QueueReview => ({ id, repositoryId: "repo-a", prNumber: 2, headSha: "a".repeat(40), status: "platform_failed", statusReasonCode: "provider_rate_limited", isStale: false, coverageLevel: "full", currentStage: "complete", nextActionCode: "retry_review", updatedAt });
 
-describe("review queue grouping", () => {
-  it("groups only identical provider-limit retries and keeps the newest sorted row", () => {
-    const newest = retry("newest", 3), grouped = groupQueueReviews([newest, retry("older", 2), retry("oldest", 1)]);
-    expect(grouped).toEqual([{ review: newest, matchingAttemptCount: 3 }]);
+describe("review queue presentation", () => {
+  it("shows one latest result per pull request and exact commit", () => {
+    const newest = { ...retry("newest", 3), status: "changes_requested", statusReasonCode: "required_check_failed" }, grouped = groupQueueReviews([retry("older", 2), newest, retry("oldest", 1)]);
+    expect(grouped).toEqual([{ review: newest, attemptCount: 3, failedAttemptCount: 2 }]);
   });
 
-  it("never hides a distinct terminal state, reason, or exact head", () => {
-    const first = retry("first", 3), differentReason = { ...retry("second", 2), statusReasonCode: "platform_error" }, differentHead = { ...retry("third", 1), headSha: "b".repeat(40) };
-    expect(groupQueueReviews([first, differentReason, differentHead])).toHaveLength(3);
+  it("keeps different commits separate and sorts their latest results", () => {
+    const oldHead = retry("old-head", 2), newHead = { ...retry("new-head", 4), headSha: "b".repeat(40) };
+    expect(groupQueueReviews([oldHead, newHead]).map(group => group.review.id)).toEqual(["new-head", "old-head"]);
+  });
+
+  it("separates code decisions from service retries in plain language", () => {
+    const failure = retry("failure", 1), decision = { ...retry("decision", 2), status: "changes_requested", statusReasonCode: "required_check_failed" };
+    expect(queueSection(failure)).toBe("retry");
+    expect(queueStatusLabel(failure)).toBe("Review didn't run");
+    expect(queueStatusDetail(failure)).toContain("No code decision was made");
+    expect(queueSection(decision)).toBe("decision");
+    expect(queueStatusLabel(decision)).toBe("Changes needed");
+    expect(queueStatusDetail(decision)).toBe("At least one required check failed.");
   });
 });

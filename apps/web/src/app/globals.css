@@ -166,9 +166,19 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .search-field input { width: 260px; min-height: 40px; padding: 0 12px; background: var(--workbench); border: 1px solid var(--line); border-radius: 6px; outline: 0; }
 .search-field input:focus { border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-soft); }
 .review-group { margin-bottom: 28px; }
-.review-row { min-height: 62px; display: grid; grid-template-columns: 160px minmax(260px,1fr) 84px 95px 90px 70px 50px; align-items: center; gap: 12px; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.review-group-heading { justify-content: space-between !important; align-items: flex-end !important; }
+.review-group-heading > div:first-child { display: grid; gap: 3px; }
+.review-group-heading p { margin: 0; color: var(--muted); font-size: 12px; }
+.review-group-counts { display: flex; align-items: center; gap: 10px; }
+.review-group-counts a { color: var(--navy); font-size: 11px; font-weight: 700; }
+.review-row { min-height: 76px; display: grid; grid-template-columns: 150px minmax(280px,1fr) 24px; align-items: center; gap: 14px; padding: 11px 14px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.review-row:focus-visible { outline: 3px solid var(--navy-soft); outline-offset: -3px; }
 .review-row code, .decision-row code { color: var(--muted); font-size: 11px; }
-.review-row time { color: var(--muted); text-align: right; }
+.review-row time { color: var(--muted); }
+.review-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 12px; margin-top: 4px; color: var(--muted); font-size: 10px; }
+.review-meta > :not(:last-child) { position: relative; }
+.review-meta > :not(:last-child)::after { position: absolute; right: -8px; color: var(--line-strong); content: "·"; }
+.review-row .row-arrow { justify-self: end; }
 .signal { color: var(--danger); font-family: "JetBrains Mono Variable", monospace; }
 .empty-band { min-height: 88px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 18px; background: var(--workbench); border: 1px dashed var(--line-strong); border-radius: 7px; }
 .empty-band p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
