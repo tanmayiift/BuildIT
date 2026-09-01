@@ -40,26 +40,93 @@ export function boundedValidationEvidence(value: ValidationArtifact, pinned: { h
 export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_000) {
   const headChunks = chunks.filter(chunk => chunk.revision !== "base"), pull = headChunks.find(chunk => chunk.pull)?.pull;
   if (!pull) throw new Error("pull_request_context_missing");
-  const rawBody = pull.body.slice(0, 30_000), body = redactForModel(rawBody), bodyTruncated = rawBody.length !== pull.body.length, changes: Array<{ path: string; status: string; patch?: string }> = [], patchPaths: string[] = [];
-  let patchBudget = 30_000;
-  for (const file of pull.files) {
-    const rawPatch = file.patch?.slice(0, Math.max(0, patchBudget)), patch = rawPatch === undefined ? undefined : redactForModel(rawPatch);
-    if (rawPatch) patchBudget -= rawPatch.length;
-    if (file.patch && rawPatch?.length !== file.patch.length) patchPaths.push(file.path);
-    changes.push({ path: file.path, status: file.status, ...(patch ? { patch } : {}) });
+  type ModelSource = NonNullable<NonNullable<SnapshotChunk["pull"]>["requirementSources"]>[number] & { content?: string };
+  type ModelRequirement = NonNullable<NonNullable<SnapshotChunk["pull"]>["requirements"]>[number] & { textTruncated?: boolean };
+  type ModelConflict = NonNullable<NonNullable<SnapshotChunk["pull"]>["requirementConflicts"]>[number] & { canonicalTruncated?: boolean };
+  type OmissionSample = { path?: string; reason: string };
+  type OmissionKind = "repositoryFiles" | "patches" | "changedFiles" | "sourceOmissions" | "pullOmissions" | "requirementSources" | "requirements" | "requirementConflicts" | "truncatedTexts";
+  const changes: Array<{ path: string; status: string; patch?: string }> = [];
+  const requirementSources: ModelSource[] = [], requirements: ModelRequirement[] = [], requirementConflicts: ModelConflict[] = [];
+  const files: Array<{ evidenceId: string; path: string; content: string; startLine: number; endLine: number; contentHash: string }> = [];
+  const exclusions = { paths: [] as string[], patchPaths: [] as string[], changedPaths: [] as string[], source: [] as OmissionSample[], pull: [] as OmissionSample[],
+    totals: {} as Partial<Record<OmissionKind, number>> };
+  const base = { pull: { title: "", titleTruncated: false, body: "", bodyTruncated: false, changes, urlHash: pull.urlHash,
+    requirementCoverage: pull.requirementCoverage ?? "partial", requirementSources, requirements, requirementConflicts }, files, exclusions, coverage: "partial" as "full" | "partial" };
+  const size = () => Buffer.byteLength(JSON.stringify(base));
+  if (size() > maxBytes) throw new Error("analysis_context_budget_too_small");
+  const baseCeiling = Math.max(size(), Math.floor(maxBytes * 0.7));
+  const pushWithin = <T>(target: T[], item: T, ceiling = baseCeiling) => { target.push(item); if (size() <= ceiling) return true; target.pop(); return false; };
+  const increment = (kind: OmissionKind, amount = 1) => { exclusions.totals[kind] = (exclusions.totals[kind] ?? 0) + amount; };
+  const fitText = (raw: string, maximum: number, assign: (value: string) => void) => {
+    let low = 0, high = Math.min(raw.length, maximum);
+    while (low < high) { const middle = Math.ceil((low + high) / 2); assign(redactForModel(raw.slice(0, middle))); if (size() <= baseCeiling) low = middle; else high = middle - 1; }
+    assign(redactForModel(raw.slice(0, low)));
+    return low !== raw.length;
+  };
+  base.pull.titleTruncated = fitText(pull.title, 500, value => { base.pull.title = value; });
+  base.pull.bodyTruncated = fitText(pull.body, 30_000, value => { base.pull.body = value; });
+  if (base.pull.titleTruncated) increment("truncatedTexts");
+  if (base.pull.bodyTruncated) increment("truncatedTexts");
+
+  let requirementBudget = 20_000;
+  for (const source of pull.requirementSources ?? []) {
+    const rawContent = source.content?.slice(0, Math.max(0, requirementBudget));
+    const contentTruncated = Boolean(source.content && rawContent?.length !== source.content.length);
+    const candidate = { ...source, ...(rawContent === undefined ? {} : { content: redactForModel(rawContent) }) } as ModelSource;
+    if (pushWithin(requirementSources, candidate)) { requirementBudget -= Buffer.byteLength(rawContent ?? ""); if (contentTruncated) increment("truncatedTexts"); }
+    else increment("requirementSources");
   }
-  let requirementBudget = 20_000, requirementTruncated = false;
-  const requirementSources = (pull.requirementSources ?? []).map(source => { const rawContent = source.content?.slice(0, Math.max(0, requirementBudget)), content = rawContent === undefined ? undefined : redactForModel(rawContent); if (source.content && rawContent?.length !== source.content.length) requirementTruncated = true; requirementBudget -= Buffer.byteLength(rawContent ?? ""); return { ...source, ...(content === undefined ? {} : { content }) }; });
-  const changed = new Set(changes.map(file => file.path)), files: Array<{ evidenceId: string; path: string; content: string; startLine: number; endLine: number; contentHash: string }> = [], excluded: string[] = [];
-  const base = { pull: { title: redactForModel(pull.title), body, bodyTruncated, changes, urlHash: pull.urlHash, requirementCoverage: pull.requirementCoverage ?? "partial", requirementSources, requirements: (pull.requirements ?? []).map(item => ({ ...item, text: redactForModel(item.text) })), requirementConflicts: pull.requirementConflicts ?? [] }, files, exclusions: { paths: excluded, patchPaths, source: headChunks.flatMap(chunk => chunk.snapshot.omitted), pull: pull.omitted } };
-  let bytes = Buffer.byteLength(JSON.stringify(base));
+  for (const item of pull.requirements ?? []) {
+    const rawText = item.text.slice(0, 2_000), textTruncated = rawText.length !== item.text.length;
+    if (pushWithin(requirements, { ...item, text: redactForModel(rawText), ...(textTruncated ? { textTruncated: true } : {}) } as ModelRequirement)) { if (textTruncated) increment("truncatedTexts"); }
+    else increment("requirements");
+  }
+  for (const item of pull.requirementConflicts ?? []) {
+    const rawCanonical = item.canonical.slice(0, 2_000), canonicalTruncated = rawCanonical.length !== item.canonical.length;
+    if (pushWithin(requirementConflicts, { ...item, canonical: redactForModel(rawCanonical), ...(canonicalTruncated ? { canonicalTruncated: true } : {}) } as ModelConflict)) { if (canonicalTruncated) increment("truncatedTexts"); }
+    else increment("requirementConflicts");
+  }
+  for (const file of pull.files) {
+    if (!pushWithin(changes, { path: file.path, status: file.status })) {
+      increment("changedFiles");
+      pushWithin(exclusions.changedPaths, file.path);
+    }
+  }
+  let patchBudget = 30_000;
+  const omittedPatches = new Set<string>();
+  const omitPatch = (path: string) => { if (omittedPatches.has(path)) return; omittedPatches.add(path); increment("patches"); pushWithin(exclusions.patchPaths, path); };
+  for (const file of pull.files) {
+    if (!file.patch) continue;
+    const change = changes.find(item => item.path === file.path);
+    if (!change) { omitPatch(file.path); continue; }
+    const rawPatch = file.patch.slice(0, Math.max(0, patchBudget));
+    if (!rawPatch || rawPatch.length !== file.patch.length) omitPatch(file.path);
+    if (!rawPatch) continue;
+    change.patch = redactForModel(rawPatch);
+    if (size() <= baseCeiling) patchBudget -= rawPatch.length;
+    else { delete change.patch; omitPatch(file.path); }
+  }
+  const sampleOmission = (value: unknown): OmissionSample => {
+    if (!value || typeof value !== "object") return { reason: "omitted" };
+    const item = value as { path?: unknown; reason?: unknown };
+    return { ...(typeof item.path === "string" ? { path: redactForModel(item.path.slice(0, 500)) } : {}), reason: typeof item.reason === "string" ? redactForModel(item.reason.slice(0, 100)) : "omitted" };
+  };
+  const sourceOmissions = headChunks.flatMap(chunk => chunk.snapshot.omitted);
+  if (sourceOmissions.length) increment("sourceOmissions", sourceOmissions.length);
+  if (pull.omitted.length) increment("pullOmissions", pull.omitted.length);
+  for (const item of sourceOmissions) pushWithin(exclusions.source, sampleOmission(item));
+  for (const item of pull.omitted) pushWithin(exclusions.pull, sampleOmission(item));
+
+  const changed = new Set(pull.files.map(file => file.path));
   for (const file of headChunks.flatMap(chunk => chunk.snapshot.files).sort((a, b) => Number(changed.has(b.path)) - Number(changed.has(a.path)) || a.path.localeCompare(b.path))) {
     const evidence = sourceEvidence(file.path, file.content), item = { ...evidence, content: redactForModel(file.content) }, size = Buffer.byteLength(JSON.stringify(item));
-    if (bytes + size > maxBytes) { excluded.push(file.path); continue; }
-    files.push(item); bytes += size;
+    if (Buffer.byteLength(JSON.stringify(base)) + size > maxBytes) { increment("repositoryFiles"); pushWithin(exclusions.paths, file.path, maxBytes); continue; }
+    files.push(item);
   }
-  if (Buffer.byteLength(JSON.stringify(base)) > maxBytes) throw new Error("analysis_context_too_large");
-  return { ...base, coverage: excluded.length || patchPaths.length || bodyTruncated || requirementTruncated || pull.requirementCoverage !== "complete" || pull.omitted.length || headChunks.some(chunk => chunk.snapshot.coverage !== "full") ? "partial" as const : "full" as const };
+  const excludedAnything = Object.values(exclusions.totals).some(value => value > 0) || pull.requirementCoverage !== "complete" || headChunks.some(chunk => chunk.snapshot.coverage !== "full");
+  base.coverage = excludedAnything ? "partial" : "full";
+  if (size() > maxBytes) throw new Error("analysis_context_too_large");
+  return base;
 }
 export function selectCriticModel(provider:ProviderName,primary:string,availableModels?:readonly string[]){const preferred=provider==="gemini"?(primary==="gemini-2.5-flash"?"gemini-2.5-pro":"gemini-2.5-flash"):provider==="openai"?(primary==="gpt-5.4-mini"?"gpt-5.4":"gpt-5.4-mini"):(primary==="claude-sonnet-4-5"?"claude-sonnet-4-6":"claude-sonnet-4-5"),available=availableModels?new Set(availableModels):approvedProviderModels[provider],independent=Boolean(availableModels)&&available.has(preferred)&&preferred!==primary;return{model:independent?preferred:primary,independent}}
 export function selectFindingsModel(provider: ProviderName, primary: string, availableModels?: readonly string[]) {
