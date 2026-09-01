@@ -17,6 +17,13 @@ import {
 } from "./remote-review.js";
 import {doctorChecks} from "./doctor.js";
 
+function remoteBudget(value: string | undefined) {
+  if (value === undefined) return undefined;
+  const parsed = Number(value);
+  if (![1, 2, 3, 5].includes(parsed)) throw new Error("invalid_budget_limit");
+  return parsed as 1 | 2 | 3 | 5;
+}
+
 const args = process.argv.slice(2),
   command = args[0] ?? "help",
   value = (name: string) => {
@@ -81,13 +88,19 @@ async function main() {
     return checks.node.ok&&checks.git.ok?0:3;
   }
   if (command === "review") {
-    if (args.includes("--remote"))
+    if (args.includes("--remote")) {
+      const providerValue = value("--provider"),
+        provider = providerValue === undefined ? undefined : providerFrom(providerValue),
+        budgetLimit = remoteBudget(value("--budget"));
       return requestRemoteCommand({
         pr: value("--pr"),
         ...(value("--repo") ? { repo: value("--repo") } : {}),
+        ...(provider ? { provider } : {}),
+        ...(budgetLimit ? { budgetLimit } : {}),
         command: "review",
         emit,
       });
+    }
     const directory = value("--dir"),
       baseRef = value("--base"),
       managerValue = value("--manager"),
@@ -128,15 +141,20 @@ async function main() {
   if (command === "autofix") {
     if (!args.includes("--remote") || !args.includes("--stacked"))
       throw new Error("autofix_requires_hosted_stacked_pr");
+    const providerValue = value("--provider"),
+      provider = providerValue === undefined ? undefined : providerFrom(providerValue),
+      budgetLimit = remoteBudget(value("--budget"));
     return requestRemoteAutofix({
       pr: value("--pr"),
       ...(value("--repo") ? { repo: value("--repo") } : {}),
+      ...(provider ? { provider } : {}),
+      ...(budgetLimit ? { budgetLimit } : {}),
       confirmed: args.includes("--confirm-stacked-pr"),
       emit,
     });
   }
   process.stdout.write(
-    "BuildIT CLI\n\nCommands:\n  buildit configure --provider <anthropic|openai|gemini> [--from-env|--revoke]\n  buildit review [--dir path] [--base ref] [--manager npm|pnpm|yarn] [--trust-working-config] [--confirm-run] [--json]\n  buildit review --remote --pr <number> [--repo owner/name] [--json]\n  buildit autofix --remote --stacked --confirm-stacked-pr --pr <number> [--repo owner/name] [--json]\n  buildit status --pr <number> [--repo owner/name] [--watch] [--interval seconds] [--timeout seconds] [--json]\n  buildit cancel --pr <number> [--repo owner/name] [--json]\n  buildit doctor [--json]\n\nNever pass a key as a command argument. Local review first prints the exact zero-provider-cost command plan and runs it only with --confirm-run; if a repository has more than one lockfile, pass --manager only after choosing the intended package manager. It includes committed, staged, unstaged, and untracked files without uploading or writing to the worktree. Remote commands use your existing GitHub CLI login; BuildIT rechecks collaborator permission and the PR head. Status --watch reads GitHub Checks repeatedly and is resumable by rerunning the same command. Autofix is limited to a stacked PR and never merges.\n",
+    "BuildIT CLI\n\nCommands:\n  buildit configure --provider <anthropic|openai|gemini> [--from-env|--revoke]\n  buildit review [--dir path] [--base ref] [--manager npm|pnpm|yarn] [--trust-working-config] [--confirm-run] [--json]\n  buildit review --remote --pr <number> [--repo owner/name] [--provider anthropic|openai|gemini] [--budget 1|2|3|5] [--json]\n  buildit autofix --remote --stacked --confirm-stacked-pr --pr <number> [--repo owner/name] [--provider anthropic|openai|gemini] [--budget 1|2|3|5] [--json]\n  buildit status --pr <number> [--repo owner/name] [--watch] [--interval seconds] [--timeout seconds] [--json]\n  buildit cancel --pr <number> [--repo owner/name] [--json]\n  buildit doctor [--json]\n\nNever pass a key as a command argument. Local review first prints the exact zero-provider-cost command plan and runs it only with --confirm-run; if a repository has more than one lockfile, pass --manager only after choosing the intended package manager. It includes committed, staged, unstaged, and untracked files without uploading or writing to the worktree. Remote commands use your existing GitHub CLI login; BuildIT rechecks repository permission and the PR head. When more than one model key is connected, pass --provider so BuildIT never chooses a different provider silently. The hosted default ceiling is $2; --budget can lower or explicitly raise it. Status --watch reads GitHub Checks repeatedly and is resumable by rerunning the same command. Autofix is limited to a stacked PR and never merges.\n",
   );
   return command === "help" || command === "--help" ? 0 : 4;
 }

@@ -4,6 +4,7 @@ import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { terminalStatuses } from "./lib/lifecycle";
+import { provider as providerValidator } from "./validators";
 
 export function webhookTelemetryOutcome(disposition: "processed" | "ignored_bot" | "ignored_edit" | "duplicate" | "rejected", status: "enqueued" | "completed" | "failed") {
   return { operation: "webhook.process" as const, stage: "context" as const, outcome: status === "failed" ? "failed" as const : disposition === "rejected" ? "blocked" as const : "succeeded" as const };
@@ -168,9 +169,14 @@ export const materializeReview = internalMutation({
       v.literal("maintain"),
       v.literal("admin"),
     ),
+    expectedProvider: v.optional(providerValidator),
+    expectedBudgetLimit: v.optional(v.number()),
     now: v.number(),
   },
   handler: async (ctx, args) => {
+    const budgetLimit = args.expectedBudgetLimit ?? 2;
+    if (![1, 2, 3, 5].includes(budgetLimit))
+      throw new Error("invalid_budget_limit");
     const delivery = await ctx.db
       .query("webhookDeliveries")
       .withIndex("by_delivery_id", (q) => q.eq("deliveryId", args.deliveryId))
@@ -246,11 +252,25 @@ export const materializeReview = internalMutation({
         q.eq("organizationId", args.organizationId).eq("status", "valid"),
       )
       .collect();
+    const eligible = credentials
+      .filter(
+        (item) =>
+          (!args.expectedProvider || item.provider === args.expectedProvider) &&
+          (item.repositoryId === repository._id || item.repositoryId === undefined),
+      )
+      .sort(
+        (left, right) =>
+          (right.lastValidatedAt ?? right.createdAt) -
+          (left.lastValidatedAt ?? left.createdAt),
+      );
     const credential =
-      credentials.find((item) => item.repositoryId === repository._id) ??
-      credentials.find((item) => item.repositoryId === undefined);
-    const provider = credential?.provider ?? "anthropic";
-    const model = credential ? selectProviderModel(provider, credential.availableModels) : null;
+      eligible.find((item) => item.repositoryId === repository._id) ??
+      eligible.find((item) => item.repositoryId === undefined);
+    const selectedProvider =
+      credential?.provider ?? args.expectedProvider ?? "anthropic";
+    const model = credential
+      ? selectProviderModel(selectedProvider, credential.availableModels)
+      : null;
     const status = credential && model ? ("queued" as const) : ("blocked" as const);
     const reviewId = await ctx.db.insert("reviews", {
       organizationId: args.organizationId,
@@ -273,7 +293,7 @@ export const materializeReview = internalMutation({
       triggerActorPermission: args.actorPermission,
       mode,
       status,
-      budgetLimit: 5,
+      budgetLimit,
       budgetConsumed: 0,
       statusReasonCode: credential ? undefined : "provider_credential_invalid",
       nextActionCode: credential ? "none" : "reconnect_provider",
@@ -282,7 +302,7 @@ export const materializeReview = internalMutation({
       trustedRefSha: delivery.baseSha,
       configRevisionId: config._id,
       configProvenance: "defaults_only",
-      provider,
+      provider: selectedProvider,
       model: model ?? "unavailable",
       modelVersion: "pinned-at-execution",
       promptVersion: "chain-v1",

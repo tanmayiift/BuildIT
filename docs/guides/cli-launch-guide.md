@@ -51,7 +51,7 @@ Local deterministic review does not call a provider. Hosted review uses the repo
 Authenticate GitHub CLI first with `gh auth login`, then run:
 
 ```sh
-node apps/cli/dist/index.js review --remote --repo owner/name --pr 42 --json
+node apps/cli/dist/index.js review --remote --repo owner/name --pr 42 --provider anthropic --budget 2 --json
 node apps/cli/dist/index.js status --repo owner/name --pr 42 --watch --json
 ```
 
@@ -66,10 +66,10 @@ node apps/cli/dist/index.js cancel --repo owner/name --pr 42 --json
 Request a separate stacked fix pull request:
 
 ```sh
-node apps/cli/dist/index.js autofix --remote --stacked --confirm-stacked-pr --repo owner/name --pr 42 --json
+node apps/cli/dist/index.js autofix --remote --stacked --confirm-stacked-pr --repo owner/name --pr 42 --provider anthropic --budget 2 --json
 ```
 
-Autofix is rejected unless all three consent flags are present. It stops at the configured time, spend, attempt, and three-round limits. BuildIT never merges; a human reviews and merges the stacked pull request in GitHub.
+`--provider` names the already-saved provider key to use; never put the key itself on the command line. `--budget` sets the hard dollar ceiling, with $2 as the safe hosted default. Autofix is rejected unless all three consent flags are present. It stops at the configured time, spend, attempt, and three-round limits. BuildIT never merges; a human reviews and merges the stacked pull request in GitHub.
 
 ## Product reviewer journey
 

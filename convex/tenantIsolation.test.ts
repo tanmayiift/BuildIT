@@ -3085,7 +3085,32 @@ describe("GitHub webhook durability", () => {
   it("creates a fresh GitHub-comment review after an earlier exact-head run is terminal", async () => {
     const t = convexTest(schema, modules),
       tenant = await seedTenant(t, "github-retry", "alice");
-    const materialize = async (deliveryId: string, now: number) => {
+    await t.run((ctx) =>
+      ctx.db.insert("providerCredentials", {
+        organizationId: tenant.organizationId,
+        credentialScopeId: "credential-gemini-retry",
+        provider: "gemini",
+        encryptedCiphertext: "ciphertext",
+        nonce: "nonce",
+        authTag: "tag",
+        aadDigest: "aad",
+        wrappedDataKey: "wrapped",
+        kmsKeyId: "kms-test",
+        envelopeVersion: 1,
+        keyVersion: 1,
+        maskedSuffix: "5678",
+        availableModels: ["gemini-2.5-flash"],
+        status: "valid",
+        createdBy: "alice",
+        createdAt: 2,
+        lastValidatedAt: 2,
+      }),
+    );
+    const materialize = async (
+      deliveryId: string,
+      now: number,
+      expectedProvider: "anthropic" | "gemini",
+    ) => {
       await t.mutation(internal.githubWebhookData.reserve, {
         deliveryId,
         event: "issue_comment",
@@ -3111,21 +3136,32 @@ describe("GitHub webhook durability", () => {
         baseRef: "main",
         triggerActor: "e".repeat(64),
         actorPermission: "admin",
+        expectedProvider,
+        expectedBudgetLimit: expectedProvider === "anthropic" ? 1 : 3,
         now: now + 1,
       });
     };
 
-    const first = await materialize("delivery-first", 1);
+    const first = await materialize("delivery-first", 1, "anthropic");
+    expect(await t.run((ctx) => ctx.db.get(first.reviewId))).toMatchObject({
+      provider: "anthropic",
+      budgetLimit: 1,
+    });
     await t.run((ctx) =>
       ctx.db.patch(first.reviewId, {
         status: "changes_requested",
         updatedAt: 3,
       }),
     );
-    const retry = await materialize("delivery-retry", 4);
+    const retry = await materialize("delivery-retry", 4, "gemini");
 
     expect(retry).toMatchObject({ status: "queued" });
     expect(retry.reviewId).not.toBe(first.reviewId);
+    expect(await t.run((ctx) => ctx.db.get(retry.reviewId))).toMatchObject({
+      provider: "gemini",
+      model: "gemini-2.5-flash",
+      budgetLimit: 3,
+    });
     expect(
       await t.run((ctx) =>
         ctx.db

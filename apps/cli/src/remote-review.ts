@@ -3,6 +3,8 @@ import type { CliEvent } from "./local-review.js";
 
 type Result = { code: number; stdout: string; stderr: string };
 export type RemoteExec = (file: string, args: string[]) => Promise<Result>;
+export type RemoteProvider = "anthropic" | "openai" | "gemini";
+export type RemoteBudget = 1 | 2 | 3 | 5;
 const execute: RemoteExec = (file, args) =>
   new Promise((resolve, reject) => {
     const child = spawn(file, args, {
@@ -58,13 +60,17 @@ export async function requestRemoteCommand(input: {
   pr: string | undefined;
   repo?: string | undefined;
   command: "review" | "cancel";
+  provider?: RemoteProvider | undefined;
+  budgetLimit?: RemoteBudget | undefined;
   emit: (item: CliEvent) => void;
   exec?: RemoteExec;
 }) {
   const exec = input.exec ?? execute,
     pr = validPr(input.pr),
     repo = await currentRepository(exec, input.repo),
-    body = "@buildit " + input.command;
+    body = `@buildit ${input.command}${input.provider ? ` provider=${input.provider}` : ""}${input.budgetLimit ? ` budget=${input.budgetLimit}` : ""}`;
+  if (input.command === "cancel" && (input.provider || input.budgetLimit))
+    throw new Error("review_options_not_allowed_for_cancel");
   const preview = await exec("gh", [
     "pr",
     "view",
@@ -99,6 +105,8 @@ export async function requestRemoteCommand(input: {
       repository: repo,
       prNumber: pr,
       command: input.command,
+      ...(input.provider ? { provider: input.provider } : {}),
+      ...(input.budgetLimit ? { budgetLimit: input.budgetLimit } : {}),
       pinnedHead: pull.headRefOid,
       prUrl: pull.url,
       commentUrl:
@@ -252,6 +260,8 @@ export async function requestRemoteAutofix(input: {
   pr: string | undefined;
   repo?: string | undefined;
   confirmed: boolean;
+  provider?: RemoteProvider | undefined;
+  budgetLimit?: RemoteBudget | undefined;
   emit: (item: CliEvent) => void;
   exec?: RemoteExec;
 }) {
@@ -284,7 +294,7 @@ export async function requestRemoteAutofix(input: {
     "POST",
     "repos/" + repo + "/issues/" + pr + "/comments",
     "-f",
-    "body=@buildit autofix stacked",
+    `body=@buildit autofix stacked${input.provider ? ` provider=${input.provider}` : ""}${input.budgetLimit ? ` budget=${input.budgetLimit}` : ""}`,
   ]);
   if (result.code !== 0) throw new Error("github_command_failed");
   const response = JSON.parse(result.stdout) as { html_url?: unknown };
@@ -293,6 +303,8 @@ export async function requestRemoteAutofix(input: {
       repository: repo,
       prNumber: pr,
       command: "autofix_stacked",
+      ...(input.provider ? { provider: input.provider } : {}),
+      ...(input.budgetLimit ? { budgetLimit: input.budgetLimit } : {}),
       pinnedHead: pull.headRefOid,
       prUrl: pull.url,
       commentUrl:

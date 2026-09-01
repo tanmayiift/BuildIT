@@ -188,6 +188,10 @@ export const processWebhook = internalAction({
           baseRef: snapshot.baseRef,
           triggerActor: await sha256(args.senderLogin.toLowerCase()),
           actorPermission: permission,
+          ...(decision.provider ? { expectedProvider: decision.provider } : {}),
+          ...(decision.budgetLimit
+            ? { expectedBudgetLimit: decision.budgetLimit }
+            : {}),
           now: Date.now(),
         },
       );

@@ -91,6 +91,44 @@ describe("remote GitHub CLI review commands", () => {
     );
   });
 
+  it("pins an explicitly selected provider into the GitHub command", async () => {
+    const f = fixture([
+      {
+        code: 0,
+        stdout: JSON.stringify({
+          url: "https://github.com/acme/service/pull/7",
+          headRefOid: "a".repeat(40),
+        }),
+      },
+      {
+        code: 0,
+        stdout: JSON.stringify({
+          html_url: "https://github.com/acme/service/issues/7#comment",
+        }),
+      },
+    ]);
+    await requestRemoteCommand({
+      pr: "7",
+      repo: "acme/service",
+      command: "review",
+      provider: "anthropic",
+      budgetLimit: 2,
+      emit: f.emit,
+      exec: f.exec,
+    });
+    expect(f.calls[1]?.[1]).toContain(
+      "body=@buildit review provider=anthropic budget=2",
+    );
+    expect(f.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: "anthropic",
+          budgetLimit: 2,
+        }),
+      }),
+    );
+  });
+
   it("posts cancel through the same repository-scoped path", async () => {
     const f = fixture([
       { code: 0, stdout: JSON.stringify({ nameWithOwner: "acme/service" }) },
