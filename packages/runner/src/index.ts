@@ -8,7 +8,7 @@ export const SERVERLESS_PLAN_BUDGET_MS=150_000;
 export const SANDBOX_DIAGNOSTIC_RERUN_LIMIT=1;
 export const SERVERLESS_SANDBOX_WORK_BUDGET_MS=180_000;
 export const SANDBOX_SCANNER_TIMEOUT_MS=35_000;
-export const SANDBOX_TEARDOWN_RESERVE_MS=20_000;
+export const SANDBOX_OVERHEAD_RESERVE_MS=55_000;
 const commands:Record<PackageManager,Record<NamedCommand,string[]>>={npm:{install:["ci","--ignore-scripts","--no-audit"],test:["run","test"],lint:["run","lint"],typecheck:["run","typecheck"],build:["run","build"]},pnpm:{install:["install","--frozen-lockfile","--ignore-scripts"],test:["run","test"],lint:["run","lint"],typecheck:["run","typecheck"],build:["run","build"]},yarn:{install:["install","--immutable","--mode=skip-builds"],test:["run","test"],lint:["run","lint"],typecheck:["run","typecheck"],build:["run","build"]}};
 const kinds:Record<NamedCommand,CheckKind>={install:"build",test:"test",lint:"lint",typecheck:"typecheck",build:"build"};
 export function createNamedPlan(input:{planId:NamedCommand;manager:PackageManager;origin:"built_in"|"trusted_ref";required:boolean}):CommandPlan{return validatePlan({planId:input.planId,origin:input.origin,kind:kinds[input.planId],executable:input.manager,args:[...commands[input.manager][input.planId]],required:input.required,timeoutMs:input.planId==="install"?600_000:1_200_000,cpuLimit:2,memoryMb:4096,outputBytes:10_000_000,fileBytes:1_000_000_000,network:input.planId==="install"?"registry_only":"none"})}

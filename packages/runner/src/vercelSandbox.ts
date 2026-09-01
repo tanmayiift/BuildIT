@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Sandbox } from "@vercel/sandbox";
-import { diagnoseFlakiness, executionReady, SANDBOX_DIAGNOSTIC_RERUN_LIMIT, SANDBOX_SCANNER_TIMEOUT_MS, SANDBOX_TEARDOWN_RESERVE_MS, SERVERLESS_SANDBOX_WORK_BUDGET_MS, type CheckResult, type CommandPlan, type DiagnosticRun, type Workspace } from "./index.js";
+import { diagnoseFlakiness, executionReady, SANDBOX_DIAGNOSTIC_RERUN_LIMIT, SANDBOX_OVERHEAD_RESERVE_MS, SANDBOX_SCANNER_TIMEOUT_MS, SERVERLESS_SANDBOX_WORK_BUDGET_MS, type CheckResult, type CommandPlan, type DiagnosticRun, type Workspace } from "./index.js";
 
 type Finished = { exitCode: number; durationMs?: number; stdout(): Promise<string>; stderr(): Promise<string> };
 type SandboxCommand = { cmd: string; args: string[]; cwd?: string; timeoutMs: number };
@@ -45,7 +45,7 @@ export class VercelSandboxRunner {
     const planBudget = input.install.timeoutMs + input.checks.reduce((sum, plan) => sum + plan.timeoutMs, 0);
     const diagnosticBudget = input.checks.filter(plan => plan.required).reduce((sum, plan) => sum + plan.timeoutMs * SANDBOX_DIAGNOSTIC_RERUN_LIMIT, 0);
     if (planBudget + diagnosticBudget > SERVERLESS_SANDBOX_WORK_BUDGET_MS) throw new Error("sandbox_execution_budget_exceeded");
-    const timeout = planBudget + diagnosticBudget + SANDBOX_SCANNER_TIMEOUT_MS + SANDBOX_TEARDOWN_RESERVE_MS;
+    const timeout = planBudget + diagnosticBudget + SANDBOX_SCANNER_TIMEOUT_MS + SANDBOX_OVERHEAD_RESERVE_MS;
     if (input.image && !/@sha256:[0-9a-f]{64}$/.test(input.image)) throw new Error("sandbox_image_must_be_digest_pinned");
     const environment = { timeout, resources: { vcpus: 2 }, networkPolicy: "deny-all" as const, env: { CI: "true" }, region: "cdg1", persistent: false as const };
     const sandbox = await this.create(input.image ? { ...environment, image: input.image, ...(input.credentials ?? {}) } : { ...environment, runtime: input.runtime, ...(input.credentials ?? {}) });
