@@ -2,14 +2,11 @@
   "schemaVersion": 1,
   "verdictWhileOpen": "not_ready",
   "blockers": [
-    {"id": "live-model-matrix", "owner": "buildit-and-consenting-user", "state": "open", "dependency": "private, CLI, Gemini, neutral-change, Autofix, revoke, self-review, and stacked-PR runs"},
+    {"id": "live-model-matrix", "owner": "buildit-and-consenting-user", "state": "open", "dependency": "private review, live neutral/AACR/SWE populations, accepted Autofix, self-review, and stacked-PR handoff"},
     {"id": "blind-human-labels", "owner": "human-reviewers", "state": "open", "dependency": "qualified independent reviewers"},
-    {"id": "two-real-users", "owner": "customer-testers", "state": "open", "dependency": "one completed live review per already-established independent identity"},
+    {"id": "two-real-users", "owner": "customer-testers", "state": "open", "dependency": "the second person independently connects a provider key and consents to one bounded review in their isolated workspace"},
     {"id": "external-security-audit", "owner": "independent-auditor", "state": "open", "dependency": "contracted penetration test and optional certification audit"},
     {"id": "tracker-and-email-integrations", "owner": "buildit-operator", "state": "open", "dependency": "provider applications and credentials"},
-    {"id": "production-alert-delivery", "owner": "buildit-operator", "state": "open", "dependency": "Grafana administrator session and BuildIT-only notification destination"},
-    {"id": "github-app-key-cleanup", "owner": "github-app-owner", "state": "open", "dependency": "identify the active replacement and delete only the three prior remote keys"},
-    {"id": "runner-region-approval", "owner": "product-owner", "state": "open", "dependency": "approve and disclose Paris runner processing with Ireland artifact storage"},
     {"id": "design-partner-evidence", "owner": "founder", "state": "open", "dependency": "3 to 10 observed first-review sessions and repeat-use evidence"}
   ]
 }

@@ -17,6 +17,8 @@ The later result-truthfulness release is source `18ddf41fda652c296306ed5a7371abb
 
 The public alias was explicitly reassigned to the latest Ready web deployment after the documentation release. `/reviews` returned HTTP 200.
 
+The later processing-region disclosure release is source `1f3a686202c89982f9575f44536fb6bbff92e061`, GitHub Security run `33480544749`, Build/Test run `33480544750`, and Ready web deployment `dpl_3yQcfTdHfoL5gtkGhmAUrj6mVZxN`. The public alias was explicitly assigned to it and returned HTTP 200. Its public data page and a freshly authenticated owner permission receipt both state the exact split: encrypted source artifacts stay in AWS Ireland, while isolated repository checks run in Paris, France.
+
 ## Review outcome proof
 
 The production queue was refreshed in an authenticated browser after the result-truthfulness release. It showed one current result for the controlled public fixture and grouped 13 other attempts into the audit trail. The current result was `Changes needed`, not `Platform failed`. It named the failed required check as the reason, preserved exact head `682805e`, and explained that the latest retry stopped while the code decision remained visible. The screenshot is retained locally and contains no source, credential, or browser-session data.
