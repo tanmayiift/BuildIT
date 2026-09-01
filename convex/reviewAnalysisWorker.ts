@@ -135,6 +135,15 @@ export function selectFindingsModel(provider: ProviderName, primary: string, ava
 }
 export function requireIndependentCritic(findings:FindingCandidate[],decisions:CriticDecision[],independent:boolean){if(independent)return decisions;const risky=new Set(findings.filter(item=>item.origin==="model"&&["critical","high"].includes(item.severity)).map(item=>item.id));return decisions.map(item=>risky.has(item.findingId)?{...item,verdict:"uncertain" as const,missingEvidenceIds:[...new Set([...item.missingEvidenceIds,"independent-critic-unavailable"])],explanation:"An independent approved critic model was unavailable."}:item)}
 
+type ScannerFindingInput = { scanner?: string; ruleId?: string; fingerprint?: string; severity?: "critical" | "warning" | "info"; path?: string; startLine?: number; endLine?: number; summary?: string };
+export function introducedScannerFindings(base: ScannerFindingInput[], head: ScannerFindingInput[]) {
+  const key = (item: ScannerFindingInput) => typeof item.fingerprint === "string" && item.fingerprint.length > 0 && typeof item.ruleId === "string" && typeof item.path === "string"
+    ? `${item.scanner ?? "unknown"}\0${item.ruleId}\0${item.path}\0${item.fingerprint}` : undefined;
+  const remaining = new Map<string, number>();
+  for (const item of base) { const value = key(item); if (value) remaining.set(value, (remaining.get(value) ?? 0) + 1); }
+  return head.filter(item => { const value = key(item); if (!value) return true; const count = remaining.get(value) ?? 0; if (!count) return true; if (count === 1) remaining.delete(value); else remaining.set(value, count - 1); return false; });
+}
+
 export const analyze = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
   handler: async (ctx, args): Promise<{ artifactId: string; stages: number; inputTokens: number; outputTokens: number }> => {
@@ -189,7 +198,8 @@ export const analyze = internalAction({
     const criteriaIds = new Set(requirements.map(item => item.id));
     const modelFindings = normalizeFindingCriteria(((stage("findings").findings ?? []) as FindingCandidate[]).map(item => ({ ...item, origin: "model" as const })), criteriaIds);
     const critic = requireIndependentCritic(modelFindings,((stage("critic").decisions ?? []) as CriticDecision[]),criticRoute.independent);
-    const scannerHead = (validationValue.output?.scanners as { head?: { findings?: Array<{ ruleId?: string; severity?: "critical" | "warning" | "info"; path?: string; startLine?: number; endLine?: number; summary?: string }> } } | undefined)?.head?.findings ?? [];
+    const scannerRuns = validationValue.output?.scanners as { base?: { findings?: ScannerFindingInput[] }; head?: { findings?: ScannerFindingInput[] } } | undefined;
+    const scannerHead = introducedScannerFindings(scannerRuns?.base?.findings ?? [], scannerRuns?.head?.findings ?? []);
     const scannerFindings: FindingCandidate[] = scannerHead.flatMap((item, index) => {
       if (!item.path || !item.ruleId || !item.severity || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine)) return [];
       const evidence = [...headEvidence.values()].find(value => value.record.path === item.path);
