@@ -49,9 +49,10 @@ The second identity's own review remains blocked at model-provider setup. A symm
 
 The isolated Grafana folder `buildit` was updated without modifying Orbit resources.
 
-- Dashboard `buildit-overview` is at version 2 with 14 product, accuracy, reliability, provider, runner, artifact, delivery, security, cost, and capacity panels.
+- Dashboard `buildit-overview` is at version 3 with 14 product, accuracy, reliability, provider, runner, artifact, delivery, security, cost, and capacity panels. Its datasource is a selectable Prometheus variable; this Cloud copy is pinned to the stack's real `grafanacloud-prom` datasource rather than the nonexistent earlier `buildit-prometheus` UID.
 - Twelve BuildIT alert rules are present in the BuildIT folder/group.
-- Production displays all seven fixed, source-free snapshot measurements: active reviews, budget stops, capacity utilization, effective LOC delivered, expired artifact backlog, hourly model cost, and queue depth.
+- Production queries display all seven fixed, source-free snapshot measurements: active reviews, budget stops, capacity utilization, effective LOC delivered, expired artifact backlog, hourly model cost, and queue depth.
+- A 24-hour production range query returned retained successful `github.check` and `github.comment` series, each with 23 samples and counter value 1. This proves the deployed review worker emitted both side-effect signals.
 - A controlled unsupported webhook command produced the bounded `webhook.process / blocked` series without a model call, code change, or GitHub write.
 - A separate `BuildIT alerts (Tanmay)` email contact point exists, and all 12 BuildIT rules route directly to it. Orbit's notification policy was not edited.
 
