@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { promptStages, reviewPromptStages } from "../src/promptChain";
 import { runModelPatchChain, runModelReviewChain, stageSchemas, validateRoutes } from "../src/modelChain";
+import { assertStrictSchema } from "@buildit/providers";
 
 const values: Record<string, Record<string, unknown>> = {
   requirements: { requirements: [] }, review_plan: { checks: [], evidenceOperations: [], riskAreas: [], exclusions: [] }, findings: { findings: [] },
@@ -9,6 +10,9 @@ const values: Record<string, Record<string, unknown>> = {
 const pinned = { headSha: "a".repeat(40), baseSha: "b".repeat(40), configRevision: "cfg" };
 
 describe("executable model review chain", () => {
+  it("keeps every provider schema compatible with OpenAI strict structured output", () => {
+    for (const schema of Object.values(stageSchemas)) expect(() => assertStrictSchema(schema)).not.toThrow();
+  });
   it("invokes six strict review stages and never requests a patch", async () => {
     const usage: unknown[] = [];
     const invoke = vi.fn(async request => ({ value: values[request.stage], provider: "gemini" as const, model: "gemini-test", finishReason: "STOP", inputTokens: 10, outputTokens: 2, requestId: "request-1" }));
