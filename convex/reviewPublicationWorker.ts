@@ -22,6 +22,10 @@ export function publicationTitle(status: string) {
   return "Review needs attention";
 }
 
+export function reviewDetailsUrl(reviewId: string) {
+  return new URL(`/reviews/${encodeURIComponent(reviewId)}`, "https://buildit-agentic-review.vercel.app").toString();
+}
+
 export const publish = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
   handler: async (ctx, args): Promise<{ checkId: string; commentId: string }> => {
@@ -42,7 +46,7 @@ export const publish = internalAction({
       const writer = new GitHubRepositoryWriter({ repositoryId: scope.githubRepositoryId, installationToken: token }), requestHash = createHash("sha256").update(`${scope.conclusion}\0${body}`).digest("hex"), now = Date.now();
       const slot = String(scope.reviewId), checkKey = sideEffectKey({ repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, headSha: scope.headSha, kind: "check", slot }), commentKey = sideEffectKey({ repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, headSha: scope.headSha, kind: "comment", slot });
       const checkEffect: Id<"githubSideEffects"> = await ctx.runMutation(internal.reviewState.reserveSideEffect, { ...args, operationKey: checkKey, type: "check_update", requestHash, now });
-      const check = await writer.upsertCheckRun({ name: "BuildIT / review", headSha: scope.headSha, conclusion: scope.conclusion, title: publicationTitle(scope.status), summary: body });
+      const check = await writer.upsertCheckRun({ name: "BuildIT / review", headSha: scope.headSha, conclusion: scope.conclusion, title: publicationTitle(scope.status), summary: body, detailsUrl: reviewDetailsUrl(String(scope.reviewId)) });
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, { ...args, sideEffectId: checkEffect, requestHash, externalId: String(check.id), status: "completed", now: Date.now() });
       const commentEffect: Id<"githubSideEffects"> = await ctx.runMutation(internal.reviewState.reserveSideEffect, { ...args, operationKey: commentKey, type: "comment_update", requestHash, now });
       const comment = await writer.upsertIssueComment({ prNumber: scope.prNumber, marker: `buildit-review:${scope.reviewId}:${scope.headSha}`, body });

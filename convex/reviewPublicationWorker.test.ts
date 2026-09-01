@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertReportPublicationContract, publicationTitle } from "./reviewPublicationWorker";
+import { assertReportPublicationContract, publicationTitle, reviewDetailsUrl } from "./reviewPublicationWorker";
 
 const head = "a".repeat(40);
 
@@ -31,5 +31,10 @@ describe("review publication title", () => {
     expect(publicationTitle("checks_passed")).toBe("Ready for human review");
     expect(publicationTitle("failed_after_three_rounds")).toBe("Review needs attention");
     expect(publicationTitle("unexpected_status")).toBe("Review needs attention");
+  });
+
+  it("links only to the fixed production review route", () => {
+    expect(reviewDetailsUrl("review_123")).toBe("https://buildit-agentic-review.vercel.app/reviews/review_123");
+    expect(reviewDetailsUrl("../foreign?x=1")).toBe("https://buildit-agentic-review.vercel.app/reviews/..%2Fforeign%3Fx%3D1");
   });
 });
