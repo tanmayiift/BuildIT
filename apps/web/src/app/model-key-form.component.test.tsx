@@ -51,10 +51,13 @@ describe("authenticated model-key controls", () => {
     render(<ModelKeyForm />);
     expect((await screen.findAllByText("acme/api")).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Key ending in nmiQ").textContent).toContain("•••• nmiQ");
-    expect(screen.getByText(/Validated .*last used/)).not.toBeNull();
+    expect(screen.getByText("Validated", { exact: true })).not.toBeNull();
+    expect(screen.getByText(/used 8\/31\/2026/)).not.toBeNull();
     expect(document.body.textContent).not.toContain("session-token");
     const replace = screen.getByRole("button", { name: "Replace" }), revoke = screen.getByRole("button", { name: "Revoke" });
     expect(replace.compareDocumentPosition(revoke) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await user.tab();
+    expect(document.activeElement?.tagName).toBe("SUMMARY");
     await user.tab();
     expect(document.activeElement?.tagName).toBe("SELECT");
   });
@@ -62,7 +65,8 @@ describe("authenticated model-key controls", () => {
   it("truthfully distinguishes a valid key that has never been used", async () => {
     state.credentials = [{ ...credential, lastUsedAt: undefined }];
     render(<ModelKeyForm />);
-    expect(await screen.findByText(/Validated .*never used/)).not.toBeNull();
+    expect(await screen.findByText("Validated", { exact: true })).not.toBeNull();
+    expect(screen.getByText(/not used yet/)).not.toBeNull();
   });
 
   it("requires a reversible confirmation before revocation", async () => {
@@ -106,7 +110,7 @@ describe("authenticated model-key controls", () => {
     expect(await screen.findByLabelText("Key ending in nmiQ")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Replace" }).closest(".credential-actions")).not.toBeNull();
     const css = readFileSync("apps/web/src/app/flows.css", "utf8");
-    expect(css).toMatch(/@media\(max-width:760px\).*\.saved-credentials>div\{grid-template-columns:38px 1fr\}/s);
-    expect(css).toMatch(/\.credential-actions,.credential-confirm\{grid-column:2\}/);
+    expect(css).toMatch(/@media\(max-width:640px\).*\.credential-row\{grid-template-columns:38px minmax\(0,1fr\)/s);
+    expect(css).toMatch(/\.credential-actions,.credential-confirm\{grid-column:1\/-1/);
   });
 });

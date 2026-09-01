@@ -6,11 +6,11 @@ const message: DecisionEmail = { recipient: { email: "rohan@example.com", organi
 describe("source-free decision email", () => {
   it("leads with the outcome, next human action, and exact source-free receipt", () => {
     const result = decisionEmail(message);
-    expect(result).toEqual(expect.objectContaining({ subject: "Changes need review · acme/api #42", idempotencyKey: "review:42:decision" }));
+    expect(result).toEqual(expect.objectContaining({ subject: "[BuildIT] Changes need review · acme/api #42", idempotencyKey: "review:42:decision" }));
     expect(result.text).toContain("BuildIT review: Changes need review");
-    expect(result.text).toContain("What to do next: Inspect the evidence and decide whether the pull request should change.");
+    expect(result.text).toContain("Next action\nInspect the evidence and decide whether the pull request should change.");
     expect(result.text).toContain(`Exact commit: ${"a".repeat(40)}`);
-    expect(result.text).toContain("Open in BuildIT: https://buildit.example/reviews/42");
+    expect(result.text).toContain("Open evidence: https://buildit.example/reviews/42");
     expect(result.text).toContain("Open on GitHub: https://github.com/acme/api/pull/42");
     expect(result.text).not.toContain("changes_requested");
   });
@@ -20,6 +20,7 @@ describe("source-free decision email", () => {
     expect(result.html).toContain("Inspect the evidence and decide whether the pull request should change.");
     expect(result.html).toContain(`aria-label="Open BuildIT review for acme/api pull request 42"`);
     expect(result.html).toContain("BuildIT cannot merge this pull request");
+    expect(result.html).toContain("verified person who enabled review email for this workspace");
     expect(result.html).not.toMatch(/<img|tracking|pixel|script/i);
   });
   it("rejects source-like, unknown-status, or unsafe action fields", () => {

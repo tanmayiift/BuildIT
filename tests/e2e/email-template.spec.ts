@@ -22,7 +22,7 @@ const message = decisionEmail({
 test("decision email is readable, source-free, and visually stable", async ({ page }) => {
   await page.setContent(message.html);
   await expect(page.getByRole("heading", { name: "Changes need review" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "What to do next" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Next action" })).toBeVisible();
   await expect(page.getByRole("link", { name: /Open BuildIT review/ })).toHaveAttribute("href", /buildit-agentic-review\.vercel\.app/);
   await expect(page.getByRole("link", { name: /Open northstar\/payments pull request/ })).toHaveAttribute("href", "https://github.com/northstar/payments/pull/42");
   await expect(page.locator("img, script, iframe")).toHaveCount(0);
