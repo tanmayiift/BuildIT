@@ -26,7 +26,7 @@ export const scope = internalQuery({
     return { actorId: access.userId, actorRole: access.role, organizationId: access.repository.organizationId,
       repositoryId: access.repository._id, githubRepositoryId: access.repository.githubRepositoryId,
       installationId: access.installation.installationId, owner: access.repository.owner, name: access.repository.name,
-      forkPolicy: access.repository.forkPolicy, credentialScopeId: credential.credentialScopeId, provider: credential.provider, model };
+      forkPolicy: access.repository.forkPolicy, credentialScopeId: credential.credentialScopeId, provider: credential.provider, model, availableModels: credential.availableModels ?? [] };
   },
 });
 

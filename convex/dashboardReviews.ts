@@ -12,7 +12,7 @@ const provider = v.union(v.literal("anthropic"), v.literal("openai"), v.literal(
 const args = { repositoryId: v.id("repositories"), prNumber: v.number(), budgetLimit: v.number(), provider };
 type DashboardScope = { actorId: string; actorRole: "developer" | "admin" | "owner"; organizationId: Id<"organizations">;
   repositoryId: Id<"repositories">; githubRepositoryId: number; installationId: number; owner: string; name: string; forkPolicy: "manual_review_only" | "disabled";
-  credentialScopeId: string; provider: "anthropic" | "openai" | "gemini"; model: string };
+  credentialScopeId: string; provider: "anthropic" | "openai" | "gemini"; model: string; availableModels: string[] };
 type PreparedReview = { repository: string; pull: Awaited<ReturnType<typeof snapshot>>; credentialScopeId: string; consent: { reads: string[]; runs: string[]; provider: string; model: string; maximumProviderCostUsd: number; writes: string[]; cannot: string[] } };
 const recordPreview = makeFunctionReference<"mutation", { repositoryId: Id<"repositories">; actorId: string; headSha: string; now: number }, string>("dashboardReviewData:recordPreview");
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
@@ -28,6 +28,10 @@ export function previewTelemetryFailure(code: ReturnType<typeof previewFailureCo
   if (code === "github_app_access_unavailable") return "configuration_missing" as const;
   if (code === "pull_request_unavailable") return "upstream_unavailable" as const;
   return "UnknownError" as const;
+}
+export function modelRouteDescription(route: Pick<DashboardScope, "provider" | "model" | "availableModels">) {
+  if (route.provider === "openai" && route.model === "gpt-5.4-mini" && route.availableModels.includes("gpt-5.4")) return "openai · gpt-5.4-mini for context and independent checks, with gpt-5.4 for code findings";
+  return `${route.provider} · ${route.model}`;
 }
 async function snapshot(scope: { installationId: number; githubRepositoryId: number; forkPolicy: "manual_review_only" | "disabled" }, prNumber: number) {
   if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error("invalid_pull_request_number");
@@ -58,7 +62,7 @@ export const prepare = action({ args, handler: async (ctx, input): Promise<Prepa
   return { repository: `${scope.owner}/${scope.name}`, pull, credentialScopeId: scope.credentialScopeId,
     consent: { reads: ["PR description and diff", "linked GitHub Issues", "repository files needed for impact analysis"],
       runs: ["dependency install with scripts disabled", "test", "lint", "typecheck", "Gitleaks 8.28.0", "OSV-Scanner 2.2.3", "BuildIT static rules 1.0.0"],
-      provider: scope.provider, model: `${scope.provider} · ${scope.model}. Only bounded context and evidence go to this provider through the saved key inspected now`, maximumProviderCostUsd: input.budgetLimit,
+      provider: scope.provider, model: `${modelRouteDescription(scope)}. Only bounded context and evidence go to this provider through the saved key inspected now`, maximumProviderCostUsd: input.budgetLimit,
       writes: ["one BuildIT Check", "one BuildIT PR summary"], cannot: ["merge", "edit workflows", "change repository settings", "write a fix branch during review mode"] } };
 } });
 

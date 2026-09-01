@@ -7,7 +7,7 @@ export type AuthorizationPolicy =
   | "active_organization_admin_recent_auth"
   | "invited_user";
 
-export type ResponseClassification = "none" | "metadata" | "personal_identity";
+export type ResponseClassification = "none" | "metadata" | "personal_identity" | "authorized_source_derived";
 
 export const publicFunctionPolicies = {
   "activation:funnel": { authorization: "active_organization_viewer", response: "metadata" },
@@ -45,6 +45,7 @@ export const publicFunctionPolicies = {
   "reviews:list": { authorization: "active_organization_viewer", response: "metadata" },
   "reviews:get": { authorization: "active_organization_viewer", response: "metadata" },
   "reviews:getEvidence": { authorization: "active_organization_viewer", response: "metadata" },
+  "reviewEvidenceActions:getFindingDetails": { authorization: "active_organization_viewer", response: "authorized_source_derived" },
   "users:viewer": { authorization: "authenticated_user", response: "personal_identity" },
   "users:sessions": { authorization: "authenticated_user", response: "metadata" },
   "users:revokeOtherSessions": { authorization: "authenticated_user", response: "metadata" },
