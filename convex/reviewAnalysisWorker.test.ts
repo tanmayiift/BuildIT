@@ -23,6 +23,18 @@ describe("bounded model evidence selection", () => {
     expect(result.coverage).toBe("partial");
   });
 
+  it("bounds many-file PR metadata and reports exact omission totals instead of crashing", () => {
+    const manyFiles = Array.from({ length: 1_200 }, (_, index) => ({ path: `src/generated/very-long-component-name-${String(index).padStart(4, "0")}.ts`, status: "modified", patch: `@@ ${index}\n${"x".repeat(300)}` }));
+    const omissions = Array.from({ length: 1_200 }, (_, index) => ({ path: `vendor/omitted-${index}.bin`, reason: "budget" }));
+    const result = boundedAnalysisContext([{ pull: { ...pull, files: manyFiles, omitted: omissions }, snapshot: { coverage: "partial", omitted: omissions, files: [] } }], 80_000);
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(80_000);
+    expect(result.coverage).toBe("partial");
+    expect(result.exclusions.totals.changedFiles).toBeGreaterThan(0);
+    expect(result.exclusions.totals.patches).toBeGreaterThan(0);
+    expect(result.exclusions.totals.sourceOmissions).toBe(1_200);
+    expect(result.exclusions.totals.pullOmissions).toBe(1_200);
+  });
+
   it("passes pinned ticket criteria to the model and preserves incomplete intent coverage", () => {
     const result = boundedAnalysisContext([{ pull: { ...pull, requirementCoverage: "partial", requirementSources: [{ id: "linked-1", type: "github_issue", status: "available", version: '"issue-v2"', urlHash: "b".repeat(64), content: "## Acceptance criteria\n- Reject empty names" }, { id: "linked-2", type: "linear", status: "inaccessible", version: "connection_unavailable", urlHash: "c".repeat(64) }], requirements: [{ id: "req-linked-1-2", text: "Reject empty names", sourceId: "linked-1", line: 2, evidenceHash: "d".repeat(64), certainty: "explicit" }] }, snapshot: { coverage: "full", omitted: [], files: [] } }], 80_000);
     expect(result.pull.requirements).toEqual([expect.objectContaining({ text: "Reject empty names", evidenceHash: "d".repeat(64) })]);
