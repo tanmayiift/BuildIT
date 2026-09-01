@@ -15,6 +15,19 @@ type DashboardScope = { actorId: string; actorRole: "developer" | "admin" | "own
 type PreparedReview = { repository: string; pull: Awaited<ReturnType<typeof snapshot>>; credentialScopeId: string; consent: { reads: string[]; runs: string[]; provider: string; model: string; maximumProviderCostUsd: number; writes: string[]; cannot: string[] } };
 const recordPreview = makeFunctionReference<"mutation", { repositoryId: Id<"repositories">; actorId: string; headSha: string; now: number }, string>("dashboardReviewData:recordPreview");
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
+export function previewFailureCode(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (message === "github_timeout") return "github_timeout";
+  if (message === "pull_request_unavailable" || message.startsWith("github_pull_request_")) return "pull_request_unavailable";
+  if (message === "repository_or_installation_unavailable" || message === "installation_unavailable" || message === "installation_suspended" || message.startsWith("github_token_") || message.startsWith("github_installation_")) return "github_app_access_unavailable";
+  return "github_preview_failed";
+}
+export function previewTelemetryFailure(code: ReturnType<typeof previewFailureCode>) {
+  if (code === "github_timeout") return "timeout" as const;
+  if (code === "github_app_access_unavailable") return "configuration_missing" as const;
+  if (code === "pull_request_unavailable") return "upstream_unavailable" as const;
+  return "UnknownError" as const;
+}
 async function snapshot(scope: { installationId: number; githubRepositoryId: number; forkPolicy: "manual_review_only" | "disabled" }, prNumber: number) {
   if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error("invalid_pull_request_number");
   const client = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
@@ -32,7 +45,13 @@ async function snapshot(scope: { installationId: number; githubRepositoryId: num
 
 export const prepare = action({ args, handler: async (ctx, input): Promise<PreparedReview> => {
   const scope: DashboardScope = await ctx.runQuery(internal.dashboardReviewData.scope, { repositoryId: input.repositoryId });
-  const pull = await snapshot(scope, input.prNumber);
+  let pull: Awaited<ReturnType<typeof snapshot>>;
+  try { pull = await snapshot(scope, input.prNumber); }
+  catch (error) {
+    const code = previewFailureCode(error);
+    await ctx.runAction(internal.telemetryWorker.emit, { operation: "activation.preview", stage: "activation", outcome: "failed", errorCode: previewTelemetryFailure(code) });
+    throw new Error(code);
+  }
   await ctx.runMutation(recordPreview, { repositoryId: input.repositoryId, actorId: scope.actorId, headSha: pull.headSha, now: Date.now() });
   await ctx.runAction(internal.telemetryWorker.emit, { operation: "activation.preview", stage: "activation", outcome: "succeeded" });
   return { repository: `${scope.owner}/${scope.name}`, pull, credentialScopeId: scope.credentialScopeId,
