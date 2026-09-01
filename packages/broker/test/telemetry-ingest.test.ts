@@ -16,6 +16,13 @@ describe("signed telemetry ingest boundary", () => {
     expect(parseTelemetryEvent({ operation: "review.decision", outcome: "succeeded", stage: "decision" })).toEqual({ operation: "review.decision", outcome: "succeeded", stage: "decision" });
   });
 
+  it("accepts only bounded fixed-name operational snapshots", () => {
+    expect(parseTelemetryEvent({ measurement: "queue_depth", value: 4 })).toEqual({ measurement: "queue_depth", value: 4 });
+    expect(parseTelemetryEvent({ measurement: "tenant_queue_depth", value: 4 })).toBeUndefined();
+    expect(parseTelemetryEvent({ measurement: "queue_depth", value: -1 })).toBeUndefined();
+    expect(parseTelemetryEvent({ measurement: "queue_depth", value: 1, organizationId: "never" })).toBeUndefined();
+  });
+
   it("rejects altered bodies, source-like fields, and unknown labels", async () => {
     expect(verifyTelemetrySignature(secret, `${body}x`, signTelemetryEvent(secret, body))).toBe(false);
     expect(parseTelemetryEvent({ operation: "review.context", outcome: "succeeded", source: "never" })).toBeUndefined();

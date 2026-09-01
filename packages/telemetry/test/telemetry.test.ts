@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { safeAttributes, safeLog, traced } from "../src/index.js";
+import { safeAttributes, safeLog, safeMeasurement, traced } from "../src/index.js";
 import { parseOtlpHeaders } from "../src/register.js";
 
 describe("source-free telemetry", () => {
@@ -11,6 +11,17 @@ describe("source-free telemetry", () => {
 
   it("collapses unknown operations to prevent customer-controlled metric labels", () => {
     expect(safeAttributes({ operation: "customer/repository/name" } as never)).toEqual({ "buildit.operation": "other" });
+  });
+
+  it("accepts only bounded source-free operational measurements", () => {
+    expect(safeMeasurement({ measurement: "queue_depth", value: 12 })).toEqual({
+      value: 12,
+      attributes: { "buildit.measurement": "queue_depth" },
+    });
+    expect(safeMeasurement({ measurement: "customer_name", value: 1 } as never)).toBeUndefined();
+    expect(safeMeasurement({ measurement: "queue_depth", value: -1 })).toBeUndefined();
+    expect(safeMeasurement({ measurement: "queue_depth", value: Number.POSITIVE_INFINITY })).toBeUndefined();
+    expect(safeMeasurement({ measurement: "queue_depth", value: 1_000_001 })).toBeUndefined();
   });
 
   it("logs only safe fields", () => {

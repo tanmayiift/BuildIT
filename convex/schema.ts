@@ -18,7 +18,7 @@ export default defineSchema({
     retentionHours: v.number(), monthlyBudget: v.number(), concurrencyLimit: v.number(),
     planId: v.string(), fingerprintKeyVersion: v.number(), createdAt: v.number(),
     deletedAt: v.optional(v.number()),
-  }).index("by_slug", ["slug"]).index("by_deleted", ["deletedAt"]),
+  }).index("by_slug", ["slug"]).index("by_deleted", ["deletedAt"]).index("by_created", ["createdAt"]),
 
   memberships: defineTable({
     organizationId: v.id("organizations"), userId: v.string(), role: value.role,
@@ -120,6 +120,7 @@ export default defineSchema({
     sandboxId: v.optional(v.string()), runnerImageVersion: v.string(), startedAt: v.optional(v.number()),
     completedAt: v.optional(v.number()), expiresAt: v.number(), createdAt: v.number(), updatedAt: v.number(),
   }).index("by_org_status", ["organizationId", "status"])
+    .index("by_status", ["status", "updatedAt"])
     .index("by_repo_pr_head_mode", ["repositoryId", "prNumber", "headSha", "mode"])
     .index("by_expiry", ["expiresAt"])
     .index("by_queue", ["organizationId", "status", "createdAt"])
@@ -212,6 +213,7 @@ export default defineSchema({
     deletionAttempts: v.number(), deletionLeaseId: v.optional(v.string()), deletionLeaseExpiresAt: v.optional(v.number()),
     lastDeletionErrorCode: v.optional(v.string()), deletionTerminalAt: v.optional(v.number()),
   }).index("by_expiry", ["expiresAt"])
+    .index("by_pending_expiry", ["deletedAt", "expiresAt"])
     .index("by_deletion_terminal", ["deletionTerminalAt"])
     .index("by_repository", ["repositoryId"])
     .index("by_review", ["reviewId"]),
@@ -221,6 +223,7 @@ export default defineSchema({
     roundId: v.optional(v.id("autofixRounds")), kind: value.usageKind, quantity: v.number(),
     unitCost: v.number(), currency: v.string(), occurredAt: v.number(),
   }).index("by_org_time", ["organizationId", "occurredAt"])
+    .index("by_time", ["occurredAt"])
     .index("by_review", ["reviewId"]),
 
   githubSideEffects: defineTable({

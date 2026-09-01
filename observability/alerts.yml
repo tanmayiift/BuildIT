@@ -21,3 +21,43 @@ groups:
         for: 0m
         labels: {severity: page}
         annotations: {summary: "A security or safety boundary failed"}
+      - alert: BuildITQueueDepthHigh
+        expr: max(buildit_snapshot{buildit_measurement="queue_depth"}) > 25
+        for: 10m
+        labels: {severity: ticket}
+        annotations: {summary: "BuildIT review queue has stayed above 25"}
+      - alert: BuildITProviderFailure
+        expr: sum(increase(buildit_failures_total{buildit_operation="model.invoke"}[10m])) > 2
+        for: 5m
+        labels: {severity: ticket}
+        annotations: {summary: "BuildIT model calls are repeatedly failing"}
+      - alert: BuildITRunnerFailure
+        expr: sum(increase(buildit_failures_total{buildit_operation=~"sandbox.execute|sandbox.cleanup"}[10m])) > 0
+        for: 0m
+        labels: {severity: page}
+        annotations: {summary: "BuildIT runner execution or cleanup failed"}
+      - alert: BuildITArtifactDeletionBacklog
+        expr: max(buildit_snapshot{buildit_measurement="expired_artifact_backlog"}) > 0
+        for: 20m
+        labels: {severity: page}
+        annotations: {summary: "Expired BuildIT artifacts remain undeleted"}
+      - alert: BuildITWebhookSignatureSpike
+        expr: sum(increase(buildit_failures_total{buildit_operation="webhook.verify"}[5m])) > 5
+        for: 0m
+        labels: {severity: page}
+        annotations: {summary: "BuildIT is rejecting an unusual number of webhook signatures"}
+      - alert: BuildITLoopGuardTrip
+        expr: sum(increase(buildit_failures_total{buildit_operation="autofix.loop_guard"}[5m])) > 0
+        for: 0m
+        labels: {severity: ticket}
+        annotations: {summary: "A BuildIT Autofix loop safety bound stopped a run"}
+      - alert: BuildITStaleCheck
+        expr: sum(increase(buildit_failures_total{buildit_operation="review.stale_check"}[5m])) > 0
+        for: 0m
+        labels: {severity: ticket}
+        annotations: {summary: "BuildIT stopped work because the reviewed commit changed"}
+      - alert: BuildITBudgetExhaustionSpike
+        expr: max(buildit_snapshot{buildit_measurement="budget_exhausted_reviews_hour"}) > 3
+        for: 5m
+        labels: {severity: ticket}
+        annotations: {summary: "More than three BuildIT reviews exhausted their budget this hour"}

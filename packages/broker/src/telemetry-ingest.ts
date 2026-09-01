@@ -1,7 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { operationNames, recordOperation, type OperationName, type ReviewStage, type SafeAttributes, type TelemetryOutcome } from "@buildit/telemetry";
+import { measurementNames, operationNames, recordMeasurement, recordOperation, type MeasurementName, type OperationName, type ReviewStage, type SafeAttributes, type TelemetryOutcome } from "@buildit/telemetry";
 
 const operations = new Set<string>(operationNames);
+const measurements = new Set<string>(measurementNames);
 const stages = new Set<ReviewStage>(["activation", "context", "requirements", "analysis", "critic", "tests", "autofix", "delivery", "decision"]);
 const outcomes = new Set<TelemetryOutcome>(["started", "succeeded", "failed", "cancelled", "blocked"]);
 const providers = new Set(["anthropic", "openai", "gemini"]);
@@ -9,7 +10,7 @@ const modes = new Set(["review", "autofix"]);
 const visibilities = new Set(["public", "private"]);
 const errorCodes = new Set(["UnknownError", "cancelled", "stale_head", "budget_exhausted", "loop_guard", "provider_error", "runner_error", "upstream_unavailable", "configuration_missing", "timeout", "rate_limited"]);
 
-export type TelemetryIngestEvent = SafeAttributes & { operation: OperationName; outcome: TelemetryOutcome };
+export type TelemetryIngestEvent = (SafeAttributes & { operation: OperationName; outcome: TelemetryOutcome }) | { measurement: MeasurementName; value: number };
 
 function signature(secret: string, body: string) {
   return `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
@@ -28,6 +29,10 @@ export function verifyTelemetrySignature(secret: string, body: string, supplied:
 export function parseTelemetryEvent(value: unknown): TelemetryIngestEvent | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const input = value as Record<string, unknown>, keys = Object.keys(input);
+  if (keys.length === 2 && keys.includes("measurement") && keys.includes("value")) {
+    if (typeof input.measurement !== "string" || !measurements.has(input.measurement) || typeof input.value !== "number" || !Number.isFinite(input.value) || input.value < 0 || input.value > 1_000_000) return undefined;
+    return input as { measurement: MeasurementName; value: number };
+  }
   if (!keys.length || keys.some(key => !["operation", "outcome", "stage", "provider", "reviewMode", "repositoryVisibility", "errorCode"].includes(key))) return undefined;
   if (typeof input.operation !== "string" || !operations.has(input.operation) || typeof input.outcome !== "string" || !outcomes.has(input.outcome as TelemetryOutcome)) return undefined;
   if (input.stage !== undefined && (typeof input.stage !== "string" || !stages.has(input.stage as ReviewStage))) return undefined;
@@ -50,6 +55,7 @@ export async function handleTelemetryIngest(request: Request, secret: string): P
   try { parsed = JSON.parse(body); } catch { return Response.json({ error: "telemetry_invalid" }, { status: 400, headers: { "cache-control": "no-store" } }); }
   const event = parseTelemetryEvent(parsed);
   if (!event) return Response.json({ error: "telemetry_invalid" }, { status: 400, headers: { "cache-control": "no-store" } });
-  recordOperation(event);
+  if ("measurement" in event) recordMeasurement(event);
+  else recordOperation(event);
   return Response.json({ accepted: true }, { status: 202, headers: { "cache-control": "no-store" } });
 }

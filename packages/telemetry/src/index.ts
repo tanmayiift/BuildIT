@@ -11,6 +11,11 @@ export const operationNames = [
   "tracker.fetch", "tracker.credential_save", "web.request", "webhook.verify", "webhook.process", "autofix.loop_guard", "telemetry.smoke",
 ] as const;
 export type OperationName = typeof operationNames[number];
+export const measurementNames = [
+  "queue_depth", "active_reviews", "capacity_utilization", "expired_artifact_backlog",
+  "model_cost_usd_hour", "budget_exhausted_reviews_hour", "effective_loc_delivered_hour",
+] as const;
+export type MeasurementName = typeof measurementNames[number];
 
 export type SafeAttributes = {
   stage?: ReviewStage;
@@ -25,6 +30,7 @@ export type SafeAttributes = {
 const forbidden = /(api.?key|authorization|cookie|credential|diff|email|file|header|owner|path|prompt|repo.?name|secret|source|stdout|token)/i;
 const allowed = new Set(["stage", "outcome", "provider", "reviewMode", "repositoryVisibility", "errorCode", "operation"]);
 const operationSet = new Set<string>(operationNames);
+const measurementSet = new Set<string>(measurementNames);
 const errorCodes = new Set(["TypeError", "UnknownError", "configuration_missing", "upstream_unavailable", "rate_limited", "timeout", "cancelled", "stale_head", "budget_exhausted", "loop_guard", "deletion_failed", "provider_error", "runner_error", ...Array.from({ length: 600 }, (_, index) => `http_${index}`)]);
 
 export function safeAttributes(input: SafeAttributes): Attributes {
@@ -37,6 +43,11 @@ export function safeAttributes(input: SafeAttributes): Attributes {
     output[`buildit.${key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)}`] = normalized;
   }
   return output;
+}
+
+export function safeMeasurement(input: { measurement: MeasurementName; value: number }): { value: number; attributes: Attributes } | undefined {
+  if (!measurementSet.has(input.measurement) || !Number.isFinite(input.value) || input.value < 0 || input.value > 1_000_000) return undefined;
+  return { value: input.value, attributes: { "buildit.measurement": input.measurement } };
 }
 
 function instruments() {
@@ -56,6 +67,15 @@ export function recordOperation(attributes: SafeAttributes & { durationMs?: numb
   operations.add(1, labels);
   if (rest.outcome === "failed" || rest.outcome === "blocked") failures.add(1, labels);
   if (durationMs !== undefined && Number.isFinite(durationMs) && durationMs >= 0) duration.record(durationMs, labels);
+}
+
+export function recordMeasurement(input: { measurement: MeasurementName; value: number }) {
+  const safe = safeMeasurement(input);
+  if (!safe) return false;
+  const meterProvider = (globalThis as typeof globalThis & { [key: symbol]: { getMeter(name: string): ReturnType<typeof metrics.getMeter> } | undefined })[Symbol.for("buildit.telemetry.meter-provider")];
+  const meter = meterProvider?.getMeter("buildit") ?? metrics.getMeter("buildit");
+  meter.createGauge("buildit.snapshot", { description: "Bounded global BuildIT operating measurement" }).record(safe.value, safe.attributes);
+  return true;
 }
 
 export async function traced<T>(name: string, attributes: SafeAttributes, task: () => Promise<T>): Promise<T> {
