@@ -276,6 +276,143 @@ describe("remote GitHub CLI review commands", () => {
     }
   });
 
+  it("includes the exact-commit BuildIT App report without another model call", async () => {
+    const headSha = "a".repeat(40),
+      f = fixture([
+        {
+          code: 0,
+          stdout: JSON.stringify({
+            url: "https://github.com/acme/service/pull/9",
+            headRefOid: headSha,
+            statusCheckRollup: [
+              {
+                name: "BuildIT / review",
+                status: "COMPLETED",
+                conclusion: "FAILURE",
+              },
+            ],
+          }),
+        },
+        {
+          code: 0,
+          stdout: JSON.stringify({
+            check_runs: [
+              {
+                name: "BuildIT / review",
+                status: "completed",
+                conclusion: "failure",
+                head_sha: headSha,
+                app: { slug: "buildit-agentic-review" },
+                output: {
+                  title: "Changes requested",
+                  summary:
+                    "### Findings\n- `src/tax.js:4`: tax only the excess above 100",
+                },
+              },
+            ],
+          }),
+        },
+      ]);
+    await expect(
+      remoteStatus({ pr: "9", repo: "acme/service", emit: f.emit, exec: f.exec }),
+    ).resolves.toBe(2);
+    expect(f.calls[1]).toEqual([
+      "gh",
+      [
+        "api",
+        `repos/acme/service/commits/${headSha}/check-runs`,
+        "-H",
+        "Accept: application/vnd.github+json",
+      ],
+    ]);
+    expect(f.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "remote_status",
+        data: expect.objectContaining({
+          report: {
+            title: "Changes requested",
+            summary:
+              "### Findings\n- `src/tax.js:4`: tax only the excess above 100",
+          },
+        }),
+      }),
+    );
+  });
+
+  it("omits foreign, stale, unsupported, malformed, or unsafe check reports", async () => {
+    const headSha = "a".repeat(40),
+      base = {
+        name: "BuildIT / review",
+        head_sha: headSha,
+        app: { slug: "buildit-agentic-review" },
+        output: { title: "Changes requested", summary: "safe" },
+      },
+      rejected = [
+        { ...base, app: { slug: "foreign-app" } },
+        { ...base, head_sha: "b".repeat(40) },
+        { ...base, name: "Foreign check" },
+        { ...base, output: { title: "\u001b[31munsafe", summary: "safe" } },
+      ];
+    for (const checkRun of rejected) {
+      const f = fixture([
+        {
+          code: 0,
+          stdout: JSON.stringify({
+            url: "https://github.com/acme/service/pull/9",
+            headRefOid: headSha,
+            statusCheckRollup: [
+              {
+                name: "BuildIT / review",
+                status: "COMPLETED",
+                conclusion: "FAILURE",
+              },
+            ],
+          }),
+        },
+        { code: 0, stdout: JSON.stringify({ check_runs: [checkRun] }) },
+      ]);
+      await remoteStatus({
+        pr: "9",
+        repo: "acme/service",
+        emit: f.emit,
+        exec: f.exec,
+      });
+      expect(f.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ report: expect.anything() }),
+        }),
+      );
+    }
+    const malformed = fixture([
+      {
+        code: 0,
+        stdout: JSON.stringify({
+          url: "https://github.com/acme/service/pull/9",
+          headRefOid: headSha,
+          statusCheckRollup: [
+            {
+              name: "BuildIT / review",
+              status: "COMPLETED",
+              conclusion: "FAILURE",
+            },
+          ],
+        }),
+      },
+      { code: 0, stdout: "not-json" },
+    ]);
+    await remoteStatus({
+      pr: "9",
+      repo: "acme/service",
+      emit: malformed.emit,
+      exec: malformed.exec,
+    });
+    expect(malformed.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ report: expect.anything() }),
+      }),
+    );
+  });
+
   it("watches GitHub Checks until a terminal result and can be resumed", async () => {
     const f = fixture([
         {
