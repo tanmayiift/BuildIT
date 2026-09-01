@@ -4,60 +4,96 @@ groups:
       - alert: BuildITHighFailureRate
         expr: sum(rate(buildit_failures_total[10m])) / clamp_min(sum(rate(buildit_operations_total[10m])), 0.001) > 0.05
         for: 10m
-        labels: {severity: page}
-        annotations: {summary: "More than 5% of BuildIT operations are failing"}
+        labels: {severity: page, service: buildit}
+        annotations:
+          summary: "More than 5% of BuildIT operations are failing"
+          action: "Check the BuildIT failure and latency panels, then pause the failing boundary if the ratio is still rising."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#buildithighfailurerate"
       - alert: BuildITP95LatencyHigh
         expr: histogram_quantile(0.95, sum by (le) (rate(buildit_operation_duration_milliseconds_bucket[10m]))) > 120000
         for: 15m
-        labels: {severity: ticket}
-        annotations: {summary: "BuildIT operation p95 is above two minutes"}
+        labels: {severity: ticket, service: buildit}
+        annotations:
+          summary: "BuildIT operation p95 is above two minutes"
+          action: "Compare provider, runner, and queue latency; reduce intake if the slow boundary is saturated."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditp95latencyhigh"
       - alert: BuildITTelemetrySilent
         expr: absent_over_time(buildit_operations_total[15m]) == 1
         for: 5m
-        labels: {severity: ticket}
-        annotations: {summary: "No BuildIT operation telemetry has arrived"}
+        labels: {severity: ticket, service: buildit}
+        annotations:
+          summary: "No BuildIT operation telemetry has arrived"
+          action: "Check the web and broker health endpoints, collector delivery, and the most recent deployment."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#buildittelemetrysilent"
       - alert: BuildITCriticalBoundaryFailure
         expr: sum(increase(buildit_failures_total{buildit_operation=~"artifact.delete|sandbox.cleanup|webhook.verify|autofix.loop_guard|review.stale_check"}[5m])) > 0
         for: 0m
-        labels: {severity: page}
-        annotations: {summary: "A security or safety boundary failed"}
+        labels: {severity: page, service: buildit}
+        annotations:
+          summary: "A BuildIT security or safety boundary failed"
+          action: "Stop the affected execution path, confirm cleanup and deletion, then follow the incident runbook before resuming."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditcriticalboundaryfailure"
       - alert: BuildITQueueDepthHigh
         expr: max(buildit_snapshot{buildit_measurement="queue_depth"}) > 25
         for: 10m
-        labels: {severity: ticket}
-        annotations: {summary: "BuildIT review queue has stayed above 25"}
+        labels: {severity: ticket, service: buildit}
+        annotations:
+          summary: "BuildIT review queue has stayed above 25"
+          action: "Check worker capacity and provider limits; stop new intake if wait time continues to grow."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditqueuedepthhigh"
       - alert: BuildITProviderFailure
         expr: sum(increase(buildit_failures_total{buildit_operation="model.invoke"}[10m])) > 2
         for: 5m
-        labels: {severity: ticket}
-        annotations: {summary: "BuildIT model calls are repeatedly failing"}
+        labels: {severity: ticket, service: buildit}
+        annotations:
+          summary: "BuildIT model calls are repeatedly failing"
+          action: "Check provider status and bounded retry counts; disable the failing provider route if errors continue."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditproviderfailure"
       - alert: BuildITRunnerFailure
         expr: sum(increase(buildit_failures_total{buildit_operation=~"sandbox.execute|sandbox.cleanup"}[10m])) > 0
         for: 0m
-        labels: {severity: page}
-        annotations: {summary: "BuildIT runner execution or cleanup failed"}
+        labels: {severity: page, service: buildit}
+        annotations:
+          summary: "BuildIT runner execution or cleanup failed"
+          action: "Disable untrusted execution, confirm every sandbox stopped, and inspect runner capacity before resuming."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditrunnerfailure"
       - alert: BuildITArtifactDeletionBacklog
         expr: max(buildit_snapshot{buildit_measurement="expired_artifact_backlog"}) > 0
         for: 20m
-        labels: {severity: page}
-        annotations: {summary: "Expired BuildIT artifacts remain undeleted"}
+        labels: {severity: page, service: buildit}
+        annotations:
+          summary: "Expired BuildIT artifacts remain undeleted"
+          action: "Pause new artifact creation, run the deletion reconciler, and confirm the backlog returns to zero."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditartifactdeletionbacklog"
       - alert: BuildITWebhookSignatureSpike
         expr: sum(increase(buildit_failures_total{buildit_operation="webhook.verify"}[5m])) > 5
         for: 0m
-        labels: {severity: page}
-        annotations: {summary: "BuildIT is rejecting an unusual number of webhook signatures"}
+        labels: {severity: page, service: buildit}
+        annotations:
+          summary: "BuildIT is rejecting an unusual number of webhook signatures"
+          action: "Check GitHub delivery status and secret rotation history; keep rejected requests blocked."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditwebhooksignaturespike"
       - alert: BuildITLoopGuardTrip
         expr: sum(increase(buildit_failures_total{buildit_operation="autofix.loop_guard"}[5m])) > 0
         for: 0m
-        labels: {severity: ticket}
-        annotations: {summary: "A BuildIT Autofix loop safety bound stopped a run"}
+        labels: {severity: ticket, service: buildit}
+        annotations:
+          summary: "A BuildIT Autofix loop safety bound stopped a run"
+          action: "Confirm the run stopped at its configured bound and no further candidate or merge action occurred."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditloopguardtrip"
       - alert: BuildITStaleCheck
         expr: sum(increase(buildit_failures_total{buildit_operation="review.stale_check"}[5m])) > 0
         for: 0m
-        labels: {severity: ticket}
-        annotations: {summary: "BuildIT stopped work because the reviewed commit changed"}
+        labels: {severity: ticket, service: buildit}
+        annotations:
+          summary: "BuildIT stopped because the reviewed commit changed"
+          action: "Confirm the stale run made no write and let the user start a new review at the current commit."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditstalecheck"
       - alert: BuildITBudgetExhaustionSpike
         expr: max(buildit_snapshot{buildit_measurement="budget_exhausted_reviews_hour"}) > 3
         for: 5m
-        labels: {severity: ticket}
-        annotations: {summary: "More than three BuildIT reviews exhausted their budget this hour"}
+        labels: {severity: ticket, service: buildit}
+        annotations:
+          summary: "More than three BuildIT reviews exhausted their budget this hour"
+          action: "Check model routing and context size; do not raise customer ceilings automatically."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditbudgetexhaustionspike"
