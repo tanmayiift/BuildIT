@@ -32,6 +32,7 @@ import type * as lib_executionGate from "../lib/executionGate.js";
 import type * as lib_githubProfile from "../lib/githubProfile.js";
 import type * as lib_lifecycle from "../lib/lifecycle.js";
 import type * as lib_parentConsistency from "../lib/parentConsistency.js";
+import type * as lib_platformFailureReport from "../lib/platformFailureReport.js";
 import type * as lib_runtimeVersion from "../lib/runtimeVersion.js";
 import type * as lib_validationEvidence from "../lib/validationEvidence.js";
 import type * as memberships from "../memberships.js";
@@ -96,6 +97,7 @@ declare const fullApi: ApiFromModules<{
   "lib/githubProfile": typeof lib_githubProfile;
   "lib/lifecycle": typeof lib_lifecycle;
   "lib/parentConsistency": typeof lib_parentConsistency;
+  "lib/platformFailureReport": typeof lib_platformFailureReport;
   "lib/runtimeVersion": typeof lib_runtimeVersion;
   "lib/validationEvidence": typeof lib_validationEvidence;
   memberships: typeof memberships;
