@@ -13,6 +13,7 @@ export const publicFunctionPolicies = {
   "activation:funnel": { authorization: "active_organization_viewer", response: "metadata" },
   "audit:list": { authorization: "active_organization_viewer", response: "metadata" },
   "artifacts:getMetadata": { authorization: "active_organization_viewer", response: "metadata" },
+  "dashboardReviewData:availableProviders": { authorization: "active_organization_developer", response: "metadata" },
   "dashboardReviews:prepare": { authorization: "active_organization_developer", response: "metadata" },
   "dashboardReviews:cancel": { authorization: "active_organization_developer", response: "metadata" },
   "dashboardReviews:start": { authorization: "active_organization_developer", response: "metadata" },
