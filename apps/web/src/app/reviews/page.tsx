@@ -1,6 +1,7 @@
 "use client";
 import { useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
+import Link from "next/link";
 import { sampleReviews } from "../sample-data";
 import { useSampleTour } from "../workspace-route-boundary";
 import { ActivationPath } from "./activation-path";
@@ -78,7 +79,7 @@ function LiveGroup({ copy, groups, connection }: { copy: { title: string; descri
         const repository = connection.repositories.find(item => item.id === review.repositoryId);
         const updated = new Date(review.updatedAt);
         const preservedDecision = latestAttempt.id !== review.id;
-        return <a role="row" className="review-row" href={`/reviews/${review.id}`} key={review.id}>
+        return <Link role="row" className="review-row" href={`/reviews/${review.id}`} key={review.id}>
           <span role="cell" className={`status ${tone(review.status)}`}>{queueStatusLabel(review)}</span>
           <span role="cell" className="review-name">
             <strong>{repository ? `${repository.owner}/${repository.name}` : "Authorized repository"} #{review.prNumber}</strong>
@@ -86,7 +87,7 @@ function LiveGroup({ copy, groups, connection }: { copy: { title: string; descri
             <span className="review-meta"><code title="Exact head commit">{review.headSha.slice(0, 7)}</code><time dateTime={updated.toISOString()}>Decision {updated.toLocaleString()}</time>{attemptCount > 1 ? <span>{attemptCount - 1} other {attemptCount === 2 ? "attempt" : "attempts"} in audit</span> : null}{preservedDecision ? <span>Latest retry stopped; decision preserved</span> : null}</span>
           </span>
           <span className="row-arrow" aria-hidden="true">→</span>
-        </a>;
+        </Link>;
       })}
     </div>
   </section>;

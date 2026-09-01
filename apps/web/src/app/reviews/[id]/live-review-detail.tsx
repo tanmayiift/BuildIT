@@ -1,6 +1,6 @@
 "use client";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
 import { eventPresentation, nextActionPresentation, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
 type Evidence = {
@@ -73,6 +73,20 @@ type Evidence = {
     createdAt: number;
   }>;
 };
+type FindingDetail = {
+  id: string;
+  title: string;
+  category: string;
+  severity: string;
+  confidence: number;
+  path: string;
+  startLine: number;
+  endLine: number;
+  impact: string;
+  explanation: string;
+  resolution: "accepted" | "uncertain";
+  blocking: boolean;
+};
 const evidenceQuery = makeFunctionReference<
     "query",
     { reviewId: string },
@@ -83,6 +97,7 @@ const evidenceQuery = makeFunctionReference<
     { reviewId: string },
     { status: "cancelled" | "already_finished" }
   >("dashboardReviews:cancel"),
+  findingDetailsAction = makeFunctionReference<"action", { reviewId: string }, FindingDetail[]>("reviewEvidenceActions:getFindingDetails"),
   tone = (value: string) =>
     ["passed", "checks_passed", "delivered", "accepted", "resolved"].includes(
       value,
@@ -103,12 +118,23 @@ const evidenceQuery = makeFunctionReference<
 export function LiveReviewDetail({ id }: { id: string }) {
   const { isAuthenticated, isLoading } = useConvexAuth(),
     cancel = useAction(cancelAction),
+    loadFindingDetails = useAction(findingDetailsAction),
     [cancelling, setCancelling] = useState(false),
     [cancelError, setCancelError] = useState(""),
+    [findingDetails, setFindingDetails] = useState<FindingDetail[] | null>(null),
+    [findingDetailError, setFindingDetailError] = useState(false),
     evidence = useQuery(
       evidenceQuery,
       isAuthenticated ? { reviewId: id } : "skip",
     );
+  const findingCount = evidence?.findings.length ?? 0;
+  useEffect(() => {
+    if (!isAuthenticated || findingCount === 0) { setFindingDetails(null); setFindingDetailError(false); return; }
+    let active = true;
+    setFindingDetailError(false);
+    void loadFindingDetails({ reviewId: id }).then(value => { if (active) setFindingDetails(value); }).catch(() => { if (active) { setFindingDetails(null); setFindingDetailError(true); } });
+    return () => { active = false; };
+  }, [findingCount, id, isAuthenticated, loadFindingDetails]);
   if (isLoading || (isAuthenticated && evidence === undefined))
     return (
       <State
@@ -238,9 +264,18 @@ export function LiveReviewDetail({ id }: { id: string }) {
         eyebrow="Decision support"
         title="Issues to fix"
         detail={`${evidence.findings.length} supported by evidence`}
-        foot="BuildIT shows an issue only when it can point to supporting evidence. Open the pull request for the plain-language report and exact source locations."
+        foot="Finding prose is read from the encrypted report only after BuildIT rechecks your repository membership."
       >
-        {evidence.findings.length ? (
+        {findingDetails?.length ? (
+          findingDetails.map(item => <article className="finding-summary" key={item.id}>
+            <div className="finding-summary-head"><span className={`status ${tone(item.severity)}`}>{label(item.severity)}</span><div><h3>{item.title}</h3><code>{item.path} · {item.startLine === item.endLine ? `line ${item.startLine}` : `lines ${item.startLine}–${item.endLine}`}</code></div><span className={`finding-resolution ${item.blocking ? "blocking" : ""}`}>{item.blocking ? "Blocks merge" : label(item.resolution)}</span></div>
+            <div className="finding-summary-body"><div><small>Why it matters</small><p>{item.impact}</p></div><div><small>What to inspect and correct</small><p>{item.explanation}</p></div></div>
+          </article>)
+        ) : findingDetailError ? (
+          <div className="finding-detail-state"><strong>Plain-language details could not be loaded</strong><p>No source was shown. Open the pull request for the published evidence, or refresh after checking your workspace access.</p></div>
+        ) : findingDetails === null ? (
+          <div className="finding-detail-state"><strong>Loading the encrypted finding summary…</strong><p>BuildIT is rechecking repository access before decrypting the report.</p></div>
+        ) : evidence.findings.length ? (
           evidence.findings.map((item) => (
             <div className="evidence-row" key={item.id}>
               <span className={`status ${tone(item.severity)}`}>

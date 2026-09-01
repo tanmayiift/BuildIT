@@ -180,6 +180,16 @@ async function seedTenant(
 }
 
 describe("Convex tenant isolation", () => {
+  it("never exposes an encrypted finding artifact scope across organizations", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "finding-alpha", "alice"), beta = await seedTenant(t, "finding-beta", "bob"), asAlice = t.withIdentity({ subject: "alice" });
+    const analysisId = await t.run(ctx => ctx.db.insert("artifacts", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId, type: "prompt_trace", storageKey: `artifacts/${alpha.organizationId}/${alpha.repositoryId}/${alpha.reviewId}/analysis.json`, encrypted: true, checksum: "a".repeat(64), size: 100, redactionStatus: "redacted", expiresAt: Date.now() + 60_000, deletionAttempts: 0 }));
+    await t.run(ctx => ctx.db.insert("artifacts", { organizationId: beta.organizationId, repositoryId: beta.repositoryId, reviewId: beta.reviewId, type: "prompt_trace", storageKey: `artifacts/${beta.organizationId}/${beta.repositoryId}/${beta.reviewId}/analysis.json`, encrypted: true, checksum: "b".repeat(64), size: 100, redactionStatus: "redacted", expiresAt: Date.now() + 60_000, deletionAttempts: 0 }));
+    await expect(asAlice.query(internal.reviewEvidenceData.findingDetailScope, { reviewId: beta.reviewId })).rejects.toThrow("not_found_or_forbidden");
+    const own = await asAlice.query(internal.reviewEvidenceData.findingDetailScope, { reviewId: alpha.reviewId });
+    expect(own.artifact.id).toBe(analysisId);
+    expect(JSON.stringify(own)).not.toContain("finding-beta");
+  });
+
   it("derives source-free activation only inside the active organization", async () => {
     const t = convexTest(schema, modules), alpha = await seedTenant(t, "activation-alpha", "alice"), beta = await seedTenant(t, "activation-beta", "bob"), asAlice = t.withIdentity({ subject: "alice" });
     await expect(asAlice.query(activationFunnel, { organizationId: beta.organizationId })).rejects.toThrow("not_found_or_forbidden");

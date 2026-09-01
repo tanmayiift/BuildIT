@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { previewFailureCode, previewTelemetryFailure } from "./dashboardReviews";
+import { modelRouteDescription, previewFailureCode, previewTelemetryFailure } from "./dashboardReviews";
 
 describe("dashboard preview failure codes", () => {
   it("turns GitHub failures into source-free, actionable categories", () => {
@@ -15,5 +15,15 @@ describe("dashboard preview failure codes", () => {
     expect(previewTelemetryFailure("github_app_access_unavailable")).toBe("configuration_missing");
     expect(previewTelemetryFailure("pull_request_unavailable")).toBe("upstream_unavailable");
     expect(previewTelemetryFailure("github_preview_failed")).toBe("UnknownError");
+  });
+});
+
+describe("dashboard model route disclosure", () => {
+  it("names the stronger findings model when the validated OpenAI key exposes it", () => {
+    expect(modelRouteDescription({ provider: "openai", model: "gpt-5.4-mini", availableModels: ["gpt-5.4-mini", "gpt-5.4"] })).toContain("gpt-5.4 for code findings");
+  });
+
+  it("does not claim a secondary model that the key did not validate", () => {
+    expect(modelRouteDescription({ provider: "openai", model: "gpt-5.4-mini", availableModels: ["gpt-5.4-mini"] })).toBe("openai · gpt-5.4-mini");
   });
 });
