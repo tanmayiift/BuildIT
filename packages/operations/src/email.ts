@@ -48,9 +48,43 @@ export function decisionEmail(input: DecisionEmail) {
   const decision = copy[status], tone = tones[decision.tone], escapedRepository = escapeHtml(repository), escapedCommit = escapeHtml(commit), escapedBuilditUrl = escapeHtml(builditUrl.toString()), escapedGithubUrl = githubUrl ? escapeHtml(githubUrl.toString()) : null;
   const githubText = githubUrl ? `\nOpen on GitHub: ${githubUrl.toString()}` : "";
   const githubButton = escapedGithubUrl ? `<a href="${escapedGithubUrl}" style="display:inline-block;margin:8px 0 0;padding:12px 16px;color:#0b315f;background:#ffffff;border:1px solid #b8c0cc;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none" aria-label="Open ${escapedRepository} pull request ${input.prNumber} on GitHub">Open on GitHub</a>` : "";
-  const text = `BuildIT review: ${decision.title}\n\n${decision.summary}\n\nWhat to do next: ${decision.nextAction}\n\nRepository: ${repository}\nPull request: #${input.prNumber}\nExact commit: ${commit}\n\nOpen in BuildIT: ${builditUrl.toString()}${githubText}\n\nSecurity boundary: This message contains no source code, diff, logs, findings, prompts, or credentials. BuildIT cannot merge this pull request; a human owns the decision.`;
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(decision.title)}</title></head><body style="margin:0;padding:0;background:#f6f7f9;color:#151a22;font-family:Arial,sans-serif"><span style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(decision.summary)}</span><main style="max-width:640px;margin:0 auto;padding:32px 16px"><div style="padding:24px;background:#ffffff;border:1px solid #d8dde5;border-radius:8px"><div style="margin-bottom:20px;color:#0b315f;font-size:18px;font-weight:800;letter-spacing:-0.02em">BuildIT</div><div style="margin-bottom:20px;padding:16px;background:${tone.background};border:1px solid ${tone.border};border-radius:6px"><div style="margin-bottom:7px;color:${tone.foreground};font-size:12px;font-weight:800;text-transform:uppercase">Human decision needed</div><h1 style="margin:0 0 8px;color:#151a22;font-size:26px;line-height:1.2">${escapeHtml(decision.title)}</h1><p style="margin:0;color:#3f4856;font-size:15px;line-height:1.55">${escapeHtml(decision.summary)}</p></div><section aria-labelledby="next-action"><h2 id="next-action" style="margin:0 0 6px;font-size:15px">What to do next</h2><p style="margin:0 0 20px;color:#3f4856;font-size:14px;line-height:1.55">${escapeHtml(decision.nextAction)}</p></section><table role="presentation" style="width:100%;margin:0 0 20px;border-collapse:collapse;font-size:13px"><tr><td style="padding:9px 0;color:#5f6978;border-bottom:1px solid #eef1f4">Repository</td><td style="padding:9px 0;text-align:right;font-weight:700;border-bottom:1px solid #eef1f4">${escapedRepository}</td></tr><tr><td style="padding:9px 0;color:#5f6978;border-bottom:1px solid #eef1f4">Pull request</td><td style="padding:9px 0;text-align:right;font-weight:700;border-bottom:1px solid #eef1f4">#${input.prNumber}</td></tr><tr><td style="padding:9px 0;color:#5f6978">Exact commit</td><td style="padding:9px 0;text-align:right;font-family:monospace;font-size:12px">${escapedCommit.slice(0, 12)}</td></tr></table><a href="${escapedBuilditUrl}" style="display:inline-block;margin:0 8px 0 0;padding:12px 16px;color:#ffffff;background:#0b315f;border:1px solid #0b315f;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none" aria-label="Open BuildIT review for ${escapedRepository} pull request ${input.prNumber}">Open review evidence</a>${githubButton}<p style="margin:24px 0 0;padding-top:16px;color:#5f6978;border-top:1px solid #d8dde5;font-size:11px;line-height:1.55">This source-free notification contains no code, diff, logs, findings, prompts, or credentials. BuildIT cannot merge this pull request; a human owns the decision.</p></div></main></body></html>`;
-  return { to: recipient, subject: `${decision.title} · ${repository} #${input.prNumber}`, text, html, idempotencyKey };
+  const text = `BuildIT review: ${decision.title}\n${repository} · PR #${input.prNumber}\n\n${decision.summary}\n\nNext action\n${decision.nextAction}\n\nExact commit: ${commit}\nOpen evidence: ${builditUrl.toString()}${githubText}\n\nSecurity: This source-free message contains no code, diff, logs, findings, prompts, or credentials. It was addressed only to the verified person who enabled review email for this workspace. BuildIT cannot merge this pull request; a human owns the decision.`;
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(decision.title)}</title></head>
+<body style="margin:0;padding:0;background:#f4f6f8;color:#151a22;font-family:Arial,Helvetica,sans-serif">
+<span style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(decision.summary)} · ${escapedRepository} #${input.prNumber}</span>
+<main style="max-width:620px;margin:0 auto;padding:28px 14px">
+  <div style="overflow:hidden;background:#ffffff;border:1px solid #d8dde5;border-radius:10px">
+    <header style="padding:18px 22px;border-bottom:1px solid #e6eaf0">
+      <table role="presentation" style="width:100%;border-collapse:collapse"><tr>
+        <td style="color:#0b315f;font-size:18px;font-weight:800;letter-spacing:-0.02em">BuildIT</td>
+        <td style="text-align:right;color:#5f6978;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Pull request evidence</td>
+      </tr></table>
+    </header>
+    <div style="padding:22px">
+      <p style="margin:0 0 8px;color:#5f6978;font-size:12px;font-weight:700">${escapedRepository} · PR #${input.prNumber}</p>
+      <section aria-labelledby="review-outcome" style="margin:0 0 16px;padding:16px;background:${tone.background};border:1px solid ${tone.border};border-radius:7px">
+        <div style="margin-bottom:7px;color:${tone.foreground};font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em">Review outcome</div>
+        <h1 id="review-outcome" style="margin:0 0 7px;color:#151a22;font-size:25px;line-height:1.2;letter-spacing:-.025em">${escapeHtml(decision.title)}</h1>
+        <p style="margin:0;color:#3f4856;font-size:14px;line-height:1.55">${escapeHtml(decision.summary)}</p>
+      </section>
+      <section aria-labelledby="next-action" style="margin:0 0 18px;padding:14px 16px;background:#eef5fc;border-left:3px solid #0b315f">
+        <h2 id="next-action" style="margin:0 0 5px;color:#0b315f;font-size:12px;text-transform:uppercase;letter-spacing:.05em">Next action</h2>
+        <p style="margin:0;color:#26384c;font-size:14px;line-height:1.55">${escapeHtml(decision.nextAction)}</p>
+      </section>
+      <table role="presentation" aria-label="Review receipt" style="width:100%;margin:0 0 20px;border-collapse:collapse;font-size:13px">
+        <tr><td style="padding:9px 0;color:#5f6978;border-bottom:1px solid #e6eaf0">Repository</td><td style="padding:9px 0;text-align:right;font-weight:700;border-bottom:1px solid #e6eaf0">${escapedRepository}</td></tr>
+        <tr><td style="padding:9px 0;color:#5f6978;border-bottom:1px solid #e6eaf0">Pull request</td><td style="padding:9px 0;text-align:right;font-weight:700;border-bottom:1px solid #e6eaf0">#${input.prNumber}</td></tr>
+        <tr><td style="padding:9px 0;color:#5f6978">Exact commit</td><td style="padding:9px 0;text-align:right;font-family:monospace;font-size:12px">${escapedCommit.slice(0, 12)}</td></tr>
+      </table>
+      <div role="group" aria-label="Review actions">
+        <a href="${escapedBuilditUrl}" style="display:inline-block;margin:0 8px 8px 0;padding:12px 16px;color:#ffffff;background:#0b315f;border:1px solid #0b315f;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none" aria-label="Open BuildIT review for ${escapedRepository} pull request ${input.prNumber}">Open review evidence</a>${githubButton}
+      </div>
+      <p style="margin:18px 0 0;padding-top:15px;color:#5f6978;border-top:1px solid #d8dde5;font-size:11px;line-height:1.55">No code, diff, logs, findings, prompts, or credentials are in this email. It was sent only to the verified person who enabled review email for this workspace. BuildIT cannot merge this pull request; a human owns the decision.</p>
+    </div>
+  </div>
+</main></body></html>`;
+  return { to: recipient, subject: `[BuildIT] ${decision.title} · ${repository} #${input.prNumber}`, text, html, idempotencyKey };
 }
 
 export async function sendDecisionEmail(input: DecisionEmail, transport: EmailTransport) { await transport(decisionEmail(input)); }
