@@ -126,8 +126,8 @@ BLOCK-01, BLOCK-02).
 
 ### Manual and browser testing
 
-66 scenarios recorded in `FEATURE_TEST_MATRIX.md`: **38 PASS, 18 FAIL, 6 BLOCKED, 2 N/A,
-2 NOT TESTED.** Twenty routes across five viewports, ten HTTP route probes, an open-redirect
+66 scenarios recorded in `FEATURE_TEST_MATRIX.md`: **35 PASS, 22 FAIL, 5 BLOCKED, 2 not applicable,
+2 not tested** (two rows carry a split status). Twenty routes across five viewports, ten HTTP route probes, an open-redirect
 fuzz, and ten CLI negative cases.
 
 Highlights: nine of the ten protected routes correctly gate anonymous access, and server-side
