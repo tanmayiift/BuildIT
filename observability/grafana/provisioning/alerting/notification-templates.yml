@@ -1,0 +1,36 @@
+# Wires buildit-operator-v1.tmpl to the operator contact point.
+#
+# Until this existed the template was referenced nowhere, so Grafana fell back to its stock
+# layout: it renders only `summary` and the labels, which meant the `action` and `runbook_url`
+# annotations that every rule in observability/alerts.yml carries never reached an operator.
+# The stock layout also prints a raw Go timestamp in UTC.
+#
+# Grafana Cloud does not read this file. Apply the same two objects there through
+# /api/v1/provisioning/templates and /api/v1/provisioning/contact-points; the local
+# docker-compose stack in observability/ picks the file up directly.
+apiVersion: 1
+
+templates:
+  - orgId: 1
+    name: buildit-operator-v1
+    template: '{{ template "buildit.operator.body.v1" . }}'
+
+contactPoints:
+  - orgId: 1
+    name: BuildIT operators
+    receivers:
+      - uid: buildit-operator-email
+        type: email
+        settings:
+          addresses: ${BUILDIT_ALERT_EMAIL}
+          singleEmail: true
+          subject: '{{ template "buildit.operator.subject.v1" . }}'
+          message: '{{ template "buildit.operator.body.v1" . }}'
+
+policies:
+  - orgId: 1
+    receiver: BuildIT operators
+    group_by: [grafana_folder, alertname]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h

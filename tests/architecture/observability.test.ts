@@ -76,6 +76,19 @@ describe("observability release assets", () => {
     for (const field of ["Alert: {{ .CommonLabels.alertname }}", "Next action", "Runbook"]) expect(template).toContain(field);
   });
 
+  // The template existed but nothing referenced it, so Grafana used its stock layout and the
+  // action and runbook_url annotations every rule carries never reached an operator.
+  it("wires the operator template to the contact point that sends the alert", () => {
+    const provisioning = read("observability/grafana/provisioning/alerting/notification-templates.yml");
+    expect(provisioning).toContain("buildit-operator-v1");
+    expect(provisioning).toContain('{{ template "buildit.operator.subject.v1" . }}');
+    expect(provisioning).toContain('{{ template "buildit.operator.body.v1" . }}');
+    // A contact point that names no template silently falls back to the stock layout.
+    expect(provisioning).toMatch(/contactPoints:/);
+    expect(provisioning).toMatch(/subject:/);
+    expect(provisioning).toMatch(/message:/);
+  });
+
   it("provisions only the BuildIT template name on the approved stack", () => {
     const script = read("scripts/provision-buildit-grafana-template.mjs");
     expect(script).toContain("peacefulbumblebee2324.grafana.net");
