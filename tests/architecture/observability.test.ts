@@ -11,7 +11,7 @@ describe("observability release assets", () => {
       templating?: { list?: Array<{ name?: string; type?: string; query?: string; current?: { value?: string } }> };
     };
     expect(dashboard.panels.map(panel => panel.title)).toEqual(expect.arrayContaining([
-      "Failure ratio", "p95 latency by operation", "Activation funnel", "Human decisions",
+      "Service failure ratio", "p95 latency by operation", "Activation funnel", "Human decisions",
       "Provider and runner failures", "Artifact deletion backlog", "GitHub delivery",
       "Queue and capacity", "Hourly provider cost", "Effective LOC delivered",
       "Accuracy evidence unavailable",
@@ -21,6 +21,11 @@ describe("observability release assets", () => {
     expect(datasource?.current?.value).toBe("grafanacloud-prom");
     expect(dashboard.panels.filter(panel => panel.datasource).every(panel => panel.datasource?.uid === "$buildit_prometheus")).toBe(true);
     expect(read("observability/grafana/dashboards/buildit-overview.json")).not.toContain('"uid": "buildit-prometheus"');
+    const failurePanel = dashboard.panels.find(panel => panel.title === "Service failure ratio") as { description?: string; targets?: Array<{ expr?: string }> } | undefined;
+    expect(failurePanel?.description).toContain("Intentional blocked requests");
+    expect(failurePanel?.targets?.[0]?.expr).toContain('buildit_failures_total{buildit_outcome="failed"}');
+    expect(failurePanel?.targets?.[0]?.expr).toContain('buildit_operations_total{buildit_outcome=~"succeeded|failed"}');
+    expect(failurePanel?.targets?.[0]?.expr).toContain("or vector(0)");
   });
 
   it("alerts on every required production failure mode", () => {
@@ -34,6 +39,11 @@ describe("observability release assets", () => {
     expect((rules.match(/service: buildit/g) ?? [])).toHaveLength(12);
     expect((rules.match(/runbook_url:/g) ?? [])).toHaveLength(12);
     expect((rules.match(/action:/g) ?? [])).toHaveLength(12);
+    expect(rules).toContain('buildit_failures_total{buildit_outcome="failed"}');
+    expect(rules).toContain('buildit_operations_total{buildit_outcome=~"succeeded|failed"}');
+    expect(rules).toContain("or vector(0)");
+    expect(rules).toContain("max(absent_over_time(buildit_operations_total[15m]) or vector(0)) > 0.5");
+    expect(rules).toContain('buildit_failures_total{buildit_operation="webhook.verify"}');
   });
 
   it("ships one versioned, source-free BuildIT operator notification template", () => {
