@@ -1,10 +1,11 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
-import { api } from "./_generated/api";
+import { describe, expect, it, vi } from "vitest";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
+const makeTest = () => convexTest(schema, modules);
 
 // The connected-state UI, the "connected" accessibility and product journeys, and the committed
 // release screenshots were all rendered from connectedDesignFixture - a hardcoded client object.
@@ -147,5 +148,258 @@ describe("a run can be debugged after the fact", () => {
         .rejects.toThrow("not_found_or_forbidden");
     }
     expect(userId).toBeTruthy();
+  });
+});
+
+// L5 observability asks whether two runs can be compared. Until now each run could only be read on
+// its own, so "it found this last time and not this time" - the exact failure that motivated the
+// detection suite - could not be seen in the product at all.
+describe("two runs of the same pull request can be compared", () => {
+  const seedRun = async (t: ReturnType<typeof makeTest>, organizationId: Awaited<ReturnType<typeof seedWorkspace>>["organizationId"], userId: string, options: { headSha: string; status: string; findings: Array<{ print: string; blocking: boolean }>; stages: string[] }) =>
+    t.run(async ctx => {
+      const now = Date.now();
+      const repository = (await ctx.db.query("repositories").withIndex("by_org_enabled", q => q.eq("organizationId", organizationId).eq("enabled", true)).first())!;
+      const configRevisionId = await ctx.db.insert("configRevisions", { organizationId, repositoryId: repository._id,
+        sourceCommitSha: "b".repeat(40), sourceRef: "main", contentHash: "c".repeat(64), rulesDigest: "c".repeat(64),
+        schemaVersion: "defaults-v1", validationState: "valid", provenance: "defaults_only", refProtectionState: "unverified", createdAt: now });
+      const reviewId = await ctx.db.insert("reviews", { organizationId, repositoryId: repository._id,
+        githubRepositoryId: repository.githubRepositoryId, prNumber: 12, isFork: false, baseRef: "main", baseSha: "b".repeat(40),
+        headSha: options.headSha, requiredCheckPolicy: "fail_closed", completedRoundCount: 0, patchAttemptCount: 0,
+        diagnosticRunCount: 0, providerRetryCount: 0, commandRetryCount: 0, trigger: "dashboard", triggerVerb: "review",
+        triggerActor: userId, triggerActorPermission: "admin", mode: "review", status: options.status as never,
+        budgetLimit: 2, budgetConsumed: 0, nextActionCode: "none", isStale: false, trustedRef: "main",
+        trustedRefSha: "b".repeat(40), configRevisionId, queuePriority: 0, configProvenance: "defaults_only",
+        provider: "anthropic", model: "claude-sonnet-4-5", modelVersion: "pinned", promptVersion: "chain-v1",
+        evalSetVersion: "v1", coverageLevel: "full", currentStage: "complete", executionGeneration: 0,
+        runnerImageVersion: "img", expiresAt: now + 86_400_000, createdAt: now, updatedAt: now });
+      const artifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId: repository._id,
+        reviewId, type: "prompt_trace", storageKey: `compare/${options.headSha}.json`, encrypted: true,
+        checksum: "a".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      for (const stage of options.stages) {
+        await ctx.db.insert("modelStageRuns", { organizationId, repositoryId: repository._id, reviewId,
+          stage: stage as never, provider: "anthropic", model: "claude-sonnet-4-5", promptVersion: "chain-v1",
+          schemaVersion: "v1", finishReason: "stop", requestHash: "h".repeat(64), attempt: 1, outcome: "valid",
+          inputTokens: 500, outputTokens: 50, createdAt: now });
+      }
+      for (const item of options.findings) {
+        await ctx.db.insert("findings", { organizationId, reviewId, fingerprintHmac: item.print.padEnd(64, "0"),
+          category: "correctness", severity: "high", confidence: 0.9, blocking: item.blocking, contentArtifactId: artifactId,
+          evidenceIds: [artifactId], pathHmac: "p".repeat(64), startLine: 3, endLine: 3, resolution: "open",
+          createdAt: now, updatedAt: now, expiresAt: now + 86_400_000 });
+      }
+      return reviewId;
+    });
+
+  it("shows what one run found that the other did not", async () => {
+    const t = convexTest(schema, modules);
+    const { userId, organizationId } = await seedWorkspace(t);
+    const earlier = await seedRun(t, organizationId, userId, { headSha: "a".repeat(40), status: "changes_requested", stages: ["requirements", "findings", "critic"], findings: [{ print: "rounding", blocking: true }, { print: "shared", blocking: true }] });
+    const later = await seedRun(t, organizationId, userId, { headSha: "c".repeat(40), status: "checks_passed", stages: ["findings", "critic"], findings: [{ print: "shared", blocking: true }] });
+
+    const signedIn = t.withIdentity({ subject: `${userId}|session` });
+    const diff = await signedIn.query(api.reviews.compareRuns, { leftReviewId: earlier, rightReviewId: later });
+
+    // The column that matters: a defect the earlier run reported and the later one did not.
+    expect(diff.onlyInLeft).toHaveLength(1);
+    expect(diff.onlyInRight).toHaveLength(0);
+    expect(diff.inBoth).toBe(1);
+    expect(diff.statusChanged).toBe(true);
+    // A stage the planner skipped shows as not run rather than silently missing.
+    const requirements = diff.stages.find(row => row.stage === "requirements")!;
+    expect(requirements.left.ran).toBe(true);
+    expect(requirements.right.ran).toBe(false);
+  });
+
+  it("lists every run of the pull request, newest first", async () => {
+    const t = convexTest(schema, modules);
+    const { userId, organizationId } = await seedWorkspace(t);
+    const first = await seedRun(t, organizationId, userId, { headSha: "a".repeat(40), status: "changes_requested", stages: ["findings"], findings: [] });
+    await seedRun(t, organizationId, userId, { headSha: "c".repeat(40), status: "checks_passed", stages: ["findings"], findings: [] });
+    const history = await t.withIdentity({ subject: `${userId}|session` }).query(api.reviews.runHistory, { reviewId: first });
+    expect(history).toHaveLength(2);
+    expect(history.filter(run => run.isCurrent)).toHaveLength(1);
+    expect(history.every(run => typeof run.costUsd === "number")).toBe(true);
+  });
+
+  it("refuses to compare across a repository boundary", async () => {
+    const t = convexTest(schema, modules);
+    const { userId, organizationId } = await seedWorkspace(t);
+    const mine = await seedRun(t, organizationId, userId, { headSha: "a".repeat(40), status: "checks_passed", stages: ["findings"], findings: [] });
+    const other = await t.run(async ctx => (await ctx.db.query("reviews").filter(q => q.neq(q.field("_id"), mine)).first())?._id);
+    const stranger = await t.run(ctx => ctx.db.insert("users", { githubUserId: 9500, githubLogin: "mallory" }));
+    await expect(t.withIdentity({ subject: `${stranger}|session` }).query(api.reviews.runHistory, { reviewId: mine }))
+      .rejects.toThrow("not_found_or_forbidden");
+    expect(other ?? null).toBeDefined();
+  });
+});
+
+// The eval set only ever grew by hand, so the runs most worth learning from were the ones nothing
+// captured: a review that reached no verdict, and a finding a person read and dismissed as wrong.
+// The second had no code path at all - findingSuppressions existed in the schema and nothing wrote
+// to it, so a reviewer people could not correct was one they would stop reading.
+describe("the eval set learns from production", () => {
+  const seedFinding = async (t: ReturnType<typeof makeTest>, organizationId: Awaited<ReturnType<typeof seedWorkspace>>["organizationId"], userId: string) =>
+    t.run(async ctx => {
+      const now = Date.now();
+      const repository = (await ctx.db.query("repositories").withIndex("by_org_enabled", q => q.eq("organizationId", organizationId).eq("enabled", true)).first())!;
+      const configRevisionId = await ctx.db.insert("configRevisions", { organizationId, repositoryId: repository._id,
+        sourceCommitSha: "b".repeat(40), sourceRef: "main", contentHash: "c".repeat(64), rulesDigest: "c".repeat(64),
+        schemaVersion: "defaults-v1", validationState: "valid", provenance: "defaults_only", refProtectionState: "unverified", createdAt: now });
+      const reviewId = await ctx.db.insert("reviews", { organizationId, repositoryId: repository._id,
+        githubRepositoryId: repository.githubRepositoryId, prNumber: 21, isFork: false, baseRef: "main",
+        baseSha: "b".repeat(40), headSha: "a".repeat(40), requiredCheckPolicy: "fail_closed", completedRoundCount: 0,
+        patchAttemptCount: 0, diagnosticRunCount: 0, providerRetryCount: 0, commandRetryCount: 0, trigger: "dashboard",
+        triggerVerb: "review", triggerActor: userId, triggerActorPermission: "admin", mode: "review",
+        status: "changes_requested", budgetLimit: 2, budgetConsumed: 0, nextActionCode: "inspect_findings",
+        isStale: false, trustedRef: "main", trustedRefSha: "b".repeat(40), configRevisionId, queuePriority: 0,
+        configProvenance: "defaults_only", provider: "anthropic", model: "claude-sonnet-4-5", modelVersion: "pinned",
+        promptVersion: "chain-v1", evalSetVersion: "v1", coverageLevel: "full", currentStage: "complete",
+        executionGeneration: 0, runnerImageVersion: "img", expiresAt: now + 86_400_000, createdAt: now, updatedAt: now });
+      const artifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId: repository._id, reviewId,
+        type: "prompt_trace", storageKey: "eval/trace.json", encrypted: true, checksum: "a".repeat(64), size: 10,
+        redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const print = "f".repeat(64);
+      await ctx.db.insert("findings", { organizationId, reviewId, fingerprintHmac: print, category: "correctness",
+        severity: "high", confidence: 0.9, blocking: true, contentArtifactId: artifactId, evidenceIds: [artifactId],
+        pathHmac: "p".repeat(64), startLine: 3, endLine: 3, resolution: "open", createdAt: now, updatedAt: now,
+        expiresAt: now + 86_400_000 });
+      return { reviewId, print };
+    });
+
+  it("turns a dismissed finding into an eval candidate and silences it", async () => {
+    vi.useFakeTimers();
+    const t = makeTest();
+    const { userId, organizationId } = await seedWorkspace(t);
+    const { reviewId, print } = await seedFinding(t, organizationId, userId);
+    const signedIn = t.withIdentity({ subject: `${userId}|session` });
+
+    await expect(signedIn.mutation(api.findings.dismiss, {
+      reviewId, fingerprintHmac: print, scope: "repository",
+      reasonCode: "not_a_defect", requestId: "dismiss-finding-000001",
+    })).resolves.toMatchObject({ scope: "repository" });
+
+    const suppressions = await t.run(ctx => ctx.db.query("findingSuppressions").collect());
+    expect(suppressions).toHaveLength(1);
+    expect(suppressions[0]).toMatchObject({ reasonCode: "not_a_defect", dismissedBy: userId });
+
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const candidates = await t.run(ctx => ctx.db.query("evalCandidates").collect());
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ kind: "false_positive", reasonCode: "not_a_defect", promptVersion: "chain-v1" });
+    // Source-free: a fingerprint and codes, never repository content.
+    expect(JSON.stringify(candidates[0])).not.toContain("src/");
+    vi.useRealTimers();
+  });
+
+  it("records a review that reached no verdict, once", async () => {
+    const t = makeTest();
+    const { userId, organizationId } = await seedWorkspace(t);
+    const { reviewId } = await seedFinding(t, organizationId, userId);
+    for (const reason of ["injection_unscoped", "injection_unscoped"]) {
+      await t.mutation(internal.evalLoop.recordMissedVerdict, { organizationId, reviewId, reasonCode: reason, now: Date.now() });
+    }
+    const candidates = await t.run(ctx => ctx.db.query("evalCandidates").collect());
+    // Finalizing twice is still one thing to learn from.
+    expect(candidates.filter(item => item.kind === "missed")).toHaveLength(1);
+  });
+
+  it("lists what a curator has not yet folded into the corpus", async () => {
+    const t = makeTest();
+    const { userId, organizationId } = await seedWorkspace(t);
+    const { reviewId } = await seedFinding(t, organizationId, userId);
+    await t.mutation(internal.evalLoop.recordMissedVerdict, { organizationId, reviewId, reasonCode: "coverage_partial", now: Date.now() });
+    const pending = await t.query(internal.evalLoop.pendingCandidates, { limit: 10 });
+    expect(pending).toHaveLength(1);
+    await t.mutation(internal.evalLoop.markCurated, { candidateId: pending[0]!.id as never, now: Date.now() });
+    await expect(t.query(internal.evalLoop.pendingCandidates, { limit: 10 })).resolves.toHaveLength(0);
+  });
+
+  it("refuses a dismissal from someone who may only read", async () => {
+    const t = makeTest();
+    const { userId, organizationId } = await seedWorkspace(t);
+    const { reviewId, print } = await seedFinding(t, organizationId, userId);
+    await t.run(async ctx => {
+      const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", organizationId).eq("userId", userId)).unique();
+      if (membership) await ctx.db.patch(membership._id, { role: "viewer" });
+    });
+    await expect(t.withIdentity({ subject: `${userId}|session` }).mutation(api.findings.dismiss, {
+      reviewId, fingerprintHmac: print, scope: "repository", reasonCode: "not_a_defect", requestId: "dismiss-finding-000002",
+    })).rejects.toThrow("not_found_or_forbidden");
+  });
+});
+
+// Context survived within a review and nowhere else, so the second review of a repository started
+// as cold as the first: a finding a person had already dismissed came back, and a defect reported
+// last week was reported again as if new.
+describe("a review remembers the repository", () => {
+  it("carries dismissed and recurring fingerprints, and nothing else", async () => {
+    const t = makeTest();
+    const { userId, organizationId } = await seedWorkspace(t);
+    const repositoryId = await t.run(async ctx =>
+      (await ctx.db.query("repositories").withIndex("by_org_enabled", q => q.eq("organizationId", organizationId).eq("enabled", true)).first())!._id);
+
+    const dismissed = "d".repeat(64), recurring = "e".repeat(64), fresh = "f".repeat(64);
+    await t.run(async ctx => {
+      const now = Date.now();
+      await ctx.db.insert("findingSuppressions", { organizationId, repositoryId, fingerprintHmac: dismissed,
+        hmacKeyVersion: 1, scope: "repository", scopeValueHmac: dismissed, reasonCode: "not_a_defect",
+        dismissedBy: userId, dismissedAt: now });
+      const configRevisionId = await ctx.db.insert("configRevisions", { organizationId, repositoryId,
+        sourceCommitSha: "b".repeat(40), sourceRef: "main", contentHash: "c".repeat(64), rulesDigest: "c".repeat(64),
+        schemaVersion: "defaults-v1", validationState: "valid", provenance: "defaults_only", refProtectionState: "unverified", createdAt: now });
+      const repository = (await ctx.db.get(repositoryId))!;
+      // Two reviews that both reported the same fingerprint, plus one that reported another.
+      for (const [index, prints] of [[recurring, fresh], [recurring]].entries()) {
+        const reviewId = await ctx.db.insert("reviews", { organizationId, repositoryId,
+          githubRepositoryId: repository.githubRepositoryId, prNumber: 30 + index, isFork: false, baseRef: "main",
+          baseSha: "b".repeat(40), headSha: `${index}`.repeat(40).slice(0, 40), requiredCheckPolicy: "fail_closed",
+          completedRoundCount: 0, patchAttemptCount: 0, diagnosticRunCount: 0, providerRetryCount: 0,
+          commandRetryCount: 0, trigger: "dashboard", triggerVerb: "review", triggerActor: userId,
+          triggerActorPermission: "admin", mode: "review", status: "changes_requested", budgetLimit: 2,
+          budgetConsumed: 0, nextActionCode: "none", isStale: false, trustedRef: "main", trustedRefSha: "b".repeat(40),
+          configRevisionId, queuePriority: 0, configProvenance: "defaults_only", provider: "anthropic",
+          model: "claude-sonnet-4-5", modelVersion: "pinned", promptVersion: "chain-v1", evalSetVersion: "v1",
+          coverageLevel: "full", currentStage: "complete", executionGeneration: 0, runnerImageVersion: "img",
+          expiresAt: now + 86_400_000, createdAt: now + index, updatedAt: now + index });
+        const artifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, reviewId,
+          type: "prompt_trace", storageKey: `memory/${index}.json`, encrypted: true, checksum: "a".repeat(64),
+          size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+        for (const print of prints as string[]) {
+          await ctx.db.insert("findings", { organizationId, reviewId, fingerprintHmac: print, category: "correctness",
+            severity: "high", confidence: 0.9, blocking: true, contentArtifactId: artifactId, evidenceIds: [artifactId],
+            pathHmac: "p".repeat(64), startLine: 1, endLine: 1, resolution: "open", createdAt: now, updatedAt: now,
+            expiresAt: now + 86_400_000 });
+        }
+      }
+    });
+
+    const memory = await t.query(internal.repositoryMemory.forRepository, { repositoryId });
+    expect(memory.dismissedFingerprints).toEqual([dismissed]);
+    expect(memory.recurringFingerprints).toEqual([recurring]);
+    // Seen once is not recurring, or every finding would be one after two reviews.
+    expect(memory.recurringFingerprints).not.toContain(fresh);
+    expect(memory.reviewsSeen).toBe(2);
+  });
+
+  // Memory is fed back into a prompt, so it must never be able to carry one review's prose into
+  // the next - that would be a channel from model output to model input.
+  it("carries no repository content, path or prose", async () => {
+    const t = makeTest();
+    const { organizationId } = await seedWorkspace(t);
+    const repositoryId = await t.run(async ctx =>
+      (await ctx.db.query("repositories").withIndex("by_org_enabled", q => q.eq("organizationId", organizationId).eq("enabled", true)).first())!._id);
+    const memory = await t.query(internal.repositoryMemory.forRepository, { repositoryId });
+    const serialized = JSON.stringify(memory);
+    for (const leak of ["src/", ".ts", "billing-api", "ledgerline", "http"]) expect(serialized.toLowerCase()).not.toContain(leak);
+    expect(Object.keys(memory).sort()).toEqual(["dismissedFingerprints", "recurringFingerprints", "reviewsSeen"]);
+  });
+
+  it("is empty for a repository nobody has reviewed", async () => {
+    const t = makeTest();
+    const { organizationId } = await seedWorkspace(t);
+    const repositoryId = await t.run(async ctx =>
+      (await ctx.db.query("repositories").withIndex("by_org_enabled", q => q.eq("organizationId", organizationId).eq("enabled", true)).first())!._id);
+    await expect(t.query(internal.repositoryMemory.forRepository, { repositoryId }))
+      .resolves.toEqual({ dismissedFingerprints: [], recurringFingerprints: [], reviewsSeen: 0 });
   });
 });

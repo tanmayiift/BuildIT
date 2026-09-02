@@ -193,7 +193,8 @@ export const analyze = internalAction({
     const availableModels = scope.credential.availableModels.length ? scope.credential.availableModels : undefined;
     const findingsModel = selectFindingsModel(scope.provider, scope.model, availableModels);
     const criticRoute = selectCriticModel(scope.provider, findingsModel, availableModels);
-    const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }) }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
+    const memory = await ctx.runQuery(internal.repositoryMemory.forRepository, { repositoryId: scope.repositoryId });
+    const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }), memory }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
     let injectionUnscoped = false;
     const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
       onInjection: report => { injectionUnscoped ||= report.scope.unscoped; },
