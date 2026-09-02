@@ -20,6 +20,18 @@ function safe(value: string) {
 }
 
 function code(value: string) { return safe(value).replace(/`/g, "ˋ"); }
+
+const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// A fixed +05:30 shift rather than a locale lookup: the report has to render identically wherever
+// it is composed, and the operator alert template applies the same offset for the same reason.
+function istDate(epochMs: number) {
+  const shifted = new Date(epochMs + 5.5 * 60 * 60_000);
+  const day = shifted.getUTCDate();
+  const hours = String(shifted.getUTCHours()).padStart(2, "0");
+  const minutes = String(shifted.getUTCMinutes()).padStart(2, "0");
+  return `${day} ${months[shifted.getUTCMonth()]} ${shifted.getUTCFullYear()}, ${hours}:${minutes} IST`;
+}
 function title(status: "changes_requested" | "inconclusive" | "checks_passed") {
   if (status === "changes_requested") return "Changes need review";
   if (status === "checks_passed") return "Ready for human review";
@@ -54,22 +66,32 @@ export function composeVerifiedReport(input: { repository: string; prNumber: num
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
   const blockingFindings = visibleFindings.filter(finding => finding.resolution === "accepted" && finding.blocking).length;
   const failedRequiredChecks = input.checks.filter(check => check.required && check.conclusion === "failed" && check.evidenceComplete).length;
-  const summary = [
+  const requiredChecks = input.checks.filter(check => check.required);
+  const failedAdvisory = input.checks.filter(check => !check.required && check.conclusion === "failed");
+  const advisoryNote = failedAdvisory.length
+    ? ` ${failedAdvisory.length === 1 ? "One advisory check did not pass" : `${failedAdvisory.length} advisory checks did not pass`}: ${failedAdvisory.map(check => `\`${code(check.name)}\``).join(", ")}. Advisory checks do not block a merge.`
+    : "";
+  const problems = [
     blockingFindings ? `**${blockingFindings} blocking ${blockingFindings === 1 ? "issue" : "issues"}**` : "",
     failedRequiredChecks ? `**${failedRequiredChecks} required ${failedRequiredChecks === 1 ? "check" : "checks"} failed**` : "",
-  ].filter(Boolean).join(" and ") || (decision.status === "checks_passed" ? "All required checks produced passing evidence" : "Complete evidence was not available");
+  ].filter(Boolean).join(" and ");
+  const summary = problems
+    || (decision.status === "checks_passed"
+      ? `All ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"} passed with complete evidence`
+      : "Complete evidence was not available");
   const checkRows = input.checks.length
-    ? input.checks.map(check => `| ${safe(check.name)} | ${check.required ? "Required" : "Optional"} | ${conclusion(check.conclusion)}${check.evidenceComplete ? "" : " · evidence incomplete"} |`)
+    ? input.checks.map(check => `| ${safe(check.name)} | ${check.required ? "Required" : "Advisory"} | ${check.conclusion === "failed" ? `**${conclusion(check.conclusion)}**` : conclusion(check.conclusion)}${check.evidenceComplete ? "" : " · evidence incomplete"} |`)
     : ["| No checks configured | — | Not run |"];
   const evidenceReceipts = visibleFindings.map(finding => `- ${safe(finding.title)} — Evidence: ${finding.evidenceIds.length ? finding.evidenceIds.map(id => `\`${code(id)}\``).join(", ") : "none"}`);
   const claimReceipts = claims.map(claim => `- ${safe(claim.text)} — Evidence: ${claim.evidenceIds.map(id => `\`${code(id)}\``).join(", ")}`);
   const lines = [
     `## ${title(decision.status)}`,
-    `\`${code(input.repository)}\` #${input.prNumber} · exact commit \`${code(input.headSha.slice(0, 12))}\``,
     "",
-    `${summary}.`,
+    `**Repository** \`${code(input.repository)}\`  ·  **Pull request** #${input.prNumber}  ·  **Commit** \`${code(input.headSha.slice(0, 12))}\``,
     "",
-    `**Next step:** ${nextStep(decision.nextAction)}`,
+    `${summary}.${advisoryNote}`,
+    "",
+    `**Next step** — ${nextStep(decision.nextAction)}`,
     "",
     "> BuildIT did not merge this pull request. A human owns the merge decision.",
     ...(visibleFindings.length ? ["", "### What needs attention", "", ...visibleFindings.flatMap(findingLines)] : []),
@@ -84,13 +106,14 @@ export function composeVerifiedReport(input: { repository: string; prNumber: num
     "<details>",
     "<summary>Technical receipt</summary>",
     "",
-    `- Repository: \`${code(input.repository)}\` · PR #${input.prNumber}`,
-    `- Head commit: \`${code(input.headSha)}\``,
-    `- Base commit: \`${code(input.baseSha)}\``,
-    `- Trusted configuration: \`${code(input.configRevision)}\``,
-    `- Coverage: **${input.coverage === "complete" ? "Complete" : "Partial"}**`,
-    `- Cost: $${input.costUsd.toFixed(4)}`,
-    `- Source-derived evidence expires: ${new Date(input.retentionExpiresAt).toISOString()}`,
+    "| | |",
+    "| --- | --- |",
+    `| Head commit | \`${code(input.headSha)}\` |`,
+    `| Base commit | \`${code(input.baseSha)}\` |`,
+    `| Trusted configuration | \`${code(input.configRevision)}\` |`,
+    `| Repository coverage | ${input.coverage === "complete" ? "Complete" : "Partial"} |`,
+    `| Model cost | $${input.costUsd.toFixed(4)} |`,
+    `| Source evidence deleted after | ${istDate(input.retentionExpiresAt)} |`,
     ...(evidenceReceipts.length || claimReceipts.length ? ["", ...evidenceReceipts, ...claimReceipts] : []),
     "",
     "</details>",

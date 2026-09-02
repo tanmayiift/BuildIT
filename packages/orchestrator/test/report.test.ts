@@ -30,7 +30,7 @@ describe("verified report", () => {
     expect(report.decision.status).toBe("changes_requested");
     expect(report.body).toContain("## Changes need review");
     expect(report.body).toContain("**1 blocking issue**");
-    expect(report.body).toContain("**Next step:** Inspect the evidence and decide what to change.");
+    expect(report.body).toContain("**Next step** — Inspect the evidence and decide what to change.");
     expect(report.body).toContain("### What needs attention");
     expect(report.body).not.toContain("## BuildIT: changes_requested");
   });
@@ -43,9 +43,9 @@ describe("verified report", () => {
     expect(report.body).toContain("### Validation checks");
     expect(report.body).toContain("| test | Required | Passed |");
     expect(report.body).toContain("<summary>Technical receipt</summary>");
-    expect(report.body.indexOf(`Head commit: \`${head}\``)).toBeGreaterThan(report.body.indexOf("<summary>Technical receipt</summary>"));
+    expect(report.body.indexOf(`| Head commit | \`${head}\` |`)).toBeGreaterThan(report.body.indexOf("<summary>Technical receipt</summary>"));
     expect(report.body.indexOf("Evidence: `ev-1`")).toBeGreaterThan(report.body.indexOf("<summary>Technical receipt</summary>"));
-    expect(report.body).toContain("Cost: $0.1235");
+    expect(report.body).toContain("| Model cost | $0.1235 |");
     expect(report.body).toContain("BuildIT did not merge");
   });
 
@@ -53,7 +53,7 @@ describe("verified report", () => {
     const report = composeVerifiedReport({ ...input(), prNumber: 8, configRevision: "cfg:2", coverage: "partial", checks: [{ name: "test", required: true, conclusion: "passed", evidenceComplete: true }], findings: [], claims: [], evidence: [], costUsd: 0 });
     expect(report.decision).toMatchObject({ status: "inconclusive", reason: "incomplete_coverage" });
     expect(report.body).toContain("## Review needs attention");
-    expect(report.body).toContain("Coverage: **Partial**");
+    expect(report.body).toContain("| Repository coverage | Partial |");
   });
 
   it("drops unsupported claims and neutralizes mentions and markup", () => {
@@ -87,5 +87,67 @@ describe("GitHub egress boundary", () => {
   it("defuses Markdown link syntax", () => {
     const rendered = JSON.stringify(withFinding("[Click here to re-run CI](https://attacker.example)"));
     expect(rendered).not.toContain("](https://attacker.example)");
+  });
+});
+
+// From a real notification email: the report announced "All required checks produced passing
+// evidence" while the table beside it showed typecheck · Optional · Failed. True by the letter and
+// contradictory to read, which is the fastest way to lose a reader's trust in the rest of it.
+describe("the report reads honestly in an inbox", () => {
+  const withChecks = (checks: Array<{ name: string; required: boolean; conclusion: "passed" | "failed" }>) =>
+    composeVerifiedReport({ ...input(), findings: [], claims: [],
+      checks: checks.map(check => ({ ...check, evidenceComplete: true })) }).body;
+
+  it("says an advisory check failed instead of claiming everything passed", () => {
+    const body = withChecks([
+      { name: "install", required: true, conclusion: "passed" },
+      { name: "test", required: true, conclusion: "passed" },
+      { name: "typecheck", required: false, conclusion: "failed" },
+    ]);
+    expect(body).toContain("All 2 required checks passed with complete evidence");
+    expect(body).toContain("One advisory check did not pass");
+    expect(body).toContain("typecheck");
+    // And says plainly that it does not block, because that is the reader's next question.
+    expect(body).toContain("Advisory checks do not block a merge");
+  });
+
+  it("does not invent an advisory caveat when there is none", () => {
+    const body = withChecks([
+      { name: "install", required: true, conclusion: "passed" },
+      { name: "lint", required: false, conclusion: "passed" },
+    ]);
+    expect(body).toContain("All 1 required check passed");
+    expect(body).not.toContain("advisory check did not pass");
+  });
+
+  it("counts more than one advisory failure correctly", () => {
+    const body = withChecks([
+      { name: "install", required: true, conclusion: "passed" },
+      { name: "lint", required: false, conclusion: "failed" },
+      { name: "typecheck", required: false, conclusion: "failed" },
+    ]);
+    expect(body).toContain("2 advisory checks did not pass");
+  });
+
+  it("marks a failed row so the table can be skimmed", () => {
+    const body = withChecks([
+      { name: "install", required: true, conclusion: "passed" },
+      { name: "typecheck", required: false, conclusion: "failed" },
+    ]);
+    expect(body).toContain("| typecheck | Advisory | **Failed** |");
+    expect(body).toContain("| install | Required | Passed |");
+  });
+
+  // The retention promise was printed as 2026-09-09T17:17:15.790Z, which is a machine's way of
+  // saying a date to a person - and in the wrong zone for the operator reading it.
+  it("writes the retention date the way a person would", () => {
+    const body = composeVerifiedReport({ ...input(), retentionExpiresAt: Date.UTC(2026, 8, 9, 17, 17, 15) }).body;
+    expect(body).toContain("| Source evidence deleted after | 9 September 2026, 22:47 IST |");
+    expect(body).not.toContain("2026-09-09T17:17:15");
+  });
+
+  it("names the repository, pull request and commit in one scannable line", () => {
+    const body = composeVerifiedReport(input()).body;
+    expect(body).toMatch(/\*\*Repository\*\* `acme\/api` {2}· {2}\*\*Pull request\*\* #7 {2}· {2}\*\*Commit\*\*/);
   });
 });
