@@ -19,9 +19,12 @@ export function AccountStatus({ compact = false }: { compact?: boolean }) {
   const organizations = useQuery(organizationsQuery, hydrated && isAuthenticated ? {} : "skip");
   useEffect(() => setHydrated(true), []);
 
+  // Session state is still unknown here. Offering "Sign in" would tell an already
+  // signed-in member they are signed out and point them at an action that undoes
+  // their session, so this state stays neutral and non-actionable until it resolves.
   if (!hydrated || isLoading) return compact
-    ? <a className="button compact" href="/sign-in">Sign in</a>
-    : <><span className="muted" aria-live="polite">Checking account…</span><br/><a className="account-link" href="/sign-in">Sign in with GitHub</a></>;
+    ? <span className="button compact is-pending" aria-live="polite">Checking…</span>
+    : <span className="muted" aria-live="polite">Checking account…</span>;
   if (!isAuthenticated) return compact
     ? <a className="button compact" href="/sign-in">Sign in</a>
     : <><span className="preview-dot" aria-hidden="true" />Not signed in<br/><a className="account-link" href="/sign-in">Sign in with GitHub</a></>;
