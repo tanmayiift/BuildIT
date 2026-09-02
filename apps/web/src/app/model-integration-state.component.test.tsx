@@ -60,4 +60,11 @@ describe("model provider integration card", () => {
     const { container } = render(<ModelIntegrationState />);
     expect(container.textContent).not.toContain("YkEA");
   });
+  it("renders real characters, never a literal escape sequence", () => {
+    state.connection = connected("owner");
+    state.credentials = [{ status: "valid" }];
+    const { container } = render(<ModelIntegrationState />);
+    expect(container.textContent).not.toMatch(/\\u[0-9a-fA-F]{4}/);
+    expect(container.textContent).toContain("\u2192");
+  });
 });

@@ -162,11 +162,11 @@ export function ModelIntegrationState() {
   const loading = !connection || checking;
   // Only an owner or admin may read the credential list, so a developer or viewer is told
   // where the state lives rather than being shown a misleading "not connected".
-  const label = loading ? "Checking\u2026" : !canManage ? "Owner or admin manages this" : ready ? `${validCount} connected` : "Connect when analyzing";
+  const label = loading ? "Checking…" : !canManage ? "Owner or admin manages this" : ready ? `${validCount} connected` : "Connect when analyzing";
   const body = ready
     ? "A validated key is stored for this workspace. It is used only for the provider request you authorize."
     : "Your key is used only for the provider request you authorize.";
-  return <article className="integration-card" data-connected={ready || undefined}><div><span className="integration-glyph">AN</span><span className={`status ${ready ? "success" : "neutral"}`}>{label}</span></div><h2>Anthropic / OpenAI / Gemini</h2><p>{body}</p><a href="/setup/model">{ready ? "Manage model keys" : "Compare model setup"} \u2192</a></article>;
+  return <article className="integration-card" data-connected={ready || undefined}><div><span className="integration-glyph">AN</span><span className={`status ${ready ? "success" : "neutral"}`}>{label}</span></div><h2>Anthropic / OpenAI / Gemini</h2><p>{body}</p><a href="/setup/model">{ready ? "Manage model keys" : "Compare model setup"} →</a></article>;
 }
 
 export function GitHubIntegrationState() {
