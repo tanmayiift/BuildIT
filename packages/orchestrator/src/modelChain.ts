@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { validateSchemaValue, type JsonSchema, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { redactForModel } from "@buildit/security";
-import { planReview, type ReviewPlan } from "./reviewPlan.js";
+import { partitionFiles, planReview, type ReviewPlan } from "./reviewPlan.js";
 import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type InjectionScope, type InjectionSignal, type PromptStage, type StageDefinition } from "./promptChain.js";
 
 const string = { type: "string" } as const;
@@ -68,6 +68,10 @@ export async function runModelReviewChain(input: {
   const attempts=new Map<PromptStage,Array<Omit<StageUsage,"promptVersion"|"schemaVersion"|"attempt"|"outcome">>>();
   const plan = input.plan ?? planReview(input.untrusted);
   const definitions = plan.stages.map(strictDefinition);
+  const files = input.untrusted.files;
+  const slices = plan.findingsSpecialists > 1 && Array.isArray(files)
+    ? partitionFiles(files, plan.findingsSpecialists).map(part => ({ ...input.untrusted, files: part }))
+    : [input.untrusted];
   await input.onPlan?.(plan);
   return runPromptChain({
     definitions,
@@ -75,6 +79,7 @@ export async function runModelReviewChain(input: {
     pinned: input.pinned,
     untrusted: input.untrusted,
     maxSchemaRepairs: 1,
+    ...(slices.length > 1 ? { partition: (stage: PromptStage) => stage === "findings" ? slices : undefined } : {}),
     ...(input.onInjection ? { onInjection: input.onInjection } : {}),
     onAttempt: async attempt=>{const queue=attempts.get(attempt.stage),usage=queue?.shift();if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},
     executor: async request => {

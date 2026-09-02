@@ -112,7 +112,19 @@ function stable(value:unknown){return JSON.stringify(value,(_key,item)=>item&&ty
 function delimited(label:string,value:unknown){const json=stable(value);return `<buildit:${label}>\n${json}\n</buildit:${label}>`}
 export function renderStageInput(stage:PromptStage,context:{pinned:{headSha:string;baseSha:string;configRevision:string};untrusted:Record<string,unknown>;prior:ValidatedStage[]}){const signals=detectInjectionSignals(context.untrusted);return [`stage=${stage}`,delimited("pinned",context.pinned),delimited("untrusted",context.untrusted),delimited("injection-signals",signals),delimited("validated-prior",context.prior.map(record=>({stage:record.stage,promptVersion:record.promptVersion,schemaVersion:record.schemaVersion,value:record.value})))].join("\n")}
 
-export async function runPromptChain(input:{definitions:StageDefinition[];expectedStages?:readonly PromptStage[];executor:StageExecutor;onAttempt?:(attempt:StageAttempt)=>Promise<void>|void;onInjection?:(report:{signals:InjectionSignal[];scope:InjectionScope})=>Promise<void>|void;pinned:{headSha:string;baseSha:string;configRevision:string};untrusted:Record<string,unknown>;maxSchemaRepairs?:number}){
+
+export function mergeStageValues(values:Array<Record<string,unknown>>):Record<string,unknown>{
+ if(values.length===1)return values[0]!;
+ const merged:Record<string,unknown>={};
+ for(const value of values)for(const [key,item] of Object.entries(value)){
+   const existing=merged[key];
+   if(Array.isArray(item)&&Array.isArray(existing))merged[key]=[...existing,...item];
+   else if(!(key in merged))merged[key]=item;
+ }
+ return merged;
+}
+
+export async function runPromptChain(input:{definitions:StageDefinition[];expectedStages?:readonly PromptStage[];executor:StageExecutor;partition?:(stage:PromptStage)=>Array<Record<string,unknown>>|undefined;onAttempt?:(attempt:StageAttempt)=>Promise<void>|void;onInjection?:(report:{signals:InjectionSignal[];scope:InjectionScope})=>Promise<void>|void;pinned:{headSha:string;baseSha:string;configRevision:string};untrusted:Record<string,unknown>;maxSchemaRepairs?:number}){
  const expected=input.expectedStages??promptStages;
  if(input.definitions.length!==expected.length||input.definitions.some((definition,index)=>definition.stage!==expected[index]))throw new Error("invalid_prompt_chain_definition");
  const records:ValidatedStage[]=[];
@@ -134,16 +146,22 @@ export async function runPromptChain(input:{definitions:StageDefinition[];expect
    // The caller must hear about a signal that first appears in model output too, or the review
    // would still reach a verdict on evidence a poisoned prior stage shaped.
    if (stageScope !== scope && !scope.unscoped) await input.onInjection?.({signals:stageSignals,scope:stageScope});
-   const rendered=renderStageInput(definition.stage,{pinned:input.pinned,untrusted:input.untrusted,prior:records});
-   if(Buffer.byteLength(rendered,"utf8")>definition.maxInputBytes)throw new Error(`stage_input_too_large:${definition.stage}`);
-   let raw:unknown,validated:Record<string,unknown>|undefined,lastError:unknown,attempts=0;
-   const repairs=input.maxSchemaRepairs??1;
-   for(let attempt=0;attempt<=repairs;attempt++){
-     attempts++; raw=await input.executor({stage:definition.stage,system:`${fixedSystemPolicy}\n\nStage task: ${stagePolicies[definition.stage]}`,input:rendered,repairOf:attempt?raw:undefined});
-     try{validated=definition.validate(raw);await input.onAttempt?.({stage:definition.stage,promptVersion:definition.promptVersion,schemaVersion:definition.schemaVersion,attempt:attempt+1,outcome:"valid"});break}catch(error){lastError=error;await input.onAttempt?.({stage:definition.stage,promptVersion:definition.promptVersion,schemaVersion:definition.schemaVersion,attempt:attempt+1,outcome:"schema_invalid"})}
+   const slices=input.partition?.(definition.stage)??[input.untrusted];
+   const values:Array<Record<string,unknown>>=[];
+   let attempts=0;
+   for(const slice of slices){
+     const rendered=renderStageInput(definition.stage,{pinned:input.pinned,untrusted:slice,prior:records});
+     if(Buffer.byteLength(rendered,"utf8")>definition.maxInputBytes)throw new Error(`stage_input_too_large:${definition.stage}`);
+     let raw:unknown,validated:Record<string,unknown>|undefined,lastError:unknown;
+     const repairs=input.maxSchemaRepairs??1;
+     for(let attempt=0;attempt<=repairs;attempt++){
+       attempts++; raw=await input.executor({stage:definition.stage,system:`${fixedSystemPolicy}\n\nStage task: ${stagePolicies[definition.stage]}`,input:rendered,repairOf:attempt?raw:undefined});
+       try{validated=definition.validate(raw);await input.onAttempt?.({stage:definition.stage,promptVersion:definition.promptVersion,schemaVersion:definition.schemaVersion,attempt:attempt+1,outcome:"valid"});break}catch(error){lastError=error;await input.onAttempt?.({stage:definition.stage,promptVersion:definition.promptVersion,schemaVersion:definition.schemaVersion,attempt:attempt+1,outcome:"schema_invalid"})}
+     }
+     if(!validated)throw new Error(`stage_schema_invalid:${definition.stage}`,{cause:lastError});
+     values.push(validated);
    }
-   if(!validated)throw new Error(`stage_schema_invalid:${definition.stage}`,{cause:lastError});
-   records.push({stage:definition.stage,promptVersion:definition.promptVersion,schemaVersion:definition.schemaVersion,value:applyInjectionPolicy(definition.stage,validated,stageSignals,stageScope,records),attempts});
+   records.push({stage:definition.stage,promptVersion:definition.promptVersion,schemaVersion:definition.schemaVersion,value:applyInjectionPolicy(definition.stage,mergeStageValues(values),stageSignals,stageScope,records),attempts});
  }
  return records;
 }

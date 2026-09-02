@@ -3607,6 +3607,42 @@ describe("a review with an unattributable injection signal fails closed", () => 
   });
 });
 
+// A finding the critic could not resolve is neither open nor blocking, so it fell out of the
+// verdict entirely: the review went green on a question nobody answered. The planner has said
+// since it was written that a second uncertain pass means a person decides - nothing enforced it.
+describe("a finding the critic cannot resolve reaches a person", () => {
+  const uncertainReview = async (t: ReturnType<typeof convexTest>, tenant: Awaited<ReturnType<typeof seedTenant>>, now: number, passes: number) =>
+    t.run(async ctx => {
+      await ctx.db.patch(tenant.reviewId, { coverageLevel: "full", status: "validating", currentStage: "analysis" });
+      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "inconclusive/output.txt", encrypted: true, checksum: "c".repeat(64), size: 4, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "inconclusive/report.md", encrypted: true, checksum: "d".repeat(64), size: 4, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      await ctx.db.insert("checkRuns", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, kind: "test", nameHash: "b".repeat(64), required: true, status: "completed", conclusion: "passed", commandFingerprint: "c".repeat(64), commitSha: "a".repeat(40), exitCode: 0, durationMs: 1, artifactId, credentialTeardownProved: true, sandboxStopped: true, startedAt: now - 10, completedAt: now });
+      await ctx.db.insert("findings", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, fingerprintHmac: "e".repeat(64), category: "correctness", severity: "high", confidence: 0.5, blocking: false, contentArtifactId: artifactId, evidenceIds: [artifactId], pathHmac: "f".repeat(64), startLine: 1, endLine: 1, resolution: "uncertain", uncertainPasses: passes, createdAt: now, updatedAt: now, expiresAt: now + 86_400_000 });
+      return reportArtifactId;
+    });
+
+  const decide = (t: ReturnType<typeof convexTest>, tenant: Awaited<ReturnType<typeof seedTenant>>, reportArtifactId: string, now: number) =>
+    t.mutation(internal.reviewValidationData.finalizeDecision, { organizationId: tenant.organizationId, reviewId: tenant.reviewId,
+      expectedHeadSha: "a".repeat(40), expectedGeneration: 0, reportArtifactId: reportArtifactId as never, now });
+
+  it("still passes after one uncertain pass, because the next round may resolve it", async () => {
+    const t = convexTest(schema, modules), tenant = await seedTenant(t, "uncertain-once", "alice"), now = Date.now();
+    const reportArtifactId = await uncertainReview(t, tenant, now, 1);
+    await expect(decide(t, tenant, reportArtifactId, now)).resolves.toMatchObject({ status: "checks_passed" });
+  });
+
+  it("stops going green once the same finding is uncertain twice", async () => {
+    const t = convexTest(schema, modules), tenant = await seedTenant(t, "uncertain-twice", "alice"), now = Date.now();
+    const reportArtifactId = await uncertainReview(t, tenant, now, 2);
+    await expect(decide(t, tenant, reportArtifactId, now))
+      // Not retry_review: another pass spends money to reach the same place.
+      .resolves.toMatchObject({ status: "inconclusive", statusReasonCode: "human_review_required", nextActionCode: "inspect_findings" });
+    expect(await t.run(ctx => ctx.db.get(tenant.reviewId))).toMatchObject({ githubCheckConclusion: "neutral" });
+    const event = await t.run(ctx => ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", tenant.reviewId)).filter(q => q.eq(q.field("sequence"), 5)).unique());
+    expect(event?.metadata).toMatchObject({ reasonCode: "uncertain_escalated" });
+  });
+});
+
 // The behavioural half of the same defect: prove the conflict is real at the mutation that
 // throws it, not only that the key strings differ.
 describe("a failed Autofix does not poison the commit for the next review", () => {
