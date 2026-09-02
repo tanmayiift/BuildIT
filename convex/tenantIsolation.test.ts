@@ -3897,3 +3897,86 @@ describe("an owner can change their own capacity", () => {
     })).rejects.toThrow("not_found_or_forbidden");
   });
 });
+
+// BYOK had only ever run for one organization: the operator's own. Opening the product means a
+// second tenant brings their own key, and nothing had exercised that path end to end - authorize,
+// store, select for a review, revoke - or checked that one tenant's key cannot reach another's
+// review. The live half still needs a human to paste a real key; this covers the code.
+describe("a second tenant brings their own key", () => {
+  const setup = async (slug: string, githubUserId: number) => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId, githubLogin: slug }));
+    const tenant = await seedTenant(t, slug, userId);
+    await t.run(async ctx => {
+      // seedTenant leaves a credential behind; this tenant starts with none, like a real signup.
+      for (const row of await ctx.db.query("providerCredentials").collect()) await ctx.db.delete(row._id);
+      await ctx.db.insert("userProfiles", { userId, githubUserId, githubLogin: slug, lastAuthenticatedAt: Date.now(), updatedAt: Date.now() });
+    });
+    return { t, tenant, userId, signedIn: t.withIdentity({ subject: `${userId}|session` }) };
+  };
+
+  const credential = (scopeId: string) => ({
+    credentialScopeId: scopeId, provider: "openai" as const, encryptedCiphertext: "ciphertext", nonce: "nonce",
+    authTag: "tag", aadDigest: "d".repeat(64), wrappedDataKey: "wrapped", kmsKeyId: "arn:aws:kms:eu-west-1:123:key/test",
+    envelopeVersion: 1 as const, keyVersion: 1, maskedSuffix: "4242", availableModels: ["gpt-5"],
+    lastValidatedAt: Date.now(),
+  });
+
+  it("runs the whole key lifecycle for an organization that has never had one", async () => {
+    const { t, tenant, signedIn } = await setup("byok-tenant-b", 9101);
+    await expect(signedIn.mutation(api.integrations.authorizeCredentialWrite, {
+      organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
+    })).resolves.toBeTruthy();
+
+    await expect(signedIn.mutation(api.integrations.storeEncryptedCredential, {
+      organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
+      requestId: "byok-tenant-b-000001", ...credential("523e4567-e89b-12d3-a456-426614174000"),
+    })).resolves.toMatchObject({ status: "valid" });
+
+    // The stored key belongs to this organization and is selectable for its own repository.
+    await expect(signedIn.query(api.dashboardReviewData.availableProviders, { repositoryId: tenant.repositoryId }))
+      .resolves.toEqual(["openai"]);
+
+    const stored = await t.run(ctx => ctx.db.query("providerCredentials").collect());
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ organizationId: tenant.organizationId, provider: "openai", status: "valid" });
+    // The key itself is never stored in the clear, whoever owns it.
+    expect(JSON.stringify(stored[0])).not.toContain("sk-");
+  });
+
+  it("keeps one tenant's key out of the other tenant's review", async () => {
+    const { t, tenant, signedIn } = await setup("byok-owner", 9102);
+    await signedIn.mutation(api.integrations.authorizeCredentialWrite, { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId });
+    await signedIn.mutation(api.integrations.storeEncryptedCredential, {
+      organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
+      requestId: "byok-owner-000001", ...credential("623e4567-e89b-12d3-a456-426614174000"),
+    });
+    const neighbour = await seedTenant(t, "byok-neighbour", "bob");
+    await t.run(async ctx => {
+      for (const row of await ctx.db.query("providerCredentials").collect()) {
+        if (row.organizationId === neighbour.organizationId) await ctx.db.delete(row._id);
+      }
+    });
+    // The neighbour has no key of their own, and must not inherit one.
+    await expect(t.mutation(internal.dashboardReviewData.create, {
+      repositoryId: neighbour.repositoryId, prNumber: 9, headSha: "e".repeat(40), baseSha: "b".repeat(40),
+      baseRef: "main", isFork: false, actorId: "bob", actorRole: "developer",
+      expectedCredentialScopeId: "623e4567-e89b-12d3-a456-426614174000", expectedProvider: "openai",
+      budgetLimit: 2, now: Date.now(),
+    })).rejects.toThrow("provider_credential_changed_review_again");
+  });
+
+  it("stops working the moment the tenant revokes it", async () => {
+    const { tenant, signedIn } = await setup("byok-revoke", 9103);
+    await signedIn.mutation(api.integrations.authorizeCredentialWrite, { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId });
+    const saved = await signedIn.mutation(api.integrations.storeEncryptedCredential, {
+      organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
+      requestId: "byok-revoke-000001", ...credential("723e4567-e89b-12d3-a456-426614174000"),
+    });
+    await expect(signedIn.mutation(api.integrations.revokeProviderCredential, {
+      organizationId: tenant.organizationId, credentialId: saved.id, requestId: "byok-revoke-000002",
+    })).resolves.toBeTruthy();
+    await expect(signedIn.query(api.dashboardReviewData.availableProviders, { repositoryId: tenant.repositoryId }))
+      .resolves.toEqual([]);
+  });
+});
