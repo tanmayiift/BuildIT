@@ -1,3 +1,4 @@
+import { githubRequester } from "./request.js";
 type GitHubHttp = (input: string | URL, init?: RequestInit) => Promise<Response>;
 const apiHeaders = { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "BuildIT", "Content-Type": "application/json" };
 function safePath(path: string) { return path.length > 0 && !path.startsWith("/") && !path.includes("\0") && !path.split("/").includes("..") && !path.startsWith(".git/"); }
@@ -11,7 +12,10 @@ function safeDetailsUrl(value: string | undefined) {
 }
 
 export class GitHubRepositoryWriter {
-  constructor(private readonly input: { repositoryId: number; installationToken: string; http?: GitHubHttp }) {}
+  private readonly input: { repositoryId: number; installationToken: string; http?: GitHubHttp };
+  constructor(input: { repositoryId: number; installationToken: string; http?: GitHubHttp }) {
+    this.input = { ...input, http: githubRequester(input.http ?? fetch) };
+  }
   get http() { return this.input.http ?? fetch; }
   get headers() { return { ...apiHeaders, Authorization: `Bearer ${this.input.installationToken}` }; }
   async request(path: string, init: RequestInit = {}) {

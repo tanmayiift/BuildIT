@@ -19,7 +19,9 @@ test("each real identity sees only its own tenant surfaces", async ({ page }, in
   }
   for (const route of ["/metrics", "/usage", "/audit"]) {
     await page.goto(route);
-    await expect(page.locator("body")).toContainText("CONNECTED");
+    // The banner label is "Connected" in the DOM; .preview-label uppercases it in CSS only,
+    // and toContainText reads textContent, so asserting "CONNECTED" could never pass.
+    await expect(page.locator("body")).toContainText("Connected");
     await expect(page.locator("body")).not.toContainText(values.foreignOrganization!);
     await expect(page.locator("body")).not.toContainText(values.foreignMarker!);
   }

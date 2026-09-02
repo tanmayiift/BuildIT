@@ -68,7 +68,8 @@ export class ConvexCredentialGateway implements CredentialStore,TrackerCredentia
   }
   async insertTracker(value:StoredTrackerCredential){await callConvex(this.convexUrl,this.token,"mutation","integrations:storeEncryptedTrackerConnection",{organizationId:value.organizationId,...(value.repositoryId?{repositoryId:value.repositoryId}:{}),credentialScopeId:value.id,provider:value.provider,workspaceId:value.workspaceId,scopes:value.scopes,encryptedAccessToken:value.ciphertext,nonce:value.nonce,authTag:value.tag,aadDigest:value.aadDigest,wrappedDataKey:value.wrappedDataKey,kmsKeyId:value.kmsKeyId,envelopeVersion:value.envelopeVersion,keyVersion:value.keyVersion,maskedSuffix:value.maskedSuffix,lastValidatedAt:value.lastValidatedAt,...(value.expiresAt?{expiresAt:value.expiresAt}:{}),...(value.replacesConnectionId?{replacesConnectionId:value.replacesConnectionId}:{}),requestId:`tracker-create:${randomUUID()}`})}
 
-  async get(): Promise<StoredCredential | null> { throw new Error("credential_read_not_configured"); }
-  async markUsed(): Promise<void> { throw new Error("credential_use_not_configured"); }
-  async revoke(): Promise<void> { throw new Error("credential_revoke_not_configured"); }
+  // Deliberately not implemented. Reading, marking and revoking a credential all happen in
+  // Convex, which owns the row: reviewModelData updates lastUsedAt and the web app revokes
+  // through integrations:revokeProviderCredential. Satisfying this interface with throwing stubs
+  // made CredentialBroker.withCredential look usable against this gateway when it never was.
 }

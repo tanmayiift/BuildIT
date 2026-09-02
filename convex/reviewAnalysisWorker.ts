@@ -27,14 +27,39 @@ export function redactModelOutput<T>(value: T): T {
   return value;
 }
 
+// Drops whole array elements from the end until the value fits the remaining budget. Truncating
+// mid-JSON would hand the model a malformed structure; dropping elements keeps it valid and the
+// truncated flag tells the model the sample is incomplete.
+export function boundJson<T>(value: T, budget: number): { value: T | undefined; truncated: boolean } {
+  const size = (item: unknown) => Buffer.byteLength(JSON.stringify(item) ?? "");
+  if (value === undefined) return { value: undefined, truncated: false };
+  if (size(value) <= budget) return { value, truncated: false };
+  if (Array.isArray(value)) {
+    const kept: unknown[] = [];
+    for (const item of value) {
+      if (size([...kept, item]) > budget) return { value: kept as T, truncated: true };
+      kept.push(item);
+    }
+    return { value: kept as T, truncated: true };
+  }
+  if (value && typeof value === "object") {
+    const bounded = Object.fromEntries(Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => [key, boundJson(item, Math.max(0, Math.floor(budget / Math.max(1, Object.keys(value as object).length)))).value]));
+    return { value: bounded as T, truncated: true };
+  }
+  return { value: undefined, truncated: true };
+}
+
 export function boundedValidationEvidence(value: ValidationArtifact, pinned: { headSha: string; baseSha: string }, maxOutputBytes = 60_000) {
   if (value.version !== 1 || value.pinned?.headSha !== pinned.headSha || value.pinned?.baseSha !== pinned.baseSha || !value.output?.base || !value.output.head) throw new Error("validation_evidence_pinning_failed");
   let remaining = maxOutputBytes;
-  const run = (input: NonNullable<ValidationArtifact["output"]>["base"]) => ({ results: input?.results ?? [], outputs: (input?.outputs ?? []).map(item => {
+  const run = (input: NonNullable<ValidationArtifact["output"]>["base"]) => ({ results: boundJson(input?.results ?? [], Math.max(0, remaining)).value ?? [], outputs: (input?.outputs ?? []).map(item => {
     const raw = typeof item.text === "string" ? redact(item.text) : "", text = raw.slice(0, Math.max(0, remaining)); remaining -= Buffer.byteLength(text);
     return { planId: item.planId, text, truncated: Boolean(item.truncated || item.evidenceTruncated || text.length !== raw.length) };
   }) });
-  return { manager: value.manager, base: run(value.output.base), head: run(value.output.head), scanners: value.output.scanners };
+  const boundedScanners = boundJson(value.output.scanners, Math.max(0, remaining));
+  return { manager: value.manager, base: run(value.output.base), head: run(value.output.head),
+    scanners: boundedScanners.value, scannersTruncated: boundedScanners.truncated };
 }
 
 export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_000) {
@@ -169,7 +194,9 @@ export const analyze = internalAction({
     const findingsModel = selectFindingsModel(scope.provider, scope.model, availableModels);
     const criticRoute = selectCriticModel(scope.provider, findingsModel, availableModels);
     const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }) }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
+    let injectionUnscoped = false;
     const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
+      onInjection: report => { injectionUnscoped ||= report.scope.unscoped; },
       invoke: async (stageRequest: ModelStageRequest): Promise<ProviderResult> => {
         const stage = stageRequest.stage as PromptStage;
         const model = stage === "findings" ? findingsModel : stage === "critic" ? criticRoute.model : scope.model;
@@ -224,7 +251,7 @@ export const analyze = internalAction({
       findings: arbitrated.filter(item => item.resolution !== "rejected").map(item => ({ fingerprintHmac: fingerprint(`${item.id}\0${item.path}\0${item.startLine}\0${item.endLine}`, fingerprintKey), pathHmac: fingerprint(item.path, fingerprintKey),
         category: item.category as "correctness" | "security" | "requirement" | "architecture" | "quality" | "dependency" | "test", severity: item.severity, confidence: item.confidence, blocking: item.blocking,
         evidenceIds: item.evidenceIds.map(id => headEvidence.get(id)!.artifactId), startLine: item.startLine, endLine: item.endLine, ...(item.origin === "scanner" ? { ruleId: item.id.split("-").slice(2).join("-") } : {}),
-        ...(item.criterionId ? { requirementExternalIdHash: fingerprint(item.criterionId, fingerprintKey) } : {}), resolution: item.resolution === "accepted" ? "open" as const : "uncertain" as const })), now: Date.now() });
+        ...(item.criterionId ? { requirementExternalIdHash: fingerprint(item.criterionId, fingerprintKey) } : {}), resolution: item.resolution === "accepted" ? "open" as const : "uncertain" as const, ...(item.reason === "prompt_injection_detected" ? { injectionSuspected: true } : {}) })), ...(injectionUnscoped ? { injectionUnscoped: true } : {}), now: Date.now() });
     return { artifactId: String(reserved.artifactId), stages: records.length, inputTokens, outputTokens };
   },
 });

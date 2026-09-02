@@ -29,7 +29,22 @@ describe("credential broker", () => {
     expect(f.providers.validateKey).toHaveBeenCalledWith("gemini", "a-secret-provider-key");
     expect(result).toMatchObject({ provider: "gemini", maskedSuffix: "-key", status: "valid", availableModels: ["gemini-2.5-pro"] });
     expect(f.getSaved()).not.toHaveProperty("apiKey");
-    expect(f.getSaved()!.ciphertext).not.toContain("a-secret-provider-key");
+    // "does not contain the plaintext" passes for base64, ROT13 or a reversed string. These are
+    // the properties AES-256-GCM actually provides.
+    const saved = f.getSaved()!;
+    expect(saved.ciphertext).not.toContain("a-secret-provider-key");
+    // Not a reversible encoding of the plaintext.
+    for (const encoding of ["base64", "base64url", "hex"] as const) {
+      expect(saved.ciphertext).not.toContain(Buffer.from("a-secret-provider-key").toString(encoding));
+    }
+    expect(Buffer.from(saved.ciphertext, "base64").toString("utf8")).not.toContain("a-secret-provider-key");
+    // A distinct nonce, authentication tag and wrapped data key, none of them empty or reused.
+    expect(saved.nonce).toBeTruthy();
+    expect(saved.tag).toBeTruthy();
+    expect(saved.wrappedDataKey).toBeTruthy();
+    expect(new Set([saved.nonce, saved.tag, saved.wrappedDataKey, saved.ciphertext]).size).toBe(4);
+    // The key itself never leaves as plaintext anywhere in the stored row.
+    expect(JSON.stringify(saved)).not.toContain("a-secret-provider-key");
     expect(f.getSaved()!.repositoryId).toBe("repo-a");
     expect(f.getSaved()!.replacesCredentialId).toBe("old-credential");
     expect(f.getSaved()!.availableModels).toEqual(["gemini-2.5-pro"]);

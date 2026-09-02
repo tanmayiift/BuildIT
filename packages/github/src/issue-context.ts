@@ -1,9 +1,11 @@
+import { githubRequester } from "./request.js";
 type Http = (input: string | URL, init?: RequestInit) => Promise<Response>;
 export type GitHubIssueContext = { status: "available" | "missing" | "inaccessible" | "image_only" | "oversized"; version: string; content?: string };
 const headers = { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "BuildIT" };
 
 export class GitHubIssueContextClient {
-  constructor(private readonly http: Http = fetch) {}
+  private readonly http: Http;
+  constructor(http: Http = fetch) { this.http = githubRequester(http); }
   async fetch(input: { installationToken: string; repositoryId: number; issueNumber: number; maxBytes?: number }): Promise<GitHubIssueContext> {
     const maxBytes = input.maxBytes ?? 250_000;
     if (!Number.isSafeInteger(input.repositoryId) || input.repositoryId < 1 || !Number.isSafeInteger(input.issueNumber) || input.issueNumber < 1 || maxBytes < 1 || maxBytes > 1_000_000) throw new Error("invalid_issue_context");

@@ -33,7 +33,7 @@ describe("public Convex function inventory", () => {
 
 describe("product table security inventory", () => {
   it("requires scope, parent, and stored-data declarations for every product table", () => {
-    const tables = [...schema.matchAll(/^  ([A-Za-z_]+): defineTable/gm)].map(match => match[1]).sort();
+    const tables = [...schema.matchAll(/^ {2}([A-Za-z_]+): defineTable/gm)].map(match => match[1]).sort();
     expect(Object.keys(tablePolicies).sort()).toEqual(tables);
   });
 

@@ -29,6 +29,13 @@ export function recentLoginRequired(reason: unknown) {
   return String(reason instanceof Error ? reason.message : reason).includes("recent_reauthentication_required");
 }
 
+export function policyFailureMessage(reason: unknown) {
+  const message = String(reason instanceof Error ? reason.message : reason);
+  if (message.includes("recent_reauthentication_required")) return "Your GitHub security check expired, so the policy was not changed. Verify with GitHub, then set it again.";
+  if (message.includes("not_found_or_forbidden")) return "The policy change was refused. Confirm you still have admin access to this workspace, then try again.";
+  return "The policy change could not be saved. Nothing was changed. Try again shortly, and tell us if it keeps happening.";
+}
+
 const signedOutConnection: Connection = { state: "signed_out", organization: null, installations: [], repositories: [] };
 const connectedDesignFixture: Connection = {
   state: "connected",
@@ -132,6 +139,7 @@ function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
 
 export function RepositoryConnectionView() {
   const connection = useConnection();
+  const sampleTour = useSampleTour();
   const updatePolicy = useMutation(setReviewPolicy), [policyMessage, setPolicyMessage] = useState(""), [savingRepositoryId, setSavingRepositoryId] = useState<string | null>(null);
   if (!connection) return <section className="live-state" aria-live="polite"><span className="state-pulse" /><div><strong>Loading repository access…</strong><p>Checking your active workspace on the server.</p></div></section>;
   const copy = stateCopy[connection.state];
@@ -141,12 +149,16 @@ export function RepositoryConnectionView() {
   const canManage = organization.role === "owner" || organization.role === "admin";
   const save = async (repository: ConnectedRepository, next: { paused?: boolean; autofixMode?: "disabled" | "stacked" }) => {
     setPolicyMessage("");
+    if (sampleTour) {
+      setPolicyMessage(`Sample tour: no policy was changed for ${repository.owner}/${repository.name}. Sign in to manage a real repository.`);
+      return;
+    }
     setSavingRepositoryId(repository.id);
     try {
       await updatePolicy({ organizationId: organization.id, repositoryId: repository.id, paused: next.paused ?? repository.paused, autofixMode: next.autofixMode ?? (repository.autofixMode === "disabled" ? "disabled" : "stacked"), requestId: crypto.randomUUID() });
       setPolicyMessage(`Policy saved for ${repository.owner}/${repository.name}. New reviews will use it.`);
     } catch (reason) {
-      setPolicyMessage(recentLoginRequired(reason) ? "Your GitHub security check expired, so the policy was not changed. Verify with GitHub, then set it again." : "The policy change was refused. Confirm you still have admin access to this workspace, then try again.");
+      setPolicyMessage(policyFailureMessage(reason));
     } finally {
       setSavingRepositoryId(null);
     }
@@ -278,12 +290,13 @@ export function MembersWorkspaceState() {
   const connection = useConnection();
   const organizationId = connection?.organization?.id;
   const members = useQuery(membersQuery, organizationId ? { organizationId } : "skip");
+  const membersSampleTour = useSampleTour();
   const invite = useMutation(inviteMember), changeRole = useMutation(changeMemberRole), remove = useMutation(removeMember);
   const [githubLogin, setGithubLogin] = useState(""), [inviteRole, setInviteRole] = useState<"viewer" | "developer" | "admin">("developer"), [message, setMessage] = useState(""), [working, setWorking] = useState(false);
   if (!connection) return <section className="live-state"><span className="state-pulse" /><div><strong>Loading workspace access…</strong></div></section>;
   if (!connection.organization) return <section className="empty-state compact-empty"><span className="empty-mark">ID</span><h2>{connection.state === "signed_out" ? "Sign in to manage members" : "No workspace selected"}</h2><p>Membership and roles are scoped to one workspace at a time.</p><ConnectionAction connection={connection} returnTo="/members" /></section>;
   const canManage = connection.organization.role === "owner" || connection.organization.role === "admin", requestId = () => crypto.randomUUID();
-  async function submitInvite(event: React.FormEvent) { event.preventDefault(); if (!organizationId || !canManage) return; setWorking(true); setMessage(""); try { await invite({ organizationId, githubLogin, role: inviteRole, requestId: requestId() }); setGithubLogin(""); setMessage("Invitation created. The person can accept it after signing in with that GitHub account."); } catch (error) { const code = error instanceof Error ? error.message : ""; setMessage(code.includes("member_must_sign_in_first") ? "That GitHub user must sign in to BuildIT once before you can invite them." : "The invitation was not created. Your access may have changed; refresh and try again."); } finally { setWorking(false); } }
-  async function update(member: Member, action: "remove" | Member["role"]) { if (!organizationId || !canManage) return; setWorking(true); setMessage(""); try { if (action === "remove") await remove({ organizationId, membershipId: member.id, requestId: requestId() }); else await changeRole({ organizationId, membershipId: member.id, role: action, requestId: requestId() }); setMessage(action === "remove" ? "Member access removed." : "Member role updated."); } catch (reason) { setMessage(recentLoginRequired(reason) ? "Your GitHub security check expired, so nothing changed. Verify with GitHub, then make the change again." : "The member change was refused. BuildIT preserves the last owner and rechecks your role before every change."); } finally { setWorking(false); } }
+  async function submitInvite(event: React.FormEvent) { event.preventDefault(); if (!organizationId || !canManage) return; if (membersSampleTour) { setMessage("Sample tour: no invitation was sent. Sign in to manage a real workspace."); return; } setWorking(true); setMessage(""); try { await invite({ organizationId, githubLogin, role: inviteRole, requestId: requestId() }); setGithubLogin(""); setMessage("Invitation created. The person can accept it after signing in with that GitHub account."); } catch (error) { const code = error instanceof Error ? error.message : ""; setMessage(code.includes("member_must_sign_in_first") ? "That GitHub user must sign in to BuildIT once before you can invite them." : "The invitation was not created. Your access may have changed; refresh and try again."); } finally { setWorking(false); } }
+  async function update(member: Member, action: "remove" | Member["role"]) { if (!organizationId || !canManage) return; if (membersSampleTour) { setMessage("Sample tour: no member was changed. Sign in to manage a real workspace."); return; } setWorking(true); setMessage(""); try { if (action === "remove") await remove({ organizationId, membershipId: member.id, requestId: requestId() }); else await changeRole({ organizationId, membershipId: member.id, role: action, requestId: requestId() }); setMessage(action === "remove" ? "Member access removed." : "Member role updated."); } catch (reason) { setMessage(recentLoginRequired(reason) ? "Your GitHub security check expired, so nothing changed. Verify with GitHub, then make the change again." : "The member change was refused. BuildIT preserves the last owner and rechecks your role before every change."); } finally { setWorking(false); } }
   return <><section className="connection-hero"><div><span className="status success">Current workspace</span><h2>{connection.organization.name}</h2><p>Your role: {connection.organization.role}. Roles and invitations apply only to this workspace.</p></div><a className="button secondary" href="/account">Manage account</a></section>{canManage?<form className="review-start-form" onSubmit={submitInvite}><label className="field"><span>GitHub username</span><input value={githubLogin} onChange={event=>setGithubLogin(event.target.value)} placeholder="octocat" autoComplete="off" required /></label><label className="field"><span>Starting role</span><select value={inviteRole} onChange={event=>setInviteRole(event.target.value as typeof inviteRole)}><option value="viewer">Viewer</option><option value="developer">Developer</option><option value="admin">Admin</option></select></label><button className="button" disabled={working||!githubLogin.trim()}>{working?"Saving…":"Invite member"}</button></form>:null}{message?<p className="form-result" role="status">{message}</p>:null}<section className="settings-list" aria-label="Workspace members">{members?.map(member=><article className="setting-row" key={member.id}><div><strong>{member.name||member.githubLogin||"GitHub user"}</strong><p>{member.githubLogin?`@${member.githubLogin} · `:""}{member.status}</p></div><code>{member.role}</code>{canManage&&member.role!=="owner"?<div className="button-row"><select aria-label={`Role for ${member.githubLogin||member.userId}`} value={member.role} disabled={working||member.status!=="active"} onChange={event=>void update(member,event.target.value as Member["role"])}><option value="viewer">Viewer</option><option value="developer">Developer</option><option value="admin">Admin</option></select><button className="button danger" type="button" disabled={working} onClick={()=>void update(member,"remove")}>Remove</button></div>:<span className="muted-copy">Protected owner</span>}</article>)??<article className="setting-row"><div><strong>Loading members…</strong></div></article>}</section></>;
 }

@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
+import { terminalStatuses } from "./lib/lifecycle";
 
 export const contextScope = internalQuery({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
@@ -9,7 +10,9 @@ export const contextScope = internalQuery({
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
     const repository = await ctx.db.get(review.repositoryId), installation = repository ? await ctx.db.get(repository.installationId) : null;
     if (!repository || !repository.enabled || !installation || installation.status !== "active" || installation.organizationId !== args.organizationId) throw new ConvexError("repository_unavailable");
-    const trackers=(await ctx.db.query("trackerConnections").withIndex("by_status",q=>q.eq("status","active")).collect()).filter(item=>item.organizationId===args.organizationId&&(!item.repositoryId||item.repositoryId===repository._id)&&(!item.expiresAt||item.expiresAt>Date.now()));
+    // Scoped at the index. by_status is global, so this read every tenant's encrypted tracker
+    // tokens into memory before filtering them out in JavaScript.
+    const trackers=(await ctx.db.query("trackerConnections").withIndex("by_org_provider",q=>q.eq("organizationId",args.organizationId)).collect()).filter(item=>item.status==="active"&&(!item.repositoryId||item.repositoryId===repository._id)&&(!item.expiresAt||item.expiresAt>Date.now()));
     return { organizationId: args.organizationId, repositoryId: repository._id, reviewId: review._id,
       installationId: installation.installationId, githubRepositoryId: repository.githubRepositoryId,
       prNumber: review.prNumber, headSha: review.headSha, baseSha: review.baseSha,
@@ -41,10 +44,17 @@ export const reserve = internalMutation({
 });
 
 export const complete = internalMutation({
-  args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), artifactId: v.id("artifacts"), checksum: v.string(), size: v.number(),
+  args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number(),
+    artifactId: v.id("artifacts"), checksum: v.string(), size: v.number(),
     coverage: v.union(v.literal("full"), v.literal("partial")), now: v.number() },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), artifact = await ctx.db.get(args.artifactId);
+    // This was the one completion mutation with no fence: it patched the review back to
+    // "gathering_context" unconditionally, so a context worker that finished after the user
+    // cancelled, or after a newer commit superseded the run, resurrected a terminal review and
+    // left it stuck in a non-terminal state forever. Every sibling completion already fences.
+    if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale
+      || terminalStatuses.has(review.status)) throw new ConvexError("stale_or_replaced_review");
     if (!artifact || artifact.organizationId !== args.organizationId || artifact.repositoryId !== review.repositoryId || artifact.reviewId !== review._id
       || artifact.type !== "repository_snapshot" || artifact.checksum !== args.checksum || artifact.size !== args.size) throw new ConvexError("artifact_completion_mismatch");
     if (artifact.redactionStatus === "redacted") return artifact._id;

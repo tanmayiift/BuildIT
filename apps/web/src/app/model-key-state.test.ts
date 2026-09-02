@@ -47,3 +47,31 @@ describe("model-key recovery", () => {
     expect(credentialNeedsIdentityRecovery("service_update_required")).toBe(false);
   });
 });
+
+// The check ran on the requested string and not on the returned one, so it happened before the
+// only transformation that could break it: "/..//evil.com" clears every leading check, and URL
+// resolution then collapses the "/.." segment into "//evil.com" - a protocol-relative URL, which
+// a browser reads as an absolute address on another host.
+describe("sign-in return path", () => {
+  const offPlatform = ["/..//evil.com", "/..//..//evil.example", "//evil.com", "/\\evil.com", "https://attacker.example/collect", "javascript:alert(1)", "/./..//evil.com"];
+  for (const value of offPlatform) {
+    it(`refuses to send a signed-in user to ${value}`, () => {
+      const result = safeSignInReturnPath(value);
+      expect(result.startsWith("//")).toBe(false);
+      expect(result.startsWith("/\\")).toBe(false);
+      expect(new URL(result, "https://buildit.example").origin).toBe("https://buildit.example");
+    });
+  }
+
+  it("still returns the user to where they were going", () => {
+    expect(safeSignInReturnPath("/reviews")).toBe("/reviews");
+    expect(safeSignInReturnPath("/reviews/abc?tab=findings#f1")).toBe("/reviews/abc?tab=findings#f1");
+    expect(safeSignInReturnPath("/setup/model")).toBe("/setup/model");
+  });
+
+  it("falls back to the overview when nothing was requested", () => {
+    expect(safeSignInReturnPath(null)).toBe("/");
+    expect(safeSignInReturnPath(undefined)).toBe("/");
+    expect(safeSignInReturnPath("")).toBe("/");
+  });
+});

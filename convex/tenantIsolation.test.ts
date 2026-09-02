@@ -916,6 +916,10 @@ describe("Convex tenant isolation", () => {
     expect(audit).toMatchObject({ action: "credential.rotated" });
   });
 
+  // This test used to move lastAuthenticatedAt 11 minutes into the past and assert the save still
+  // succeeded, which is the bypass itself: publicFunctionPolicy declares storeEncryptedCredential
+  // active_organization_admin_recent_auth, and it is the call that actually writes the credential.
+  // A provider round-trip takes seconds, not eleven minutes, so the window covers it either way.
   it("keeps an authorized credential save valid while provider validation runs", async () => {
     const t = convexTest(schema, modules);
     const userId = await t.run((ctx) =>
@@ -940,9 +944,10 @@ describe("Convex tenant isolation", () => {
         repositoryId: alpha.repositoryId,
       }),
     ).resolves.toEqual({ actorId: userId });
+    // A realistic provider validation round-trip.
     await t.run((ctx) =>
       ctx.db.patch(profileId, {
-        lastAuthenticatedAt: Date.now() - 11 * 60 * 1000,
+        lastAuthenticatedAt: Date.now() - 30_000,
         updatedAt: Date.now(),
       }),
     );
@@ -967,6 +972,18 @@ describe("Convex tenant isolation", () => {
     await expect(
       signedIn.mutation(api.integrations.storeEncryptedCredential, common),
     ).resolves.toMatchObject({ status: "valid" });
+    // Past the step-up window, the write itself is refused - not only the authorize step.
+    await t.run((ctx) =>
+      ctx.db.patch(profileId, {
+        lastAuthenticatedAt: Date.now() - 11 * 60 * 1000,
+        updatedAt: Date.now(),
+      }),
+    );
+    await expect(
+      signedIn.mutation(api.integrations.storeEncryptedCredential, {
+        ...common, credentialScopeId: common.credentialScopeId.replace(/^3/, "4"), requestId: "credential-provider-delay-0002",
+      }),
+    ).rejects.toThrow("recent_reauthentication_required");
     await expect(
       signedIn.mutation(api.integrations.authorizeCredentialWrite, {
         organizationId: alpha.organizationId,
@@ -1204,6 +1221,8 @@ describe("Convex tenant isolation", () => {
       t.mutation(internal.reviewArtifactData.complete, {
         organizationId: beta.organizationId,
         reviewId: alpha.reviewId,
+        expectedHeadSha: "a".repeat(40),
+        expectedGeneration: 0,
         artifactId: reserved.artifactId,
         checksum,
         size: 128,
@@ -1215,6 +1234,8 @@ describe("Convex tenant isolation", () => {
       t.mutation(internal.reviewArtifactData.complete, {
         organizationId: alpha.organizationId,
         reviewId: alpha.reviewId,
+        expectedHeadSha: "a".repeat(40),
+        expectedGeneration: 0,
         artifactId: reserved.artifactId,
         checksum: "e".repeat(64),
         size: 128,
@@ -1226,6 +1247,8 @@ describe("Convex tenant isolation", () => {
       t.mutation(internal.reviewArtifactData.complete, {
         organizationId: alpha.organizationId,
         reviewId: alpha.reviewId,
+        expectedHeadSha: "a".repeat(40),
+        expectedGeneration: 0,
         artifactId: reserved.artifactId,
         checksum,
         size: 128,
@@ -1237,6 +1260,8 @@ describe("Convex tenant isolation", () => {
       t.mutation(internal.reviewArtifactData.complete, {
         organizationId: alpha.organizationId,
         reviewId: alpha.reviewId,
+        expectedHeadSha: "a".repeat(40),
+        expectedGeneration: 0,
         artifactId: reserved.artifactId,
         checksum,
         size: 128,
@@ -1368,6 +1393,8 @@ describe("Convex tenant isolation", () => {
       t.mutation(internal.reviewModelData.completeAnalysis, {
         ...args,
         organizationId: beta.organizationId,
+        expectedHeadSha: "a".repeat(40),
+        expectedGeneration: 0,
         artifactId: reserved.artifactId,
         checksum,
         size: 200,
@@ -1381,6 +1408,8 @@ describe("Convex tenant isolation", () => {
     await expect(
       t.mutation(internal.reviewModelData.completeAnalysis, {
         ...args,
+        expectedHeadSha: "a".repeat(40),
+        expectedGeneration: 0,
         artifactId: reserved.artifactId,
         checksum,
         size: 200,
@@ -1394,6 +1423,8 @@ describe("Convex tenant isolation", () => {
     await expect(
       t.mutation(internal.reviewModelData.completeAnalysis, {
         ...args,
+        expectedHeadSha: "a".repeat(40),
+        expectedGeneration: 0,
         artifactId: reserved.artifactId,
         checksum,
         size: 200,
@@ -1737,8 +1768,9 @@ describe("audited membership administration", () => {
       "membership.invited",
       "membership.accepted",
     ]);
-    expect(events[1].previousHash).toBe(events[0].eventHash);
-    expect(events[0].resourceIdHash).not.toContain(membershipId);
+    expect(events).toHaveLength(2);
+    expect(events[1]!.previousHash).toBe(events[0]!.eventHash);
+    expect(events[0]!.resourceIdHash).not.toContain(membershipId);
   });
 
   it("resolves a member by their exact signed-in GitHub login", async () => {
@@ -2979,6 +3011,7 @@ describe("GitHub webhook durability", () => {
         action: "created",
         installationId: 20,
         disposition: "processed" as const,
+        signatureValid: true,
         now: 1,
       },
       first = await t.mutation(internal.githubWebhookData.reserve, args),
@@ -2999,7 +3032,7 @@ describe("GitHub webhook durability", () => {
         event: "issue_comment",
         action: "created",
         installationId: 20,
-        disposition: "processed",
+        disposition: "processed", signatureValid: true,
         now: 1,
       }),
       refs = { headRefHash: "c".repeat(64), baseRefHash: "d".repeat(64) };
@@ -3049,7 +3082,7 @@ describe("GitHub webhook durability", () => {
         event: "issue_comment",
         action: "created",
         installationId: 20,
-        disposition: "processed",
+        disposition: "processed", signatureValid: true,
         now: 1,
       }),
       snapshot = {
@@ -3145,7 +3178,7 @@ describe("GitHub webhook durability", () => {
         event: "issue_comment",
         action: "created",
         installationId: 20,
-        disposition: "processed",
+        disposition: "processed", signatureValid: true,
         now,
       });
       await t.mutation(internal.githubWebhookData.recordPinnedSnapshot, {
@@ -3372,5 +3405,384 @@ describe("expired artifact cleanup", () => {
     await expect(t.mutation(internal.artifactCleanupData.retryTerminal,{artifactId:validId,now})).resolves.toBe(validId);
     const retried=await t.run(ctx=>ctx.db.get(validId));expect(retried).toMatchObject({deletionAttempts:0});expect(retried?.lastDeletionErrorCode).toBeUndefined();expect(retried?.deletionTerminalAt).toBeUndefined();
     expect(await t.mutation(internal.artifactCleanupData.claimExpired,{now:now+1,leaseId:"77777777-7777-4777-8777-777777777777",limit:1})).toHaveLength(1);
+  });
+});
+
+// organizations.monthlyBudget and organizations.concurrencyLimit were written on every tenant and
+// read only for display. Opening BuildIT beyond one operator means an unknown tenant could
+// otherwise hold unbounded sandbox, broker and provider capacity on the shared plan.
+describe("per-tenant capacity limits", () => {
+  const createArgs = (repositoryId: Awaited<ReturnType<typeof seedTenant>>["repositoryId"], prNumber: number, headSha: string) => ({
+    repositoryId, prNumber, headSha, baseSha: "b".repeat(40), baseRef: "main", isFork: false,
+    actorId: "alice", actorRole: "developer" as const,
+    expectedCredentialScopeId: "credential-test", expectedProvider: "anthropic" as const,
+    budgetLimit: 2, now: Date.now(),
+  });
+
+  it("refuses a review past the organization's concurrency limit", async () => {
+    const t = convexTest(schema, modules);
+    // seedTenant sets concurrencyLimit: 2 and leaves one active review behind.
+    const alpha = await seedTenant(t, "capacity-alpha", "alice");
+    await t.mutation(internal.dashboardReviewData.create, createArgs(alpha.repositoryId, 2, "c".repeat(40)));
+    await expect(t.mutation(internal.dashboardReviewData.create, createArgs(alpha.repositoryId, 3, "d".repeat(40))))
+      .rejects.toThrow("organization_concurrency_limit_reached");
+  });
+
+  it("counts only this organization's active reviews toward the limit", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "capacity-neighbour-alpha", "alice");
+    const beta = await seedTenant(t, "capacity-neighbour-beta", "bob");
+    await t.run(ctx => ctx.db.patch(beta.organizationId, { concurrencyLimit: 1 }));
+    // Beta is at its own ceiling; that must not consume any of alpha's capacity.
+    await expect(t.mutation(internal.dashboardReviewData.create, createArgs(alpha.repositoryId, 2, "c".repeat(40))))
+      .resolves.toMatchObject({ status: "queued" });
+  });
+
+  it("frees capacity again once a review reaches a terminal status", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "capacity-terminal", "alice");
+    await t.run(ctx => ctx.db.patch(alpha.reviewId, { status: "checks_passed" }));
+    await t.mutation(internal.dashboardReviewData.create, createArgs(alpha.repositoryId, 2, "c".repeat(40)));
+    await expect(t.mutation(internal.dashboardReviewData.create, createArgs(alpha.repositoryId, 3, "d".repeat(40))))
+      .resolves.toMatchObject({ status: "queued" });
+  });
+
+  it("reports a misconfigured repository before the capacity limit", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "capacity-precedence", "alice");
+    await t.run(ctx => ctx.db.patch(alpha.organizationId, { concurrencyLimit: 1 }));
+    await expect(t.mutation(internal.dashboardReviewData.create, {
+      ...createArgs(alpha.repositoryId, 2, "c".repeat(40)), expectedCredentialScopeId: "replaced-after-preview",
+    })).rejects.toThrow("provider_credential_changed_review_again");
+  });
+
+  it("stops a model stage that would cross the monthly budget", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "capacity-monthly", "alice");
+    const review = await t.run(ctx => ctx.db.get(alpha.reviewId));
+    const now = Date.now();
+    await t.run(ctx => ctx.db.patch(alpha.organizationId, { monthlyBudget: 5 }));
+    await t.run(ctx => ctx.db.insert("usageLedger", {
+      organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId,
+      kind: "model_spend", quantity: 5, unitCost: 1, currency: "USD", occurredAt: now,
+    }));
+    const blocked = await t.mutation(internal.reviewModelData.preflightStageSpend, {
+      organizationId: alpha.organizationId, reviewId: alpha.reviewId,
+      expectedHeadSha: review!.headSha, expectedGeneration: review!.executionGeneration,
+      provider: "anthropic", model: "claude-sonnet-4-5", inputBytes: 1_000, maxOutputTokens: 1_000, now,
+    });
+    expect(blocked.allowed).toBe(false);
+    expect(await t.run(ctx => ctx.db.get(alpha.reviewId))).toMatchObject({
+      status: "budget_exhausted", statusReasonCode: "spend_ceiling_reached", nextActionCode: "increase_budget",
+    });
+  });
+
+  it("ignores another organization's spend when checking the monthly budget", async () => {
+    const t = convexTest(schema, modules);
+    const alpha = await seedTenant(t, "capacity-monthly-alpha", "alice");
+    const beta = await seedTenant(t, "capacity-monthly-beta", "bob");
+    const review = await t.run(ctx => ctx.db.get(alpha.reviewId));
+    const now = Date.now();
+    await t.run(ctx => ctx.db.patch(alpha.organizationId, { monthlyBudget: 5 }));
+    await t.run(ctx => ctx.db.insert("usageLedger", {
+      organizationId: beta.organizationId, repositoryId: beta.repositoryId, reviewId: beta.reviewId,
+      kind: "model_spend", quantity: 500, unitCost: 1, currency: "USD", occurredAt: now,
+    }));
+    await expect(t.mutation(internal.reviewModelData.preflightStageSpend, {
+      organizationId: alpha.organizationId, reviewId: alpha.reviewId,
+      expectedHeadSha: review!.headSha, expectedGeneration: review!.executionGeneration,
+      provider: "anthropic", model: "claude-sonnet-4-5", inputBytes: 1_000, maxOutputTokens: 1_000, now,
+    })).resolves.toMatchObject({ allowed: true });
+  });
+});
+
+// The retention promise ("deleted within 7 days at the latest") stopped being kept silently:
+// claimExpired read by_expiry, which is not filtered on deletion state, and skipped soft-deleted
+// and quarantined rows inside the loop. Those rows keep their original expiresAt, so once enough
+// held the oldest values every claim returned the same rows, skipped all of them, and claimed
+// nothing. No error, no failing test, and the cron kept reporting success.
+describe("artifact retention does not stall behind tombstones", () => {
+  it("claims live expired artifacts from behind a wall of tombstones", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "retention-stall", "alice");
+    const now = 500_000, leaseId = "66666666-6666-4666-8666-666666666666";
+    const live = await t.run(async ctx => {
+      const insert = async (expiresAt: number) => {
+        const id = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
+          reviewId: tenant.reviewId, type: "command_output", storageKey: "pending", encrypted: true, checksum: "e".repeat(64),
+          size: 10, redactionStatus: "redacted", expiresAt, deletionAttempts: 0 });
+        await ctx.db.patch(id, { storageKey: `artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/validation.json` });
+        return id;
+      };
+      // 100 tombstones hold the oldest expiresAt values, ahead of every live row.
+      for (let index = 0; index < 50; index += 1) await ctx.db.patch(await insert(now - 10_000 - index), { deletedAt: now - 5_000 });
+      for (let index = 0; index < 50; index += 1) await ctx.db.patch(await insert(now - 9_000 - index), { deletionTerminalAt: now - 5_000, lastDeletionErrorCode: "deletion_attempts_exhausted" });
+      const ids = [];
+      for (let index = 0; index < 20; index += 1) ids.push(await insert(now - 1 - index));
+      return ids;
+    });
+    const claimed = await t.mutation(internal.artifactCleanupData.claimExpired, { now, leaseId, limit: 25 });
+    expect(claimed).toHaveLength(20);
+    expect(new Set(claimed.map(item => String(item.artifactId)))).toEqual(new Set(live.map(String)));
+  });
+
+  it("requeues a quarantined artifact so the deletion reconciler has something to run", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "retention-reconciler", "alice");
+    const now = 600_000;
+    const { stuck, orphan } = await t.run(async ctx => {
+      const insert = async () => {
+        const id = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
+          reviewId: tenant.reviewId, type: "command_output", storageKey: "pending", encrypted: true, checksum: "f".repeat(64),
+          size: 10, redactionStatus: "redacted", expiresAt: now - 1_000, deletionAttempts: 10, deletionTerminalAt: now - 500,
+          lastDeletionErrorCode: "deletion_attempts_exhausted" });
+        return id;
+      };
+      const stuck = await insert(), orphan = await insert();
+      await ctx.db.patch(stuck, { storageKey: `artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${stuck}/validation.json` });
+      // A forged key can never be scoped back to its parents, so it stays terminal for a human.
+      await ctx.db.patch(orphan, { storageKey: `artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/someone-else/validation.json` });
+      return { stuck, orphan };
+    });
+    expect(await t.action(internal.artifactCleanupWorker.sweepTerminal, {})).toEqual({ terminal: 2, requeued: 1 });
+    expect(await t.run(ctx => ctx.db.get(stuck))).toMatchObject({ deletionAttempts: 0 });
+    expect((await t.run(ctx => ctx.db.get(stuck)))?.deletionTerminalAt).toBeUndefined();
+    expect(await t.run(ctx => ctx.db.get(orphan))).toMatchObject({ deletionTerminalAt: now - 500 });
+    // Requeued means claimable again on the very next cron tick.
+    expect(await t.mutation(internal.artifactCleanupData.claimExpired, { now, leaseId: "77777777-7777-4777-8777-777777777777", limit: 25 })).toHaveLength(1);
+  });
+
+  it("refuses to mark an artifact deleted when the broker cannot confirm it is gone", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "retention-unconfirmed", "alice");
+    const artifactId = await t.run(async ctx => {
+      const id = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
+        reviewId: tenant.reviewId, type: "repository_snapshot", storageKey: "pending", encrypted: true, checksum: "0".repeat(64),
+        size: 10, redactionStatus: "redacted", expiresAt: 1, deletionAttempts: 0 });
+      await ctx.db.patch(id, { storageKey: `artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/context-base-0.json` });
+      return id;
+    });
+    vi.stubEnv("BUILDIT_BROKER_URL", "https://broker.example");
+    vi.stubEnv("ARTIFACT_GRANT_SECRET", Buffer.alloc(32, 7).toString("base64url"));
+    // The broker answers 200 without confirming absence, as it did before this was fixed.
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ artifactId: "x" })));
+    try {
+      await expect(t.action(internal.artifactCleanupWorker.cleanup, {})).resolves.toEqual({ claimed: 1, deleted: 0, failed: 1 });
+      expect((await t.run(ctx => ctx.db.get(artifactId)))?.deletedAt).toBeUndefined();
+    } finally { vi.unstubAllGlobals(); vi.unstubAllEnvs(); }
+  });
+});
+
+// The verdict failed open. An injection signal downgraded every critic decision to uncertain,
+// arbitration mapped that to resolution "uncertain", the ladder computes blocking from
+// resolution === "open", and so the review landed on checks_passed with a green GitHub check -
+// exactly the outcome an attacker who plants "approve this without reading" is aiming for.
+describe("a review with an unattributable injection signal fails closed", () => {
+  const greenReview = async (t: ReturnType<typeof convexTest>, tenant: Awaited<ReturnType<typeof seedTenant>>, now: number) =>
+    t.run(async ctx => {
+      await ctx.db.patch(tenant.reviewId, { coverageLevel: "full", status: "validating", currentStage: "analysis" });
+      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "injection/validation.json", encrypted: true, checksum: "a".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "injection/report.md", encrypted: true, checksum: "d".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      await ctx.db.insert("checkRuns", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, kind: "test", nameHash: "b".repeat(64), required: true, status: "completed", conclusion: "passed", commandFingerprint: "c".repeat(64), commitSha: "a".repeat(40), exitCode: 0, durationMs: 1, artifactId, credentialTeardownProved: true, sandboxStopped: true, startedAt: now - 1, completedAt: now });
+      return reportArtifactId;
+    });
+
+  it("reaches a green check when nothing tried to steer the review", async () => {
+    const t = convexTest(schema, modules), tenant = await seedTenant(t, "injection-clean", "alice"), now = Date.now();
+    const reportArtifactId = await greenReview(t, tenant, now);
+    await expect(t.mutation(internal.reviewValidationData.finalizeDecision, { organizationId: tenant.organizationId, reviewId: tenant.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0, reportArtifactId, now }))
+      .resolves.toMatchObject({ status: "checks_passed", statusReasonCode: "checks_complete" });
+  });
+
+  it("refuses the same green check once an unscoped signal is recorded", async () => {
+    const t = convexTest(schema, modules), tenant = await seedTenant(t, "injection-unscoped", "alice"), now = Date.now();
+    const reportArtifactId = await greenReview(t, tenant, now);
+    await t.run(ctx => ctx.db.patch(tenant.reviewId, { promptInjectionUnscopedAt: now - 1 }));
+    await expect(t.mutation(internal.reviewValidationData.finalizeDecision, { organizationId: tenant.organizationId, reviewId: tenant.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0, reportArtifactId, now }))
+      .resolves.toMatchObject({ status: "inconclusive", statusReasonCode: "required_check_missing", nextActionCode: "retry_review" });
+    // Never a success conclusion on GitHub, and the cause has to survive into the event.
+    expect(await t.run(ctx => ctx.db.get(tenant.reviewId))).toMatchObject({ githubCheckConclusion: "neutral" });
+    const event = await t.run(ctx => ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", tenant.reviewId)).filter(q => q.eq(q.field("sequence"), 5)).unique());
+    expect(event?.metadata).toMatchObject({ reasonCode: "injection_unscoped" });
+  });
+});
+
+// The behavioural half of the same defect: prove the conflict is real at the mutation that
+// throws it, not only that the key strings differ.
+describe("a failed Autofix does not poison the commit for the next review", () => {
+  it("lets a second review reserve the same operation at the same head SHA", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "autofix-key-recovery", "alice");
+    const secondReviewId = await t.run(async ctx => {
+      const first = (await ctx.db.get(tenant.reviewId))!;
+      const { _id, _creationTime, ...fields } = first;
+      return ctx.db.insert("reviews", { ...fields, prNumber: first.prNumber, status: "queued" });
+    });
+    const constantKey = "1:7:aaaa:branch:autofix";
+    const reserve = (reviewId: typeof tenant.reviewId, operationKey: string, requestHash: string) =>
+      t.mutation(internal.reviewState.reserveSideEffect, { organizationId: tenant.organizationId, reviewId,
+        expectedHeadSha: "a".repeat(40), expectedGeneration: 0, operationKey, type: "comment_update" as const, requestHash, now: 1 });
+    // What the constant slot did: the first review owns the key and the second can never have it.
+    await reserve(tenant.reviewId, constantKey, "hash-1");
+    await expect(reserve(secondReviewId, constantKey, "hash-2")).rejects.toThrow("idempotency_key_conflict");
+    // What slotting by review id does instead.
+    await reserve(tenant.reviewId, `1:7:aaaa:branch:autofix:${tenant.reviewId}`, "hash-1");
+    await expect(reserve(secondReviewId, `1:7:aaaa:branch:autofix:${secondReviewId}`, "hash-2")).resolves.toBeDefined();
+  });
+});
+
+// The audit view read the oldest 1,000 events ascending and sliced the tail, so once an
+// organization passed 1,000 events the page froze on events 900-1,000 forever. Nothing that
+// happened afterwards ever appeared, on the one screen whose whole purpose is showing what
+// happened - and it kept reporting chainValid: true while doing it.
+describe("audit log keeps showing what just happened", () => {
+  const seedEvents = async (t: ReturnType<typeof convexTest>, organizationId: Awaited<ReturnType<typeof seedTenant>>["organizationId"], count: number) =>
+    t.run(async ctx => {
+      const digest = async (value: string) => {
+        const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+        return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, "0")).join("");
+      };
+      let previousHash: string | undefined;
+      for (let index = 0; index < count; index += 1) {
+        const input = { organizationId, actorId: "alice", action: `audit.event.${index}`, resourceType: "review",
+          resourceId: `resource-${index}`, requestId: `audit-backfill-${String(index).padStart(6, "0")}`,
+          result: "allowed" as const, createdAt: 1_000 + index };
+        const resourceIdHash = await digest(input.resourceId);
+        const eventHash = await digest(JSON.stringify({ previousHash: previousHash ?? null, ...input, resourceId: resourceIdHash }));
+        const { resourceId: _resourceId, ...row } = input;
+        await ctx.db.insert("auditEvents", { ...row, resourceIdHash, previousHash, eventHash });
+        previousHash = eventHash;
+      }
+    });
+
+  it("shows the newest events, not the oldest, past the 1000-event mark", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId: 501, githubLogin: "alice" }));
+    const alpha = await seedTenant(t, "audit-window", userId);
+    await seedEvents(t, alpha.organizationId, 1_050);
+    const page = await t.withIdentity({ subject: `${userId}|audit` }).query(api.audit.list, { organizationId: alpha.organizationId, limit: 10 });
+    expect(page.events[0]?.action).toBe("audit.event.1049");
+    expect(page.events.at(-1)?.action).toBe("audit.event.1040");
+    // The window is hash-chain checked against the event immediately before it.
+    expect(page.chainValid).toBe(true);
+    expect(page.truncated).toBe(true);
+  });
+
+  it("still detects a tampered event inside the visible window", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId: 502, githubLogin: "alice" }));
+    const alpha = await seedTenant(t, "audit-tamper", userId);
+    await seedEvents(t, alpha.organizationId, 20);
+    const asAlice = t.withIdentity({ subject: `${userId}|audit` });
+    await t.run(async ctx => {
+      const latest = await ctx.db.query("auditEvents").withIndex("by_org_created", q => q.eq("organizationId", alpha.organizationId)).order("desc").first();
+      await ctx.db.patch(latest!._id, { action: "audit.event.tampered" });
+    });
+    await expect(asAlice.query(api.audit.list, { organizationId: alpha.organizationId, limit: 5 })).resolves.toMatchObject({ chainValid: false });
+  });
+
+  it("verifies the whole chain from the first event, paginated", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId: 503, githubLogin: "alice" }));
+    const alpha = await seedTenant(t, "audit-verify", userId);
+    await seedEvents(t, alpha.organizationId, 1_200);
+    const asAlice = t.withIdentity({ subject: `${userId}|audit` });
+    let cursor: string | undefined, previousHash: string | undefined, verified = 0, done = false, pages = 0;
+    while (!done && pages < 10) {
+      const page: { chainValid: boolean; verified: number; done: boolean; cursor: string; previousHash?: string } =
+        await asAlice.query(api.audit.verifyChain, { organizationId: alpha.organizationId, ...(cursor ? { cursor } : {}), ...(previousHash ? { previousHash } : {}) });
+      expect(page.chainValid).toBe(true);
+      verified += page.verified; cursor = page.cursor; previousHash = page.previousHash; done = page.done; pages += 1;
+    }
+    expect(verified).toBe(1_200);
+  });
+});
+
+// reviewArtifactData.complete was the one completion mutation with no fence. It patched the
+// review back to "gathering_context" unconditionally, so a context worker that finished after a
+// cancellation - or after a newer commit superseded the run - resurrected a terminal review and
+// left it stuck in a non-terminal state forever.
+describe("a late context worker cannot resurrect a terminal review", () => {
+  const setup = async (t: ReturnType<typeof convexTest>, slug: string) => {
+    const tenant = await seedTenant(t, slug, "alice");
+    const now = Date.now();
+    const reserved = await t.mutation(internal.reviewArtifactData.reserve, { organizationId: tenant.organizationId, reviewId: tenant.reviewId,
+      expectedHeadSha: "a".repeat(40), expectedGeneration: 0, checksum: "f".repeat(64), size: 128, revision: "head", chunkIndex: 0, now });
+    return { tenant, reserved, now };
+  };
+  const completeArgs = (tenant: Awaited<ReturnType<typeof seedTenant>>, reserved: { artifactId: unknown }, now: number, checksum: string) => ({
+    organizationId: tenant.organizationId, reviewId: tenant.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0,
+    artifactId: reserved.artifactId as never, checksum, size: 128, coverage: "full" as const, now,
+  });
+
+  it("refuses to complete into a cancelled review", async () => {
+    const t = convexTest(schema, modules);
+    const { tenant, reserved, now } = await setup(t, "context-late-cancelled");
+    await t.run(ctx => ctx.db.patch(tenant.reviewId, { status: "cancelled" }));
+    await expect(t.mutation(internal.reviewArtifactData.complete, completeArgs(tenant, reserved, now, "f".repeat(64))))
+      .rejects.toThrow("stale_or_replaced_review");
+    expect(await t.run(ctx => ctx.db.get(tenant.reviewId))).toMatchObject({ status: "cancelled" });
+  });
+
+  it("refuses to complete against a newer commit or generation", async () => {
+    const t = convexTest(schema, modules);
+    const { tenant, reserved, now } = await setup(t, "context-late-superseded");
+    await t.run(ctx => ctx.db.patch(tenant.reviewId, { headSha: "b".repeat(40) }));
+    await expect(t.mutation(internal.reviewArtifactData.complete, completeArgs(tenant, reserved, now, "f".repeat(64))))
+      .rejects.toThrow("stale_or_replaced_review");
+    await t.run(ctx => ctx.db.patch(tenant.reviewId, { headSha: "a".repeat(40), executionGeneration: 1 }));
+    await expect(t.mutation(internal.reviewArtifactData.complete, completeArgs(tenant, reserved, now, "f".repeat(64))))
+      .rejects.toThrow("stale_or_replaced_review");
+    await t.run(ctx => ctx.db.patch(tenant.reviewId, { executionGeneration: 0, isStale: true }));
+    await expect(t.mutation(internal.reviewArtifactData.complete, completeArgs(tenant, reserved, now, "f".repeat(64))))
+      .rejects.toThrow("stale_or_replaced_review");
+  });
+});
+
+// Three paths that ended with the pull request author seeing nothing at all - the worst failure
+// mode for a product whose whole value is evidence on the pull request.
+describe("failures reach the person waiting for them", () => {
+  it("lets GitHub redeliver a failed webhook instead of answering duplicate forever", async () => {
+    const t = convexTest(schema, modules);
+    const args = { deliveryId: "delivery-retry-1", event: "issue_comment", action: "created", installationId: 42,
+      disposition: "processed" as const, signatureValid: true, now: 1_000 };
+    const first = await t.mutation(internal.githubWebhookData.reserve, args);
+    expect(first.duplicate).toBe(false);
+    // While the first attempt is still running, a redelivery is still deduplicated.
+    await expect(t.mutation(internal.githubWebhookData.reserve, { ...args, now: 2_000 })).resolves.toMatchObject({ duplicate: true });
+    await t.mutation(internal.githubWebhookData.complete, { deliveryId: args.deliveryId, disposition: "processed", status: "failed", now: 3_000 });
+    // Immediately after the failure, still within the grace period.
+    await expect(t.mutation(internal.githubWebhookData.reserve, { ...args, now: 3_500 })).resolves.toMatchObject({ duplicate: true });
+    // GitHub's redelivery, once the failure has settled. Before this fix it was dropped forever.
+    const retried = await t.mutation(internal.githubWebhookData.reserve, { ...args, now: 3_000 + 60_001 });
+    expect(retried.duplicate).toBe(false);
+    expect(retried.id).toBe(first.id);
+    expect(await t.run(ctx => ctx.db.get(first.id))).toMatchObject({ status: "received" });
+  });
+
+  it("records whether the signature was verified instead of asserting it", async () => {
+    const t = convexTest(schema, modules);
+    const reserved = await t.mutation(internal.githubWebhookData.reserve, { deliveryId: "delivery-signature-1", event: "push",
+      action: "unknown", disposition: "rejected", signatureValid: false, now: 1 });
+    expect(await t.run(ctx => ctx.db.get(reserved.id))).toMatchObject({ signatureValid: false });
+  });
+
+  it("makes a review terminal when a newer commit supersedes it", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "stale-head-terminal", "alice");
+    const now = Date.now();
+    await t.run(ctx => ctx.db.patch(tenant.reviewId, { status: "analyzing", currentStage: "analysis" }));
+    const repository = await t.run(ctx => ctx.db.get(tenant.repositoryId));
+    const installation = await t.run(ctx => ctx.db.get(repository!.installationId));
+    await t.mutation(internal.githubWebhookData.reconcilePullRequestHead, {
+      installationId: installation!.installationId, githubRepositoryId: repository!.githubRepositoryId,
+      prNumber: (await t.run(ctx => ctx.db.get(tenant.reviewId)))!.prNumber, observedHeadSha: "c".repeat(40), now,
+    });
+    // Was: isStale true, status left at analyzing, "In progress" in the queue forever.
+    expect(await t.run(ctx => ctx.db.get(tenant.reviewId))).toMatchObject({
+      isStale: true, status: "cancelled", statusReasonCode: "superseded_by_new_commit",
+      nextActionCode: "start_new_review", githubCheckConclusion: "neutral",
+    });
+    expect((await t.run(ctx => ctx.db.get(tenant.reviewId)))?.completedAt).toBe(now);
   });
 });

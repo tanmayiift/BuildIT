@@ -111,6 +111,7 @@ export default defineSchema({
     configRevisionId: v.id("configRevisions"), configProvenance: value.configProvenance,
     provider: value.provider, model: v.string(), modelVersion: v.string(), promptVersion: v.string(),
     evalSetVersion: v.string(), coverageLevel: value.coverageLevel, currentStage: value.reviewStage,
+    promptInjectionUnscopedAt: v.optional(v.number()),
     blockedReason: v.optional(v.string()), blockedSince: v.optional(v.number()),
     blockedExpiresAt: v.optional(v.number()), parentReviewId: v.optional(v.id("reviews")),
     attemptOfReviewId: v.optional(v.id("reviews")), cancelledBy: v.optional(v.string()),
@@ -156,8 +157,10 @@ export default defineSchema({
     contentArtifactId: v.id("artifacts"), evidenceIds: v.array(v.id("artifacts")), pathHmac: v.string(),
     startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()),
     requirementId: v.optional(v.id("requirements")), resolution: value.findingResolution,
+    injectionSuspected: v.optional(v.boolean()),
     createdAt: v.number(), updatedAt: v.number(), expiresAt: v.number(),
-  }).index("by_review_severity", ["reviewId", "severity"])
+  }).index("by_organization", ["organizationId"])
+    .index("by_review_severity", ["reviewId", "severity"])
     .index("by_review_fingerprint", ["reviewId", "fingerprintHmac"]),
 
   findingSuppressions: defineTable({
@@ -214,6 +217,10 @@ export default defineSchema({
     lastDeletionErrorCode: v.optional(v.string()), deletionTerminalAt: v.optional(v.number()),
   }).index("by_expiry", ["expiresAt"])
     .index("by_pending_expiry", ["deletedAt", "expiresAt"])
+    // Retention claims must skip rows that are already gone or permanently stuck. Skipping them
+    // in the loop instead left them holding the front of by_expiry forever, so once enough
+    // accumulated the cron claimed zero work and deletion stopped with no error and no alert.
+    .index("by_claimable_expiry", ["deletionTerminalAt", "deletedAt", "expiresAt"])
     .index("by_deletion_terminal", ["deletionTerminalAt"])
     .index("by_repository", ["repositoryId"])
     .index("by_review", ["reviewId"]),
@@ -221,7 +228,10 @@ export default defineSchema({
   usageLedger: defineTable({
     organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.id("reviews"),
     roundId: v.optional(v.id("autofixRounds")), kind: value.usageKind, quantity: v.number(),
-    unitCost: v.number(), currency: v.string(), occurredAt: v.number(),
+    // The authoritative cost of the row. unitCost is retained for rows written before this
+    // existed; it is a derived price and reconstructing a total from it loses the cost of any
+    // call a provider reported no usage for.
+    unitCost: v.number(), totalCostMicros: v.optional(v.number()), currency: v.string(), occurredAt: v.number(),
   }).index("by_org_time", ["organizationId", "occurredAt"])
     .index("by_time", ["occurredAt"])
     .index("by_review", ["reviewId"]),
@@ -278,7 +288,8 @@ export default defineSchema({
     reviewId: v.optional(v.id("reviews")), roundId: v.optional(v.id("autofixRounds")),
     name: value.metricName, value: v.number(), organizationTimezone: v.string(), occurredAt: v.number(),
   }).index("by_org_time", ["organizationId", "occurredAt"])
-    .index("by_name_time", ["name", "occurredAt"]),
+    .index("by_name_time", ["name", "occurredAt"])
+    .index("by_review_name", ["reviewId", "name"]),
 
   reviewLocks: defineTable({
     repositoryId: v.id("repositories"), prNumber: v.number(), headSha: v.string(),

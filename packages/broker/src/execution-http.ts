@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { defaultExecutionPlans, isUnsafeInstallControlPath, SANDBOX_DIAGNOSTIC_RERUN_LIMIT, SERVERLESS_PLAN_BUDGET_MS, SERVERLESS_SANDBOX_WORK_BUDGET_MS, validatePlan, VercelSandboxRunner, type CommandPlan, type DiagnosticRun, type SandboxCredentials } from "@buildit/runner";
+import { isUnsafeInstallControlPath, SANDBOX_DIAGNOSTIC_RERUN_LIMIT, SERVERLESS_PLAN_BUDGET_MS, SERVERLESS_SANDBOX_WORK_BUDGET_MS, validatePlan, VercelSandboxRunner, type CommandPlan, type DiagnosticRun, type SandboxCredentials } from "@buildit/runner";
 import { combineScannerRuns, parseGitleaks, parseOsv, scanBuildITRules, scannerInventory } from "@buildit/scanners";
 import { verifyExecutionGrant } from "@buildit/security";
 import type { ArtifactBroker } from "./artifacts.js";
@@ -7,7 +7,7 @@ import type { ArtifactBroker } from "./artifacts.js";
 type Descriptor = { revision: "base" | "head"; artifactId: string; storageKey: string; checksum: string; size: number; readGrant: string };
 type Body = { organizationId: string; repositoryId: string; reviewId: string; baseSha: string; headSha: string; runnerImageVersion: string; runtime: "node22" | "node24"; artifacts: Descriptor[]; install: CommandPlan; checks: CommandPlan[] };
 type Runner = Pick<VercelSandboxRunner, "run">;
-export function pinnedSandboxImage(value: string | undefined) { if (!value || !/@sha256:[0-9a-f]{64}$/.test(value)) throw new Error("sandbox_image_unavailable"); return value; }
+export function pinnedSandboxImage(value: string | undefined) { if (!value || !/^(?:[a-z0-9][a-z0-9.\-]*(?::\d+)?\/)?[a-z0-9][a-z0-9._\-\/]*@sha256:[0-9a-f]{64}$/.test(value)) throw new Error("sandbox_image_unavailable"); return value; }
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const descriptorsForHash = (items: Descriptor[]) => items.map(({ readGrant: _, ...item }) => item);
 function json(status: number, body: Record<string, unknown>) { return Response.json(body, { status, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } }); }

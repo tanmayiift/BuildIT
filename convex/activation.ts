@@ -3,6 +3,10 @@ import { query } from "./_generated/server";
 import { requireOrganizationRole } from "./lib/authz";
 
 type StageTimes = { identityAt?: number; repositoryAt?: number; modelKeyAt?: number; previewAt?: number; reviewAt?: number; evidenceAt?: number; humanDecisionAt?: number };
+// The same ceiling telemetrySnapshotData uses. Activation is a funnel, not an export: past a
+// few thousand rows the answer stops changing, and an unbounded read on a live subscription
+// re-reads the tenant's whole history on every write.
+const rowCeiling = 1_000;
 const completedEvidenceStatuses = new Set(["checks_passed", "changes_requested", "inconclusive", "delivered", "failed_after_bounds"]);
 const duration = (from?: number, to?: number) => from !== undefined && to !== undefined && to >= from ? to - from : undefined;
 export function summarizeActivation(times: StageTimes, outcomes: string[]) {
@@ -19,13 +23,16 @@ export const funnel = query({
     const access = await requireOrganizationRole(ctx, args.organizationId, "viewer");
     const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", args.organizationId).eq("userId", access.userId)).unique();
     if (!membership || membership.status !== "active") throw new Error("not_found_or_forbidden");
+    // Bounded. These run on a live dashboard subscription and re-execute on every write, so an
+    // organization with a long history would re-read its whole history each time.
     const [repositories, credentials, reviews, audits, reviewEvents, findings] = await Promise.all([
-      ctx.db.query("repositories").withIndex("by_org_enabled", q => q.eq("organizationId", args.organizationId).eq("enabled", true)).collect(),
-      ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", args.organizationId).eq("status", "valid")).collect(),
-      ctx.db.query("reviews").withIndex("by_org_status", q => q.eq("organizationId", args.organizationId)).collect(),
-      ctx.db.query("auditEvents").withIndex("by_org_created", q => q.eq("organizationId", args.organizationId)).collect(),
-      ctx.db.query("reviewEvents").withIndex("by_org_created", q => q.eq("organizationId", args.organizationId)).collect(),
-      ctx.db.query("findings").filter(q => q.eq(q.field("organizationId"), args.organizationId)).collect(),
+      ctx.db.query("repositories").withIndex("by_org_enabled", q => q.eq("organizationId", args.organizationId).eq("enabled", true)).take(rowCeiling),
+      ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", args.organizationId).eq("status", "valid")).take(rowCeiling),
+      ctx.db.query("reviews").withIndex("by_org_status", q => q.eq("organizationId", args.organizationId)).take(rowCeiling),
+      ctx.db.query("auditEvents").withIndex("by_org_created", q => q.eq("organizationId", args.organizationId)).take(rowCeiling),
+      ctx.db.query("reviewEvents").withIndex("by_org_created", q => q.eq("organizationId", args.organizationId)).take(rowCeiling),
+      // findings had no organizationId index, so this was a full table scan across every tenant.
+      ctx.db.query("findings").withIndex("by_organization", q => q.eq("organizationId", args.organizationId)).take(rowCeiling),
     ]);
     const reviewIds = new Set(reviews.map(item => item._id));
     // An internal stage event means only that work was attempted. First value is an

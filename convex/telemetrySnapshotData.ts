@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalQuery } from "./_generated/server";
+import { totalCostUsd } from "./lib/usageCost";
 
 const rowLimit = 1_000;
 const activeStatuses = ["gathering_context", "analyzing", "validating", "autofix_queued", "autofixing", "validating_round", "validating_final", "cancelling"] as const;
@@ -23,7 +24,7 @@ export const snapshot = internalQuery({
       activeReviews: bounded(active),
       capacityUtilization: bounded(capacity > 0 ? active / capacity : 0),
       expiredArtifactBacklog: bounded(Math.min(rowLimit, expired.length)),
-      modelCostUsdHour: bounded(usage.length > rowLimit ? 1_000_000 : usage.filter(item => item.kind === "model_tokens").reduce((sum, item) => sum + item.quantity * item.unitCost, 0)),
+      modelCostUsdHour: bounded(usage.length > rowLimit ? 1_000_000 : totalCostUsd(usage.filter(item => item.kind === "model_tokens"))),
       budgetExhaustedReviewsHour: bounded(Math.min(rowLimit, budgetStops.length)),
       effectiveLocDeliveredHour: bounded(effectiveLoc.length > rowLimit ? 1_000_000 : effectiveLoc.reduce((sum, item) => sum + item.value, 0)),
     };

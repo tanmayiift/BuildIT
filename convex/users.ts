@@ -21,7 +21,7 @@ export const sessions = query({
     const userId = await getAuthUserId(ctx);
     const currentSessionId = await getAuthSessionId(ctx);
     if (!userId || !currentSessionId) return [];
-    const sessions = await ctx.db.query("authSessions").withIndex("userId", (q) => q.eq("userId", userId)).collect();
+    const sessions = await ctx.db.query("authSessions").withIndex("userId", (q) => q.eq("userId", userId)).order("desc").take(200);
     return sessions.map((session) => ({
       id: session._id,
       current: session._id === currentSessionId,

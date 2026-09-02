@@ -2,6 +2,14 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireOrganizationRole, requireRepositoryRole } from "./lib/authz";
 
+// These feed live subscriptions that re-execute on every matching write, so an unbounded read
+// re-reads a tenant's whole history each time and eventually crosses Convex's per-query read
+// limit, where the query does not degrade but hard-fails. completeAnalysis already refuses more
+// than 500 findings or requirements per review, so the evidence ceiling is well clear of any
+// real review.
+const listCeiling = 500;
+const evidenceCeiling = 1_000;
+
 const publicReview = (review: {
   _id: unknown; repositoryId: unknown; prNumber: number; headSha: string; status: string; statusReasonCode?: string;
   isStale: boolean; coverageLevel: string; currentStage: string; nextActionCode: string;
@@ -20,8 +28,8 @@ export const list = query({
     await requireOrganizationRole(ctx, args.organizationId, "viewer");
     if (args.repositoryId) await requireRepositoryRole(ctx, args.repositoryId, "viewer", args.organizationId);
     const reviews = args.repositoryId
-      ? await ctx.db.query("reviews").withIndex("by_repo_pr_head_mode", (q) => q.eq("repositoryId", args.repositoryId!)).collect()
-      : await ctx.db.query("reviews").withIndex("by_org_status", (q) => q.eq("organizationId", args.organizationId)).collect();
+      ? await ctx.db.query("reviews").withIndex("by_repo_pr_head_mode", (q) => q.eq("repositoryId", args.repositoryId!)).order("desc").take(listCeiling)
+      : await ctx.db.query("reviews").withIndex("by_org_status", (q) => q.eq("organizationId", args.organizationId)).order("desc").take(listCeiling);
     return reviews.map(publicReview);
   },
 });
@@ -43,11 +51,11 @@ export const getEvidence = query({
     if (!review) throw new Error("not_found_or_forbidden");
     const access = await requireRepositoryRole(ctx, review.repositoryId, "viewer", review.organizationId);
     const [requirements, findings, checks, rounds, events] = await Promise.all([
-      ctx.db.query("requirements").withIndex("by_review", q => q.eq("reviewId", review._id)).collect(),
-      ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).collect(),
-      ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect(),
-      ctx.db.query("autofixRounds").withIndex("by_review_round", q => q.eq("reviewId", review._id)).collect(),
-      ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", review._id)).collect(),
+      ctx.db.query("requirements").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
+      ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
+      ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
+      ctx.db.query("autofixRounds").withIndex("by_review_round", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
+      ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
     ]);
     return { review: { ...publicReview(review), baseSha: review.baseSha, baseRef: review.baseRef, mode: review.mode,
       statusReasonCode: review.statusReasonCode, trigger: review.trigger, provider: review.provider, model: review.model,

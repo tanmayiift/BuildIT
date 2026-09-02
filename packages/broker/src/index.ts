@@ -28,9 +28,9 @@ export type StoredCredential = EnvelopeCiphertext & {
 
 export type CredentialStore = {
   insert(value: StoredCredential): Promise<void>;
-  get(id: string): Promise<StoredCredential | null>;
-  markUsed(id: string, at: number): Promise<void>;
-  revoke(id: string, organizationId: string, actorId: string, at: number): Promise<void>;
+  get?(id: string): Promise<StoredCredential | null>;
+  markUsed?(id: string, at: number): Promise<void>;
+  revoke?(id: string, organizationId: string, actorId: string, at: number): Promise<void>;
 };
 
 export type CredentialAccess = {
@@ -101,13 +101,14 @@ export class CredentialBroker {
   }
 
   async withCredential<T>(credentialId: string, access: CredentialAccess, use: (provider: ProviderName, apiKey: string) => Promise<T>) {
+    if (!this.store.get) throw new Error("credential_store_write_only");
     const credential = await this.store.get(credentialId);
     if (!credential) throw new Error("credential_not_found_or_forbidden");
     assertAccess(credential, access);
-    const plaintext = await envelopeDecryptSecret(credential, scopeFor(credential), this.kms);
+    const plaintext = await envelopeDecryptSecret(credential, scopeFor(credential), this.kms, this.kmsKeyId);
     try {
       const result = await use(credential.provider, plaintext);
-      await this.store.markUsed(credential.id, this.now());
+      await this.store.markUsed?.(credential.id, this.now());
       return result;
     } finally {
       // JavaScript strings cannot be reliably zeroed. The value is scoped to this call and is never returned or logged.
@@ -115,9 +116,11 @@ export class CredentialBroker {
   }
 
   async revoke(credentialId: string, access: CredentialAccess) {
+    if (!this.store.get) throw new Error("credential_store_write_only");
     const credential = await this.store.get(credentialId);
     if (!credential) throw new Error("credential_not_found_or_forbidden");
     assertAccess(credential, access);
+    if (!this.store.revoke) throw new Error("credential_store_write_only");
     await this.store.revoke(credential.id, access.organizationId, access.actorId, this.now());
   }
 }

@@ -20,6 +20,9 @@ function safeError(error: unknown) {
   const code = error instanceof Error ? error.message : "artifact_unavailable";
   if (code === "authentication_required") return { status: 401, code };
   if (code === "artifact_size_invalid" || code === "artifact_checksum_mismatch") return { status: 422, code };
+  // Never a 2xx: the caller marks the artifact deleted off this response, and the retention
+  // promise is only kept if the object is confirmed absent.
+  if (code === "artifact_delete_unconfirmed") return { status: 502, code };
   if (code === "artifact_grant_expired" || code === "artifact_grant_replayed") return { status: 410, code };
   if (code === "artifact_grant_invalid" || code === "artifact_grant_scope_invalid") return { status: 403, code: "artifact_grant_invalid" };
   return { status: 503, code: "artifact_unavailable" };

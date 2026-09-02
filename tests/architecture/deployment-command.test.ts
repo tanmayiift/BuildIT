@@ -1,7 +1,8 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   aliasArgs, assertAliasMatches, assertBuildITWebDeployContext, assertProbeOk,
-  deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, resolveDeployLink,
+  deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, probeWithRetry, resolveDeployLink,
 } from "../../scripts/deploy-buildit-web.mjs";
 import { assertBuildITBrokerDeployContext } from "../../scripts/deploy-buildit-broker.mjs";
 
@@ -159,5 +160,72 @@ describe("deploy link resolution", () => {
   it("still refuses a wrong project id supplied by the environment", () => {
     const link = resolveDeployLink({ repoRoot, env: { VERCEL_PROJECT_ID: "prj_someone_else", VERCEL_ORG_ID: correctLink.orgId }, readFile: failRead });
     expect(() => assertBuildITWebDeployContext({ cwd: repoRoot, repoRoot, link })).toThrow("buildit_web_deploy_project_refused");
+  });
+});
+
+// A single fetch straight after an alias move is the least reliable moment to make one: DNS and
+// edge propagation can lose it. Observed in a real release - the alias had already moved and the
+// site was serving, and the script still reported the release as failed.
+describe("release probe", () => {
+  const url = "https://buildit-agentic-review.vercel.app/reviews";
+  const noWait = async () => {};
+
+  it("passes on the first try when the alias is already serving", async () => {
+    let calls = 0;
+    const fetchImpl = async () => { calls += 1; return new Response("", { status: 200 }); };
+    await expect(probeWithRetry(url, fetchImpl, noWait)).resolves.toBe(200);
+    expect(calls).toBe(1);
+  });
+
+  it("rides out a transient network failure rather than failing a good release", async () => {
+    let calls = 0;
+    const fetchImpl = async () => { calls += 1; if (calls < 3) throw new TypeError("fetch failed"); return new Response("", { status: 200 }); };
+    await expect(probeWithRetry(url, fetchImpl, noWait)).resolves.toBe(200);
+    expect(calls).toBe(3);
+  });
+
+  it("rides out an edge that has not caught up yet", async () => {
+    let calls = 0;
+    const fetchImpl = async () => { calls += 1; return new Response("", { status: calls < 2 ? 404 : 200 }); };
+    await expect(probeWithRetry(url, fetchImpl, noWait)).resolves.toBe(200);
+  });
+
+  // Retrying must not turn a genuinely broken release into a green one.
+  it("still fails when the alias never serves", async () => {
+    const fetchImpl = async () => new Response("", { status: 500 });
+    await expect(probeWithRetry(url, fetchImpl, noWait)).rejects.toThrow("buildit_web_deploy_probe_failed:500");
+  });
+
+  it("still fails when every attempt errors", async () => {
+    const fetchImpl = async () => { throw new TypeError("fetch failed"); };
+    await expect(probeWithRetry(url, fetchImpl, noWait)).rejects.toThrow("fetch failed");
+  });
+});
+
+// The Release workflow had never been run, and it would have failed on its first use: on a runner
+// there is no .vercel/project.json, and the shared VERCEL_PROJECT_ID / VERCEL_ORG_ID pair names
+// the web project - so the broker's link resolution returned the web project and its own guard
+// refused the release. CI never ran the deploy checks, so nothing caught it.
+describe("release runs on a runner with no link file", () => {
+  const failRead = () => { throw new Error("ENOENT"); };
+  const runnerEnv = { VERCEL_PROJECT_ID: correctLink.projectId, VERCEL_ORG_ID: correctLink.orgId };
+
+  it("resolves the web project from the CI environment", () => {
+    const link = resolveDeployLink({ repoRoot, env: runnerEnv, readFile: failRead });
+    expect(assertBuildITWebDeployContext({ cwd: repoRoot, repoRoot, link })).toMatchObject({ projectName: "buildit-agentic-review" });
+  });
+
+  // The broker must not resolve to the web project just because that pair is what CI exports.
+  it("does not let the web ids become the broker's link", () => {
+    expect(() => assertBuildITBrokerDeployContext({ cwd: repoRoot, repoRoot, link: { ...correctLink } }))
+      .toThrow("buildit_broker_deploy_project_refused");
+    expect(assertBuildITBrokerDeployContext({ cwd: repoRoot, repoRoot, link: brokerLink })).toMatchObject({ projectName: "buildit-content-broker" });
+  });
+
+  it("names both ids in the release workflow, so the check has something to resolve", () => {
+    const workflow = readFileSync(".github/workflows/release.yml", "utf8");
+    expect(workflow).toContain(`VERCEL_PROJECT_ID: ${correctLink.projectId}`);
+    expect(workflow).toContain(`VERCEL_ORG_ID: ${correctLink.orgId}`);
+    expect(workflow).toContain("secrets.VERCEL_TOKEN");
   });
 });

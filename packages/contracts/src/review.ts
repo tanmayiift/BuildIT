@@ -29,7 +29,7 @@ export const statusReasonCode = z.enum([
   "unsupported_check", "environment_unavailable", "review_timeout",
   "final_validation_incomplete", "provider_credential_invalid",
   "installation_suspended", "permission_revoked", "user_cancelled",
-  "blocked_expired", "spend_ceiling_reached", "provider_rate_limited", "platform_error", "delivery_complete",
+  "blocked_expired", "spend_ceiling_reached", "concurrency_limit_reached", "superseded_by_new_commit", "provider_rate_limited", "platform_error", "delivery_complete",
 ]);
 export type StatusReasonCode = z.infer<typeof statusReasonCode>;
 export const nextActionCode = z.enum([

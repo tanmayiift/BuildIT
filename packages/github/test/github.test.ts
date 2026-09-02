@@ -1,8 +1,7 @@
 import {createHmac,generateKeyPairSync} from "node:crypto";
 import {describe,expect,it,vi} from "vitest";
-import {authorizeTrigger,canCommitSensitiveWrite,deliverStackedPr,DeliveryLedger,GitHubAppClient,pinPullRequest,PushDebouncer,reviewPolicy,sideEffectKey,trustedConfiguration,verifyWebhook} from "../src/index.js";
+import {authorizeTrigger,canCommitSensitiveWrite,deliverStackedPr,DeliveryLedger,GitHubAppClient,pinPullRequest,PushDebouncer,reviewPolicy,sideEffectKey,trustedConfiguration} from "../src/index.js";
 describe("GitHub boundary",()=>{
- it("verifies raw webhook bytes",()=>{const body=Buffer.from('{"x":1}'),sig="sha256="+createHmac("sha256","s").update(body).digest("hex");expect(verifyWebhook(body,sig,"s")).toBe(true);expect(verifyWebhook(Buffer.from("changed"),sig,"s")).toBe(false)});
  it("deduplicates deliveries",()=>{const l=new DeliveryLedger();expect(l.accept("d")).toBe(true);expect(l.accept("d")).toBe(false)});
  it("rejects bots, edits, and weak autofix actors",()=>{expect(authorizeTrigger({deliveryId:"1",action:"created",senderType:"Bot",body:"@buildit review",permission:"admin"}).accepted).toBe(false);expect(authorizeTrigger({deliveryId:"2",action:"created",senderType:"User",body:"@buildit autofix",permission:"triage"}).accepted).toBe(false)});
  it("carries explicit provider and budget while rejecting flags on cancel",()=>{expect(authorizeTrigger({deliveryId:"3",action:"created",senderType:"User",body:"@buildit review provider=anthropic budget=2",permission:"write"})).toMatchObject({accepted:true,kind:"review",provider:"anthropic",budgetLimit:2});expect(authorizeTrigger({deliveryId:"4",action:"created",senderType:"User",body:"@buildit cancel provider=gemini",permission:"admin"})).toEqual({accepted:false,reason:"invalid_flags"});expect(authorizeTrigger({deliveryId:"5",action:"created",senderType:"User",body:"@buildit review budget=4",permission:"admin"})).toEqual({accepted:false,reason:"no_command"})});

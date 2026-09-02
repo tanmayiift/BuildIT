@@ -64,3 +64,28 @@ describe("verified report", () => {
     expect(report.body).not.toContain("bug-free");
   });
 });
+
+
+// report.ts:safe is the last point before content leaves for a public pull request comment. It
+// neutered @-mentions and stripped tags, but never redacted - so the one helper that combined
+// redaction with injection-hardening was dead code implying a control that was not wired.
+describe("GitHub egress boundary", () => {
+  const withFinding = (title: string) => composeVerifiedReport({
+    ...input(),
+    findings: [{ title, severity: "high", resolution: "accepted", blocking: true, evidenceIds: [evidence.id] }],
+  });
+
+  it("redacts a credential that reached a finding title", () => {
+    const secret = `github_pat_11ABCDEFG0${"a".repeat(50)}`;
+    const rendered = JSON.stringify(withFinding(`Token ${secret} is committed`));
+    expect(rendered).not.toContain(secret);
+    expect(rendered).toContain("[REDACTED]");
+  });
+
+  // A verified bot posting [Click here to re-run CI](https://attacker.example) is a plausible
+  // phishing surface the moment model prose reaches a comment.
+  it("defuses Markdown link syntax", () => {
+    const rendered = JSON.stringify(withFinding("[Click here to re-run CI](https://attacker.example)"));
+    expect(rendered).not.toContain("](https://attacker.example)");
+  });
+});

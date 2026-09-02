@@ -49,11 +49,14 @@ describe("security", () => {
     };
     const scope={organizationId:"org-a",repositoryId:"repo-a",credentialId:"cred-a",purpose:"model-provider"} as const;
     const encrypted=await envelopeEncryptSecret("provider-secret",scope,kms,"kms-v1",1);
-    expect(await envelopeDecryptSecret(encrypted,scope,kms)).toBe("provider-secret");
-    await expect(envelopeDecryptSecret(encrypted,{...scope,organizationId:"org-b"},kms)).rejects.toThrow("kms_context_mismatch");
+    expect(await envelopeDecryptSecret(encrypted,scope,kms,"kms-v1")).toBe("provider-secret");
+    await expect(envelopeDecryptSecret(encrypted,{...scope,organizationId:"org-b"},kms,"kms-v1")).rejects.toThrow("kms_context_mismatch");
+    // The stored row names the key to decrypt with, and an org admin supplied that row, so
+    // nothing but this deployment's own key is accepted.
+    await expect(envelopeDecryptSecret({...encrypted,kmsKeyId:"arn:aws:kms:eu-west-1:999999999999:key/attacker"},scope,kms,"kms-v1")).rejects.toThrow("kms_key_id_refused");
     const rotated=await rotateEnvelope(encrypted,scope,kms,"kms-v2",2);
     expect(rotated).toMatchObject({kmsKeyId:"kms-v2",keyVersion:2,ciphertext:encrypted.ciphertext});
-    expect(await envelopeDecryptSecret(rotated,scope,kms)).toBe("provider-secret");
+    expect(await envelopeDecryptSecret(rotated,scope,kms,"kms-v2")).toBe("provider-secret");
     await expect(rotateEnvelope(rotated,scope,kms,"kms-v2",2)).rejects.toThrow("key_version_must_increase");
   });
 });

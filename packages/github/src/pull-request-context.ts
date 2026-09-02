@@ -1,3 +1,4 @@
+import { githubRequester } from "./request.js";
 type Http = (input: string | URL, init?: RequestInit) => Promise<Response>;
 export type PullRequestChangedFile = { path: string; previousPath?: string; status: "added" | "modified" | "removed" | "renamed" | "copied" | "changed" | "unchanged"; additions: number; deletions: number; changes: number; patch?: string };
 export type PullRequestContext = { title: string; body: string; htmlUrl: string; headSha: string; baseSha: string; files: PullRequestChangedFile[]; omitted: Array<{ path: string; reason: "patch_unavailable" | "patch_too_large" | "budget" }>; coverage: "full" | "partial" };
@@ -10,7 +11,8 @@ function safePath(value: string) { return value.length > 0 && value.length <= 1_
 function number(value: unknown) { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0; }
 
 export class PullRequestContextClient {
-  constructor(private readonly http: Http = fetch) {}
+  private readonly http: Http;
+  constructor(http: Http = fetch) { this.http = githubRequester(http); }
   async fetch(input: { installationToken: string; repositoryId: number; prNumber: number; expectedHeadSha: string; expectedBaseSha: string; maxFiles?: number; maxPatchBytes?: number; maxPatchBytesPerFile?: number }): Promise<PullRequestContext> {
     const maxFiles = input.maxFiles ?? 3_000, maxPatchBytes = input.maxPatchBytes ?? 1_000_000, maxPatchBytesPerFile = input.maxPatchBytesPerFile ?? 100_000;
     if (!Number.isInteger(input.prNumber) || input.prNumber < 1 || !/^[0-9a-f]{40}$/i.test(input.expectedHeadSha) || !/^[0-9a-f]{40}$/i.test(input.expectedBaseSha)

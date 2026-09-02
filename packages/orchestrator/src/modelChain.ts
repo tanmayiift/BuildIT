@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { validateSchemaValue, type JsonSchema, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { redactForModel } from "@buildit/security";
-import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type PromptStage, type StageDefinition } from "./promptChain.js";
+import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type InjectionScope, type InjectionSignal, type PromptStage, type StageDefinition } from "./promptChain.js";
 
 const string = { type: "string" } as const;
 const stringArray = { type: "array", items: string } as const;
@@ -60,6 +60,7 @@ export async function runModelReviewChain(input: {
   pinned: { headSha: string; baseSha: string; configRevision: string };
   untrusted: Record<string, unknown>;
   onUsage?: (usage: StageUsage) => Promise<void> | void;
+  onInjection?: (report: { signals: InjectionSignal[]; scope: InjectionScope }) => Promise<void> | void;
 }) {
   const attempts=new Map<PromptStage,Array<Omit<StageUsage,"promptVersion"|"schemaVersion"|"attempt"|"outcome">>>();
   return runPromptChain({
@@ -68,6 +69,7 @@ export async function runModelReviewChain(input: {
     pinned: input.pinned,
     untrusted: input.untrusted,
     maxSchemaRepairs: 1,
+    ...(input.onInjection ? { onInjection: input.onInjection } : {}),
     onAttempt: async attempt=>{const queue=attempts.get(attempt.stage),usage=queue?.shift();if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},
     executor: async request => {
       const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);

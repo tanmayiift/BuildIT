@@ -3,6 +3,7 @@ import { AwsKmsClient } from "@buildit/security";
 import { ConvexCredentialGateway } from "../src/convex-gateway.js";
 import { TrackerCredentialBroker } from "../src/tracker-credentials.js";
 import { handleTrackerCredentialSave } from "../src/tracker-credential-http.js";
+import { observedBrokerRoute, registerBrokerTelemetry } from "../src/instrumentation.js";
 
 function required(name: string) {
   const value = process.env[name];
@@ -24,9 +25,6 @@ async function route(request: Request) {
   }
 }
 
-export const POST = route;
-export const OPTIONS = route;
-import { observedBrokerRoute, registerBrokerTelemetry } from "../src/instrumentation.js";
-
 registerBrokerTelemetry();
-// The compact handler above remains the sole implementation; wrap exports in the next formatting pass.
+export const POST = observedBrokerRoute("tracker.credential_save", route);
+export const OPTIONS = observedBrokerRoute("tracker.credential_preflight", route);

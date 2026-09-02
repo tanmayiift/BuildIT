@@ -71,6 +71,7 @@ export const gather = internalAction({
           if (!response.ok) throw new Error(`artifact_upload_${response.status}`);
           const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" && intentCoverage === "complete" ? "full" as const : "partial" as const;
           await ctx.runMutation(internal.reviewArtifactData.complete, { organizationId: scope.organizationId, reviewId: scope.reviewId,
+            expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
             artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, now: Date.now() });
           artifactIds.push(String(reserved.artifactId));
         }
@@ -78,6 +79,6 @@ export const gather = internalAction({
       const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" && intentCoverage === "complete" ? "full" as const : "partial" as const;
       return { artifactIds, chunkCount, fileCount: headSnapshot.files.length + baseSnapshot.files.length,
         omittedCount: headSnapshot.omitted.length + baseSnapshot.omitted.length + pullContext.omitted.length + intent.sources.filter(source => source.status !== "available").length+repositoryIntent.omitted.length, coverage };
-    } finally { github.revoke(tokenScope); }
+    } finally { await github.revoke(tokenScope); }
   },
 });

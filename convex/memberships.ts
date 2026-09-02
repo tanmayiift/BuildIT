@@ -44,6 +44,9 @@ export const invite = mutation({
     const existing = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", args.organizationId).eq("userId", args.targetUserId)).unique();
     if (existing?.status === "active") throw new ConvexError("membership_already_active");
     const membershipId = existing?._id ?? await ctx.db.insert("memberships", { organizationId: args.organizationId, userId: args.targetUserId, role: args.role, status: "invited", createdAt: now, updatedAt: now });
+    // Also check the role already on the invite, not only the requested one: an admin must not
+    // be able to rewrite an invite an owner issued.
+    if (existing) await assertCanManage(actor.role, existing.role);
     if (existing) await ctx.db.patch(existing._id, { role: args.role, status: "invited", updatedAt: now });
     await appendAuditEvent(ctx, { organizationId: args.organizationId, actorId: actor.userId, action: "membership.invited", resourceType: "membership", resourceId: membershipId, requestId: args.requestId, result: "allowed", createdAt: now });
     return membershipId;
@@ -64,6 +67,9 @@ export const inviteByGitHubLogin = mutation({
     const existing = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", args.organizationId).eq("userId", profile.userId)).unique();
     if (existing?.status === "active") throw new ConvexError("membership_already_active");
     const membershipId = existing?._id ?? await ctx.db.insert("memberships", { organizationId: args.organizationId, userId: profile.userId, role: args.role, status: "invited", createdAt: now, updatedAt: now });
+    // Also check the role already on the invite, not only the requested one: an admin must not
+    // be able to rewrite an invite an owner issued.
+    if (existing) await assertCanManage(actor.role, existing.role);
     if (existing) await ctx.db.patch(existing._id, { role: args.role, status: "invited", updatedAt: now });
     await appendAuditEvent(ctx, { organizationId: args.organizationId, actorId: actor.userId, action: "membership.invited", resourceType: "membership", resourceId: membershipId, requestId: args.requestId, result: "allowed", createdAt: now });
     return membershipId;

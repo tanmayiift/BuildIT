@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
 import { checkConclusion, checkKind } from "./validators";
+import { toMicros } from "./lib/usageCost";
 
 // Keep this calculation local to the Convex data runtime. Importing the
 // orchestrator package here also bundles its Node-only sandbox and crypto code.
@@ -14,7 +15,7 @@ const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("r
 const hash = v.string();
 
 export const mode = internalQuery({args:executionArgs,handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale)throw new ConvexError("stale_or_replaced_review");return review.mode}});
-export const assertActive = internalQuery({args:executionArgs,handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||review.mode!=="autofix"||review.cancellationRequestedAt||!["validating","autofixing"].includes(review.status))throw new ConvexError("autofix_cancelled_or_replaced");return true}});
+export const assertActive = internalQuery({args:executionArgs,handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||review.mode!=="autofix"||review.cancellationRequestedAt||!["validating","autofixing","budget_exhausted"].includes(review.status))throw new ConvexError("autofix_cancelled_or_replaced");return true}});
 
 export const scope = internalQuery({
   args: executionArgs,
@@ -39,7 +40,7 @@ export const scope = internalQuery({
 
 export const recordModelUsage = internalMutation({
   args: { ...executionArgs, credentialId: v.id("providerCredentials"), inputTokens: v.number(), outputTokens: v.number(), now: v.number() },
-  handler: async (ctx, args) => { const review = await assertReviewParent(ctx.db, args.organizationId,args.reviewId),credential=await ctx.db.get(args.credentialId),quantity=args.inputTokens+args.outputTokens,cost=conservativeModelCost(args.inputTokens,args.outputTokens),consumed=review.budgetConsumed+cost;if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||review.mode!=="autofix"||!credential||credential.organizationId!==args.organizationId||(credential.repositoryId&&credential.repositoryId!==review.repositoryId)||credential.provider!==review.provider||credential.status!=="valid"||!Number.isSafeInteger(quantity)||quantity<0||consumed>review.budgetLimit)throw new ConvexError("autofix_model_usage_invalid");await ctx.db.insert("usageLedger",{organizationId:args.organizationId,repositoryId:review.repositoryId,reviewId:review._id,kind:"model_tokens",quantity,unitCost:cost/Math.max(1,quantity),currency:"provider_billed",occurredAt:args.now});await ctx.db.patch(credential._id,{lastUsedAt:args.now});await ctx.db.patch(review._id,{budgetConsumed:consumed,updatedAt:args.now}); },
+  handler: async (ctx, args) => { const review = await assertReviewParent(ctx.db, args.organizationId,args.reviewId),credential=await ctx.db.get(args.credentialId),quantity=args.inputTokens+args.outputTokens,cost=conservativeModelCost(args.inputTokens,args.outputTokens),consumed=review.budgetConsumed+cost;if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||review.mode!=="autofix"||!credential||credential.organizationId!==args.organizationId||(credential.repositoryId&&credential.repositoryId!==review.repositoryId)||credential.provider!==review.provider||credential.status!=="valid"||!Number.isSafeInteger(quantity)||quantity<0||consumed>review.budgetLimit)throw new ConvexError("autofix_model_usage_invalid");await ctx.db.insert("usageLedger",{organizationId:args.organizationId,repositoryId:review.repositoryId,reviewId:review._id,kind:"model_tokens",quantity,unitCost:cost/Math.max(1,quantity),totalCostMicros:toMicros(cost),currency:"provider_billed",occurredAt:args.now});await ctx.db.patch(credential._id,{lastUsedAt:args.now});await ctx.db.patch(review._id,{budgetConsumed:consumed,updatedAt:args.now}); },
 });
 
 export const reserveArtifact = internalMutation({
@@ -94,8 +95,7 @@ export const completeDelivery = internalMutation({
     const metric = await ctx.db.query("metricEvents").withIndex("by_org_time", q => q.eq("organizationId", args.organizationId)).filter(q => q.and(q.eq(q.field("reviewId"), review._id),q.eq(q.field("name"), "autofix_applied"))).unique();
     if (!metric) await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, name: "autofix_applied", value: 1, organizationTimezone: organization.timezone, occurredAt: args.now });
     const effectiveMetrics = { effective_loc_added: args.effectiveLoc.added, effective_loc_removed: args.effectiveLoc.removed, effective_loc_net: args.effectiveLoc.net, effective_loc_reverted: args.effectiveLoc.reverted } as const;
-    const existingMetrics = await ctx.db.query("metricEvents").withIndex("by_org_time", q => q.eq("organizationId", args.organizationId)).collect();
-    for (const [name, value] of Object.entries(effectiveMetrics) as Array<[keyof typeof effectiveMetrics, number]>) if (!existingMetrics.some(item => item.reviewId === review._id && item.name === name)) await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, roundId: round._id, name, value, organizationTimezone: organization.timezone, occurredAt: args.now });
+    for (const [name, value] of Object.entries(effectiveMetrics) as Array<[keyof typeof effectiveMetrics, number]>) if (!(await ctx.db.query("metricEvents").withIndex("by_review_name", q => q.eq("reviewId", review._id).eq("name", name)).first())) await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, roundId: round._id, name, value, organizationTimezone: organization.timezone, occurredAt: args.now });
     return review._id;
   },
 });

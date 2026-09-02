@@ -11,6 +11,7 @@ import {
   GitHubRepositoryWriter,
   RepositoryContentClient,
   chunkRepositorySnapshot,
+  sideEffectKey,
 } from "@buildit/github";
 import {
   assertAutofixBounds,
@@ -705,7 +706,7 @@ export const runConvergence = internalAction({
         roundNumber: 3,
       };
     } finally {
-      github.revoke(tokenScope);
+      await github.revoke(tokenScope);
     }
   },
 });
@@ -807,7 +808,11 @@ export const deliverPassed = internalAction({
           .update(`${branch}\0${passed.candidateCommitSha}`)
           .digest("hex"),
         now = Date.now(),
-        branchKey = `${scope.githubRepositoryId}:${scope.prNumber}:${scope.headSha}:branch:autofix`,
+        // Slotted by review id, not a constant. reserveSideEffect refuses a key whose stored row
+        // belongs to another review, so a constant slot made one failed attempt poison that head
+        // SHA for every later review. The autofix prefix keeps these distinct from the review
+        // publication's own check and comment, which slot on the bare review id.
+        branchKey = sideEffectKey({ repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, headSha: scope.headSha, kind: "branch", slot: `autofix:${scope.reviewId}` }),
         branchEffect: Id<"githubSideEffects"> = await ctx.runMutation(
           internal.reviewState.reserveSideEffect,
           {
@@ -838,7 +843,7 @@ export const deliverPassed = internalAction({
       const prHash = createHash("sha256")
           .update(`${branch}\0${pull.head.ref}\0${passed.candidateCommitSha}`)
           .digest("hex"),
-        prKey = `${scope.githubRepositoryId}:${scope.prNumber}:${scope.headSha}:stacked_pr:autofix`,
+        prKey = sideEffectKey({ repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, headSha: scope.headSha, kind: "stacked_pr", slot: `autofix:${scope.reviewId}` }),
         prEffect: Id<"githubSideEffects"> = await ctx.runMutation(
           internal.reviewState.reserveSideEffect,
           {
@@ -908,7 +913,7 @@ export const deliverPassed = internalAction({
           artifactSecret,
         ),
         publicationHash = createHash("sha256").update(reportText).digest("hex"),
-        checkKey = `${scope.githubRepositoryId}:${scope.prNumber}:${scope.headSha}:check:autofix`,
+        checkKey = sideEffectKey({ repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, headSha: scope.headSha, kind: "check", slot: `autofix:${scope.reviewId}` }),
         checkEffect: Id<"githubSideEffects"> = await ctx.runMutation(
           internal.reviewState.reserveSideEffect,
           {
@@ -938,7 +943,7 @@ export const deliverPassed = internalAction({
         status: "completed",
         now: Date.now(),
       });
-      const commentKey = `${scope.githubRepositoryId}:${scope.prNumber}:${scope.headSha}:comment:autofix`,
+      const commentKey = sideEffectKey({ repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, headSha: scope.headSha, kind: "comment", slot: `autofix:${scope.reviewId}` }),
         commentEffect: Id<"githubSideEffects"> = await ctx.runMutation(
           internal.reviewState.reserveSideEffect,
           {
@@ -994,7 +999,7 @@ export const deliverPassed = internalAction({
       }
       throw error;
     } finally {
-      github.revoke(tokenScope);
+      await github.revoke(tokenScope);
     }
   },
 });
@@ -1090,7 +1095,7 @@ export const publishFailure = internalAction({
           installationToken: token,
         }),
         requestHash = createHash("sha256").update(reportText).digest("hex"),
-        operationKey = `${scope.githubRepositoryId}:${scope.prNumber}:${scope.headSha}:comment:autofix`,
+        operationKey = sideEffectKey({ repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, headSha: scope.headSha, kind: "comment", slot: `autofix:${scope.reviewId}` }),
         effect: Id<"githubSideEffects"> = await ctx.runMutation(
           internal.reviewState.reserveSideEffect,
           {
@@ -1125,7 +1130,7 @@ export const publishFailure = internalAction({
       });
       return { candidateCommitSha: last.candidateCommitSha };
     } finally {
-      github.revoke(tokenScope);
+      await github.revoke(tokenScope);
     }
   },
 });
