@@ -5,6 +5,14 @@ const providers = new Set<ProviderName>(["anthropic", "openai", "gemini"]);
 const maxBodyBytes = 16 * 1024;
 export const credentialContractVersion = "2026-08-30.1";
 
+// BUILDIT_WEB_ORIGIN may list more than one exact origin, separated by commas, so a
+// development origin can be permitted without removing the deployed one. Matching stays
+// exact: no wildcards, no prefix matching, no subdomain expansion.
+export function originAllowed(origin: string | null, allowed: string): origin is string {
+  if (!origin) return false;
+  return allowed.split(",").some(entry => entry.trim() === origin);
+}
+
 class CredentialSaveStageError extends Error {
   constructor(stage: "authorization" | "persistence", cause: unknown) {
     super(`credential_${stage}_failed`, { cause });
@@ -39,7 +47,7 @@ export async function handleCredentialSave(request: Request, input: {
   allowedOrigin: string; authorize: CredentialAuthorization; broker: CredentialBroker; onFailure?: (error: unknown) => void;
 }) {
   const origin = request.headers.get("origin");
-  if (origin !== input.allowedOrigin) return json(403, { error: "origin_not_allowed" });
+  if (!originAllowed(origin, input.allowedOrigin)) return json(403, { error: "origin_not_allowed" });
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: {
     "access-control-allow-origin": origin, "access-control-allow-methods": "POST, OPTIONS",
     "access-control-allow-headers": "authorization, content-type", "access-control-expose-headers": "x-buildit-credential-contract",

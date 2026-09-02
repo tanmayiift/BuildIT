@@ -1,12 +1,16 @@
 import type { NextConfig } from "next";
 
+// React's development build needs eval() for callstack reconstruction and Fast Refresh.
+// Production keeps the stricter policy; this relaxation never reaches a deployed build.
+const developmentOnlyScriptSources = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${developmentOnlyScriptSources}`,
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
   "img-src 'self' data:",
