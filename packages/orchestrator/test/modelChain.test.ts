@@ -16,7 +16,7 @@ describe("executable model review chain", () => {
   it("invokes six strict review stages and never requests a patch", async () => {
     const usage: unknown[] = [];
     const invoke = vi.fn(async request => ({ value: values[request.stage], provider: "gemini" as const, model: "gemini-test", finishReason: "STOP", inputTokens: 10, outputTokens: 2, requestId: "request-1" }));
-    const records = await runModelReviewChain({ invoke, pinned, untrusted: { source: "untrusted" }, onUsage: item => { usage.push(item); } });
+    const records = await runModelReviewChain({ invoke, pinned, untrusted: { source: "untrusted", requirements: [{ id: "REQ-1", text: "round tax to two decimals" }] }, onUsage: item => { usage.push(item); } });
     expect(invoke.mock.calls.map(([request]) => request.stage)).toEqual(reviewPromptStages);
     expect(records).toHaveLength(6);
     expect(usage).toHaveLength(6);
@@ -28,7 +28,7 @@ describe("executable model review chain", () => {
 
   it("gives each stage an explicit grounding task instead of relying on the stage name", async () => {
     const invoke = vi.fn(async request => ({ value: values[request.stage], provider: "openai" as const, model: "test", finishReason: "completed", inputTokens: 1, outputTokens: 1 }));
-    await runModelReviewChain({ invoke, pinned, untrusted: {} });
+    await runModelReviewChain({ invoke, pinned, untrusted: { requirements: [{ id: "REQ-1", text: "round tax" }] } });
     const systems=Object.fromEntries(invoke.mock.calls.map(([request])=>[request.stage,request.system]));
     expect(systems.requirements).toContain("Preserve each supplied requirement id exactly");
     expect(systems.requirements).toContain("return an empty requirements array");
@@ -48,7 +48,7 @@ describe("executable model review chain", () => {
 
   it("repairs one malformed provider response and then fails closed", async () => {
     const invoke = vi.fn(async request => ({ value: request.stage === "findings" ? { findings: [{ invented: true }] } : values[request.stage], provider: "openai" as const, model: "test", finishReason: "completed", inputTokens: 1, outputTokens: 1 }));
-    await expect(runModelReviewChain({ invoke, pinned, untrusted: {} })).rejects.toThrow("stage_schema_invalid:findings");
+    await expect(runModelReviewChain({ invoke, pinned, untrusted: { requirements: [{ id: "REQ-1", text: "round tax" }] } })).rejects.toThrow("stage_schema_invalid:findings");
     expect(invoke.mock.calls.filter(([request]) => request.stage === "findings")).toHaveLength(2);
     expect(invoke.mock.calls.some(([request]) => request.stage === "critic")).toBe(false);
     expect(invoke.mock.calls.filter(([request]) => request.stage === "findings")[1]?.[0].input).toContain("<buildit:invalid-output>");
@@ -62,14 +62,14 @@ describe("executable model review chain", () => {
       calls.push(request.input);
       if (request.stage === "requirements" && malformed) { malformed = false; return { value: { leaked: secret }, provider: "gemini", model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 }; }
       return { value: values[request.stage], provider: "gemini", model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 };
-    }, pinned, untrusted: {} });
+    }, pinned, untrusted: { requirements: [{ id: "REQ-1", text: "round tax" }] } });
     expect(calls[1]).toContain("[REDACTED]");
     expect(calls[1]).not.toContain(secret);
   });
 
   it("does not resend an oversized invalid response", async () => {
     const invoke = vi.fn(async request => ({ value: request.stage === "requirements" ? { invalid: "x".repeat(16_001) } : values[request.stage], provider: "gemini" as const, model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 }));
-    await expect(runModelReviewChain({ invoke, pinned, untrusted: {} })).rejects.toThrow("schema_repair_output_too_large");
+    await expect(runModelReviewChain({ invoke, pinned, untrusted: { requirements: [{ id: "REQ-1", text: "round tax" }] } })).rejects.toThrow("schema_repair_output_too_large");
     expect(invoke).toHaveBeenCalledTimes(1);
   });
 
@@ -82,6 +82,6 @@ describe("executable model review chain", () => {
 
   it("rejects a plausible finding that lacks inspectable location and impact", async () => {
     const invoke = vi.fn(async request => ({ value: request.stage === "findings" ? { findings: [{ id: "f-1", title: "Bug", severity: "high", evidenceIds: ["source-1"], explanation: "Maybe broken" }] } : values[request.stage], provider: "gemini" as const, model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 }));
-    await expect(runModelReviewChain({ invoke, pinned, untrusted: {} })).rejects.toThrow("stage_schema_invalid:findings");
+    await expect(runModelReviewChain({ invoke, pinned, untrusted: { requirements: [{ id: "REQ-1", text: "round tax" }] } })).rejects.toThrow("stage_schema_invalid:findings");
   });
 });

@@ -1,5 +1,6 @@
 import type {CheckResult} from "@buildit/runner";import {finalStatus} from "@buildit/runner";
 export * from "./promptChain.js";
+export * from "./reviewPlan.js";
 export * from "./requirements.js";
 export * from "./contextIndex.js";
 export * from "./findings.js";

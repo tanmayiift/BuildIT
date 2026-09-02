@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { validateSchemaValue, type JsonSchema, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { redactForModel } from "@buildit/security";
+import { planReview, type ReviewPlan } from "./reviewPlan.js";
 import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type InjectionScope, type InjectionSignal, type PromptStage, type StageDefinition } from "./promptChain.js";
 
 const string = { type: "string" } as const;
@@ -61,11 +62,16 @@ export async function runModelReviewChain(input: {
   untrusted: Record<string, unknown>;
   onUsage?: (usage: StageUsage) => Promise<void> | void;
   onInjection?: (report: { signals: InjectionSignal[]; scope: InjectionScope }) => Promise<void> | void;
+  plan?: ReviewPlan;
+  onPlan?: (plan: ReviewPlan) => Promise<void> | void;
 }) {
   const attempts=new Map<PromptStage,Array<Omit<StageUsage,"promptVersion"|"schemaVersion"|"attempt"|"outcome">>>();
+  const plan = input.plan ?? planReview(input.untrusted);
+  const definitions = plan.stages.map(strictDefinition);
+  await input.onPlan?.(plan);
   return runPromptChain({
-    definitions: strictModelChain,
-    expectedStages: reviewPromptStages,
+    definitions,
+    expectedStages: plan.stages,
     pinned: input.pinned,
     untrusted: input.untrusted,
     maxSchemaRepairs: 1,
