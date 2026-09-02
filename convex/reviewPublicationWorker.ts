@@ -52,7 +52,7 @@ export const publish = internalAction({
       const comment = await writer.upsertIssueComment({ prNumber: scope.prNumber, marker: `buildit-review:${scope.reviewId}:${scope.headSha}`, body });
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, { ...args, sideEffectId: commentEffect, requestHash, externalId: String(comment.id), status: "completed", now: Date.now() });
       return { checkId: String(check.id), commentId: String(comment.id) };
-    } finally { github.revoke(tokenScope); }
+    } finally { await github.revoke(tokenScope); }
   },
 });
 
@@ -152,7 +152,7 @@ export const publishPlatformFailure = internalAction({
       );
       return { checkId: String(check.id) };
     } finally {
-      github.revoke(tokenScope);
+      await github.revoke(tokenScope);
     }
   },
 });

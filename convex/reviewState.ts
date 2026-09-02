@@ -50,7 +50,8 @@ export const appendEvent = internalMutation({
     type: value.eventType, stage: value.reviewStage, internalCode: v.string(), now: v.number(),
   },
   handler: async (ctx, args) => {
-    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
+    // Called for the tenant assertion it throws, not for the row it returns.
+    await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
     const previous = await ctx.db.query("reviewEvents").withIndex("by_review", (q) => q.eq("reviewId", args.reviewId)).order("desc").first();
     if (args.sequence !== (previous?.sequence ?? 0) + 1) throw new ConvexError("invalid_event_sequence");
     return ctx.db.insert("reviewEvents", {
@@ -178,7 +179,8 @@ export const recordAutofixRound = internalMutation({
   },
   handler: async (ctx, args) => {
     if (!Number.isInteger(args.roundNumber) || args.roundNumber < 1 || args.roundNumber > 3) throw new ConvexError("round_out_of_bounds");
-    const [review, attempt] = await Promise.all([
+    // The review assertion runs for its throw; only the attempt row is read.
+    const [, attempt] = await Promise.all([
       assertReviewParent(ctx.db, args.organizationId, args.reviewId),
       assertAttemptParent(ctx.db, args.organizationId, args.reviewId, args.attemptId),
     ]);

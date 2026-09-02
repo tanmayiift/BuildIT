@@ -3,6 +3,7 @@
 import { useConvexAuth } from "convex/react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { workspaceSections } from "./workspace-sections";
 
 const SampleTourContext = createContext(false);
 
@@ -10,9 +11,6 @@ export function useSampleTour() {
   return useContext(SampleTourContext);
 }
 
-// Kept in step with validSections in app/[section]/page.tsx: every workspace section is
-// private. /notifications was previously missing here and escaped the gate entirely.
-const workspaceSections = ["repositories", "metrics", "usage", "integrations", "policies", "members", "notifications", "audit"];
 
 function requiresWorkspace(pathname: string) {
   return pathname === "/account" || pathname === "/reviews" || pathname.startsWith("/reviews/")

@@ -56,9 +56,12 @@ export const storeEncryptedCredential = mutation({
     const access = args.repositoryId
       ? await requireRepositoryRole(ctx, args.repositoryId, "admin", args.organizationId)
       : await requireOrganizationRole(ctx, args.organizationId, "admin");
-    // authorizeCredentialWrite already required a fresh GitHub login before the
-    // provider saw the key. Re-check membership and repository scope here, but
-    // do not let provider response time invalidate the approved write.
+    // publicFunctionPolicy declares this function active_organization_admin_recent_auth, and it
+    // is the call that actually writes the credential. Relying on authorizeCredentialWrite's
+    // check left the declared control unenforced at the write itself: a caller could skip the
+    // authorize step entirely, or sit on a session past its step-up window. The 10-minute window
+    // comfortably covers a provider round-trip, which is what the earlier reasoning worried about.
+    await requireRecentGitHubLogin(ctx, access.userId);
     if (!/^[0-9a-f-]{36}$/i.test(args.credentialScopeId) || !/^[0-9a-f]{64}$/i.test(args.aadDigest)
       || args.maskedSuffix.length !== 4 || args.keyVersion !== 1 || args.lastValidatedAt > Date.now() + 5_000
       || !args.availableModels.length || args.availableModels.length > 10 || args.availableModels.some(model => !/^[-.a-z0-9]{3,100}$/i.test(model))) {

@@ -8,7 +8,7 @@ export const operationNames = [
   "artifact.get", "artifact.put", "artifact.delete", "credential.save", "credential.preflight", "credential.revoke", "credential.use",
   "github.check", "github.comment", "github.branch", "github.stacked_pr", "model.invoke", "sandbox.execute", "sandbox.cleanup",
   "review.context", "review.requirements", "review.analysis", "review.critic", "review.tests", "review.autofix", "review.delivery", "review.decision", "review.stale_check",
-  "tracker.fetch", "tracker.credential_save", "web.request", "webhook.verify", "webhook.process", "autofix.loop_guard", "telemetry.smoke",
+  "tracker.fetch", "tracker.credential_save", "tracker.credential_preflight", "web.request", "webhook.verify", "webhook.process", "autofix.loop_guard", "telemetry.smoke",
 ] as const;
 export type OperationName = typeof operationNames[number];
 export const measurementNames = [
@@ -80,7 +80,6 @@ export function recordMeasurement(input: { measurement: MeasurementName; value: 
 
 export async function traced<T>(name: string, attributes: SafeAttributes, task: () => Promise<T>): Promise<T> {
   const tracer = trace.getTracer("buildit");
-  const startedAt = Date.now();
   return tracer.startActiveSpan(name, { attributes: safeAttributes({ ...attributes, outcome: "started" }) }, async span => {
     try {
       const result = await task();

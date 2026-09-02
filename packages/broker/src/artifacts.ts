@@ -1,10 +1,18 @@
 import { createHash } from "node:crypto";
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client, type S3ClientConfig } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client, type S3ClientConfig } from "@aws-sdk/client-s3";
 import { verifyArtifactGrant, type ArtifactGrant } from "@buildit/security";
 
-type S3Command = DeleteObjectCommand | GetObjectCommand | PutObjectCommand;
+type S3Command = DeleteObjectCommand | GetObjectCommand | HeadObjectCommand | PutObjectCommand;
 type S3Sender = { send(command: S3Command): Promise<Record<string, unknown>> };
 type GrantConsumer = (grantId: string, expiresAt: number) => Promise<boolean>;
+
+// A HeadObject on an absent key surfaces as NotFound, NoSuchKey, or a bare 404 depending on
+// which SDK path raised it. Anything else is a live error and must not read as "gone".
+function isNotFound(error: unknown) {
+  const value = error as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } } | null;
+  return value?.name === "NotFound" || value?.name === "NoSuchKey" || value?.Code === "NoSuchKey"
+    || value?.$metadata?.httpStatusCode === 404;
+}
 
 export class S3GrantConsumer {
   constructor(private readonly config: { bucket: string; kmsKeyId: string; s3: S3Sender }) {}
@@ -75,9 +83,20 @@ export class ArtifactBroker {
     return { artifactId: grant.artifactId, body: bytes, checksum: createHash("sha256").update(bytes).digest("hex") };
   }
 
+  // S3 answers a DeleteObject with 204 whether or not the key existed, and whether or not a
+  // bucket policy or object lock actually kept it. Reporting deleted:true off that response
+  // asserts the retention promise rather than confirming it, so read the key back: only a
+  // NotFound proves the object is gone. docs/runbooks/deletion-failure.md requires this.
   async delete(token: string) {
     const grant = await this.#grant(token, "delete");
     await this.#s3.send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: grant.storageKey }));
+    let present = true;
+    try {
+      await this.#s3.send(new HeadObjectCommand({ Bucket: this.config.bucket, Key: grant.storageKey }));
+    } catch (error) {
+      present = !isNotFound(error);
+    }
+    if (present) throw new Error("artifact_delete_unconfirmed");
     return { artifactId: grant.artifactId, deleted: true as const };
   }
 }

@@ -94,6 +94,21 @@ export function assertAliasMatches({ aliasTarget, deploymentUrl }) {
   return true;
 }
 
+export async function probeWithRetry(url, fetchImpl = fetch, wait = ms => new Promise(resolve => setTimeout(resolve, ms)), attempts = 4) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (attempt) await wait(2_000 * attempt);
+    try {
+      const response = await fetchImpl(url, { redirect: "follow" });
+      if (response.status === 200) return response.status;
+      lastError = new Error(`buildit_web_deploy_probe_failed:${response.status}:${url}`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 export function assertProbeOk({ status, url }) {
   if (status !== 200) throw new Error(`buildit_web_deploy_probe_failed:${status ?? "unknown"}:${url ?? ""}`);
   return true;
@@ -129,10 +144,10 @@ async function main() {
   assertAliasMatches({ aliasTarget, deploymentUrl });
 
   const probeUrl = `https://${contract.productionAlias}${expected.probePath}`;
-  const response = await fetch(probeUrl, { redirect: "follow" });
-  assertProbeOk({ status: response.status, url: probeUrl });
+  const probeStatus = await probeWithRetry(probeUrl);
+  assertProbeOk({ status: probeStatus, url: probeUrl });
 
-  console.log(JSON.stringify({ released: true, deploymentUrl, alias: contract.productionAlias, probe: probeUrl, probeStatus: response.status }));
+  console.log(JSON.stringify({ released: true, deploymentUrl, alias: contract.productionAlias, probe: probeUrl, probeStatus }));
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

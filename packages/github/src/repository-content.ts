@@ -1,4 +1,4 @@
-type GitHubHttp = (input: string | URL, init?: RequestInit) => Promise<Response>;
+import { githubRequester, type GitHubHttp } from "./request.js";
 
 const headers = {
   Accept: "application/vnd.github+json",
@@ -48,7 +48,8 @@ function decodeBlob(value: { encoding?: string; content?: string }, path: string
 }
 
 export class RepositoryContentClient {
-  constructor(private readonly http: GitHubHttp = fetch) {}
+  constructor(http: GitHubHttp = fetch) { this.http = githubRequester(http); }
+  private readonly http: GitHubHttp;
 
   async fetchExactCommit(input: { installationToken: string; repositoryId: number; commitSha: string; limits?: Partial<RepositoryFetchLimits> }): Promise<RepositorySnapshot> {
     if (!/^[0-9a-f]{40}$/i.test(input.commitSha)) throw new Error("invalid_commit_sha");

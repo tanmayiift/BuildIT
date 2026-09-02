@@ -27,6 +27,10 @@ export async function requireOrganizationRole(
   if (!membership || membership.status !== "active" || rank[membership.role] < rank[minimum]) {
     throw new ConvexError("not_found_or_forbidden");
   }
+  // A deleted organization authorizes nothing. Five of eleven callers re-checked this themselves
+  // and six did not, which is how an invariant ends up half-enforced.
+  const organization = await ctx.db.get(organizationId);
+  if (!organization || organization.deletedAt) throw new ConvexError("not_found_or_forbidden");
   return { userId, role: membership.role };
 }
 

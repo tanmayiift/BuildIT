@@ -36,6 +36,12 @@
       "sourceType": "github",
       "skillPath": "skills/writing-plans/SKILL.md",
       "computedHash": "27c75044e444a4fc68798c3f799dc23eaff3a6bfabff32e6ad75bb20f881c094"
+    },
+    "prompt-master": {
+      "source": "prompt-master-main.zip",
+      "sourceType": "archive",
+      "skillPath": ".claude/skills/prompt-master/SKILL.md",
+      "computedHash": "651e5490f4b51c6e6ca32cc26eed10dff52f344b95a1b9122105f0c8d8e1506a"
     }
   }
 }

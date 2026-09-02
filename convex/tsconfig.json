@@ -1,23 +1,28 @@
 {
-  /* This TypeScript project config describes the environment that
-   * Convex functions run in and is used to typecheck them.
-   * You can modify it, but some settings are required to use Convex.
-   */
+  /* The most security-sensitive code in the product had the weakest type checking: this config
+   * did not extend tsconfig.base.json and so omitted noUncheckedIndexedAccess and
+   * exactOptionalPropertyTypes, which every other workspace enables. It extends the base now and
+   * keeps only the overrides Convex actually requires. */
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    /* These settings are not required by Convex and can be modified. */
     "allowJs": true,
-    "strict": true,
-    "moduleResolution": "Bundler",
     "jsx": "react-jsx",
-    "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
 
-    /* These compiler options are required by Convex */
+    /* The remaining gap. Enabling this surfaces 17 errors in convex/, several of which are
+     * Convex's own generic types (GenericDatabaseReader, GenericActionCtx) rather than this
+     * codebase's, so closing it is a separate piece of work with real regression risk in the
+     * most security-sensitive code. noUncheckedIndexedAccess - the one that catches real
+     * out-of-bounds bugs - is inherited from the base config and is on. */
+    "exactOptionalPropertyTypes": false,
+
+    /* Required by Convex. */
     "target": "ESNext",
     "lib": ["ES2023", "dom"],
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "isolatedModules": true,
+    "declaration": false,
     "noEmit": true
   },
   "include": ["./**/*"],

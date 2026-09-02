@@ -2,12 +2,22 @@ import { GitHubIntegrationState, MembersWorkspaceState, ModelIntegrationState, R
 import { WorkspaceMetrics, WorkspaceUsage } from "../live-metrics-usage";
 import { WorkspaceAudit } from "../live-audit";
 import { NotificationPreferences } from "../notification-preferences";
+import { notFound } from "next/navigation";
+import { isWorkspaceSection } from "../workspace-sections";
 
-const validSections = new Set(["repositories", "metrics", "usage", "integrations", "policies", "members", "notifications", "audit"]);
+
+
+export async function generateMetadata({ params }: { params: Promise<{ section: string }> }) {
+  const { section } = await params;
+  // Runs before the streamed shell is flushed, which is the only place a 404 status can still be
+  // set: the layout's <Suspense> means the page component itself renders after the headers.
+  if (!isWorkspaceSection(section)) notFound();
+  return { title: `${section.charAt(0).toUpperCase()}${section.slice(1)} · BuildIT` };
+}
 
 export default async function Section({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params;
-  if (!validSections.has(section)) return <div className="content"><h1 className="title">Page not found</h1><a href="/">Return to overview</a></div>;
+  if (!isWorkspaceSection(section)) notFound();
   if (section === "repositories") return <Repositories />;
   if (section === "metrics") return <Metrics />;
   if (section === "usage") return <Usage />;

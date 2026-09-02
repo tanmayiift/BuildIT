@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aliasArgs, assertAliasMatches, assertBuildITWebDeployContext, assertProbeOk,
-  deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, resolveDeployLink,
+  deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, probeWithRetry, resolveDeployLink,
 } from "../../scripts/deploy-buildit-web.mjs";
 import { assertBuildITBrokerDeployContext } from "../../scripts/deploy-buildit-broker.mjs";
 
@@ -159,5 +159,44 @@ describe("deploy link resolution", () => {
   it("still refuses a wrong project id supplied by the environment", () => {
     const link = resolveDeployLink({ repoRoot, env: { VERCEL_PROJECT_ID: "prj_someone_else", VERCEL_ORG_ID: correctLink.orgId }, readFile: failRead });
     expect(() => assertBuildITWebDeployContext({ cwd: repoRoot, repoRoot, link })).toThrow("buildit_web_deploy_project_refused");
+  });
+});
+
+// A single fetch straight after an alias move is the least reliable moment to make one: DNS and
+// edge propagation can lose it. Observed in a real release - the alias had already moved and the
+// site was serving, and the script still reported the release as failed.
+describe("release probe", () => {
+  const url = "https://buildit-agentic-review.vercel.app/reviews";
+  const noWait = async () => {};
+
+  it("passes on the first try when the alias is already serving", async () => {
+    let calls = 0;
+    const fetchImpl = async () => { calls += 1; return new Response("", { status: 200 }); };
+    await expect(probeWithRetry(url, fetchImpl, noWait)).resolves.toBe(200);
+    expect(calls).toBe(1);
+  });
+
+  it("rides out a transient network failure rather than failing a good release", async () => {
+    let calls = 0;
+    const fetchImpl = async () => { calls += 1; if (calls < 3) throw new TypeError("fetch failed"); return new Response("", { status: 200 }); };
+    await expect(probeWithRetry(url, fetchImpl, noWait)).resolves.toBe(200);
+    expect(calls).toBe(3);
+  });
+
+  it("rides out an edge that has not caught up yet", async () => {
+    let calls = 0;
+    const fetchImpl = async () => { calls += 1; return new Response("", { status: calls < 2 ? 404 : 200 }); };
+    await expect(probeWithRetry(url, fetchImpl, noWait)).resolves.toBe(200);
+  });
+
+  // Retrying must not turn a genuinely broken release into a green one.
+  it("still fails when the alias never serves", async () => {
+    const fetchImpl = async () => new Response("", { status: 500 });
+    await expect(probeWithRetry(url, fetchImpl, noWait)).rejects.toThrow("buildit_web_deploy_probe_failed:500");
+  });
+
+  it("still fails when every attempt errors", async () => {
+    const fetchImpl = async () => { throw new TypeError("fetch failed"); };
+    await expect(probeWithRetry(url, fetchImpl, noWait)).rejects.toThrow("fetch failed");
   });
 });

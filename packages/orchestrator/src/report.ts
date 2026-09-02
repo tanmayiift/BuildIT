@@ -1,9 +1,22 @@
+import { redact } from "@buildit/security";
 import { computeReviewDecision, gateClaims, type EvidenceRecord, type MaterialClaim, type ReviewCheckDecision } from "./index.js";
 
 type ReportFinding = { title: string; severity: "critical" | "high" | "warning" | "info"; resolution: "accepted" | "rejected" | "uncertain"; blocking: boolean; evidenceIds: string[]; path?: string; startLine?: number; endLine?: number; impact?: string; explanation?: string };
 
+const redactionSentinel = "\u0000BUILDIT_REDACTED\u0000";
+
 function safe(value: string) {
-  return value.replace(/@/g, "＠").replace(/<[^>]*>/g, "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  return redact(value)
+    .replaceAll("[REDACTED]", redactionSentinel)
+    .replace(/@/g, "＠")
+    .replace(/<[^>]*>/g, "")
+    // Markdown link syntax survived into a comment posted by a verified bot, which makes
+    // [Click here to re-run CI](https://attacker.example) a plausible phishing surface.
+    .replace(/[[\]()]/g, character => `\\${character}`)
+    .replace(/[\u0001-\u001f\u007f]/g, " ")
+    .replaceAll(redactionSentinel, "[REDACTED]")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function code(value: string) { return safe(value).replace(/`/g, "ˋ"); }
@@ -12,7 +25,8 @@ function title(status: "changes_requested" | "inconclusive" | "checks_passed") {
   if (status === "checks_passed") return "Ready for human review";
   return "Review needs attention";
 }
-function nextStep(action: "start_new_review" | "retry_review" | "inspect_findings" | "none") {
+function nextStep(action: "start_new_review" | "retry_review" | "inspect_findings" | "human_merge" | "none") {
+  if (action === "human_merge") return "Untrusted text in this pull request tried to steer the review. Read the changes yourself before merging.";
   if (action === "inspect_findings") return "Inspect the evidence and decide what to change.";
   if (action === "start_new_review") return "The pull request changed. Start a new review at the current commit.";
   if (action === "retry_review") return "Resolve the missing context or checks, then retry once.";

@@ -4,11 +4,16 @@ import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { terminalStatuses } from "./lib/lifecycle";
+import { activeReviewCount, concurrencyExceeded } from "./lib/tenantLimits";
 import { provider as providerValidator } from "./validators";
 
 export function webhookTelemetryOutcome(disposition: "processed" | "ignored_bot" | "ignored_edit" | "duplicate" | "rejected", status: "enqueued" | "completed" | "failed") {
   return { operation: "webhook.process" as const, stage: "context" as const, outcome: status === "failed" ? "failed" as const : disposition === "rejected" ? "blocked" as const : "succeeded" as const };
 }
+
+// GitHub retries a failed delivery for hours. Long enough that a delivery still in flight is
+// not reprocessed concurrently, short enough that a redelivery is not refused.
+const failedRetryGraceMs = 60_000;
 
 export const reserve = internalMutation({
   args: {
@@ -22,6 +27,7 @@ export const reserve = internalMutation({
       v.literal("ignored_edit"),
       v.literal("rejected"),
     ),
+    signatureValid: v.boolean(),
     now: v.number(),
   },
   handler: async (ctx, args) => {
@@ -29,13 +35,26 @@ export const reserve = internalMutation({
       .query("webhookDeliveries")
       .withIndex("by_delivery_id", (q) => q.eq("deliveryId", args.deliveryId))
       .unique();
-    if (existing) return { duplicate: true, id: existing._id };
+    // A failed delivery used to be answered "duplicate" forever. GitHub reuses the same delivery
+    // id when it redelivers - automatically or from the Redeliver button - so one transient blip
+    // silently discarded the user's "@buildit review" comment with no error anywhere and no way
+    // to retry. A retry is only allowed once the failure has settled, so a redelivery arriving
+    // while the first attempt is still running is still deduplicated.
+    if (existing) {
+      const retryable = existing.status === "failed" && (existing.completedAt ?? 0) + failedRetryGraceMs <= args.now;
+      if (!retryable) return { duplicate: true, id: existing._id };
+      await ctx.db.patch(existing._id, { status: "received", disposition: args.disposition, completedAt: undefined, receivedAt: args.now });
+      return { duplicate: false, id: existing._id };
+    }
     const id = await ctx.db.insert("webhookDeliveries", {
       deliveryId: args.deliveryId,
       event: args.event,
       action: args.action,
       installationId: args.installationId,
-      signatureValid: true,
+      // The endpoint rejects an unsigned or wrongly signed request before reaching this
+      // mutation, so a stored delivery is signature-verified by construction. Recorded from
+      // the caller rather than hardcoded, so the column means what it says.
+      signatureValid: args.signatureValid,
       disposition: args.disposition,
       status: args.disposition === "processed" ? "received" : "completed",
       receivedAt: args.now,
@@ -271,7 +290,12 @@ export const materializeReview = internalMutation({
     const model = credential
       ? selectProviderModel(selectedProvider, credential.availableModels)
       : null;
-    const status = credential && model ? ("queued" as const) : ("blocked" as const);
+    // A webhook must not error on a tenant limit: GitHub would retry the delivery and the PR
+    // author would see nothing. Materialize the review as blocked so it is visible and retryable.
+    const organization = await ctx.db.get(args.organizationId);
+    const overConcurrency = Boolean(organization) && organization!.concurrencyLimit > 0
+      && concurrencyExceeded(await activeReviewCount(ctx, args.organizationId, organization!.concurrencyLimit), organization!.concurrencyLimit);
+    const status = overConcurrency ? ("blocked" as const) : credential && model ? ("queued" as const) : ("blocked" as const);
     const reviewId = await ctx.db.insert("reviews", {
       organizationId: args.organizationId,
       repositoryId: repository._id,
@@ -295,8 +319,8 @@ export const materializeReview = internalMutation({
       status,
       budgetLimit,
       budgetConsumed: 0,
-      statusReasonCode: credential ? undefined : "provider_credential_invalid",
-      nextActionCode: credential ? "none" : "reconnect_provider",
+      statusReasonCode: overConcurrency ? "concurrency_limit_reached" : credential ? undefined : "provider_credential_invalid",
+      nextActionCode: overConcurrency ? "retry_review" : credential ? "none" : "reconnect_provider",
       isStale: false,
       trustedRef: args.baseRef,
       trustedRefSha: delivery.baseSha,
@@ -436,6 +460,12 @@ export const reconcilePullRequestHead = internalMutation({
         isStale: true,
         staleSince: args.now,
         observedHeadSha: args.observedHeadSha.toLowerCase(),
+        // Terminal in the same mutation that bumps the generation. Without this the next
+        // assertActive throws, the workflow fails, and workflowCompleted returns on the
+        // generation mismatch without writing anything - leaving the review "In progress" forever.
+        ...(active ? { status: "cancelled" as const, statusReasonCode: "superseded_by_new_commit" as const,
+          nextActionCode: "start_new_review" as const, githubCheckConclusion: "neutral" as const,
+          currentStage: "complete" as const, completedAt: args.now } : {}),
         executionGeneration: active
           ? review.executionGeneration + 1
           : review.executionGeneration,
@@ -506,6 +536,12 @@ export const reconcileDefaultBranchPush = internalMutation({
       await ctx.db.patch(review._id, {
         isStale: true,
         staleSince: args.now,
+        status: "cancelled",
+        statusReasonCode: "superseded_by_new_commit",
+        nextActionCode: "start_new_review",
+        githubCheckConclusion: "neutral",
+        currentStage: "complete",
+        completedAt: args.now,
         executionGeneration: review.executionGeneration + 1,
         leaseOwner: undefined,
         leaseExpiresAt: undefined,

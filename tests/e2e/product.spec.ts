@@ -63,6 +63,13 @@ test("GitHub callback failures are visible and recoverable", async ({ page }) =>
   await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
 });
 
+test("the repository control points at the registered GitHub App", async ({ page }) => {
+  await page.goto("/setup/install");
+  const link = page.getByRole("link", { name: "Review access in GitHub" });
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute("href", "https://github.com/apps/buildit-agentic-review/installations/new");
+});
+
 test("production sign-in control reaches identity-only GitHub OAuth", async ({
   page,
 }) => {
@@ -234,4 +241,52 @@ test("the complete signed-out journey reports access and safety honestly", async
   await page.screenshot({ path: `.local/ui-evidence/members-${testInfo.project.name}.png`, fullPage: true });
 
   await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
+});
+
+// An unknown URL answered 200 with a body reading "Page not found", which is found as far as a
+// crawler, an uptime monitor or a link checker is concerned. The status could not be fixed in the
+// page: the root layout wraps children in <Suspense>, so Next commits the status when it flushes
+// the shell, before any route code runs. The Edge proxy decides it instead.
+test("an unknown address is a real 404, and every real page still is not", async ({ request }) => {
+  for (const path of ["/nonexistent-section", "/setup/nonexistent", "/repositories/extra/segments"]) {
+    expect((await request.get(path)).status(), `${path} should be 404`).toBe(404);
+  }
+  for (const path of ["/", "/reviews", "/notifications", "/setup/install", "/data-handling", "/sign-in", "/account"]) {
+    expect((await request.get(path)).status(), `${path} should be 200`).toBe(200);
+  }
+});
+
+test("the 404 page speaks in the product's voice and offers a way back", async ({ page }) => {
+  const response = await page.goto("/nonexistent-section");
+  expect(response?.status()).toBe(404);
+  await expect(page.getByRole("heading", { name: "That page does not exist" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Go to the overview" })).toBeVisible();
+});
+
+// script-src used to allow 'unsafe-inline' with no nonce, which is most of what a CSP is for.
+// The nonce only works on per-request renders: a statically prerendered page is built when there
+// is no request and so has no nonce to stamp, which is why the first attempt blocked its own
+// hydration. If a script ever loses its nonce, 'strict-dynamic' blocks it and the app stops
+// working - so this asserts both the policy and that the page still runs under it.
+test("inline script is allowed only by nonce, and the page still hydrates under it", async ({ page }) => {
+  const violations: string[] = [];
+  page.on("console", message => { if (/Content Security Policy/i.test(message.text())) violations.push(message.text()); });
+
+  const response = await page.goto("/");
+  const policy = response?.headers()["content-security-policy"] ?? "";
+  const scriptSrc = policy.split("; ").find(part => part.startsWith("script-src ")) ?? "";
+  expect(scriptSrc).toMatch(/^script-src 'nonce-[A-Za-z0-9+/=]+' 'strict-dynamic'$/);
+  expect(scriptSrc).not.toContain("unsafe-inline");
+  expect(scriptSrc).not.toContain("unsafe-eval");
+
+
+  // Content rendered by client hydration: proof the policy did not block the app's own scripts.
+  await expect(page.getByRole("heading", { name: "Give your technical lead proof before a pull request is merged." })).toBeVisible();
+  expect(violations).toEqual([]);
+});
+
+test("a second request gets a different nonce", async ({ page }) => {
+  const first = (await page.goto("/"))?.headers()["content-security-policy"] ?? "";
+  const second = (await page.goto("/reviews"))?.headers()["content-security-policy"] ?? "";
+  expect(/'nonce-([^']+)'/.exec(first)?.[1]).not.toBe(/'nonce-([^']+)'/.exec(second)?.[1]);
 });

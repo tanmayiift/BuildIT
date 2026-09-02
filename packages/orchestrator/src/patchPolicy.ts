@@ -4,7 +4,7 @@ export type PatchProposal = { path: string; rationale: string; findingIds: strin
 export type PatchSource = { path: string; content: string; contentHash: string };
 export type ValidatedPatch = PatchProposal & { previousContent: string };
 
-const protectedPath = /^(?:\.github\/|\.gitlab\/|\.circleci\/|\.vercel\/|migrations?\/|db\/migrations?\/|terraform\/|infra\/)|(?:^|\/)(?:CODEOWNERS|Dockerfile(?:\..*)?|vercel\.json|package(?:-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|pyproject\.toml|requirements(?:-[^.\/]+)?\.txt|poetry\.lock|pom\.xml|build\.gradle(?:\.kts)?|go\.(?:mod|sum)|Cargo\.(?:toml|lock)|\.env(?:\..*)?)$/i;
+const protectedPath = /^(?:\.github\/|\.gitlab\/|\.circleci\/|\.vercel\/|migrations?\/|db\/migrations?\/|terraform\/|infra\/|tests?\/|__tests__\/|spec\/|scripts\/)|(?:^|\/)(?:__tests__|__mocks__)\/|\.(?:test|spec)\.[cm]?[jt]sx?$|_test\.(?:go|py|rb)$|(?:^|\/)(?:CODEOWNERS|vitest\.config\.[cm]?[jt]s|jest\.config\.[cm]?[jt]s|playwright\.config\.[cm]?[jt]s|tsconfig(?:\..*)?\.json|Makefile|Dockerfile(?:\..*)?|vercel\.json|package(?:-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|pyproject\.toml|requirements(?:-[^.\/]+)?\.txt|poetry\.lock|pom\.xml|build\.gradle(?:\.kts)?|go\.(?:mod|sum)|Cargo\.(?:toml|lock)|\.env(?:\..*)?)$/i;
 const secretPattern = /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(?:api[_-]?key|secret|token|password)\s*[:=]\s*["'][A-Za-z0-9_\-/.+=]{16,}["']/i;
 const safePath = (path: string) => path.length > 0 && path.length <= 500 && !path.startsWith("/") && !path.includes("\0") && !path.split("/").includes("..") && !path.startsWith(".git/");
 export const contentHash = (content: string) => createHash("sha256").update(content).digest("hex");

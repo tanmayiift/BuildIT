@@ -4,6 +4,7 @@ import { requireRepositoryRole } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { terminalStatuses } from "./lib/lifecycle";
+import { activeReviewCount, concurrencyExceeded } from "./lib/tenantLimits";
 import { selectProviderModel, type ProviderName } from "@buildit/providers";
 
 const supportedProviders: ProviderName[] = ["anthropic", "openai", "gemini"];
@@ -60,15 +61,7 @@ export const cancellationScope = internalQuery({
     return {
       actorId: access.userId,
       workflowId: review.workflowId,
-      terminal: [
-        "passed",
-        "changes_requested",
-        "inconclusive",
-        "failed_after_bounds",
-        "budget_exhausted",
-        "cancelled",
-        "platform_failed",
-      ].includes(review.status),
+      terminal: terminalStatuses.has(review.status),
     };
   },
 });
@@ -101,6 +94,15 @@ export const create = internalMutation({
     if (!credential || credential.credentialScopeId !== args.expectedCredentialScopeId) throw new ConvexError("provider_credential_changed_review_again");
     const model = selectProviderModel(credential.provider, credential.availableModels);
     if (!model) throw new ConvexError("provider_credential_invalid");
+    // The organization's concurrency limit was stored but never enforced, so one tenant could
+    // hold unbounded sandbox and broker capacity. Counted per organization, not per repository,
+    // and checked last so a misconfigured repository still reports its own fault first.
+    const organization = await ctx.db.get(repository.organizationId);
+    if (!organization) throw new ConvexError("not_found_or_forbidden");
+    if (organization.concurrencyLimit > 0) {
+      const active = await activeReviewCount(ctx, repository.organizationId, organization.concurrencyLimit);
+      if (concurrencyExceeded(active, organization.concurrencyLimit)) throw new ConvexError("organization_concurrency_limit_reached");
+    }
     const reviewId = await ctx.db.insert("reviews", { organizationId: repository.organizationId, repositoryId: repository._id,
       githubRepositoryId: repository.githubRepositoryId, prNumber: args.prNumber, isFork: args.isFork, baseRef: args.baseRef,
       baseSha: args.baseSha, headSha: args.headSha, requiredCheckPolicy: "fail_closed", completedRoundCount: 0, patchAttemptCount: 0,

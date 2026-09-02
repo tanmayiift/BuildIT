@@ -124,6 +124,12 @@ export const execute = reviewWorkflowManager.define({
           }else{
             await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"failed"});
             await step.runMutation(internal.reviewAutofixData.failPlatform,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration,code:error instanceof Error?error.message:"autofix_failed",now:args.startedAt+index+3});
+            // Publish it. This branch used to end here, and because autofix is the last stage the
+            // workflow then returned success - so workflowCompleted, which only publishes on a
+            // failed result, wrote nothing. The pull request author saw "BuildIT is reviewing"
+            // simply stop, with nothing on GitHub: the worst failure mode for a product whose
+            // whole value is evidence on the pull request.
+            await step.runAction(internal.reviewPublicationWorker.publishPlatformFailure,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});
           }
         }
       }else{

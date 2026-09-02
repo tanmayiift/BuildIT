@@ -1,27 +1,7 @@
 import type { NextConfig } from "next";
 
-// React's development build needs eval() for callstack reconstruction and Fast Refresh.
-// Production keeps the stricter policy; this relaxation never reaches a deployed build.
-const developmentOnlyScriptSources = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
-
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  `script-src 'self' 'unsafe-inline'${developmentOnlyScriptSources}`,
-  "style-src 'self' 'unsafe-inline'",
-  "font-src 'self'",
-  "img-src 'self' data:",
-  "connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://buildit-content-broker.vercel.app",
-  "worker-src 'self' blob:",
-  "manifest-src 'self'",
-  "upgrade-insecure-requests",
-].join("; ");
-
 const securityHeaders = [
-  { key: "Content-Security-Policy", value: contentSecurityPolicy },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
   { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
@@ -33,6 +13,8 @@ const securityHeaders = [
 
 const config: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
+  // X-Powered-By: Next.js names the framework and version to anyone scanning.
+  poweredByHeader: false,
   devIndicators: false,
   async headers() {
     return [{ source: "/:path*", headers: [...securityHeaders] }];

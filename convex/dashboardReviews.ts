@@ -45,7 +45,7 @@ async function snapshot(scope: { installationId: number; githubRepositoryId: num
     const pinned = pinPullRequest({ number: pull.number ?? prNumber, head: { sha: pull.head?.sha ?? "", ref: pull.head?.ref ?? "", repoFullName: pull.head?.repo?.full_name ?? null }, base: { sha: pull.base?.sha ?? "", ref: pull.base?.ref ?? "", repoFullName: pull.base?.repo?.full_name ?? "" } });
     const policy = reviewPolicy(pinned, "review", scope.forkPolicy); if (!policy.allowed) throw new Error(policy.reason);
     return { ...pinned, title: (pull.title ?? "Untitled pull request").slice(0, 500), url: pull.html_url ?? "", changedFiles: pull.changed_files ?? 0, additions: pull.additions ?? 0, deletions: pull.deletions ?? 0 };
-  } finally { client.revoke(tokenScope); }
+  } finally { await client.revoke(tokenScope); }
 }
 
 export const prepare = action({ args, handler: async (ctx, input): Promise<PreparedReview> => {

@@ -99,6 +99,8 @@ const reasonLabels: Record<string, string> = {
   user_cancelled: "A person stopped this run before it reached a decision.",
   blocked_expired: "The blocked review expired before access was restored.",
   spend_ceiling_reached: "The review stopped before exceeding its approved model budget.",
+  concurrency_limit_reached: "Your workspace already has as many reviews running as its limit allows. This one starts when an earlier review finishes.",
+  superseded_by_new_commit: "A newer commit replaced the one this review was pinned to. Start a review at the current commit.",
   provider_rate_limited: "The model provider was rate-limited. No code decision was made.",
   platform_error: "BuildIT stopped before it could make a code decision.",
   delivery_complete: "The tested candidate is ready for human inspection.",

@@ -50,9 +50,11 @@ export function safeSignInReturnPath(requested: string | null | undefined) {
   if (!requested?.startsWith("/") || requested.startsWith("//")) return "/";
   try {
     const resolved = new URL(requested, "https://buildit.invalid");
-    return resolved.origin === "https://buildit.invalid"
-      ? `${resolved.pathname}${resolved.search}${resolved.hash}`
-      : "/";
+    if (resolved.origin !== "https://buildit.invalid") return "/";
+    const path = `${resolved.pathname}${resolved.search}${resolved.hash}`;
+    // The resolved path, not the requested one: "/..//evil.com" resolves to "//evil.com", which
+    // a browser treats as a protocol-relative URL pointing at another host.
+    return path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\") ? path : "/";
   } catch {
     return "/";
   }

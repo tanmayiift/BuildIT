@@ -12,7 +12,18 @@ export async function envelopeEncryptSecret(plaintext:string,scope:CredentialAad
  const generated=await kms.generateDataKey({keyId:kmsKeyId,encryptionContext:kmsContext(scope)}),dataKey=Buffer.from(generated.plaintextKey);
  try{return{...encryptSecret(plaintext,dataKey,credentialAad(scope),keyVersion),wrappedDataKey:Buffer.from(generated.encryptedKey).toString("base64"),kmsKeyId,envelopeVersion:1}}finally{dataKey.fill(0);generated.plaintextKey.fill(0)}
 }
-export async function envelopeDecryptSecret(value:EnvelopeCiphertext,scope:CredentialAadScope,kms:KmsClient):Promise<string>{
+// kmsKeyId is typed as a plain string in the schema with no format check, and it flows from a row
+// an organization admin supplied straight into kms.decryptDataKey({ keyId }). Without this the
+// broker's IAM role would attempt Decrypt against whatever key ARN that row names - contained by
+// IAM, but an unvalidated confused-deputy input. The deployment's own key is the only one
+// accepted, and the parameter is required so no decrypt path can skip the check.
+export function assertKmsKeyId(keyId:string,expected:string){
+ if(!keyId||keyId!==expected)throw new Error("kms_key_id_refused");
+ return keyId;
+}
+
+export async function envelopeDecryptSecret(value:EnvelopeCiphertext,scope:CredentialAadScope,kms:KmsClient,expectedKeyId:string):Promise<string>{
+ assertKmsKeyId(value.kmsKeyId,expectedKeyId);
  if(value.envelopeVersion!==1||!value.wrappedDataKey||!value.kmsKeyId)throw new Error("invalid_envelope");
  const plaintextKey=await kms.decryptDataKey({keyId:value.kmsKeyId,encryptedKey:Buffer.from(value.wrappedDataKey,"base64"),encryptionContext:kmsContext(scope)}),dataKey=Buffer.from(plaintextKey);
  try{return decryptSecret(value,dataKey,credentialAad(scope))}finally{dataKey.fill(0);plaintextKey.fill(0)}
@@ -22,18 +33,40 @@ export async function rotateEnvelope(value:EnvelopeCiphertext,scope:CredentialAa
  const wrapped=await kms.rewrapDataKey({sourceKeyId:value.kmsKeyId,destinationKeyId,encryptedKey:Buffer.from(value.wrappedDataKey,"base64"),encryptionContext:kmsContext(scope)});
  return{...value,wrappedDataKey:Buffer.from(wrapped).toString("base64"),kmsKeyId:destinationKeyId,keyVersion:nextKeyVersion};
 }
-const patterns=[/\b(?:sk-ant-|sk-proj[-_]|gh[opsu]_)[A-Za-z0-9_-]{8,}\b/g,/\bAIza[0-9A-Za-z_-]{30,}\b/g,/\bAKIA[A-Z0-9]{16}\b/g,/-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----/g];
-export function redact(input:string){return patterns.reduce((v,p)=>v.replace(p,"[REDACTED]"),input)}
-const modelSecretPatterns=[
-  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
+// One shared list. redact and redactForModel drifted apart: redactForModel made the PEM label
+// optional and redact never followed, so the unlabeled PKCS#8 header that GitHub App keys and
+// openssl genpkey emit passed through redact in cleartext. redact is the weaker of the two and is
+// the one applied to customer CI stdout and to all model output, which flows to Anthropic, OpenAI
+// and Google and into report.md - posted as a public pull request comment. BuildIT does not
+// create such a leak, but it turns a private CI leak into a third-party and public one.
+const secretPatterns = [
+  // github_pat_ has an "i" as its third character, so gh[opsu]_ never matched a fine-grained
+  // token - every one of them was invisible to both helpers, in a GitHub product.
+  /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
   /\b(?:sk-ant-|sk-proj[-_]|gh[opsu]_)[A-Za-z0-9_-]{8,}\b/g,
+  // Classic OpenAI keys, which carry no -proj or -ant marker.
+  /\bsk-[A-Za-z0-9]{32,}\b/g,
+  /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/g,
+  /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
+  // A signed JWT is a bearer credential whether or not it is labelled as one.
+  /\beyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}\b/g,
+  // Credentials embedded in a connection string, which is how they reach CI logs.
+  /:\/\/[^:@/\s]+:[^@/\s]{8,}@/g,
   /\bAIza[0-9A-Za-z_-]{30,}\b/g,
   /\bAKIA[A-Z0-9]{16}\b/g,
+  // [A-Z ]* not [A-Z ]+: the unlabeled PKCS#8 header has nothing between BEGIN and PRIVATE.
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
   /\bBearer\s+[A-Za-z0-9._~+/-]{16,}={0,2}\b/gi,
-  /\b(?:api[_-]?key|token|access[_-]?token|auth[_-]?token|client[_-]?secret|password)\s*[:=]\s*["']?[A-Za-z0-9_./+@:$=-]{16,}["']?/gi,
+  /\b(?:api[_-]?key|token|access[_-]?token|auth[_-]?token|client[_-]?secret|password)\s*[:=]\s*["\']?[A-Za-z0-9_./+@:$=-]{16,}["\']?/gi,
 ];
-export function redactForModel(input:string){return modelSecretPatterns.reduce((value,pattern)=>value.replace(pattern,match=>"[REDACTED]"+"\n".repeat((match.match(/\n/g)??[]).length)),input)}
+export function redact(input:string){return secretPatterns.reduce((value,pattern)=>value.replace(pattern,"[REDACTED]"),input)}
+// Same patterns, but line count is preserved so a redaction cannot shift the line numbers a
+// finding cites.
+export function redactForModel(input:string){return secretPatterns.reduce((value,pattern)=>value.replace(pattern,match=>"[REDACTED]"+"\n".repeat((match.match(/\n/g)??[]).length)),input)}
 export function fingerprint(value:string,key:Buffer){return createHmac("sha256",key).update(value).digest("hex")}
+// The GitHub egress boundary is report.ts:safe, which redacts and escapes Markdown link syntax.
+// This helper remains for any other path that writes GitHub-rendered content; it must never be
+// the only thing standing between model output and a public comment.
 export function sanitizeGitHub(input:string){return redact(input).replace(/@/g,"＠").replace(/<img[^>]*>/gi,"").replace(/<script[\s\S]*?<\/script>/gi,"")}
 export { AwsKmsClient } from "./aws-kms.js";
 export * from "./artifact-grant.js";

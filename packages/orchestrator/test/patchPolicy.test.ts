@@ -23,3 +23,29 @@ describe("Autofix patch policy", () => {
 });
 describe("Autofix termination bounds",()=>{it("returns only the next bounded round",()=>expect(assertAutofixBounds({completedRounds:1,modelAttempts:3,startedAt:1_000,now:2_000,budgetConsumed:1,budgetLimit:5})).toMatchObject({roundNumber:2,remainingAttempts:3}));it.each([[3,0,"autofix_round_limit"],[0,6,"autofix_attempt_limit"]])("rejects rounds %s and attempts %s",(completedRounds,modelAttempts,error)=>expect(()=>assertAutofixBounds({completedRounds,modelAttempts,startedAt:1_000,now:2_000,budgetConsumed:1,budgetLimit:5})).toThrow(error));it("rejects expired time and exhausted spend",()=>{expect(()=>assertAutofixBounds({completedRounds:0,modelAttempts:0,startedAt:1,now:45*60_000+2,budgetConsumed:0,budgetLimit:5})).toThrow("autofix_time_limit");expect(()=>assertAutofixBounds({completedRounds:0,modelAttempts:0,startedAt:1,now:2,budgetConsumed:5,budgetLimit:5})).toThrow("autofix_spend_limit")});it("prices usage with a conservative provider ceiling",()=>expect(conservativeModelCost(1_000_000,1_000_000)).toBe(90));it("reserves fixed request overhead before a model call",()=>expect(conservativeStageCost(1_000,800)).toBe(conservativeModelCost(5_096,800)))});
 describe("Autofix worsening rollback",()=>{const passed={planId:"test",required:true,conclusion:"passed" as const},failed={...passed,conclusion:"failed" as const};it("rejects a newly failed or inconclusive required check",()=>{expect(candidateWorsened({parent:[passed],candidate:[failed],parentCriticalFindings:0,candidateCriticalFindings:0})).toMatchObject({worsened:true,reason:"required_check_regressed:test"});expect(candidateWorsened({parent:[failed],candidate:[{...failed,conclusion:"timed_out"}],parentCriticalFindings:0,candidateCriticalFindings:0}).worsened).toBe(true)});it("rejects new critical scanner findings",()=>expect(candidateWorsened({parent:[failed],candidate:[passed],parentCriticalFindings:0,candidateCriticalFindings:1})).toEqual({worsened:true,reason:"critical_scanner_increase"}));it("allows a stable failure or improvement",()=>{expect(candidateWorsened({parent:[failed],candidate:[failed],parentCriticalFindings:1,candidateCriticalFindings:1}).worsened).toBe(false);expect(candidateWorsened({parent:[failed],candidate:[passed],parentCriticalFindings:1,candidateCriticalFindings:0}).worsened).toBe(false)})});
+
+
+// Delivery is gated on the runner's verdict, and candidateWorsened only detects regressions - so
+// a required check flipping failed to passed because its assertions were deleted scores as an
+// improvement and drives a stacked pull request with a success conclusion. Autofix must not be
+// able to edit the thing that decides whether Autofix worked. The only instruction against it was
+// prose in the stage prompt, which is not enforcement.
+describe("Autofix cannot edit its own gate", () => {
+  const patch = (path: string) => () => validatePatchProposals({
+    proposals: [{ ...proposal, path }],
+    sources: [{ path, content: source, contentHash: hash }],
+    acceptedFindingIds: accepted,
+  });
+
+  const blocked = [
+    "src/guard.test.ts", "src/guard.spec.tsx", "tests/e2e/login.ts", "packages/api/__tests__/auth.ts",
+    "spec/models/user.rb", "internal/server_test.go", "app/views_test.py",
+    "vitest.config.ts", "jest.config.js", "playwright.config.ts", "tsconfig.json", "apps/web/tsconfig.build.json",
+    "Makefile", "scripts/ci.sh",
+  ];
+  for (const path of blocked) it(`refuses a patch to ${path}`, () => expect(patch(path)).toThrow("patch_path_protected"));
+
+  // Words that merely contain "test" or "spec" are ordinary source and must stay editable.
+  const allowed = ["src/guard.ts", "src/testing.ts", "src/protest.ts", "src/components/Test.tsx", "src/inspector.ts"];
+  for (const path of allowed) it(`still allows a patch to ${path}`, () => expect(patch(path)).not.toThrow());
+});

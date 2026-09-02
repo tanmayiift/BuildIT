@@ -97,8 +97,13 @@ export const finalizeDecision = internalMutation({
     // Record which condition made the evidence incomplete. Without this the review ends as a
     // flat "required check missing" and the real cause — partial context, a missing artifact,
     // a flaky rerun — is unrecoverable afterwards.
-    let incompleteReason: "coverage_partial" | "no_required_check" | "evidence_missing" | "conclusion_unusable" | undefined;
-    if (review.coverageLevel !== "full") incompleteReason = "coverage_partial";
+    let incompleteReason: "injection_unscoped" | "coverage_partial" | "no_required_check" | "evidence_missing" | "conclusion_unusable" | undefined;
+    // An injection signal that could not be attributed to a changed file downgraded every critic
+    // decision to uncertain, which made blocking false, which landed the review on checks_passed
+    // with a green check. The verdict has to fail closed: an unscoped signal means BuildIT does
+    // not know whether it reviewed the code or the attacker's instructions.
+    if (review.promptInjectionUnscopedAt) incompleteReason = "injection_unscoped";
+    else if (review.coverageLevel !== "full") incompleteReason = "coverage_partial";
     else if (!checks.some(item => item.required)) incompleteReason = "no_required_check";
     let failed = false;
     for (const check of checks.filter(item => item.required)) {

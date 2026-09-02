@@ -1,13 +1,14 @@
 import { registerOTel } from "@vercel/otel";
 import { recordOperation, safeLog, traced, type OperationName } from "@buildit/telemetry";
 import { flushBuildITMetrics, registerBuildITMetrics } from "@buildit/telemetry/register";
+import { scrubUrlSpanProcessor } from "@buildit/telemetry/scrub";
 
 let registered = false;
 
 export function registerBrokerTelemetry() {
   if (registered) return;
   registered = true;
-  registerOTel({ serviceName: "buildit-content-broker" });
+  registerOTel({ serviceName: "buildit-content-broker", spanProcessors: [scrubUrlSpanProcessor()] });
   registerBuildITMetrics("buildit-content-broker");
 }
 

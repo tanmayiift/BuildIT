@@ -2,6 +2,11 @@ export const terminalStatuses = new Set([
   "checks_passed", "changes_requested", "inconclusive", "delivered",
   "failed_after_bounds", "cancelled", "budget_exhausted", "platform_failed",
 ]);
+export const activeStatuses = [
+  "queued", "gathering_context", "analyzing", "validating", "autofix_queued",
+  "autofixing", "validating_round", "validating_final", "cancelling", "blocked",
+] as const;
+
 const interruptible = new Set([
   "queued", "gathering_context", "analyzing", "validating", "autofix_queued",
   "autofixing", "validating_round", "validating_final",

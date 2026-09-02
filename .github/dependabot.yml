@@ -1,0 +1,12 @@
+# A mutable tag is resolved at run time, so pinning to a commit SHA is what actually decides which
+# code runs. gitleaks-action ran on a floating v2 in a job that has GITHUB_TOKEN in env and, via
+# fetch-depth: 0, the repository's complete history - precisely the material that job exists to
+# scan. Pinning alone would freeze the actions at today's code, so Dependabot proposes the SHA
+# bumps as reviewable pull requests.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

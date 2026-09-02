@@ -13,3 +13,8 @@ docs/
 apps/web/.next/
 **/dist/
 **/*.tsbuildinfo
+
+# .vercelignore replaces .gitignore for deployment uploads, so every secret file has to be
+# named here even though .gitignore already covers it.
+.env*
+!.env.example

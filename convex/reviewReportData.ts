@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
+import { totalCostUsd } from "./lib/usageCost";
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
 
@@ -20,7 +21,7 @@ export const reportScope = internalQuery({
     const usage = await ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
     return { organizationId: review.organizationId, repositoryId: review.repositoryId, reviewId: review._id, repository: `${repository.owner}/${repository.name}`, prNumber: review.prNumber,
       headSha: review.headSha, baseSha: review.baseSha, configRevision: String(review.configRevisionId), coverage: review.coverageLevel === "full" ? "complete" as const : "partial" as const,
-      environmentAvailable: true, isStale: review.isStale, expiresAt: review.expiresAt, costUsd: usage.reduce((sum, item) => sum + item.quantity * item.unitCost, 0),
+      environmentAvailable: true, isStale: review.isStale, expiresAt: review.expiresAt, costUsd: totalCostUsd(usage),
       analysis: { id: analysis._id, storageKey: analysis.storageKey, checksum: analysis.checksum, size: analysis.size }, validation: { id: validation._id, storageKey: validation.storageKey, checksum: validation.checksum, size: validation.size },
       ...(completed ? { completedArtifactId: completed._id } : {}) };
   },

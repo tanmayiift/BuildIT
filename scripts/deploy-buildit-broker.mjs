@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { aliasArgs, assertAliasMatches, assertProbeOk, deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, resolveDeployLink } from "./deploy-buildit-web.mjs";
+import { aliasArgs, assertAliasMatches, assertProbeOk, deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, probeWithRetry, resolveDeployLink } from "./deploy-buildit-web.mjs";
 
 const expected = Object.freeze({
   projectId: "prj_tacCioktOE1TKZwHcq0Hxu9VYOU0",
@@ -64,10 +64,10 @@ async function main() {
   assertAliasMatches({ aliasTarget, deploymentUrl });
 
   const probeUrl = `https://${expected.productionAlias}${expected.probePath}`;
-  const response = await fetch(probeUrl, { redirect: "follow" });
-  assertProbeOk({ status: response.status, url: probeUrl });
+  const probeStatus = await probeWithRetry(probeUrl);
+  assertProbeOk({ status: probeStatus, url: probeUrl });
 
-  console.log(JSON.stringify({ released: true, deploymentUrl, alias: expected.productionAlias, probe: probeUrl, probeStatus: response.status }));
+  console.log(JSON.stringify({ released: true, deploymentUrl, alias: expected.productionAlias, probe: probeUrl, probeStatus }));
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

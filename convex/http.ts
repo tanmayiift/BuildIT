@@ -2,6 +2,7 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { auth } from "./auth";
+import { validSignature } from "./lib/webhookSignature";
 
 const http = httpRouter();
 auth.addHttpRoutes(http);
@@ -16,7 +17,7 @@ http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(a
   const pullRequest = payload.pull_request as { number?: unknown; head?: { sha?: unknown } } | undefined;
   const pushRef = payload.ref, pushAfter = payload.after;
   const disposition = sender?.type === "Bot" ? "ignored_bot" : action === "edited" ? "ignored_edit" : "processed";
-  const reserved = await ctx.runMutation(internal.githubWebhookData.reserve, { deliveryId, event, action, installationId: typeof installation?.id === "number" ? installation.id : undefined, disposition, now: Date.now() });
+  const reserved = await ctx.runMutation(internal.githubWebhookData.reserve, { deliveryId, event, action, installationId: typeof installation?.id === "number" ? installation.id : undefined, disposition, signatureValid: true, now: Date.now() });
   if (reserved.duplicate) return new Response("duplicate", { status: 202 });
   if (disposition !== "processed") return new Response("ignored", { status: 202 });
   if (event === "issue_comment" && issue?.pull_request && typeof issue.number === "number" && Number.isInteger(issue.number) && issue.number > 0 && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof sender?.login === "string" && typeof sender.type === "string" && typeof comment?.body === "string") {
@@ -29,12 +30,4 @@ http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(a
   return new Response("accepted", { status: 202 });
 }) });
 
-async function validSignature(body: ArrayBuffer, header: string, secret: string) {
-  if (!/^sha256=[0-9a-f]{64}$/i.test(header)) return false;
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, body)), actual = Uint8Array.from(header.slice(7).match(/../g) ?? [], value => Number.parseInt(value, 16));
-  if (actual.length !== digest.length) return false;
-  let mismatch = 0; for (let index = 0; index < actual.length; index++) mismatch |= actual[index]! ^ digest[index]!;
-  return mismatch === 0;
-}
 export default http;
