@@ -199,6 +199,9 @@ importers:
 
   packages/evaluations:
     dependencies:
+      '@buildit/cli':
+        specifier: workspace:*
+        version: link:../../apps/cli
       hyparquet:
         specifier: 1.29.2
         version: 1.29.2

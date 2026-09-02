@@ -3,6 +3,7 @@ import {
   credentialStatus,
   environmentKey,
   providerFrom,
+  readCredential,
   revokeCredential,
   saveCredential,
   type Runner,
@@ -59,5 +60,42 @@ describe("CLI credential boundary", () => {
       expect(() =>
         saveCredential("gemini", key, { platform: "darwin", run: vi.fn() }),
       ).toThrow("invalid_key_format");
+  });
+});
+
+// The key was written to the keychain and could only be checked for presence, so every other
+// internal tool needed the same secret pasted into its own environment again.
+describe("one key, read by whatever needs it", () => {
+  const secret = "sk-proj-long-enough-secret-value";
+
+  it("reads the key `buildit configure` stored, on macOS", () => {
+    const calls: string[][] = [];
+    const value = readCredential("openai", {
+      platform: "darwin", environment: {},
+      read: (command, args) => { calls.push([command, ...args]); return { status: 0, stdout: `${secret}\n` }; },
+    });
+    expect(value).toBe(secret);
+    // The same service name `saveCredential` writes under, or it would read nothing.
+    expect(calls[0]).toEqual(["security", "find-generic-password", "-a", "default", "-s", "dev.buildit.model-key.openai", "-w"]);
+  });
+
+  it("reads it on Linux", () => {
+    expect(readCredential("openai", {
+      platform: "linux", environment: {}, read: () => ({ status: 0, stdout: secret }),
+    })).toBe(secret);
+  });
+
+  it("prefers an explicit environment key over the stored one", () => {
+    const environmentSecret = "env-supplied-secret-value";
+    expect(readCredential("openai", {
+      platform: "darwin", environment: { OPENAI_API_KEY: environmentSecret },
+      read: () => { throw new Error("keychain must not be consulted"); },
+    })).toBe(environmentSecret);
+  });
+
+  it("returns nothing rather than a fragment when the keychain has no entry", () => {
+    expect(readCredential("openai", { platform: "darwin", environment: {}, read: () => ({ status: 1, stdout: "" }) })).toBeUndefined();
+    expect(readCredential("openai", { platform: "darwin", environment: {}, read: () => ({ status: 0, stdout: "short\n" }) })).toBeUndefined();
+    expect(readCredential("openai", { platform: "win32", environment: {}, read: () => ({ status: 0, stdout: secret }) })).toBeUndefined();
   });
 });

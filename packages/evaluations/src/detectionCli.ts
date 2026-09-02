@@ -9,20 +9,32 @@ import { runDetectionSuite, type StageInvoker } from "./detectionRunner.js";
 // flakes gets switched off. Run it before a release and when a prompt or the chain changes, and
 // keep the report: a rate that moves is the signal, not any single run.
 //
+//   pnpm eval:detection                              (uses the key `buildit configure` stored)
 //   OPENAI_API_KEY=… pnpm eval:detection            (or ANTHROPIC_API_KEY / GEMINI_API_KEY)
+//   BUILDIT_EVAL_PROVIDER=openai pnpm eval:detection (when more than one key is configured)
 //   pnpm eval:detection --out docs/evidence/detection-<date>.json
 
-function providerFromEnv() {
-  if (process.env.ANTHROPIC_API_KEY) return { provider: "anthropic" as const, model: "claude-sonnet-4-5", key: process.env.ANTHROPIC_API_KEY };
-  if (process.env.OPENAI_API_KEY) return { provider: "openai" as const, model: "gpt-5", key: process.env.OPENAI_API_KEY };
-  if (process.env.GEMINI_API_KEY) return { provider: "gemini" as const, model: "gemini-2.5-pro", key: process.env.GEMINI_API_KEY };
+const providers = [
+  { provider: "anthropic" as const, model: "claude-sonnet-4-5" },
+  { provider: "openai" as const, model: "gpt-5" },
+  { provider: "gemini" as const, model: "gemini-2.5-pro" },
+];
+
+async function chooseProvider() {
+  const { readCredential } = await import("@buildit/cli/credential-store");
+  const only = process.env.BUILDIT_EVAL_PROVIDER;
+  for (const candidate of providers) {
+    if (only && candidate.provider !== only) continue;
+    const key = readCredential(candidate.provider);
+    if (key) return { ...candidate, key };
+  }
   return undefined;
 }
 
 async function main() {
-  const chosen = providerFromEnv();
+  const chosen = await chooseProvider();
   if (!chosen) {
-    process.stderr.write("set ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY to run the detection suite\n");
+    process.stderr.write("no model key: run `buildit configure --provider openai --from-env` once, or set OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY for this run\n");
     process.exitCode = 2;
     return;
   }
