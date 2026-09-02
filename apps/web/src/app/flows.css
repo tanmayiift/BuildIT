@@ -114,3 +114,25 @@
 .stage-outcome { font-size: .78rem; padding: .1em .5em; border-radius: 999px; background: var(--success-bg); color: var(--success); }
 /* A repaired stage is the signal worth seeing: the model returned something the schema rejected. */
 .stage-outcome[data-outcome="schema_invalid"] { background: var(--warning-bg); color: var(--warning); }
+
+/* Run diff. Three columns because the question a person asks is three-way: what did the earlier
+   run find that this one did not, what did both find, and what is new. */
+.run-select { display: flex; flex-direction: column; gap: .35rem; margin-bottom: 1rem; }
+.run-select span { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.run-select select { min-height: 44px; max-width: 100%; padding: .45rem .6rem; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; font-weight: 600; }
+.run-diff-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .8rem; margin: 0 0 1rem; padding: .8rem; background: var(--surface-inset); border-radius: 8px; }
+.run-diff-summary dt { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.run-diff-summary dd { margin: .2rem 0 0; font-size: .9rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.run-diff-findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .7rem; margin-bottom: 1rem; }
+.run-diff-findings > div { padding: .7rem .8rem; border: 1px solid var(--line); border-radius: 8px; }
+.run-diff-findings h4 { margin: 0; font-size: .88rem; }
+.run-diff-findings p { margin: .25rem 0 0; color: var(--muted); font-size: .78rem; }
+.run-diff-findings ul { margin: .55rem 0 0; padding-left: 1rem; display: grid; gap: .3rem; font-size: .8rem; }
+.run-diff-findings span[data-tone] { font-weight: 700; }
+.run-diff-findings span[data-tone="danger"] { color: var(--danger); }
+.run-diff-findings span[data-tone="warning"] { color: var(--warning); }
+.run-diff-findings span[data-tone="success"] { color: var(--success); }
+/* A defect the earlier run reported and this one did not is the one worth the eye going to first. */
+.run-diff-findings > div[data-side="lost"] { border-color: #e2b8b2; background: var(--danger-bg); }
+.run-diff-findings > div[data-side="new"] { border-color: #c7d7ea; background: var(--navy-soft); }
+.run-diff-empty { color: var(--muted); font-size: .85rem; }
