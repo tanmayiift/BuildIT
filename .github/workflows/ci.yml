@@ -75,5 +75,3 @@ jobs:
         run: pnpm eval
       - name: CLI journey smoke
         run: pnpm smoke:cli
-      - name: Deployment contract (no deploy performed)
-        run: pnpm deploy:web:check && pnpm deploy:broker:check

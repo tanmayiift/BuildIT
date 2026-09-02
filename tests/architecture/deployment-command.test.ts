@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aliasArgs, assertAliasMatches, assertBuildITWebDeployContext, assertProbeOk,
-  deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl,
+  deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, resolveDeployLink,
 } from "../../scripts/deploy-buildit-web.mjs";
 import { assertBuildITBrokerDeployContext } from "../../scripts/deploy-buildit-broker.mjs";
 
@@ -131,5 +131,33 @@ describe("BuildIT broker deployment command", () => {
     expect(() => assertBuildITBrokerDeployContext({ cwd: repoRoot, repoRoot, link: { ...brokerLink, projectId: correctLink.projectId } })).toThrow("buildit_broker_deploy_project_refused");
     expect(() => assertBuildITBrokerDeployContext({ cwd: repoRoot, repoRoot, link: { ...brokerLink, projectName: "buildit-agentic-review" } })).toThrow("buildit_broker_deploy_name_refused");
     expect(() => assertBuildITBrokerDeployContext({ cwd: repoRoot, repoRoot, link: { ...brokerLink, orgId: "other" } })).toThrow("buildit_broker_deploy_team_refused");
+  });
+});
+
+describe("deploy link resolution", () => {
+  const readLink = () => JSON.stringify(correctLink);
+  const failRead = () => { throw new Error("ENOENT"); };
+
+  it("prefers the checked-out project link when one exists", () => {
+    expect(resolveDeployLink({ repoRoot, env: {}, readFile: readLink })).toEqual(correctLink);
+  });
+
+  // .vercel/project.json is gitignored, so a runner has no link file. Vercel's CI contract is
+  // VERCEL_PROJECT_ID / VERCEL_ORG_ID; without this the release job cannot deploy at all.
+  it("falls back to the Vercel CI environment contract", () => {
+    const link = resolveDeployLink({ repoRoot, env: { VERCEL_PROJECT_ID: correctLink.projectId, VERCEL_ORG_ID: correctLink.orgId }, readFile: failRead });
+    expect(link).toEqual(correctLink);
+    expect(assertBuildITWebDeployContext({ cwd: repoRoot, repoRoot, link })).toMatchObject({ projectName: "buildit-agentic-review" });
+  });
+
+  it("refuses to guess when neither a link file nor the environment is present", () => {
+    expect(() => resolveDeployLink({ repoRoot, env: {}, readFile: failRead })).toThrow("buildit_web_deploy_link_missing");
+    expect(() => resolveDeployLink({ repoRoot, env: { VERCEL_ORG_ID: correctLink.orgId }, readFile: failRead })).toThrow("buildit_web_deploy_link_missing");
+  });
+
+  // The id check stays the real guard: a wrong secret must still be refused before deploying.
+  it("still refuses a wrong project id supplied by the environment", () => {
+    const link = resolveDeployLink({ repoRoot, env: { VERCEL_PROJECT_ID: "prj_someone_else", VERCEL_ORG_ID: correctLink.orgId }, readFile: failRead });
+    expect(() => assertBuildITWebDeployContext({ cwd: repoRoot, repoRoot, link })).toThrow("buildit_web_deploy_project_refused");
   });
 });

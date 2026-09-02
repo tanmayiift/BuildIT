@@ -30,6 +30,19 @@ export function assertBuildITWebDeployContext({ cwd, repoRoot, link }) {
   };
 }
 
+// .vercel/project.json is gitignored, so a CI runner has no link file. Vercel's own CI
+// contract is VERCEL_PROJECT_ID / VERCEL_ORG_ID, so accept those as the link. The id checks
+// stay the real guard: a wrong secret is still refused before anything is deployed.
+export function resolveDeployLink({ repoRoot, env = process.env, readFile = readFileSync, expectedProjectName = expected.projectName }) {
+  try {
+    return JSON.parse(readFile(join(repoRoot, ".vercel/project.json"), "utf8"));
+  } catch {
+    const projectId = env.VERCEL_PROJECT_ID, orgId = env.VERCEL_ORG_ID;
+    if (!projectId || !orgId) throw new Error("buildit_web_deploy_link_missing");
+    return { projectId, orgId, projectName: expectedProjectName };
+  }
+}
+
 export function deployArgs(teamName = expected.teamName) {
   return ["deploy", "--prod", "--yes", "--scope", teamName];
 }
@@ -98,7 +111,7 @@ function vercel(args, cwd, env) {
 
 async function main() {
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const link = JSON.parse(readFileSync(join(repoRoot, ".vercel/project.json"), "utf8"));
+  const link = resolveDeployLink({ repoRoot });
   const contract = assertBuildITWebDeployContext({ cwd: process.cwd(), repoRoot, link });
   if (process.argv.includes("--dry-run")) {
     console.log(JSON.stringify({ valid: true, ...contract, deployStarted: false }));

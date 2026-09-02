@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { aliasArgs, assertAliasMatches, assertProbeOk, deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl } from "./deploy-buildit-web.mjs";
+import { aliasArgs, assertAliasMatches, assertProbeOk, deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, resolveDeployLink } from "./deploy-buildit-web.mjs";
 
 const expected = Object.freeze({
   projectId: "prj_tacCioktOE1TKZwHcq0Hxu9VYOU0",
@@ -44,7 +44,9 @@ function vercel(args, cwd, env) {
 
 async function main() {
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const link = JSON.parse(readFileSync(join(repoRoot, "packages/broker/.vercel/project.json"), "utf8"));
+  let link;
+  try { link = JSON.parse(readFileSync(join(repoRoot, "packages/broker/.vercel/project.json"), "utf8")); }
+  catch { link = resolveDeployLink({ repoRoot: join(repoRoot, "packages/broker"), expectedProjectName: expected.projectName }); }
   const contract = assertBuildITBrokerDeployContext({ cwd: process.cwd(), repoRoot, link });
   if (process.argv.includes("--dry-run")) {
     console.log(JSON.stringify({ valid: true, ...contract, deployStarted: false }));
