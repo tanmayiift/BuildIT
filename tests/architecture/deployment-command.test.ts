@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   aliasArgs, assertAliasMatches, assertBuildITWebDeployContext, assertProbeOk,
@@ -198,5 +199,33 @@ describe("release probe", () => {
   it("still fails when every attempt errors", async () => {
     const fetchImpl = async () => { throw new TypeError("fetch failed"); };
     await expect(probeWithRetry(url, fetchImpl, noWait)).rejects.toThrow("fetch failed");
+  });
+});
+
+// The Release workflow had never been run, and it would have failed on its first use: on a runner
+// there is no .vercel/project.json, and the shared VERCEL_PROJECT_ID / VERCEL_ORG_ID pair names
+// the web project - so the broker's link resolution returned the web project and its own guard
+// refused the release. CI never ran the deploy checks, so nothing caught it.
+describe("release runs on a runner with no link file", () => {
+  const failRead = () => { throw new Error("ENOENT"); };
+  const runnerEnv = { VERCEL_PROJECT_ID: correctLink.projectId, VERCEL_ORG_ID: correctLink.orgId };
+
+  it("resolves the web project from the CI environment", () => {
+    const link = resolveDeployLink({ repoRoot, env: runnerEnv, readFile: failRead });
+    expect(assertBuildITWebDeployContext({ cwd: repoRoot, repoRoot, link })).toMatchObject({ projectName: "buildit-agentic-review" });
+  });
+
+  // The broker must not resolve to the web project just because that pair is what CI exports.
+  it("does not let the web ids become the broker's link", () => {
+    expect(() => assertBuildITBrokerDeployContext({ cwd: repoRoot, repoRoot, link: { ...correctLink } }))
+      .toThrow("buildit_broker_deploy_project_refused");
+    expect(assertBuildITBrokerDeployContext({ cwd: repoRoot, repoRoot, link: brokerLink })).toMatchObject({ projectName: "buildit-content-broker" });
+  });
+
+  it("names both ids in the release workflow, so the check has something to resolve", () => {
+    const workflow = readFileSync(".github/workflows/release.yml", "utf8");
+    expect(workflow).toContain(`VERCEL_PROJECT_ID: ${correctLink.projectId}`);
+    expect(workflow).toContain(`VERCEL_ORG_ID: ${correctLink.orgId}`);
+    expect(workflow).toContain("secrets.VERCEL_TOKEN");
   });
 });

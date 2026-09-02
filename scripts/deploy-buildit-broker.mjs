@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { aliasArgs, assertAliasMatches, assertProbeOk, deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, probeWithRetry, resolveDeployLink } from "./deploy-buildit-web.mjs";
+import { aliasArgs, assertAliasMatches, assertProbeOk, deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, probeWithRetry } from "./deploy-buildit-web.mjs";
 
 const expected = Object.freeze({
   projectId: "prj_tacCioktOE1TKZwHcq0Hxu9VYOU0",
@@ -46,7 +46,11 @@ async function main() {
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   let link;
   try { link = JSON.parse(readFileSync(join(repoRoot, "packages/broker/.vercel/project.json"), "utf8")); }
-  catch { link = resolveDeployLink({ repoRoot: join(repoRoot, "packages/broker"), expectedProjectName: expected.projectName }); }
+  // On a runner there is no link file, and the shared VERCEL_PROJECT_ID / VERCEL_ORG_ID pair
+  // names the WEB project - so falling back to that made the broker refuse its own release.
+  // This script forces the CLI to its own project below, so the fallback uses the same
+  // committed constants the guard checks against.
+  catch { link = { projectId: expected.projectId, orgId: expected.orgId, projectName: expected.projectName }; }
   const contract = assertBuildITBrokerDeployContext({ cwd: process.cwd(), repoRoot, link });
   if (process.argv.includes("--dry-run")) {
     console.log(JSON.stringify({ valid: true, ...contract, deployStarted: false }));

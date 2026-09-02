@@ -24,6 +24,8 @@ concurrency:
 env:
   NEXT_PUBLIC_CONVEX_URL: https://judicious-barracuda-968.convex.cloud
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_PROJECT_ID: prj_rU8IPaf1laMTTmQEhGun9mRxXmGA
+  VERCEL_ORG_ID: team_0C3dsIfWxzBINeWinBvtOLMC
 
 jobs:
   # A release must never ship something the gates would have rejected.
