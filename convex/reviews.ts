@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireOrganizationRole, requireRepositoryRole } from "./lib/authz";
+import { totalCostUsd } from "./lib/usageCost";
 
 // These feed live subscriptions that re-execute on every matching write, so an unbounded read
 // re-reads a tenant's whole history each time and eventually crosses Convex's per-query read
@@ -50,12 +51,14 @@ export const getEvidence = query({
     const review = await ctx.db.get(args.reviewId);
     if (!review) throw new Error("not_found_or_forbidden");
     const access = await requireRepositoryRole(ctx, review.repositoryId, "viewer", review.organizationId);
-    const [requirements, findings, checks, rounds, events] = await Promise.all([
+    const [requirements, findings, checks, rounds, events, stageRuns, ledger] = await Promise.all([
       ctx.db.query("requirements").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
       ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
       ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
       ctx.db.query("autofixRounds").withIndex("by_review_round", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
       ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
+      ctx.db.query("modelStageRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
+      ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
     ]);
     return { review: { ...publicReview(review), baseSha: review.baseSha, baseRef: review.baseRef, mode: review.mode,
       statusReasonCode: review.statusReasonCode, trigger: review.trigger, provider: review.provider, model: review.model,
@@ -73,6 +76,12 @@ export const getEvidence = query({
         validationOutcome: item.validationOutcome, completedValidation: item.completedValidation, startedAt: item.startedAt, completedAt: item.completedAt })),
       events: events.map(item => ({ id: item._id, sequence: item.sequence, type: item.type, stage: item.stage,
         code: item.internalCode, hasPublicMessage: Boolean(item.publicMessageArtifactId), createdAt: item.createdAt })),
+      stages: stageRuns.map(item => ({ id: item._id, stage: item.stage, roundNumber: item.roundNumber,
+        provider: item.provider, model: item.model, attempt: item.attempt, outcome: item.outcome,
+        finishReason: item.finishReason, inputTokens: item.inputTokens, outputTokens: item.outputTokens,
+        promptVersion: item.promptVersion, createdAt: item.createdAt })),
+      spend: { costUsd: totalCostUsd(ledger), inputTokens: stageRuns.reduce((sum, item) => sum + item.inputTokens, 0),
+        outputTokens: stageRuns.reduce((sum, item) => sum + item.outputTokens, 0) },
     };
   },
 });

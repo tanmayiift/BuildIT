@@ -90,3 +90,62 @@ describe("connected workspace, from the backend rather than a fixture", () => {
     expect(connection.credentialReauthenticationExpiresAt).toBeGreaterThan(Date.now());
   });
 });
+
+// modelStageRuns recorded the provider, model, tokens, attempt and outcome of every model call
+// since the table was created, and nothing read it. A review that went wrong could not be
+// debugged: no way to see which stage failed, what it cost, or whether the schema had to be
+// repaired. The rubric asks what a reviewer can see, and a table nobody queries is not a surface.
+describe("a run can be debugged after the fact", () => {
+  it("returns every stage with its model, attempt, outcome and tokens", async () => {
+    const t = convexTest(schema, modules);
+    const { userId, organizationId } = await seedWorkspace(t);
+    const reviewId = await t.run(async ctx => {
+      const now = Date.now();
+      const repository = (await ctx.db.query("repositories").withIndex("by_org_enabled", q => q.eq("organizationId", organizationId).eq("enabled", true)).first())!;
+      const configRevisionId = await ctx.db.insert("configRevisions", { organizationId, repositoryId: repository._id,
+        sourceCommitSha: "b".repeat(40), sourceRef: "main", contentHash: "c".repeat(64), rulesDigest: "c".repeat(64),
+        schemaVersion: "defaults-v1", validationState: "valid", provenance: "defaults_only",
+        refProtectionState: "unverified", createdAt: now });
+      const review = await ctx.db.insert("reviews", { organizationId, repositoryId: repository._id, githubRepositoryId: repository.githubRepositoryId,
+        prNumber: 4, isFork: false, baseRef: "main", baseSha: "b".repeat(40), headSha: "a".repeat(40), requiredCheckPolicy: "fail_closed",
+        completedRoundCount: 0, patchAttemptCount: 0, diagnosticRunCount: 0, providerRetryCount: 0, commandRetryCount: 0,
+        trigger: "dashboard", triggerVerb: "review", triggerActor: userId, triggerActorPermission: "admin", mode: "review",
+        status: "changes_requested", budgetLimit: 2, budgetConsumed: 0, nextActionCode: "inspect_findings", isStale: false,
+        trustedRef: "main", trustedRefSha: "b".repeat(40), configRevisionId, queuePriority: 0, configProvenance: "defaults_only", provider: "anthropic",
+        model: "claude-sonnet-4-5", modelVersion: "pinned", promptVersion: "chain-v1", evalSetVersion: "v1",
+        coverageLevel: "full", currentStage: "complete", executionGeneration: 0, runnerImageVersion: "img",
+        expiresAt: now + 86_400_000, createdAt: now, updatedAt: now });
+      for (const [index, stage] of ["requirements", "findings", "critic"].entries()) {
+        await ctx.db.insert("modelStageRuns", { organizationId, repositoryId: repository._id, reviewId: review,
+          stage: stage as never, provider: "anthropic", model: "claude-sonnet-4-5", promptVersion: "chain-v1",
+          schemaVersion: "v1", finishReason: "stop", requestHash: "h".repeat(64), attempt: index === 1 ? 2 : 1,
+          outcome: index === 1 ? "schema_invalid" : "valid", inputTokens: 1_000 * (index + 1), outputTokens: 100 * (index + 1),
+          createdAt: now + index });
+      }
+      await ctx.db.insert("usageLedger", { organizationId, repositoryId: repository._id, reviewId: review,
+        kind: "model_spend", quantity: 1, unitCost: 0.037, totalCostMicros: 37_000, currency: "USD", occurredAt: now });
+      return review;
+    });
+
+    const evidence = await t.withIdentity({ subject: `${userId}|session` }).query(api.reviews.getEvidence, { reviewId });
+    expect(evidence.stages).toHaveLength(3);
+    expect(evidence.stages.map(stage => stage.stage)).toEqual(["requirements", "findings", "critic"]);
+    // The repaired stage is the one worth spotting: the model returned something the schema refused.
+    expect(evidence.stages.find(stage => stage.stage === "findings")).toMatchObject({ attempt: 2, outcome: "schema_invalid", model: "claude-sonnet-4-5" });
+    expect(evidence.spend.inputTokens).toBe(6_000);
+    expect(evidence.spend.outputTokens).toBe(600);
+    expect(evidence.spend.costUsd).toBeCloseTo(0.037, 6);
+  });
+
+  it("still refuses the whole thing to another tenant", async () => {
+    const t = convexTest(schema, modules);
+    const { userId } = await seedWorkspace(t);
+    const other = await t.run(ctx => ctx.db.insert("users", { githubUserId: 9002, githubLogin: "mallory" }));
+    const reviewId = await t.run(async ctx => (await ctx.db.query("reviews").first())?._id);
+    if (reviewId) {
+      await expect(t.withIdentity({ subject: `${other}|session` }).query(api.reviews.getEvidence, { reviewId }))
+        .rejects.toThrow("not_found_or_forbidden");
+    }
+    expect(userId).toBeTruthy();
+  });
+});

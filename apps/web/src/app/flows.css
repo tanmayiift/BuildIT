@@ -100,3 +100,17 @@
 
 /* A halted workflow must never look like a completed review. */
 .review-journey li[data-state="failed"]>span{color:var(--danger);background:var(--danger-bg);border-color:#efb8b8}.review-journey li[data-state="failed"] strong{color:var(--danger)}
+
+/* Model stage table. Digits line up because the columns are compared down, not read across. */
+.stage-table-scroll { overflow-x: auto; }
+.stage-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.stage-table th, .stage-table td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.stage-table thead th { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.stage-table tbody th { font-weight: 600; }
+.stage-table tbody tr:last-child th, .stage-table tbody tr:last-child td { border-bottom: 0; }
+.stage-figure { font-variant-numeric: tabular-nums; text-align: right; }
+.stage-model { color: var(--muted); font-family: var(--mono, ui-monospace, monospace); font-size: .85rem; }
+.stage-round { color: var(--muted); font-weight: 400; }
+.stage-outcome { font-size: .78rem; padding: .1em .5em; border-radius: 999px; background: var(--success-bg); color: var(--success); }
+/* A repaired stage is the signal worth seeing: the model returned something the schema rejected. */
+.stage-outcome[data-outcome="schema_invalid"] { background: var(--warning-bg); color: var(--warning); }

@@ -72,6 +72,21 @@ type Evidence = {
     hasPublicMessage: boolean;
     createdAt: number;
   }>;
+  stages: Array<{
+    id: string;
+    stage: string;
+    roundNumber?: number;
+    provider: string;
+    model: string;
+    attempt: number;
+    outcome: string;
+    finishReason: string;
+    inputTokens: number;
+    outputTokens: number;
+    promptVersion: string;
+    createdAt: number;
+  }>;
+  spend: { costUsd: number; inputTokens: number; outputTokens: number };
 };
 type FindingDetail = {
   id: string;
@@ -336,6 +351,48 @@ export function LiveReviewDetail({ id }: { id: string }) {
                 <span>Human merge required</span>
               </div>
             ))}
+          </div>
+        </Section>
+      ) : null}
+      {evidence.stages.length ? (
+        <Section
+          eyebrow="Model stages"
+          title="What each stage cost"
+          detail={`$${evidence.spend.costUsd.toFixed(4)} · ${(evidence.spend.inputTokens + evidence.spend.outputTokens).toLocaleString()} tokens`}
+          foot="Recorded per model call. No prompt or repository source is stored here."
+        >
+          <div className="stage-table-scroll">
+            <table className="stage-table">
+              <thead>
+                <tr>
+                  <th scope="col">Stage</th>
+                  <th scope="col">Model</th>
+                  <th scope="col">Attempt</th>
+                  <th scope="col">Outcome</th>
+                  <th scope="col">In</th>
+                  <th scope="col">Out</th>
+                </tr>
+              </thead>
+              <tbody>
+                {evidence.stages.map((item) => (
+                  <tr key={item.id} data-outcome={item.outcome}>
+                    <th scope="row">
+                      {stagePresentation(item.stage)}
+                      {item.roundNumber ? <span className="stage-round"> · round {item.roundNumber}</span> : null}
+                    </th>
+                    <td className="stage-model">{item.provider} / {item.model}</td>
+                    <td className="stage-figure">{item.attempt}</td>
+                    <td>
+                      <span className="stage-outcome" data-outcome={item.outcome}>
+                        {item.outcome === "valid" ? "Valid" : "Schema repaired"}
+                      </span>
+                    </td>
+                    <td className="stage-figure">{item.inputTokens.toLocaleString()}</td>
+                    <td className="stage-figure">{item.outputTokens.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </Section>
       ) : null}

@@ -5,6 +5,7 @@ export type AuthorizationPolicy =
   | "active_organization_developer"
   | "active_organization_admin"
   | "active_organization_admin_recent_auth"
+  | "active_organization_owner_recent_auth"
   | "invited_user";
 
 export type ResponseClassification = "none" | "metadata" | "personal_identity" | "authorized_source_derived";
@@ -13,6 +14,7 @@ export const publicFunctionPolicies = {
   "activation:funnel": { authorization: "active_organization_viewer", response: "metadata" },
   "audit:list": { authorization: "active_organization_viewer", response: "metadata" },
   "audit:verifyChain": { authorization: "active_organization_viewer", response: "metadata" },
+  "organizations:updateCapacity": { authorization: "active_organization_owner_recent_auth", response: "metadata" },
   "artifacts:getMetadata": { authorization: "active_organization_viewer", response: "metadata" },
   "dashboardReviewData:availableProviders": { authorization: "active_organization_developer", response: "metadata" },
   "dashboardReviews:prepare": { authorization: "active_organization_developer", response: "metadata" },

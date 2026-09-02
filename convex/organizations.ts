@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { requireOrganizationRole, requireUserId } from "./lib/authz";
+import { requireOrganizationRole, requireRecentGitHubLogin, requireUserId } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
 
 export const listMine = query({
@@ -62,6 +62,36 @@ export const clearActive = mutation({
 // every organization was stuck on whatever it was seeded with, with no operator or owner path to
 // change it. A limit that cannot be raised is an outage waiting for the first customer who needs
 // more than the default.
+export const updateCapacity = mutation({
+  args: {
+    organizationId: v.id("organizations"),
+    concurrencyLimit: v.optional(v.number()),
+    monthlyBudget: v.optional(v.number()),
+    requestId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const access = await requireOrganizationRole(ctx, args.organizationId, "owner");
+    await requireRecentGitHubLogin(ctx, access.userId);
+    const now = Date.now();
+    const valid = (value: number | undefined) => value === undefined || (Number.isFinite(value) && value >= 0);
+    if (!valid(args.concurrencyLimit) || !valid(args.monthlyBudget)) throw new ConvexError("capacity_limit_invalid");
+    if (args.concurrencyLimit === undefined && args.monthlyBudget === undefined) throw new ConvexError("capacity_limit_invalid");
+    // A ceiling nobody can raise is an outage; one anybody can raise without limit is a bill.
+    if ((args.concurrencyLimit ?? 0) > 50 || (args.monthlyBudget ?? 0) > 5_000) throw new ConvexError("capacity_limit_invalid");
+    await ctx.db.patch(args.organizationId, {
+      ...(args.concurrencyLimit === undefined ? {} : { concurrencyLimit: args.concurrencyLimit }),
+      ...(args.monthlyBudget === undefined ? {} : { monthlyBudget: args.monthlyBudget }),
+    });
+    await appendAuditEvent(ctx, {
+      organizationId: args.organizationId, actorId: access.userId, action: "organization.capacity_changed",
+      resourceType: "organization", resourceId: args.organizationId, requestId: args.requestId,
+      result: "allowed", createdAt: now,
+    });
+    const updated = await ctx.db.get(args.organizationId);
+    return { concurrencyLimit: updated!.concurrencyLimit, monthlyBudget: updated!.monthlyBudget };
+  },
+});
+
 export const setCapacityLimits = internalMutation({
   args: {
     organizationId: v.id("organizations"),
