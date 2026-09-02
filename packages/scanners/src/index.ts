@@ -70,11 +70,23 @@ export function parseOsv(raw: string, commitSha: string, version: string): Scann
   return { scanner: "osvScanner", scannerVersion: version, commitSha: pinnedCommit(commitSha), complete: true, findings };
 }
 
+const scriptExtensions = /\.[cm]?[jt]sx?$/i;
+const configExtensions = /\.(?:json|ya?ml|toml|env|conf)$/i;
+// A line that is entirely a comment is prose, whatever words it contains. Code on the same line
+// as a trailing comment still matches, because the rule tests the whole line.
+const commentLine = /^\s*(?:\/\/|\/\*|\*|#|<!--|--)/;
+
 const authoredRules = [
-  { id: "buildit-js-eval", pattern: /\beval\s*\(/g, summary: "Dynamic code execution through eval", severity: "warning" as const },
-  { id: "buildit-node-shell", pattern: /\bexec(?:Sync)?\s*\(/g, summary: "Shell command execution requires manual taint review", severity: "warning" as const },
-  { id: "buildit-tls-disabled", pattern: /rejectUnauthorized\s*:\s*false/g, summary: "TLS certificate verification is disabled", severity: "critical" as const },
+  { id: "buildit-js-eval", pattern: /\beval\s*\(/g, summary: "Dynamic code execution through eval", severity: "warning" as const, scope: "script" as const },
+  { id: "buildit-node-shell", pattern: /\bexec(?:Sync)?\s*\(/g, summary: "Shell command execution requires manual taint review", severity: "warning" as const, scope: "script" as const },
+  // Configuration can disable TLS as readily as code can.
+  { id: "buildit-tls-disabled", pattern: /["']?rejectUnauthorized["']?\s*:\s*false/g, summary: "TLS certificate verification is disabled", severity: "critical" as const, scope: "script_or_config" as const },
 ];
+
+function ruleApplies(rule: { scope: "script" | "script_or_config" }, path: string) {
+  if (scriptExtensions.test(path)) return true;
+  return rule.scope === "script_or_config" && configExtensions.test(path);
+}
 
 export function scanBuildITRules(files: Array<{ path: string; content: string }>, commitSha: string): ScannerRun {
   const findings: ScannerFinding[] = [];
@@ -82,6 +94,7 @@ export function scanBuildITRules(files: Array<{ path: string; content: string }>
     if (!safePath(file.path)) throw new Error("scanner_unsafe_path");
     const lines = file.content.split("\n");
     for (const rule of authoredRules) lines.forEach((line, index) => {
+      if (!ruleApplies(rule, file.path) || commentLine.test(line)) return;
       rule.pattern.lastIndex = 0;
       if (rule.pattern.test(line)) findings.push({ scanner: "builditRules", scannerVersion: scannerInventory.builditRules, ruleId: rule.id, severity: rule.severity, path: file.path, startLine: index + 1, endLine: index + 1, fingerprint: `${file.path}:${index + 1}:${rule.id}`, summary: rule.summary });
     });
