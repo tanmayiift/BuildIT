@@ -198,7 +198,48 @@ export const workflowCompleted = internalMutation({
       review.workflowId !== String(args.workflowId) ||
       review.executionGeneration !== args.context.expectedGeneration ||
       terminalStatuses.has(review.status)
-    ) return;
+    ) {
+      // A failure after finalizeDecision used to be discarded entirely: the review was already
+      // terminal, so this returned before writing anything. That is exactly how a publication
+      // failure hid - the dashboard showed a finished review while no comment or check run ever
+      // reached the pull request, which is the one thing the product exists to do. The verdict is
+      // not overwritten, because it was legitimately reached. The failure is recorded, and
+      // publication is retried, which is idempotent through reserveSideEffect.
+      const failedAfterDecision =
+        args.result.kind === "failed" &&
+        review.workflowId === String(args.workflowId) &&
+        review.executionGeneration === args.context.expectedGeneration &&
+        terminalStatuses.has(review.status);
+      if (!failedAfterDecision) return;
+      const failedAt = Date.now();
+      const last = await ctx.db
+        .query("reviewEvents")
+        .withIndex("by_review", (q) => q.eq("reviewId", review._id))
+        .order("desc")
+        .first();
+      await ctx.db.insert("reviewEvents", {
+        organizationId: review.organizationId,
+        reviewId: review._id,
+        sequence: (last?.sequence ?? 0) + 1,
+        type: "delivery_recorded",
+        stage: "complete",
+        internalCode: "workflow_failed_after_decision",
+        metadata: {},
+        createdAt: failedAt,
+      });
+      await ctx.scheduler.runAfter(0, internal.telemetryWorker.emit, {
+        operation: "review.delivery",
+        stage: "delivery",
+        outcome: "failed",
+      });
+      await ctx.scheduler.runAfter(0, internal.reviewPublicationWorker.publish, {
+        organizationId: review.organizationId,
+        reviewId: review._id,
+        expectedHeadSha: review.headSha,
+        expectedGeneration: review.executionGeneration,
+      });
+      return;
+    }
     if (args.result.kind === "failed") {
       const now = Date.now();
       const providerRateLimited = args.result.error.includes("rate_limited");

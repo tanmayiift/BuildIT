@@ -3980,3 +3980,61 @@ describe("a second tenant brings their own key", () => {
       .resolves.toEqual([]);
   });
 });
+
+// A workflow failure after finalizeDecision was discarded: the review was already terminal, so
+// workflowCompleted returned before writing anything. That is how a publication failure hid for
+// several runs - the dashboard showed a finished review while no comment or check run reached the
+// pull request, which is the one thing the product exists to do.
+describe("a failure after the decision is not swallowed", () => {
+  const seedTerminal = async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "post-decision-failure", "alice");
+    const workflowId = "kd7fake0workflow0id0000000000000";
+    await t.run(ctx => ctx.db.patch(tenant.reviewId, {
+      status: "changes_requested", statusReasonCode: "blocking_findings", currentStage: "complete",
+      workflowId, completedAt: Date.now(),
+    }));
+    return { t, tenant, workflowId };
+  };
+
+  it("records the failure and retries delivery without touching the verdict", async () => {
+    const { t, tenant, workflowId } = await seedTerminal();
+    await t.mutation(internal.durableReview.workflowCompleted, {
+      workflowId: workflowId as never,
+      result: { kind: "failed", error: "report_publication_contract_failed" },
+      context: { organizationId: tenant.organizationId, reviewId: tenant.reviewId, expectedGeneration: 0 },
+    });
+
+    // The decision was legitimately reached, so it stands.
+    expect(await t.run(ctx => ctx.db.get(tenant.reviewId))).toMatchObject({
+      status: "changes_requested", statusReasonCode: "blocking_findings",
+    });
+    // But the failure is now visible instead of vanishing.
+    const events = await t.run(ctx => ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", tenant.reviewId)).collect());
+    expect(events.map(event => event.internalCode)).toContain("workflow_failed_after_decision");
+  });
+
+  it("leaves a successful workflow alone", async () => {
+    const { t, tenant, workflowId } = await seedTerminal();
+    await t.mutation(internal.durableReview.workflowCompleted, {
+      workflowId: workflowId as never,
+      result: { kind: "success", returnValue: null },
+      context: { organizationId: tenant.organizationId, reviewId: tenant.reviewId, expectedGeneration: 0 },
+    });
+    const events = await t.run(ctx => ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", tenant.reviewId)).collect());
+    expect(events.map(event => event.internalCode)).not.toContain("workflow_failed_after_decision");
+  });
+
+  // A late callback from a superseded run must still be ignored, or a stale workflow could
+  // resurrect delivery for a commit nobody is looking at any more.
+  it("still ignores a callback from a superseded generation", async () => {
+    const { t, tenant, workflowId } = await seedTerminal();
+    await t.mutation(internal.durableReview.workflowCompleted, {
+      workflowId: workflowId as never,
+      result: { kind: "failed", error: "anything" },
+      context: { organizationId: tenant.organizationId, reviewId: tenant.reviewId, expectedGeneration: 99 },
+    });
+    const events = await t.run(ctx => ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", tenant.reviewId)).collect());
+    expect(events.map(event => event.internalCode)).not.toContain("workflow_failed_after_decision");
+  });
+});
