@@ -55,3 +55,25 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  release-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.15.0
+      - run: pnpm install --frozen-lockfile
+      - name: Security release gate
+        run: pnpm security:release
+      - name: Reliability release gate
+        run: pnpm reliability:release
+      - name: Evaluation gate
+        run: pnpm eval
+      - name: CLI journey smoke
+        run: pnpm smoke:cli
+      - name: Deployment contract (no deploy performed)
+        run: pnpm deploy:web:check && pnpm deploy:broker:check

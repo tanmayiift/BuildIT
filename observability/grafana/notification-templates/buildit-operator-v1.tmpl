@@ -1,5 +1,17 @@
+{{/*
+  BuildIT operator alert template.
+
+  Times are rendered in India Standard Time. Grafana Cloud runs its scheduler in UTC and
+  `.StartsAt` carries a UTC instant, so the offset is applied explicitly: 5h30m expressed as
+  nanoseconds for time.Time.Add. The zone suffix is deliberately omitted from the layout and
+  " IST" appended, because Add shifts the instant without relabelling the location: printing a
+  zone here would say UTC and contradict the shifted clock.
+*/}}
+
+{{ define "buildit.time.ist" }}{{ (.Add 19800000000000).Format "02 Jan 2006, 15:04:05" }} IST{{ end }}
+
 {{ define "buildit.operator.subject.v1" -}}
-[{{ if eq .Status "firing" }}ACTION REQUIRED{{ else }}RECOVERED{{ end }}] BuildIT · {{ .CommonAnnotations.summary }}
+[{{ if eq .Status "firing" }}ACTION REQUIRED{{ else }}RECOVERED{{ end }}{{ with .CommonLabels.severity }} · {{ . }}{{ end }}] BuildIT · {{ .CommonAnnotations.summary }}
 {{- end }}
 
 {{ define "buildit.operator.body.v1" -}}
@@ -8,9 +20,10 @@ BuildIT service alert
 Status: {{ if eq .Status "firing" }}Firing{{ else }}Recovered{{ end }}
 Severity: {{ .CommonLabels.severity }}
 Environment: production
-{{ range .Alerts.Firing }}Started: {{ .StartsAt }}
+Alert: {{ .CommonLabels.alertname }}
+{{ range .Alerts.Firing }}Started: {{ template "buildit.time.ist" .StartsAt }}
+{{ end }}{{ range .Alerts.Resolved }}Resolved: {{ template "buildit.time.ist" .EndsAt }}
 {{ end }}
-
 What happened
 {{ .CommonAnnotations.summary }}
 

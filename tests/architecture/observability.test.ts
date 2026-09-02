@@ -59,6 +59,23 @@ describe("observability release assets", () => {
     for (const alert of ["BuildITHighFailureRate", "BuildITP95LatencyHigh", "BuildITTelemetrySilent", "BuildITCriticalBoundaryFailure", "BuildITQueueDepthHigh", "BuildITProviderFailure", "BuildITRunnerFailure", "BuildITArtifactDeletionBacklog", "BuildITWebhookSignatureSpike", "BuildITLoopGuardTrip", "BuildITStaleCheck", "BuildITBudgetExhaustionSpike"]) expect(runbooks).toContain(`## ${alert}`);
   });
 
+  // Operators read these at 3am from India. The scheduler emits UTC instants, so the offset is
+  // applied in the template; a raw .StartsAt would print a UTC wall clock five and a half hours
+  // behind the reader, plus a Go monotonic-clock suffix.
+  it("renders alert times in India Standard Time, not the scheduler's UTC", () => {
+    const template = read("observability/grafana/notification-templates/buildit-operator-v1.tmpl");
+    expect(template).toContain('define "buildit.time.ist"');
+    expect(template).toContain("19800000000000");
+    expect(template).toContain("IST");
+    // Add() shifts the instant without relabelling the location, so a zone token would print
+    // UTC beside an IST clock. The layout must not contain one.
+    const layout = template.match(/\.Format "([^"]+)"/)?.[1] ?? "";
+    expect(layout.length).toBeGreaterThan(0);
+    for (const zoneToken of ["MST", "Z07", "-0700", "UTC"]) expect(layout).not.toContain(zoneToken);
+    expect(template).not.toMatch(/Started: \{\{ \.StartsAt \}\}/);
+    for (const field of ["Alert: {{ .CommonLabels.alertname }}", "Next action", "Runbook"]) expect(template).toContain(field);
+  });
+
   it("provisions only the BuildIT template name on the approved stack", () => {
     const script = read("scripts/provision-buildit-grafana-template.mjs");
     expect(script).toContain("peacefulbumblebee2324.grafana.net");

@@ -1,0 +1,90 @@
+name: Release
+
+# Deployment was entirely manual and local, so a release could be skipped, half-applied, or
+# left aliased to an older build with nothing to notice. This runs the same guarded scripts as
+# `pnpm deploy:*:production`: deploy, assign the production alias, read the alias back, and
+# probe it. The scripts fail the job if the alias did not move.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which production surface to release
+        required: true
+        default: web
+        type: choice
+        options: [web, broker, both]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: buildit-release
+  cancel-in-progress: false
+
+env:
+  NEXT_PUBLIC_CONVEX_URL: https://judicious-barracuda-968.convex.cloud
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+jobs:
+  # A release must never ship something the gates would have rejected.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.15.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+      - run: pnpm security:release
+      - run: pnpm reliability:release
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+
+  release:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.15.0
+      - run: pnpm install --frozen-lockfile
+      - name: Refuse to start without a deploy credential
+        run: test -n "$VERCEL_TOKEN" || { echo "VERCEL_TOKEN repository secret is not set"; exit 1; }
+      - run: npm install --global vercel@59.10.0
+      - name: Confirm the deploy contract before touching production
+        run: pnpm deploy:web:check && pnpm deploy:broker:check
+      - name: Release the web app, alias it, and probe it
+        if: ${{ inputs.target == 'web' || inputs.target == 'both' }}
+        run: pnpm deploy:web:production
+      - name: Release the broker, alias it, and probe it
+        if: ${{ inputs.target == 'broker' || inputs.target == 'both' }}
+        run: pnpm deploy:broker:production
+
+  # The alias is what the GitHub App homepage, post-install redirect, and webhook URL resolve
+  # through, so prove the released alias serves the app rather than trusting the deploy step.
+  confirm:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.15.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Signed-out production journey against the released alias
+        env:
+          BUILDIT_E2E_BASE_URL: https://buildit-agentic-review.vercel.app
+        run: pnpm test:e2e
