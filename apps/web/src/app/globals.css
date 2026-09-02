@@ -38,7 +38,8 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .shell { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: calc(100vh - 36px); }
 .side { position: sticky; top: 0; height: calc(100vh - 36px); display: flex; flex-direction: column; padding: 20px 12px 12px; background: var(--workbench); border-right: 1px solid var(--line); }
 .brand-row { display: flex; align-items: center; gap: 10px; padding: 0 8px 18px; }
-.brand-glyph { display: grid; place-items: center; width: 32px; height: 32px; color: white; background: var(--navy); border-radius: 7px; font: 700 15px "JetBrains Mono Variable", monospace; }
+.brand-glyph { display: grid; place-items: center; width: 32px; height: 32px; color: white; background: var(--navy); border-radius: 7px; }
+.brand-glyph svg { width: 22px; height: 22px; }
 .brand { font-size: 17px; font-weight: 800; letter-spacing: -.02em; }
 .brand span { display: block; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .02em; }
 .workspace-switcher { min-height: 56px; display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px 10px; color: var(--ink); text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; opacity: 1; }
