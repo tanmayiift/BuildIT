@@ -274,3 +274,15 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; }
 /* Neutral placeholder while session state is still resolving: reads as a control,
    but is not interactive, so it cannot be mistaken for a sign-in affordance. */
 .button.is-pending{color:var(--muted);background:transparent;border-color:var(--line);cursor:default;pointer-events:none}
+
+/* Loading indicators were a static dot, so a hung request looked identical to a working one. */
+@keyframes buildit-pulse { 0%,100% { opacity: .25; transform: scale(.85) } 50% { opacity: 1; transform: scale(1) } }
+.state-pulse { animation: buildit-pulse 1.4s ease-in-out infinite }
+@media (prefers-reduced-motion: reduce) { .state-pulse { animation: none; opacity: .7 } }
+
+/* Visible only when focused, so keyboard users can bypass ~14 navigation links. */
+.skip-link { position: absolute; left: -9999px; top: 0; z-index: 100; padding: 10px 14px; background: var(--surface); color: var(--navy); border: 1px solid var(--line); border-radius: 0 0 6px 0; font-size: 13px; font-weight: 700; text-decoration: none }
+.skip-link:focus { left: 0 }
+
+/* WCAG 2.2 AA 2.5.8: inline text links were 15-22px tall. */
+.text-link, .account-link { display: inline-block; padding-block: 4px; min-height: 24px }

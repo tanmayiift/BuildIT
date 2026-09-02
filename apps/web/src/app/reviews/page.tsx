@@ -17,7 +17,7 @@ import {
 } from "./review-row-groups";
 
 type Connection = {
-  organization: null | { id: string; name: string };
+  organization: null | { id: string; name: string; role: "viewer" | "developer" | "admin" | "owner" };
   repositories: Array<{ id: string; owner: string; name: string }>;
 };
 type LiveReview = QueueReview;
@@ -45,7 +45,11 @@ export default function ReviewQueue() {
   const connection = useQuery(connectionQuery, !tour && isAuthenticated ? {} : "skip");
   const reviews = useQuery(reviewsQuery, !tour && connection?.organization ? { organizationId: connection.organization.id } : "skip");
   if (tour) return <SampleQueue />;
-  if (!connection || reviews === undefined) return <div className="content"><Heading connected /><section className="live-state" aria-live="polite"><span className="state-pulse" /><div><strong>Loading your review queue…</strong><p>Checking the active organization on the server.</p></div></section></div>;
+  if (!connection) return <div className="content"><Heading /><section className="live-state" aria-live="polite"><span className="state-pulse" /><div><strong>Loading your review queue…</strong><p>Checking the active organization on the server.</p></div></section></div>;
+  // Without an active organization the queue query stays skipped, so `reviews` never resolves.
+  // Waiting on it renders a spinner that can never finish; say what is missing instead.
+  if (!connection.organization) return <div className="content"><Heading /><section className="empty-state live-empty"><span className="empty-mark">GH</span><h2>Connect a repository to start reviewing</h2><p>You are signed in, but no workspace is active yet. Choose the repositories BuildIT may read in GitHub, and your review queue appears here.</p><div className="button-row"><a className="button" href="/setup/install">Choose repository access</a><a className="button secondary" href="/reviews?tour=1">View the sample tour</a></div></section></div>;
+  if (reviews === undefined) return <div className="content"><Heading connected /><section className="live-state" aria-live="polite"><span className="state-pulse" /><div><strong>Loading your review queue…</strong><p>Checking the active organization on the server.</p></div></section></div>;
 
   const rows = [...reviews].sort((a, b) => b.updatedAt - a.updatedAt);
   const groups = groupQueueReviews(rows);
@@ -57,11 +61,11 @@ export default function ReviewQueue() {
   return <div className="content">
     <Heading connected />
     {connection.organization ? <ActivationPath organizationId={connection.organization.id} /> : null}
-    <DashboardReviewStart repositories={connection.repositories} />
+    <DashboardReviewStart repositories={connection.repositories} canStartReview={connection.organization.role !== "viewer"} />
     <div id="review-results">
       {(["decision", "running", "retry"] as const).map(section => <LiveGroup key={section} copy={groupCopy[section]} groups={sections.get(section)!} connection={connection} />)}
     </div>
-    {rows.length === 0 ? <section className="empty-state live-empty"><span className="empty-mark">PR</span><h2>No reviews in {connection.organization?.name}</h2><p>Preview a pull request above, or comment <code>@buildit review</code> on GitHub. Both paths pin the exact commits before a review starts.</p><div className="button-row"><a className="button secondary" href="/repositories">Open repositories</a><a className="button tertiary" href="/setup/model">Check model key</a></div></section> : null}
+    {rows.length === 0 ? <section className="empty-state live-empty"><span className="empty-mark">PR</span><h2>No reviews in {connection.organization.name}</h2><p>Preview a pull request above, or comment <code>@buildit review</code> on GitHub. Both paths pin the exact commits before a review starts.</p><div className="button-row"><a className="button secondary" href="/repositories">Open repositories</a><a className="button tertiary" href="/setup/model">Check model key</a></div></section> : null}
   </div>;
 }
 

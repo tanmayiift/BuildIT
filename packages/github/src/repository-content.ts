@@ -8,6 +8,15 @@ const headers = {
 
 export type RepositoryFile = { path: string; sha: string; size: number; content: string };
 export type RepositoryOmission = { path: string; reason: "excluded" | "oversized" | "budget" | "binary" };
+
+// Coverage records what BuildIT was asked to read and could not, not what it deliberately
+// never reads. "excluded" (images, lockdirs, minified bundles) and "binary" (no reviewable
+// text) are permanent properties of the file, so they are not evidence gaps: counting them as
+// gaps makes every repository containing an image permanently inconclusive. "oversized" and
+// "budget" are real gaps — that content was wanted and did not fit.
+const forcedOmissionReasons = new Set<RepositoryOmission["reason"]>(["oversized", "budget"]);
+export function isForcedOmission(omission: RepositoryOmission) { return forcedOmissionReasons.has(omission.reason); }
+export function omissionCoverage(omitted: RepositoryOmission[]) { return omitted.some(isForcedOmission) ? "partial" as const : "full" as const; }
 export type RepositorySnapshot = {
   repositoryId: number;
   commitSha: string;
@@ -88,6 +97,6 @@ export class RepositoryContentClient {
       files.push(...values.filter((value): value is RepositoryFile => value !== null));
     }
     const fetchedBytes = files.reduce((sum, file) => sum + file.size, 0);
-    return { repositoryId: input.repositoryId, commitSha: input.commitSha.toLowerCase(), files, omitted, fetchedBytes, coverage: omitted.length ? "partial" : "full" };
+    return { repositoryId: input.repositoryId, commitSha: input.commitSha.toLowerCase(), files, omitted, fetchedBytes, coverage: omissionCoverage(omitted) };
   }
 }

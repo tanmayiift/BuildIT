@@ -1,6 +1,8 @@
 type Http = (input: string | URL, init?: RequestInit) => Promise<Response>;
 export type PullRequestChangedFile = { path: string; previousPath?: string; status: "added" | "modified" | "removed" | "renamed" | "copied" | "changed" | "unchanged"; additions: number; deletions: number; changes: number; patch?: string };
 export type PullRequestContext = { title: string; body: string; htmlUrl: string; headSha: string; baseSha: string; files: PullRequestChangedFile[]; omitted: Array<{ path: string; reason: "patch_unavailable" | "patch_too_large" | "budget" }>; coverage: "full" | "partial" };
+// GitHub returns no patch for binary files and pure renames; that is inherent, not a gap.
+// "patch_too_large" and "budget" are real gaps: the diff existed and did not fit.
 
 const statuses = new Set<PullRequestChangedFile["status"]>(["added", "modified", "removed", "renamed", "copied", "changed", "unchanged"]);
 const baseHeaders = { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "BuildIT" };
@@ -44,6 +46,6 @@ export class PullRequestContextClient {
       if (values.length < 100) break;
       if (page === 30 && values.length === 100) omitted.push({ path: "remaining_files", reason: "budget" });
     }
-    return { title: typeof metadata.title === "string" ? metadata.title.slice(0, 500) : "", body: typeof metadata.body === "string" ? metadata.body.slice(0, 250_000) : "", htmlUrl: typeof metadata.html_url === "string" ? metadata.html_url : "", headSha: input.expectedHeadSha, baseSha: input.expectedBaseSha, files, omitted, coverage: omitted.length ? "partial" : "full" };
+    return { title: typeof metadata.title === "string" ? metadata.title.slice(0, 500) : "", body: typeof metadata.body === "string" ? metadata.body.slice(0, 250_000) : "", htmlUrl: typeof metadata.html_url === "string" ? metadata.html_url : "", headSha: input.expectedHeadSha, baseSha: input.expectedBaseSha, files, omitted, coverage: omitted.some(item => item.reason !== "patch_unavailable") ? "partial" : "full" };
   }
 }

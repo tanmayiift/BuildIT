@@ -2,7 +2,7 @@
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
-import { eventPresentation, nextActionPresentation, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
+import { eventPresentation, nextActionPresentation, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
 type Evidence = {
   review: {
     id: string;
@@ -163,21 +163,16 @@ export function LiveReviewDetail({ id }: { id: string }) {
     pullRequestUrl = pullRequestHref(repository.owner, repository.name, review.prNumber),
     checkSummaries = summarizeChecks(evidence.checks),
     hasEvidence = evidence.requirements.length + evidence.findings.length + evidence.checks.length > 0;
-  const canCancel = ![
-    "passed",
-    "changes_requested",
-    "inconclusive",
-    "failed_after_bounds",
-    "budget_exhausted",
-    "cancelled",
-    "platform_failed",
-  ].includes(review.status);
+  // Mirrors terminalStatuses in convex/lib/lifecycle.ts and packages/contracts/src/review.ts.
+  // tests/architecture/review-status-contract.test.ts fails if these drift apart.
+  const canCancel = !terminalReviewStatuses.includes(review.status) && review.status !== "cancelling";
   const stoppedBeforeEvidence = !hasEvidence && !canCancel;
   async function cancelReview() {
     setCancelling(true);
     setCancelError("");
     try {
-      await cancel({ reviewId: id });
+      const result = await cancel({ reviewId: id });
+      if (result?.status === "already_finished") setCancelError("This review had already finished, so there was nothing to cancel. Its result below is unchanged.");
     } catch {
       setCancelError("The review could not be cancelled. Refresh its status before trying again.");
     } finally {
@@ -232,6 +227,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
           <small>What to do next</small>
           <strong>{nextAction.title}</strong>
           <p>{nextAction.detail}</p>
+          {nextAction.href ? <a className="text-link" href={nextAction.href}>{nextAction.hrefLabel ?? "Open"} →</a> : null}
         </div>
       </div> : null}
       {hasEvidence || canCancel ? <ReviewJourney currentStage={review.currentStage} status={review.status} events={evidence.events} /> : null}

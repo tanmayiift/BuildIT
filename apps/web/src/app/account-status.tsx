@@ -35,7 +35,7 @@ export function AccountStatus({ compact = false }: { compact?: boolean }) {
   if (compact) return <a className="button compact secondary" href="/account" aria-label={`Account: ${label}`}>Account</a>;
   return <>
     <strong>{label}</strong><br/>
-    <span className="muted">{organization ? organization.name : "Setup required"}</span><br/>
+    <span className="muted">{organizations === undefined ? "Checking workspace…" : organization ? organization.name : "Setup required"}</span><br/>
     <span className="account-actions"><a className="account-link" href="/account">Manage account</a><button className="link-button" type="button" onClick={() => void signOut()}>Sign out</button></span>
   </>;
 }

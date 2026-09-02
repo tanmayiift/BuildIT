@@ -10,10 +10,13 @@ export function useSampleTour() {
   return useContext(SampleTourContext);
 }
 
+// Kept in step with validSections in app/[section]/page.tsx: every workspace section is
+// private. /notifications was previously missing here and escaped the gate entirely.
+const workspaceSections = ["repositories", "metrics", "usage", "integrations", "policies", "members", "notifications", "audit"];
+
 function requiresWorkspace(pathname: string) {
-  return pathname === "/account" || pathname === "/reviews" || pathname.startsWith("/reviews/") || [
-    "/repositories", "/metrics", "/usage", "/integrations", "/policies", "/members", "/audit",
-  ].includes(pathname);
+  return pathname === "/account" || pathname === "/reviews" || pathname.startsWith("/reviews/")
+    || workspaceSections.some(section => pathname === `/${section}`);
 }
 
 export function WorkspaceRouteBoundary({ children }: { children: ReactNode }) {

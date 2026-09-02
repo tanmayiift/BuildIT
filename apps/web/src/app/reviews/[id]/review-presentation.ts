@@ -1,3 +1,10 @@
+// The terminal reviewStatus values. Cross-checked against packages/contracts and
+// convex/validators.ts by tests/architecture/review-status-contract.test.ts.
+export const terminalReviewStatuses: readonly string[] = [
+  "checks_passed", "changes_requested", "inconclusive", "delivered",
+  "failed_after_bounds", "cancelled", "budget_exhausted", "platform_failed",
+];
+
 export type ReviewTone = "success" | "danger" | "running" | "warning";
 
 export type CheckExecution = {
@@ -32,17 +39,45 @@ export function statusPresentation(status: string, stale: boolean, reason?: stri
   return known[status] ?? { label: "In progress", title: "BuildIT is reviewing this change", summary: "Evidence will appear here as each review step completes.", tone: "running" as ReviewTone, symbol: "●" };
 }
 
-export function nextActionPresentation(code: string, stale: boolean) {
+// Every value of the nextActionCode union in convex/validators.ts. The Record type makes a
+// missing key a compile error, so the map cannot silently drift out of the enum again and
+// leave the primary call to action rendering a raw code like "Reconnect provider".
+export type NextActionCode =
+  | "none" | "inspect_findings" | "request_autofix" | "retry_review" | "reconnect_provider"
+  | "restore_installation" | "grant_permission" | "increase_budget" | "human_merge" | "start_new_review";
+
+export const nextActionCodes: readonly NextActionCode[] = [
+  "none", "inspect_findings", "request_autofix", "retry_review", "reconnect_provider",
+  "restore_installation", "grant_permission", "increase_budget", "human_merge", "start_new_review",
+];
+
+type NextAction = { title: string; detail: string; href?: string; hrefLabel?: string };
+
+const nextActions: Record<NextActionCode, NextAction> = {
+  none: { title: "Decide whether to merge", detail: "The required checks produced evidence for this exact commit. You own the merge decision." },
+  inspect_findings: { title: "Inspect the findings", detail: "Open each finding below, check the cited lines, then decide with the author what to change." },
+  request_autofix: { title: "Consider a bounded fix", detail: "BuildIT can prepare a fix as a separate pull request for you to review. It never merges." },
+  retry_review: { title: "Retry the review", detail: "This run ended without a code decision. Retry once at the same commit." },
+  reconnect_provider: { title: "Reconnect your model provider", detail: "The saved key was rejected or revoked, so analysis could not run.", href: "/setup/model", hrefLabel: "Manage model keys" },
+  restore_installation: { title: "Restore GitHub access", detail: "The GitHub App installation is suspended or removed, so BuildIT cannot read this repository.", href: "/repositories", hrefLabel: "Check repository access" },
+  grant_permission: { title: "Grant the missing permission", detail: "BuildIT is missing a repository permission it needs for this action.", href: "/repositories", hrefLabel: "Review GitHub access" },
+  increase_budget: { title: "Increase the review budget", detail: "No further model call was made. Choose a higher ceiling, then start a new review." },
+  human_merge: { title: "Inspect the proposed fix", detail: "The fix is a separate pull request. Review it and merge only if you agree. BuildIT will never merge it for you." },
+  start_new_review: { title: "Run a new review", detail: "This run ended without a decision." },
+};
+
+// The sample tour renders its own synthetic codes; they are not part of the live enum but are
+// still shown to real people, so they need real guidance too.
+const sampleTourActions: Record<string, NextAction> = {
+  human_review: { title: "Inspect the evidence", detail: "You own the final merge decision." },
+  fix_findings: { title: "Ask the author to fix the issues", detail: "Then run BuildIT again on the new commit." },
+  await_human_approval: { title: "Inspect the proposed fix", detail: "BuildIT will never merge it for you." },
+  wait: { title: "Wait for this review to finish", detail: "BuildIT is still gathering evidence for this exact commit." },
+};
+
+export function nextActionPresentation(code: string, stale: boolean): NextAction {
   if (stale) return { title: "Run a new review", detail: "The code changed after this review started." };
-  const known: Record<string, { title: string; detail: string }> = {
-    start_new_review: { title: "Run a new review", detail: "This run ended without a decision." },
-    human_review: { title: "Inspect the evidence", detail: "You own the final merge decision." },
-    fix_findings: { title: "Ask the author to fix the issues", detail: "Then run BuildIT again on the new commit." },
-    await_human_approval: { title: "Inspect the proposed fix", detail: "BuildIT will never merge it for you." },
-    retry: { title: "Retry the review", detail: "The previous run ended because of a service problem." },
-    increase_budget: { title: "Increase the review budget", detail: "No further model call was made. Choose a higher ceiling, then start a new review." },
-  };
-  return known[code] ?? { title: words(code), detail: "Open the evidence below before taking action." };
+  return nextActions[code as NextActionCode] ?? sampleTourActions[code] ?? { title: words(code), detail: "Open the evidence below before taking action." };
 }
 
 export function stagePresentation(stage: string) {

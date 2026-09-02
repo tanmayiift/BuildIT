@@ -94,20 +94,28 @@ export const finalizeDecision = internalMutation({
     if (review.status !== "validating" || review.currentStage !== "analysis") throw new ConvexError("review_not_ready_for_decision");
     const checks = (await ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect()).filter(item => item.commitSha === review.headSha);
     const findings = await ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).collect();
-    let incomplete = review.coverageLevel !== "full" || !checks.some(item => item.required);
+    // Record which condition made the evidence incomplete. Without this the review ends as a
+    // flat "required check missing" and the real cause — partial context, a missing artifact,
+    // a flaky rerun — is unrecoverable afterwards.
+    let incompleteReason: "coverage_partial" | "no_required_check" | "evidence_missing" | "conclusion_unusable" | undefined;
+    if (review.coverageLevel !== "full") incompleteReason = "coverage_partial";
+    else if (!checks.some(item => item.required)) incompleteReason = "no_required_check";
     let failed = false;
     for (const check of checks.filter(item => item.required)) {
       const artifact = check.artifactId ? await ctx.db.get(check.artifactId) : null;
-      if (!artifact || artifact.organizationId !== args.organizationId || artifact.reviewId !== review._id || artifact.redactionStatus !== "redacted" || artifact.deletedAt || !check.credentialTeardownProved || !check.sandboxStopped || !["passed", "failed"].includes(check.conclusion)) incomplete = true;
+      const evidenceMissing = !artifact || artifact.organizationId !== args.organizationId || artifact.reviewId !== review._id || artifact.redactionStatus !== "redacted" || Boolean(artifact.deletedAt) || !check.credentialTeardownProved || !check.sandboxStopped;
+      if (evidenceMissing) incompleteReason ??= "evidence_missing";
+      else if (!["passed", "failed"].includes(check.conclusion)) incompleteReason ??= "conclusion_unusable";
       if (check.conclusion === "failed") failed = true;
     }
+    const incomplete = incompleteReason !== undefined;
     const blocking = findings.some(item => item.resolution === "open" && item.blocking);
     const status = incomplete ? "inconclusive" as const : failed || blocking ? "changes_requested" as const : "checks_passed" as const;
     const statusReasonCode = incomplete ? "required_check_missing" as const : failed ? "required_check_failed" as const : blocking ? "blocking_findings" as const : "checks_complete" as const;
     const nextActionCode = incomplete ? "retry_review" as const : failed || blocking ? "inspect_findings" as const : "none" as const;
     const githubCheckConclusion = status === "checks_passed" ? "success" as const : status === "changes_requested" ? "failure" as const : "neutral" as const;
     await ctx.db.patch(review._id, { status, statusReasonCode, nextActionCode, githubCheckConclusion, currentStage: "complete", completedAt: args.now, updatedAt: args.now });
-    await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", publicMessageArtifactId: report._id, internalCode: `decision_${statusReasonCode}`, metadata: { count: findings.length }, createdAt: args.now });
+    await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", publicMessageArtifactId: report._id, internalCode: `decision_${statusReasonCode}`, metadata: { count: findings.length, ...(incompleteReason ? { reasonCode: incompleteReason } : {}) }, createdAt: args.now });
     await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, name: "review_completed", value: 1, organizationTimezone: organization.timezone, occurredAt: args.now });
     await ctx.scheduler.runAfter(0, internal.telemetryWorker.emit, { operation: "review.decision", stage: "decision", outcome: "succeeded" });
     return { status, statusReasonCode, nextActionCode };

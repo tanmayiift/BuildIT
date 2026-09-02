@@ -48,7 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className="settings-nav" aria-label="Organization settings">{settings.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} sampleTour={sampleTour} />)}</nav>
         <div className="account"><AccountStatus /></div>
       </aside>
-      <main className="main">
+      <main className="main" id="main" tabIndex={-1}>
         <header className="top"><div><p className="top-kicker">Workspace</p><strong>{pathname.startsWith("/reviews/") ? "Review detail" : "BuildIT"}</strong></div><div className="top-actions"><a className="quiet-link" href="/data-handling">Data & privacy</a><SetupProgress /><AccountStatus compact /></div><details className="mobile-nav"><summary>Menu</summary><nav>{[...work, ...operations, ...settings].map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} sampleTour={sampleTour} />)}</nav></details></header>
         <WorkspaceRouteBoundary>{children}</WorkspaceRouteBoundary>
       </main>
