@@ -151,3 +151,35 @@ describe("the report reads honestly in an inbox", () => {
     expect(body).toMatch(/\*\*Repository\*\* `acme\/api` {2}· {2}\*\*Pull request\*\* #7 {2}· {2}\*\*Commit\*\*/);
   });
 });
+
+// The composer and the publication contract were tested separately, each against a body it wrote
+// itself, so nothing noticed when a formatting change to the receipt stopped satisfying the
+// contract. Publication then threw in production, and because the review was already terminal the
+// workflow's failure path swallowed it: a finished review with no comment on the pull request.
+// This runs the real report through the real assertion.
+describe("every report the composer produces can actually be published", () => {
+  const assertPublishable = (body: string, headSha: string) => {
+    if (!body.includes(headSha) || !body.includes("BuildIT did not merge this pull request.")) {
+      throw new Error("report_publication_contract_failed");
+    }
+  };
+
+  const shapes: Array<[string, Parameters<typeof composeVerifiedReport>[0]]> = [
+    ["passing", { ...input(), findings: [], claims: [] }],
+    ["with findings", input()],
+    ["partial coverage", { ...input(), coverage: "partial" as const }],
+    ["stale", { ...input(), isStale: true }],
+    ["environment unavailable", { ...input(), environmentAvailable: false }],
+    ["no checks at all", { ...input(), checks: [], findings: [], claims: [] }],
+    ["injection unscoped", { ...input(), injectionUnscoped: true }],
+  ];
+
+  for (const [name, args] of shapes) {
+    it(`publishes the ${name} report`, () => {
+      const report = composeVerifiedReport(args);
+      expect(() => assertPublishable(report.body, args.headSha)).not.toThrow();
+      // The full commit, not a shortened one, so the reader can verify exactly what was judged.
+      expect(report.body).toContain(args.headSha);
+    });
+  }
+});

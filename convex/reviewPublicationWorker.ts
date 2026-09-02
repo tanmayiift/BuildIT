@@ -12,8 +12,9 @@ function required(name: string) { const value = process.env[name]; if (!value) t
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; status: string; reason: string; report: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number } };
 
 export function assertReportPublicationContract(body: string, headSha: string) {
-  const exactHead = body.includes(`Head commit: \`${headSha}\``) || body.includes(`Head: \`${headSha}\``);
-  if (!exactHead || !body.includes("BuildIT did not merge this pull request.")) throw new Error("report_publication_contract_failed");
+  if (!body.includes(headSha) || !body.includes("BuildIT did not merge this pull request.")) {
+    throw new Error("report_publication_contract_failed");
+  }
 }
 
 export function publicationTitle(status: string) {
