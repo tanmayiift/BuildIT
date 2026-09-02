@@ -12,8 +12,7 @@ export const dynamic = "force-dynamic";
 
 const title = "BuildIT — Evidence-backed code review";
 const description = "Autonomous pull request review that shows its work, so a merge decision rests on evidence rather than trust.";
-const site = process.env.NEXT_PUBLIC_SITE_URL
-  ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "https://buildit-agentic-review.vercel.app");
+const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://buildit-agentic-review.vercel.app";
 
 export const metadata = {
   metadataBase: new URL(site),

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { publicAssets } from "../../apps/web/src/public-assets";
+import { known } from "../../apps/web/src/route-map";
 import { join } from "node:path";
 
 // A link to BuildIT previewed as whatever heading the scraper found first, because the app declared
@@ -11,9 +13,9 @@ const card = join(root, "apps/web/public/social-card.png");
 
 function pngSize(path: string) {
   const header = readFileSync(path).subarray(0, 33);
-  const signature = header.subarray(0, 8).toString("hex");
-  return { signature, width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+  return { signature: header.subarray(0, 8).toString("hex"), width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
 }
+
 
 describe("social preview", () => {
   it("declares an OpenGraph and Twitter card pointing at a file that exists", () => {
@@ -48,5 +50,23 @@ describe("social preview", () => {
       expect(shell).toContain(stroke);
       expect(mark).toContain(stroke);
     }
+  });
+});
+
+// The card was declared in the metadata and 404ed in production: the Edge proxy answers a real 404
+// for any path it does not recognise, and it recognised routes only. The preview was broken by the
+// one thing neither the metadata test nor the image test could see.
+describe("public assets reach the browser", () => {
+  it("lists exactly what apps/web/public ships", () => {
+    const shipped = readdirSync(join(root, "apps/web/public")).sort().map(name => `/${name}`);
+    expect([...publicAssets].sort()).toEqual(shipped);
+  });
+
+  it("lets the proxy through for every one of them", () => {
+    for (const asset of publicAssets) expect(known(asset)).toBe(true);
+  });
+
+  it("still refuses a path that only looks like an asset", () => {
+    expect(known("/not-shipped.png")).toBe(false);
   });
 });
