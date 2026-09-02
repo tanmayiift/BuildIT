@@ -78,7 +78,7 @@ const commentLine = /^\s*(?:\/\/|\/\*|\*|#|<!--|--)/;
 
 const authoredRules = [
   { id: "buildit-js-eval", pattern: /\beval\s*\(/g, summary: "Dynamic code execution through eval", severity: "warning" as const, scope: "script" as const },
-  { id: "buildit-node-shell", pattern: /\bexec(?:Sync)?\s*\(/g, summary: "Shell command execution requires manual taint review", severity: "warning" as const, scope: "script" as const },
+  { id: "buildit-node-shell", pattern: /(?<![.\w])exec(?:Sync)?\s*\(|child_process\.exec(?:Sync)?\s*\(/g, summary: "Shell command execution requires manual taint review", severity: "warning" as const, scope: "script" as const },
   // Configuration can disable TLS as readily as code can.
   { id: "buildit-tls-disabled", pattern: /["']?rejectUnauthorized["']?\s*:\s*false/g, summary: "TLS certificate verification is disabled", severity: "critical" as const, scope: "script_or_config" as const },
 ];

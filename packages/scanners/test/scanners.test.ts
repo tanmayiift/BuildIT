@@ -86,3 +86,23 @@ describe("authored rules do not cry wolf", () => {
     expect(scan("src/client.ts", "rejectUnauthorized: false").map(f => f.ruleId)).toEqual(["buildit-tls-disabled"]);
   });
 });
+
+// The shell rule matched RegExp.prototype.exec - /pattern/.exec(value) - which is among the most
+// common calls in any JavaScript codebase. BuildIT reported one on its own pull request as
+// "shell command execution requires manual taint review".
+describe("shell rule tells a regex from a shell", () => {
+  const ruleIds = (content: string) => scanBuildITRules([{ path: "src/a.ts", content }], "a".repeat(40)).findings.map(finding => finding.ruleId);
+
+  it("ignores a regular expression exec", () => {
+    expect(ruleIds("const year = /max-age=(\\d+)/.exec(header)?.[1];")).toEqual([]);
+    expect(ruleIds("while ((match = pattern.exec(text)) !== null) {}")).toEqual([]);
+    expect(ruleIds("const m = someRegex.exec(value);")).toEqual([]);
+  });
+
+  it("still catches a shell call", () => {
+    expect(ruleIds("exec(command);")).toEqual(["buildit-node-shell"]);
+    expect(ruleIds("execSync(`rm -rf ${dir}`);")).toEqual(["buildit-node-shell"]);
+    expect(ruleIds("child_process.execSync(command);")).toEqual(["buildit-node-shell"]);
+    expect(ruleIds("  const output = exec(userInput);")).toEqual(["buildit-node-shell"]);
+  });
+});
