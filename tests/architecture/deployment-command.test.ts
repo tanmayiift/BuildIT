@@ -68,6 +68,16 @@ describe("production alias release step", () => {
     expect(() => parseDeploymentUrl("Deployed.")).toThrow("buildit_web_deploy_url_unparsable");
   });
 
+  // Observed in a real release: the CLI progress stream also names an auto-assigned project
+  // domain. Picking that instead of the deployment verified the alias against the wrong target
+  // and failed a release that had actually succeeded.
+  it("ignores auto-assigned project domains and picks the deployment instance", () => {
+    const stdout = `${deployedUrl}\n`;
+    expect(parseDeploymentUrl(stdout)).toBe(deployedUrl);
+    expect(parseDeploymentUrl(`Aliased https://buildit-lyart-nine.vercel.app\n${deployedUrl}\n`)).toBe(deployedUrl);
+    expect(() => parseDeploymentUrl("Aliased https://buildit-lyart-nine.vercel.app\n")).toThrow("buildit_web_deploy_url_unparsable");
+  });
+
   it("reads the deployment an alias currently resolves to", () => {
     const inspect = `  name\tbuildit-agentic-review\n  status\t● Ready\n  url\t\t${staleUrl}\n  created\tWed Sep 02 2026\n`;
     expect(parseAliasTarget(inspect)).toBe(staleUrl);

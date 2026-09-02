@@ -35,9 +35,11 @@ export function assertBuildITBrokerDeployContext({ cwd, repoRoot, link }) {
 function vercel(args, cwd, env) {
   const result = spawnSync("vercel", args, { cwd, encoding: "utf8", shell: false, env });
   if (result.error) throw result.error;
-  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
-  if (result.status !== 0) throw new Error(`buildit_broker_deploy_failed:${result.status ?? "unknown"}`);
-  return output;
+  if (result.status !== 0) {
+    process.stderr.write(`${result.stderr ?? ""}\n`);
+    throw new Error(`buildit_broker_deploy_failed:${result.status ?? "unknown"}`);
+  }
+  return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", combined: `${result.stdout ?? ""}\n${result.stderr ?? ""}` };
 }
 
 async function main() {
@@ -51,12 +53,12 @@ async function main() {
 
   // The repo root is linked to the web project, so the broker link is supplied by environment.
   const env = { ...process.env, VERCEL_PROJECT_ID: expected.projectId, VERCEL_ORG_ID: expected.orgId };
-  const deployOutput = vercel(deployArgs(expected.teamName), repoRoot, env);
-  process.stdout.write(deployOutput);
-  const deploymentUrl = parseDeploymentUrl(deployOutput);
+  const deployed = vercel(deployArgs(expected.teamName), repoRoot, env);
+  process.stderr.write(deployed.stderr);
+  const deploymentUrl = parseDeploymentUrl(deployed.stdout);
 
   vercel(aliasArgs(deploymentUrl, expected.productionAlias, expected.teamName), repoRoot, env);
-  const aliasTarget = parseAliasTarget(vercel(inspectArgs(expected.productionAlias, expected.teamName), repoRoot, env));
+  const aliasTarget = parseAliasTarget(vercel(inspectArgs(expected.productionAlias, expected.teamName), repoRoot, env).combined);
   assertAliasMatches({ aliasTarget, deploymentUrl });
 
   const probeUrl = `https://${expected.productionAlias}${expected.probePath}`;

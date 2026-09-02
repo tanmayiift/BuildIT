@@ -43,9 +43,9 @@ export function inspectArgs(target, teamName = expected.teamName) {
   return ["inspect", target, "--scope", teamName];
 }
 
-// `vercel deploy` prints a JSON envelope on success. Fall back to the first deployment URL in
-// the stream so a plain-text CLI mode still yields a target instead of silently skipping alias
-// assignment — the exact failure this script exists to prevent.
+// `vercel deploy` writes the deployment URL to stdout and progress to stderr. Parse stdout
+// only: the progress stream also names auto-assigned domains, and picking one of those would
+// verify the alias against the wrong target and fail a release that actually succeeded.
 export function parseDeploymentUrl(stdout) {
   const text = String(stdout ?? "");
   try {
@@ -55,9 +55,12 @@ export function parseDeploymentUrl(stdout) {
   } catch {
     // not a JSON envelope; fall through to scanning
   }
-  const match = text.match(/https:\/\/[a-z0-9-]+\.vercel\.app/gi);
-  if (!match?.length) throw new Error("buildit_web_deploy_url_unparsable");
-  return match[match.length - 1];
+  const urls = text.match(/https:\/\/[a-z0-9-]+\.vercel\.app/gi) ?? [];
+  // A deployment URL carries a generated instance id: project-<id>-team.vercel.app. A project
+  // or auto-assigned domain has no such segment, so it must never be aliased over.
+  const deployment = urls.find(url => /-[a-z0-9]{8,}-/.test(url));
+  if (!deployment) throw new Error("buildit_web_deploy_url_unparsable");
+  return deployment;
 }
 
 // `vercel inspect <alias>` reports the deployment the alias currently resolves to.
@@ -83,12 +86,14 @@ export function assertProbeOk({ status, url }) {
   return true;
 }
 
-function vercel(args, cwd) {
-  const result = spawnSync("vercel", args, { cwd, encoding: "utf8", shell: false });
+function vercel(args, cwd, env) {
+  const result = spawnSync("vercel", args, { cwd, encoding: "utf8", shell: false, ...(env ? { env } : {}) });
   if (result.error) throw result.error;
-  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
-  if (result.status !== 0) throw new Error(`buildit_web_deploy_failed:${result.status ?? "unknown"}`);
-  return output;
+  if (result.status !== 0) {
+    process.stderr.write(`${result.stderr ?? ""}\n`);
+    throw new Error(`buildit_web_deploy_failed:${result.status ?? "unknown"}`);
+  }
+  return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", combined: `${result.stdout ?? ""}\n${result.stderr ?? ""}` };
 }
 
 async function main() {
@@ -100,14 +105,14 @@ async function main() {
     return;
   }
 
-  const deployOutput = vercel(deployArgs(), repoRoot);
-  process.stdout.write(deployOutput);
-  const deploymentUrl = parseDeploymentUrl(deployOutput);
+  const deployed = vercel(deployArgs(), repoRoot);
+  process.stderr.write(deployed.stderr);
+  const deploymentUrl = parseDeploymentUrl(deployed.stdout);
 
   // A Ready deployment is not a released one. Assign the alias, then read it back: Vercel can
   // report the deployment as "current production" while the alias still points elsewhere.
   vercel(aliasArgs(deploymentUrl), repoRoot);
-  const aliasTarget = parseAliasTarget(vercel(inspectArgs(contract.productionAlias), repoRoot));
+  const aliasTarget = parseAliasTarget(vercel(inspectArgs(contract.productionAlias), repoRoot).combined);
   assertAliasMatches({ aliasTarget, deploymentUrl });
 
   const probeUrl = `https://${contract.productionAlias}${expected.probePath}`;
