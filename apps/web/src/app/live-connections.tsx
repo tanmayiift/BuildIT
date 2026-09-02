@@ -54,7 +54,8 @@ export function useCredentialReadiness(connection: Connection | undefined) {
   const role = connection?.organization?.role;
   const canManage = role === "owner" || role === "admin";
   const credentials = useQuery(credentialQuery, canManage && connection?.organization ? { organizationId: connection.organization.id } : "skip");
-  return { canManage, checking: Boolean(canManage && connection?.organization && credentials === undefined), ready: credentials?.some(item => item.status === "valid") ?? false };
+  const valid = credentials?.filter(item => item.status === "valid") ?? [];
+  return { canManage, checking: Boolean(canManage && connection?.organization && credentials === undefined), ready: valid.length > 0, validCount: valid.length };
 }
 
 const stateCopy: Record<Connection["state"], { title: string; body: string }> = {
@@ -153,6 +154,19 @@ export function RepositoryConnectionView() {
     {policyMessage ? <p className="form-result" role="status">{policyMessage}</p> : null}
     <section className="repository-list" aria-label="Connected repositories">{connection.repositories.map(repository => <RepositoryPolicyRow key={repository.id} repository={repository} canManage={canManage} saving={savingRepositoryId === repository.id} onSave={next => save(repository, next)} />)}</section>
   </>;
+}
+
+export function ModelIntegrationState() {
+  const connection = useConnection();
+  const { canManage, checking, ready, validCount } = useCredentialReadiness(connection);
+  const loading = !connection || checking;
+  // Only an owner or admin may read the credential list, so a developer or viewer is told
+  // where the state lives rather than being shown a misleading "not connected".
+  const label = loading ? "Checking\u2026" : !canManage ? "Owner or admin manages this" : ready ? `${validCount} connected` : "Connect when analyzing";
+  const body = ready
+    ? "A validated key is stored for this workspace. It is used only for the provider request you authorize."
+    : "Your key is used only for the provider request you authorize.";
+  return <article className="integration-card" data-connected={ready || undefined}><div><span className="integration-glyph">AN</span><span className={`status ${ready ? "success" : "neutral"}`}>{label}</span></div><h2>Anthropic / OpenAI / Gemini</h2><p>{body}</p><a href="/setup/model">{ready ? "Manage model keys" : "Compare model setup"} \u2192</a></article>;
 }
 
 export function GitHubIntegrationState() {
