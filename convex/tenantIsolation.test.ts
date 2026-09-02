@@ -3841,7 +3841,8 @@ describe("organization capacity limits can be changed", () => {
 // own ceiling, and every organization created before today sits at concurrencyLimit 1 - one review
 // at a time - with no way for its owner to change that.
 describe("an owner can change their own capacity", () => {
-  const setup = async (t: ReturnType<typeof convexTest>, slug: string, role: "owner" | "admin" = "owner") => {
+  const setup = async (slug: string, role: "owner" | "admin" = "owner") => {
+    const t = convexTest(schema, modules);
     const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId: 8100, githubLogin: "riya" }));
     const tenant = await seedTenant(t, slug, userId);
     await t.run(async ctx => {
@@ -3849,12 +3850,11 @@ describe("an owner can change their own capacity", () => {
       if (membership) await ctx.db.patch(membership._id, { role, status: "active" });
       await ctx.db.insert("userProfiles", { userId, githubUserId: 8100, githubLogin: "riya", lastAuthenticatedAt: Date.now(), updatedAt: Date.now() });
     });
-    return { tenant, signedIn: t.withIdentity({ subject: `${userId}|session` }) };
+    return { t, tenant, signedIn: t.withIdentity({ subject: `${userId}|session` }) };
   };
 
   it("raises the ceiling the owner is actually blocked by", async () => {
-    const t = convexTest(schema, modules);
-    const { tenant, signedIn } = await setup(t, "owner-capacity");
+    const { tenant, signedIn } = await setup("owner-capacity");
     await expect(signedIn.mutation(api.organizations.updateCapacity, {
       organizationId: tenant.organizationId, concurrencyLimit: 6, monthlyBudget: 120, requestId: "owner-capacity-000001",
     })).resolves.toEqual({ concurrencyLimit: 6, monthlyBudget: 120 });
@@ -3862,16 +3862,14 @@ describe("an owner can change their own capacity", () => {
 
   // Capacity is a spend ceiling, so it is owner-only - a narrower policy than the admin controls.
   it("refuses an admin, who can manage members but not the bill", async () => {
-    const t = convexTest(schema, modules);
-    const { tenant, signedIn } = await setup(t, "admin-capacity", "admin");
+    const { tenant, signedIn } = await setup("admin-capacity", "admin");
     await expect(signedIn.mutation(api.organizations.updateCapacity, {
       organizationId: tenant.organizationId, concurrencyLimit: 6, requestId: "admin-capacity-000001",
     })).rejects.toThrow("not_found_or_forbidden");
   });
 
   it("refuses a stale session, because this moves money", async () => {
-    const t = convexTest(schema, modules);
-    const { tenant, signedIn } = await setup(t, "stale-capacity");
+    const { t, tenant, signedIn } = await setup("stale-capacity");
     await t.run(async ctx => {
       const profile = await ctx.db.query("userProfiles").withIndex("by_github_user", q => q.eq("githubUserId", 8100)).unique();
       if (profile) await ctx.db.patch(profile._id, { lastAuthenticatedAt: Date.now() - 11 * 60 * 1000 });
@@ -3883,8 +3881,7 @@ describe("an owner can change their own capacity", () => {
 
   // A ceiling nobody can raise is an outage; one anybody can raise without limit is a bill.
   it("keeps a self-serve raise inside a sane band", async () => {
-    const t = convexTest(schema, modules);
-    const { tenant, signedIn } = await setup(t, "band-capacity");
+    const { tenant, signedIn } = await setup("band-capacity");
     for (const patch of [{ concurrencyLimit: 500 }, { monthlyBudget: 1_000_000 }, { concurrencyLimit: -1 }]) {
       await expect(signedIn.mutation(api.organizations.updateCapacity, {
         organizationId: tenant.organizationId, requestId: "band-capacity-000001", ...patch,
@@ -3893,8 +3890,7 @@ describe("an owner can change their own capacity", () => {
   });
 
   it("cannot touch another organization's ceiling", async () => {
-    const t = convexTest(schema, modules);
-    const { signedIn } = await setup(t, "owner-a-capacity");
+    const { t, signedIn } = await setup("owner-a-capacity");
     const other = await seedTenant(t, "owner-b-capacity", "bob");
     await expect(signedIn.mutation(api.organizations.updateCapacity, {
       organizationId: other.organizationId, concurrencyLimit: 6, requestId: "cross-capacity-000001",
