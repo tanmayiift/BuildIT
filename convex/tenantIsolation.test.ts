@@ -3786,3 +3786,53 @@ describe("failures reach the person waiting for them", () => {
     expect((await t.run(ctx => ctx.db.get(tenant.reviewId)))?.completedAt).toBe(now);
   });
 });
+
+// monthlyBudget and concurrencyLimit became enforceable this session and nothing could set them,
+// so every organization was stuck on whatever it was seeded with. A limit nobody can raise is an
+// outage waiting for the first customer who needs more than the default.
+describe("organization capacity limits can be changed", () => {
+  const call = (t: ReturnType<typeof convexTest>, organizationId: Awaited<ReturnType<typeof seedTenant>>["organizationId"], patch: Record<string, number>, requestId = "capacity-change-000001") =>
+    t.mutation(internal.organizations.setCapacityLimits, { organizationId, actorId: "alice", requestId, now: Date.now(), ...patch });
+
+  it("raises a limit and lets the review that was blocked through", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "capacity-raise", "alice");
+    await t.run(ctx => ctx.db.patch(tenant.organizationId, { concurrencyLimit: 1 }));
+    const args = { repositoryId: tenant.repositoryId, prNumber: 2, headSha: "c".repeat(40), baseSha: "b".repeat(40),
+      baseRef: "main", isFork: false, actorId: "alice", actorRole: "developer" as const,
+      expectedCredentialScopeId: "credential-test", expectedProvider: "anthropic" as const, budgetLimit: 2, now: Date.now() };
+    await expect(t.mutation(internal.dashboardReviewData.create, args)).rejects.toThrow("organization_concurrency_limit_reached");
+    await expect(call(t, tenant.organizationId, { concurrencyLimit: 5 })).resolves.toMatchObject({ concurrencyLimit: 5 });
+    await expect(t.mutation(internal.dashboardReviewData.create, args)).resolves.toMatchObject({ status: "queued" });
+  });
+
+  it("treats zero as no limit rather than as a refusal to run anything", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "capacity-zero", "alice");
+    await expect(call(t, tenant.organizationId, { concurrencyLimit: 0, monthlyBudget: 0 }))
+      .resolves.toMatchObject({ concurrencyLimit: 0, monthlyBudget: 0 });
+  });
+
+  it("refuses a value that would silently disable the cap", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "capacity-invalid", "alice");
+    await expect(call(t, tenant.organizationId, { concurrencyLimit: -1 })).rejects.toThrow("capacity_limit_invalid");
+    await expect(call(t, tenant.organizationId, { monthlyBudget: Number.NaN })).rejects.toThrow("capacity_limit_invalid");
+    await expect(call(t, tenant.organizationId, {})).rejects.toThrow("capacity_limit_invalid");
+  });
+
+  it("records the change in the audit chain, because capacity is a spend control", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "capacity-audited", "alice");
+    await call(t, tenant.organizationId, { monthlyBudget: 250 });
+    const events = await t.run(ctx => ctx.db.query("auditEvents").withIndex("by_org_created", q => q.eq("organizationId", tenant.organizationId)).collect());
+    expect(events.map(event => event.action)).toContain("organization.capacity_changed");
+  });
+
+  it("refuses to change a deleted organization", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "capacity-deleted", "alice");
+    await t.run(ctx => ctx.db.patch(tenant.organizationId, { deletedAt: Date.now() }));
+    await expect(call(t, tenant.organizationId, { concurrencyLimit: 3 })).rejects.toThrow("not_found_or_forbidden");
+  });
+});
