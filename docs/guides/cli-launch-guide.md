@@ -28,6 +28,13 @@ The command exits with consent required. Inspect its command plan, then allow on
 node apps/cli/dist/index.js review --dir apps/cli --confirm-run --json
 ```
 
+This example ends `inconclusive`, and that is the correct outcome rather than a fault. `apps/cli`
+has no `test` script, `test` is a required check, and BuildIT refuses to report a pass when a
+required check produced no evidence. Run it against a directory whose `package.json` defines a
+`test` script to see a passing result. A check the selected package does not define is reported
+`available: false` in the command plan before anything runs, so you can see what will and will not
+be exercised.
+
 Use `--base <ref>` when the comparison base must be explicit. Use `--trust-working-config` only after inspecting a local, uncommitted policy change; the default trusts committed policy instead.
 
 ## Save an optional model key locally

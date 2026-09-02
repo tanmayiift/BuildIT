@@ -50,4 +50,16 @@ assert(completion?.data.status === "consent_required", "cli_journey_consent_stat
 assert(completion?.data.workingTreeModified === false, "cli_journey_mutation_claim_invalid");
 assert(before === after, "cli_journey_worktree_changed");
 
+const discoverable = (plan?.data.checks ?? []).filter((check) => check.available);
+assert(discoverable.length > 0, "cli_journey_no_runnable_check_discovered");
+assert(discoverable.some((check) => check.name === "lint"), "cli_journey_lint_not_discoverable");
+assert(discoverable.every((check) => typeof check.executable === "string" && Array.isArray(check.args)), "cli_journey_check_not_executable");
+
+// Consent is the boundary: the same run with --confirm-run must actually execute what it planned.
+const confirmed = run(["review", "--dir", "apps/cli", "--confirm-run", "--json"]),
+  confirmedEvents = jsonLines(confirmed.stdout),
+  ran = confirmedEvents.filter((item) => item.type === "check_completed");
+assert(ran.some((item) => item.data.name === "lint" && item.data.conclusion === "passed"), "cli_journey_lint_did_not_run");
+assert(gitStatus() === before, "cli_journey_confirmed_run_changed_worktree");
+
 process.stdout.write(JSON.stringify({ connected: true, journeys: { productReviewer: "help_and_doctor_passed", developer: "scoped_plan_and_consent_passed" }, worktreeUnchanged: true, providerCostUsd: 0 }) + "\n");
