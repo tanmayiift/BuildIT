@@ -66,7 +66,7 @@ function findingLines(finding: ReportFinding, index: number) {
 // than a phrase each report restates in its own words.
 export const neverMergedSentence = "BuildIT did not merge this pull request.";
 
-export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
+export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; unreadableSources?: { total: number; unreadable: number; summary: string; nextStep: string }; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
   const decision = computeReviewDecision({ isStale: input.isStale, environmentAvailable: input.environmentAvailable, coverageComplete: input.coverage === "complete", ...(input.injectionUnscoped ? { injectionUnscoped: true } : {}), checks: input.checks, findings: input.findings });
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
@@ -118,7 +118,11 @@ function checkExcerpt(check: ReviewCheckDecision) {
       ? ["", "> **Intent was not verified.** Instruction-like text appeared in this pull request's description or in a repository document, so BuildIT did not take either at face value when working out what the change is supposed to do. The checks and the cited findings below are unaffected: each one is tied to a file, a line and this exact commit."]
       : []),
     ...(input.coverageGap === "requirements"
-      ? ["", "> **Intent was not verified.** A requirement source linked from this pull request could not be read — a ticket in another repository, or a tracker with no connected credential. Everything above is about the code and its checks. Whether the change does what was asked is still an open question for a person."]
+      ? ["", input.unreadableSources
+        // Naming the source and the remedy is the difference between a receipt and a shrug. The
+        // generic sentence listed both possible causes instead of the one that happened.
+        ? `> **Intent was not verified.** ${input.unreadableSources.unreadable} of ${input.unreadableSources.total} requirement sources could not be read: ${input.unreadableSources.summary}. ${input.unreadableSources.nextStep} Everything above is about the code and its checks. Whether the change does what was asked is still an open question for a person.`
+        : "> **Intent was not verified.** A requirement source linked from this pull request could not be read. Everything above is about the code and its checks. Whether the change does what was asked is still an open question for a person."]
       : []),
     ...(visibleFindings.length ? ["", "### What needs attention", "", ...visibleFindings.flatMap(findingLines)] : []),
     "",
@@ -139,7 +143,7 @@ function checkExcerpt(check: ReviewCheckDecision) {
     `| Base commit | \`${code(input.baseSha)}\` |`,
     `| Trusted configuration | \`${code(input.configRevision)}\` |`,
     `| Code under review | ${input.coverage === "complete" ? "Read in full" : "Partially read"} |`,
-    `| Requirement sources | ${input.coverageGap === "requirements" ? "One or more unreadable" : "All read"} |`,
+    `| Requirement sources | ${input.coverageGap !== "requirements" ? "All read" : input.unreadableSources ? `${input.unreadableSources.unreadable} of ${input.unreadableSources.total} unreadable — ${input.unreadableSources.summary}` : "One or more unreadable"} |`,
     `| Model cost | $${input.costUsd.toFixed(4)} |`,
     `| Source evidence deleted after | ${istDate(input.retentionExpiresAt)} |`,
     ...(evidenceReceipts.length || claimReceipts.length ? ["", ...evidenceReceipts, ...claimReceipts] : []),

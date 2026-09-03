@@ -111,7 +111,11 @@ export default defineSchema({
     observedHeadSha: v.optional(v.string()), trustedRef: v.string(), trustedRefSha: v.string(),
     configRevisionId: v.id("configRevisions"), configProvenance: value.configProvenance,
     provider: value.provider, model: v.string(), modelVersion: v.string(), promptVersion: v.string(),
-    evalSetVersion: v.string(), coverageLevel: value.coverageLevel, coverageGap: v.optional(value.coverageGap), currentStage: value.reviewStage,
+    evalSetVersion: v.string(), coverageLevel: value.coverageLevel, coverageGap: v.optional(value.coverageGap),
+    // Beside the gap it explains, because "requirements" alone is what made the receipt say
+    // "One or more unreadable" and name neither which source nor why.
+    unreadableSources: v.optional(v.object({ total: v.number(), unreadable: v.number(), summary: v.string(), nextStep: v.string() })),
+    currentStage: value.reviewStage,
     promptInjectionUnscopedAt: v.optional(v.number()), promptInjectionSurfaces: v.optional(v.array(value.injectionSurface)),
     blockedReason: v.optional(v.string()), blockedSince: v.optional(v.number()),
     blockedExpiresAt: v.optional(v.number()), parentReviewId: v.optional(v.id("reviews")),
