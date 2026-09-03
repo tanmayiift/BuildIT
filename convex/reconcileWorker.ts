@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
-import { activeStatuses } from "./lib/lifecycle";
+import { activeStatuses, webhookDeliveryRetentionMs } from "./lib/lifecycle";
 
 // durableReview.reconcileStuck and reviewState.expireBlocked were both implemented, exported and
 // never called: convex/crons.ts declared only artifact cleanup and the telemetry snapshot. A
@@ -25,8 +25,17 @@ export const sweep = internalMutation({
     // webhookDeliveries grows with commit volume rather than review volume, so it outruns every
     // other table and had no expiry at all. Swept here rather than under a fifth cron, because
     // this one already exists to retire things whose time is up.
+    //
+    // Convex orders an absent field before every number, so lt(now) also matches every row
+    // recorded before expiresAt existed - regardless of age. Deleting those on sight would throw
+    // away the dedupe backlog that stops a GitHub redelivery starting a second review, so a row
+    // without a stamp gets one from when it arrived and ages out on the same rule as the rest.
     const staleDeliveries = await ctx.db.query("webhookDeliveries").withIndex("by_expiry", q => q.lt("expiresAt", now)).take(sweepLimit);
     for (const delivery of staleDeliveries) {
+      if (delivery.expiresAt === undefined) {
+        await ctx.db.patch(delivery._id, { expiresAt: delivery.receivedAt + webhookDeliveryRetentionMs });
+        continue;
+      }
       await ctx.db.delete(delivery._id);
       deliveriesDeleted += 1;
     }

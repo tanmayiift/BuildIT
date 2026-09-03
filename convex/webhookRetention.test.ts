@@ -41,6 +41,38 @@ describe("webhook delivery retention", () => {
     expect(await t.run(async ctx => ctx.db.get(old))).toBeNull();
   });
 
+  // Convex orders an absent field before every number, so lt(now) on the by_expiry index matches
+  // rows that have no expiresAt at all. Every delivery recorded before this field existed was
+  // therefore claimable the moment the sweep shipped, whatever its age - and the sweep deleted
+  // them, taking the dedupe backlog that stops a GitHub redelivery starting a second review.
+  it("does not delete a legacy row that has no expiry yet", async () => {
+    const t = convexTest(schema, modules), now = 60 * 86_400_000;
+    const legacy = await t.run(async ctx => ctx.db.insert("webhookDeliveries", {
+      deliveryId: "legacy-1", event: "pull_request", action: "opened", signatureValid: true,
+      disposition: "processed", status: "completed", receivedAt: now - 60_000,
+    }));
+
+    await t.mutation(internal.reconcileWorker.sweep, { now });
+
+    const row = await t.run(async ctx => ctx.db.get(legacy));
+    expect(row).not.toBeNull();
+    // Stamped from when it arrived, so it ages out on the same 30-day rule as everything else.
+    expect(row?.expiresAt).toBe(now - 60_000 + webhookDeliveryRetentionMs);
+  });
+
+  it("deletes a legacy row once the stamp it was given has passed", async () => {
+    const t = convexTest(schema, modules), now = 60 * 86_400_000;
+    const legacy = await t.run(async ctx => ctx.db.insert("webhookDeliveries", {
+      deliveryId: "legacy-2", event: "pull_request", action: "opened", signatureValid: true,
+      disposition: "processed", status: "completed", receivedAt: now - 31 * 86_400_000,
+    }));
+
+    await t.mutation(internal.reconcileWorker.sweep, { now });
+    await t.mutation(internal.reconcileWorker.sweep, { now });
+
+    expect(await t.run(async ctx => ctx.db.get(legacy))).toBeNull();
+  });
+
   it("stamps an expiry on every delivery it records, so nothing is unbounded", async () => {
     const t = convexTest(schema, modules);
     const rows = await t.run(async ctx => ctx.db.query("webhookDeliveries").collect());
