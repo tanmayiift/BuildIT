@@ -45,7 +45,7 @@ const summary = v.object({ revision: v.union(v.literal("base"), v.literal("head"
   credentialTeardownProved: v.literal(true), sandboxStopped: v.literal(true), executionFingerprint:v.optional(hash),outputHash:v.optional(hash),outputTruncated:v.optional(v.boolean()),
   scannerName:v.optional(v.string()),scannerVersion:v.optional(v.string()),regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))) });
 export const completeValidation = internalMutation({
-  args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: hash, size: v.number(), summaries: v.array(summary), manager: v.union(v.literal("npm"), v.literal("pnpm"), v.literal("yarn")), now: v.number() },
+  args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: hash, size: v.number(), summaries: v.array(summary), manager: v.union(v.literal("npm"), v.literal("pnpm"), v.literal("yarn"), v.literal("none")), now: v.number() },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), artifact = await ctx.db.get(args.artifactId), config = await ctx.db.get(review.configRevisionId);
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");

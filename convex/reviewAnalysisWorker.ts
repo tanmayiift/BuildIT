@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { arbitrateFindings, normalizeFindingCriteria, reconcileArbitration, runModelReviewChain, validateFindingCandidates, type ArbitrationDecision, type CriticDecision, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, type PromptStage } from "@buildit/orchestrator";
+import { arbitrateFindings, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, validateFindingCandidates } from "@buildit/orchestrator";
 import { approvedProviderModels, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact, redactForModel } from "@buildit/security";
 
@@ -81,6 +81,10 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   if (size() > maxBytes) throw new Error("analysis_context_budget_too_small");
   const baseCeiling = Math.max(size(), Math.floor(maxBytes * 0.7));
   const pushWithin = <T>(target: T[], item: T, ceiling = baseCeiling) => { target.push(item); if (size() <= ceiling) return true; target.pop(); return false; };
+  // increment() writes into base and is not covered by pushWithin's pop-on-overflow, so every
+  // exclusion counter can still grow after the last file was admitted. This holds back enough room
+  // for those digits plus the keys that appear the first time a kind is excluded.
+  const counterReserve = Math.max(48, Math.min(2_048, Math.floor(maxBytes * 0.01)));
   const increment = (kind: OmissionKind, amount = 1) => { exclusions.totals[kind] = (exclusions.totals[kind] ?? 0) + amount; };
   const fitText = (raw: string, maximum: number, assign: (value: string) => void) => {
     let low = 0, high = Math.min(raw.length, maximum);
@@ -144,12 +148,18 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
 
   const changed = new Set(pull.files.map(file => file.path));
   for (const file of headChunks.flatMap(chunk => chunk.snapshot.files).sort((a, b) => Number(changed.has(b.path)) - Number(changed.has(a.path)) || a.path.localeCompare(b.path))) {
-    const evidence = sourceEvidence(file.path, file.content), item = { ...evidence, content: redactForModel(file.content) }, size = Buffer.byteLength(JSON.stringify(item));
-    if (Buffer.byteLength(JSON.stringify(base)) + size > maxBytes) { increment("repositoryFiles"); pushWithin(exclusions.paths, file.path, maxBytes); continue; }
+    const evidence = sourceEvidence(file.path, file.content), item = { ...evidence, content: redactForModel(file.content) };
+    // The comma JSON adds before a second element is real payload; omitting it undercounted by a
+    // byte, which is all it took on a tree this size.
+    const size = Buffer.byteLength(JSON.stringify(item)) + (files.length ? 1 : 0);
+    if (Buffer.byteLength(JSON.stringify(base)) + size > maxBytes - counterReserve) { increment("repositoryFiles"); pushWithin(exclusions.paths, file.path, maxBytes); continue; }
     files.push(item);
   }
   const excludedAnything = Object.values(exclusions.totals).some(value => value > 0) || pull.requirementCoverage !== "complete" || headChunks.some(chunk => chunk.snapshot.coverage !== "full");
   base.coverage = excludedAnything ? "partial" : "full";
+  while (size() > maxBytes && exclusions.paths.length) exclusions.paths.pop();
+  while (size() > maxBytes && exclusions.patchPaths.length) exclusions.patchPaths.pop();
+  while (size() > maxBytes && exclusions.changedPaths.length) exclusions.changedPaths.pop();
   if (size() > maxBytes) throw new Error("analysis_context_too_large");
   return base;
 }
@@ -235,7 +245,7 @@ export const analyze = internalAction({
       return [{ id: `scanner-${index}-${item.ruleId}`, title: item.summary ?? item.ruleId, category: "security", severity: item.severity, confidence: 1, path: item.path, startLine: item.startLine!, endLine: item.endLine!, evidenceIds: [evidence.record.id], impact: item.summary ?? "Deterministic scanner finding", explanation: `${item.ruleId} was detected by the pinned BuildIT scanner.`, origin: "scanner" as const }];
     });
     const candidates = validateFindingCandidates({ findings: [...modelFindings, ...scannerFindings], criteriaIds, allowedPaths: new Set([...headEvidence.values()].flatMap(item => item.record.path ? [item.record.path] : [])), evidence: [...headEvidence.values()].map(item => item.record), pinnedCommit: scope.headSha });
-    const arbitration = ((stage("arbitration").findings ?? []) as ArbitrationDecision[]), arbitrated = reconcileArbitration(arbitrateFindings(candidates, critic), arbitration), fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
+    const arbitration = ((stage("arbitration").findings ?? []) as ArbitrationDecision[]), arbitrated = dedupeSameDefect(reconcileArbitration(arbitrateFindings(candidates, critic), arbitration)), fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
     if (fingerprintKey.byteLength < 32) throw new Error("finding_fingerprint_secret_invalid");
     const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, coverage: untrusted.coverage, validation: untrusted.validation, records, arbitrated }));
     if (outputBody.byteLength > 4_000_000) throw new Error("analysis_output_too_large");

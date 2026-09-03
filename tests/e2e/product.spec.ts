@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("overview leads through the review queue to exact-commit evidence", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Give your technical lead proof before a pull request is merged." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Autonomous code review that cites defects, fixes them, and opens a stacked PR." })).toBeVisible();
   await page.getByRole("link", { name: /inspect a sample review/i }).click();
   await expect(page.getByRole("heading", { name: "Review queue" })).toBeVisible();
   await Promise.all([
@@ -251,7 +251,7 @@ test("an unknown address is a real 404, and every real page still is not", async
   for (const path of ["/nonexistent-section", "/setup/nonexistent", "/repositories/extra/segments"]) {
     expect((await request.get(path)).status(), `${path} should be 404`).toBe(404);
   }
-  for (const path of ["/", "/reviews", "/notifications", "/setup/install", "/data-handling", "/sign-in", "/account"]) {
+  for (const path of ["/", "/reviews", "/notifications", "/setup/install", "/data-handling", "/pricing", "/sandbox", "/sign-in", "/account"]) {
     expect((await request.get(path)).status(), `${path} should be 200`).toBe(200);
   }
 });
@@ -281,7 +281,7 @@ test("inline script is allowed only by nonce, and the page still hydrates under 
 
 
   // Content rendered by client hydration: proof the policy did not block the app's own scripts.
-  await expect(page.getByRole("heading", { name: "Give your technical lead proof before a pull request is merged." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Autonomous code review that cites defects, fixes them, and opens a stacked PR." })).toBeVisible();
   expect(violations).toEqual([]);
 });
 

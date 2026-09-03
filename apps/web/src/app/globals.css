@@ -32,7 +32,7 @@ button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-variant-numeric: tabular-nums; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-.preview-banner { min-height: 36px; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 7px 20px; background: var(--warning-bg); border-bottom: 1px solid #ead4a5; color: #563900; font-size: 12px; }
+.preview-banner { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 7px 20px; background: var(--warning-bg); border-bottom: 1px solid #ead4a5; color: #563900; font-size: 12px; }
 .preview-banner a { margin-left: 8px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .preview-label { padding: 2px 6px; background: #f2d79c; border-radius: 4px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .shell { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: calc(100vh - 36px); }
@@ -40,18 +40,18 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .brand-row { display: flex; align-items: center; gap: 10px; padding: 0 8px 18px; }
 .brand-glyph { display: grid; place-items: center; width: 32px; height: 32px; color: white; background: var(--navy); border-radius: 7px; }
 .brand-glyph svg { width: 22px; height: 22px; }
-.brand { font-size: 17px; font-weight: 800; letter-spacing: -.02em; }
+.brand { display: inline-flex; flex-direction: column; justify-content: center; min-height: 44px; font-size: 17px; font-weight: 800; letter-spacing: -.02em; }
 .brand span { display: block; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .02em; }
 .workspace-switcher { min-height: 56px; display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px 10px; color: var(--ink); text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; opacity: 1; }
 .workspace-switcher span:first-child { display: grid; gap: 2px; }
 .workspace-switcher strong { font-size: 13px; }
 .workspace-switcher small { color: var(--muted); }
 .workspace-select { display: grid; gap: 4px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
-.workspace-select select { width: 100%; min-height: 28px; color: var(--ink); background: transparent; border: 0; font-weight: 750; outline: 0; }
+.workspace-select select { width: 100%; min-height: 44px; color: var(--ink); background: transparent; border: 0; font-weight: 750; outline: 0; }
 .workspace-select small { color: var(--muted); font-size: 10px; }
 .workspace-error { margin: 5px 2px 0; color: var(--danger); font-size: 10px; }
 .nav-heading { margin: 20px 10px 6px; color: var(--faint); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.nav-link { min-height: 42px; display: flex; align-items: center; gap: 10px; margin: 2px 0; padding: 7px 10px; color: var(--ink-2); border-radius: 6px; font-size: 13px; font-weight: 600; }
+.nav-link { min-height: 44px; display: flex; align-items: center; gap: 10px; margin: 2px 0; padding: 7px 10px; color: var(--ink-2); border-radius: 6px; font-size: 13px; font-weight: 600; }
 .nav-link:hover { background: #eceff3; color: var(--ink); }
 .nav-link[data-current] { color: var(--navy); background: var(--surface); box-shadow: inset 3px 0 var(--navy); }
 .nav-mark { display: grid; place-items: center; width: 25px; height: 25px; color: var(--muted); background: var(--surface-inset); border: 1px solid var(--line); border-radius: 5px; font: 700 9px "JetBrains Mono Variable", monospace; }
@@ -80,6 +80,7 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .landing-promise h1 { max-width: 720px; margin: 0; font-size: clamp(38px,5vw,68px); line-height: .99; letter-spacing: -.055em; text-wrap: balance; }
 .landing-promise>p:not(.eyebrow) { max-width: 680px; margin: 22px 0 0; color: var(--ink-2); font-size: 17px; line-height: 1.65; text-wrap: pretty; }
 .landing-actions { margin-top: 26px; }
+.landing-promise-line { margin: 10px 0 0; color: var(--navy); font-size: 15px; font-weight: 750; }
 .landing-boundary { display: block; max-width: 690px; margin-top: 15px; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .review-proof { overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 0 0 1px rgba(11,49,95,.02),0 10px 28px rgba(11,49,95,.08); }
 .proof-context { display: grid; grid-template-columns: 1fr 1fr; background: var(--workbench); border-bottom: 1px solid var(--line); }
@@ -106,6 +107,10 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .landing-trust .eyebrow { color: #9db8d5; }
 .landing-trust p { margin: 0; color: #d5e0ec; font-size: 13px; line-height: 1.65; }
 .landing-trust a { color: white; white-space: nowrap; }
+.landing-pricing { display: grid; grid-template-columns: minmax(230px,.65fr) minmax(360px,1.2fr) auto; gap: 40px; align-items: center; padding: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.landing-pricing h2 { margin: 0; font-size: 23px; letter-spacing: -.03em; }
+.landing-pricing p { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.65; }
+.landing-pricing a { white-space: nowrap; }
 .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; margin-bottom: 28px; }
 .page-heading > div:first-child { max-width: 760px; }
 .eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
@@ -164,7 +169,7 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .status.running { color: var(--info); background: var(--info-bg); border-color: #bfd3ec; }
 .status.neutral { color: var(--ink-2); background: var(--workbench); border-color: var(--line); }
 .count { min-width: 24px; padding: 2px 7px; color: var(--muted); background: var(--workbench); border: 1px solid var(--line); border-radius: 999px; font: 600 11px "JetBrains Mono Variable", monospace; text-align: center; }
-.search-field input { width: 260px; min-height: 40px; padding: 0 12px; background: var(--workbench); border: 1px solid var(--line); border-radius: 6px; outline: 0; }
+.search-field input { width: 260px; min-height: 44px; padding: 0 12px; background: var(--workbench); border: 1px solid var(--line); border-radius: 6px; outline: 0; }
 .search-field input:focus { border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-soft); }
 .review-group { margin-bottom: 28px; }
 .review-group-heading { justify-content: space-between !important; align-items: flex-end !important; }
@@ -282,8 +287,8 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; }
 @media (prefers-reduced-motion: reduce) { .state-pulse { animation: none; opacity: .7 } }
 
 /* Visible only when focused, so keyboard users can bypass ~14 navigation links. */
-.skip-link { position: absolute; left: -9999px; top: 0; z-index: 100; padding: 10px 14px; background: var(--surface); color: var(--navy); border: 1px solid var(--line); border-radius: 0 0 6px 0; font-size: 13px; font-weight: 700; text-decoration: none }
+.skip-link { position: absolute; left: -9999px; top: 0; z-index: 100; display: inline-flex; align-items: center; min-height: 44px; padding: 10px 14px; background: var(--surface); color: var(--navy); border: 1px solid var(--line); border-radius: 0 0 6px 0; font-size: 13px; font-weight: 700; text-decoration: none }
 .skip-link:focus { left: 0 }
 
 /* WCAG 2.2 AA 2.5.8: inline text links were 15-22px tall. */
-.text-link, .account-link { display: inline-block; padding-block: 4px; min-height: 24px }
+.text-link, .account-link, .preview-banner a, .crumbs a, .back-link, .integration-card a, .section-heading a, .empty-band a { display: inline-flex; align-items: center; padding-block: 10px; min-height: 44px }

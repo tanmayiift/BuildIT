@@ -5,7 +5,7 @@ import { verifyExecutionGrant } from "@buildit/security";
 import type { ArtifactBroker } from "./artifacts.js";
 
 type Descriptor = { revision: "base" | "head"; artifactId: string; storageKey: string; checksum: string; size: number; readGrant: string };
-type Body = { organizationId: string; repositoryId: string; reviewId: string; baseSha: string; headSha: string; runnerImageVersion: string; runtime: "node22" | "node24"; artifacts: Descriptor[]; install: CommandPlan; checks: CommandPlan[] };
+type Body = { organizationId: string; repositoryId: string; reviewId: string; baseSha: string; headSha: string; runnerImageVersion: string; runtime: "node22" | "node24"; artifacts: Descriptor[]; install?: CommandPlan; checks: CommandPlan[] };
 type Runner = Pick<VercelSandboxRunner, "run">;
 export function pinnedSandboxImage(value: string | undefined) { if (!value || !/^(?:[a-z0-9][a-z0-9.\-]*(?::\d+)?\/)?[a-z0-9][a-z0-9._\-\/]*@sha256:[0-9a-f]{64}$/.test(value)) throw new Error("sandbox_image_unavailable"); return value; }
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -45,9 +45,11 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
     const token = bearer(request), raw = await request.text();
     if (Buffer.byteLength(raw) > 250_000) return json(413, { error: "request_too_large" });
-    const body = parse(raw), install = validatePlan(body.install), checks = body.checks.map(validatePlan);
-    if (install.planId !== "install" || install.network !== "registry_only" || checks.some(plan => plan.network !== "none")) throw new Error("invalid_execution_request");
-    const planBudget = install.timeoutMs + checks.reduce((sum, plan) => sum + plan.timeoutMs, 0), diagnosticBudget = checks.filter(plan => plan.required).reduce((sum, plan) => sum + plan.timeoutMs * SANDBOX_DIAGNOSTIC_RERUN_LIMIT, 0);
+    const body = parse(raw), install = body.install ? validatePlan(body.install) : undefined, checks = body.checks.map(validatePlan);
+    if (install && (install.planId !== "install" || install.network !== "registry_only")) throw new Error("invalid_execution_request");
+    if (!install && checks.length) throw new Error("invalid_execution_request");
+    if (checks.some(plan => plan.network !== "none")) throw new Error("invalid_execution_request");
+    const planBudget = (install?.timeoutMs ?? 0) + checks.reduce((sum, plan) => sum + plan.timeoutMs, 0), diagnosticBudget = checks.filter(plan => plan.required).reduce((sum, plan) => sum + plan.timeoutMs * SANDBOX_DIAGNOSTIC_RERUN_LIMIT, 0);
     if (planBudget > SERVERLESS_PLAN_BUDGET_MS || planBudget + diagnosticBudget > SERVERLESS_SANDBOX_WORK_BUDGET_MS) throw new Error("invalid_execution_request");
     const grant = await verifyExecutionGrant(token, input.grantSecret, { ...(input.now === undefined ? {} : { now: input.now }), consume: input.consume });
     if (grant.organizationId !== body.organizationId || grant.repositoryId !== body.repositoryId || grant.reviewId !== body.reviewId || grant.baseSha !== body.baseSha || grant.headSha !== body.headSha || grant.artifactsHash !== hash(descriptorsForHash(body.artifacts)) || grant.plansHash !== hash({ runnerImageVersion: body.runnerImageVersion, runtime: body.runtime, install, checks })) throw new Error("execution_grant_scope_invalid");
@@ -65,7 +67,7 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     if (!files.base.size || !files.head.size) throw new Error("base_head_context_incomplete");
     const runner = input.runner ?? new VercelSandboxRunner(), image = input.runner ? undefined : pinnedSandboxImage(process.env.BUILDIT_SANDBOX_IMAGE);
     if (image && image !== body.runnerImageVersion) throw new Error("execution_image_mismatch");
-    const execute = async (revision: "base" | "head") => runner.run({ runtime: body.runtime, ...(image ? { image } : {}), ...(input.sandboxCredentials ? { credentials: input.sandboxCredentials } : {}), files: [...files[revision]].filter(([path]) => !isUnsafeInstallControlPath(path)).map(([path, content]) => ({ path, content })), install, checks });
+    const execute = async (revision: "base" | "head") => runner.run({ runtime: body.runtime, ...(image ? { image } : {}), ...(input.sandboxCredentials ? { credentials: input.sandboxCredentials } : {}), files: [...files[revision]].filter(([path]) => !isUnsafeInstallControlPath(path)).map(([path, content]) => ({ path, content })), ...(install ? { install } : {}), checks });
     const [baseResult, headResult] = await Promise.all([execute("base"), execute("head")]);
     const diagnosticsFor=(initial:Awaited<ReturnType<Runner["run"]>>)=>Object.fromEntries(initial.results.map(item=>{const existing=initial.diagnostics?.[item.planId];if(existing?.length)return[item.planId,existing];const found=initial.outputs.find(output=>output.planId===item.planId),passed=item.conclusion==="passed";const fallback:DiagnosticRun={conclusion:passed?"passed":"failed",...(passed?{}:{failureFingerprint:hash(found?.text??"")})};return[item.planId,[fallback]]}));
     const [baseDiagnostics,headDiagnostics]=[diagnosticsFor(baseResult),diagnosticsFor(headResult)];

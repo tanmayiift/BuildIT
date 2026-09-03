@@ -12,8 +12,9 @@ export default function Overview() {
     <section className="landing-hero" aria-labelledby="landing-title">
       <div className="landing-promise">
         <p className="eyebrow">For lean B2B software teams</p>
-        <h1 id="landing-title">Give your technical lead proof before a pull request is merged.</h1>
-        <p>BuildIT compares the proposed code with its linked requirements, repository context, tests, and security rules. It hands back cited findings, clear limits, and—only with your consent—an independently reviewable fix.</p>
+        <h1 id="landing-title">Autonomous code review that cites defects, fixes them, and opens a stacked PR.</h1>
+        <p className="landing-promise-line">It never merges. A human owns the merge decision.</p>
+        <p>BuildIT gives your technical lead proof before a pull request is merged. It compares the proposed code with its linked requirements, repository context, tests, and security rules, then hands back cited findings, clear limits, and—only with your consent—an independently reviewable fix.</p>
         <div className="button-row landing-actions"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
         <small className="landing-boundary">GitHub sign-in identifies you. Repository installation controls code access. A model key is requested only for AI analysis or Autofix.</small>
       </div>
@@ -28,5 +29,7 @@ export default function Overview() {
     <section className="landing-flow" aria-labelledby="flow-title"><div className="section-heading"><div><p className="eyebrow">One review, four working layers</p><h2 id="flow-title">From pull request to a decision you can inspect</h2></div></div><ol>{layers.map(layer => <li key={layer.mark}><code>{layer.mark}</code><div><h3>{layer.title}</h3><p>{layer.body}</p></div></li>)}</ol></section>
 
     <section className="landing-trust" aria-labelledby="trust-title"><div><p className="eyebrow">The accuracy boundary</p><h2 id="trust-title">AI proposes. Evidence decides.</h2></div><p>A model does not mark a branch safe. BuildIT derives its final status from required checks, accepted evidence-backed findings, environment availability, and staleness. Missing or conflicting proof ends as <strong>inconclusive</strong>, not a confident guess.</p><a className="text-link" href="/data-handling">Read the data and access boundary →</a></section>
+
+    <section className="landing-pricing" aria-labelledby="pricing-title"><div><p className="eyebrow">Pricing and limits</p><h2 id="pricing-title">Free while BuildIT earns your trust</h2></div><p>Every review is free today — no per-seat, per-repository or per-pull-request charge. You bring your own model key and pay your provider at cost; BuildIT adds nothing on top. Paid plans are coming, and repositories connected now keep free reviews through the change.</p><a className="text-link" href="/pricing">See pricing and limits →</a></section>
   </div>;
 }

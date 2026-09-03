@@ -111,6 +111,56 @@ describe("the report reads honestly in an inbox", () => {
     expect(body).toContain("Advisory checks do not block a merge");
   });
 
+  // A reviewer said the silence around a failing typecheck "reads as a broken check nobody
+  // watches". The output was captured by the runner and carried all the way here before being
+  // dropped, so the report could say a check failed but never what it said.
+  it("shows what a failing check actually reported", () => {
+    const body = composeVerifiedReport({ ...input(), findings: [], claims: [], checks: [
+      { name: "test", required: true, conclusion: "passed", evidenceComplete: true },
+      { name: "typecheck", required: false, conclusion: "failed", evidenceComplete: true,
+        excerpt: "src/rates.ts(4,7): error TS2322: Type 'string' is not assignable to type 'number'.\nFound 1 error." },
+    ] }).body;
+    expect(body).toContain("What `typecheck` reported");
+    expect(body).toContain("error TS2322");
+    expect(body).toContain("Found 1 error.");
+  });
+
+  it("cannot be made to break out of its code fence", () => {
+    const body = composeVerifiedReport({ ...input(), findings: [], claims: [], checks: [
+      { name: "test", required: true, conclusion: "failed", evidenceComplete: true,
+        excerpt: "boom\n```\n## injected heading\n" },
+    ] }).body;
+    expect(body).not.toContain("\n```\n## injected heading");
+    expect(body).toContain("boom");
+  });
+
+  it("stays silent when a failing check produced no output", () => {
+    const body = composeVerifiedReport({ ...input(), findings: [], claims: [], checks: [
+      { name: "test", required: true, conclusion: "failed", evidenceComplete: false },
+    ] }).body;
+    expect(body).not.toContain("reported");
+  });
+
+  // On a repository BuildIT has no command plans for, the scanners are the only required checks.
+  // "All 3 required checks passed" is true and still misleads, because a reader assumes the tests
+  // ran. Say what did not.
+  it("says plainly when no test, lint or typecheck command ran", () => {
+    const body = composeVerifiedReport({ ...input(), findings: [], claims: [], ecosystem: "none", checks: [
+      { name: "buildit-rules", required: true, conclusion: "passed", evidenceComplete: true },
+      { name: "gitleaks", required: true, conclusion: "passed", evidenceComplete: true },
+      { name: "osv-scanner", required: true, conclusion: "passed", evidenceComplete: true },
+    ] }).body;
+    expect(body).toContain("recognised no package manager in this repository");
+    expect(body).toContain("no test, lint or typecheck command was run");
+  });
+
+  it("adds no such caveat to a repository whose checks did run", () => {
+    const body = composeVerifiedReport({ ...input(), findings: [], claims: [], ecosystem: "pnpm", checks: [
+      { name: "test", required: true, conclusion: "passed", evidenceComplete: true },
+    ] }).body;
+    expect(body).not.toContain("recognised no package manager");
+  });
+
   it("does not invent an advisory caveat when there is none", () => {
     const body = withChecks([
       { name: "install", required: true, conclusion: "passed" },

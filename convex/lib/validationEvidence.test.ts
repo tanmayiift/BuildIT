@@ -9,6 +9,28 @@ describe("validation evidence", () => {
     expect(() => detectPackageManager({ base: new Set(["package.json", "pnpm-lock.yaml", "yarn.lock"]), head: new Set(["package.json", "pnpm-lock.yaml"]) })).toThrow("package_manager_unsupported_or_ambiguous");
   });
 
+  // BuildIT could not review a repository that is not a Node project at all: this threw, the throw
+  // sat inside the validation workflow step, and the review died with "a required platform step
+  // failed" rather than degrading. Nothing about a review requires a package manager - the three
+  // pinned scanners run on any tree and are themselves required checks.
+  it("recognises no package manager instead of refusing the repository", () => {
+    const gradle = new Set(["build.gradle.kts", "settings.gradle.kts", "gradlew", "composeApp/src/Main.kt"]);
+    expect(detectPackageManager({ base: gradle, head: gradle })).toBeUndefined();
+    const go = new Set(["go.mod", "go.sum", "main.go"]);
+    expect(detectPackageManager({ base: go, head: go })).toBeUndefined();
+    // A lockfile with no package.json is still not a Node project BuildIT can install.
+    expect(detectPackageManager({ base: new Set(["pnpm-lock.yaml"]), head: new Set(["pnpm-lock.yaml"]) })).toBeUndefined();
+  });
+
+  it("still refuses ambiguity, which is a different thing from having nothing to run", () => {
+    // Two lockfiles means BuildIT cannot tell which install is correct, and guessing would run the
+    // wrong one. That stays a refusal.
+    const both = new Set(["package.json", "pnpm-lock.yaml", "package-lock.json"]);
+    expect(() => detectPackageManager({ base: both, head: both })).toThrow("package_manager_unsupported_or_ambiguous");
+    // Gaining or losing an ecosystem between base and head is also a refusal.
+    expect(() => detectPackageManager({ base: new Set(["build.gradle.kts"]), head: new Set(["package.json", "pnpm-lock.yaml"]) })).toThrow("package_manager_changed");
+  });
+
   it("derives revision only from the collision-safe artifact name", () => {
     expect(revisionFromStorageKey("artifacts/o/r/v/a/context-base-12.json")).toBe("base");
     expect(() => revisionFromStorageKey("artifacts/o/r/v/a/context-12.json")).toThrow("context_artifact_revision_invalid");

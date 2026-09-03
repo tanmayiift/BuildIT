@@ -20,6 +20,7 @@ function safe(value: string) {
 }
 
 function code(value: string) { return safe(value).replace(/`/g, "ˋ"); }
+function fence(value: string) { return value.replace(/```/g, "ˋˋˋ").replace(/\u0000/g, ""); }
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -60,7 +61,7 @@ function findingLines(finding: ReportFinding, index: number) {
   ];
 }
 
-export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
+export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
   const decision = computeReviewDecision({ isStale: input.isStale, environmentAvailable: input.environmentAvailable, coverageComplete: input.coverage === "complete", ...(input.injectionUnscoped ? { injectionUnscoped: true } : {}), checks: input.checks, findings: input.findings });
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
@@ -77,11 +78,25 @@ export function composeVerifiedReport(input: { repository: string; prNumber: num
   ].filter(Boolean).join(" and ");
   const summary = problems
     || (decision.status === "checks_passed"
-      ? `All ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"} passed with complete evidence`
+      ? `All ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"} passed with complete evidence${input.ecosystem === "none" ? ", and no test, lint or typecheck command was run because BuildIT recognised no package manager in this repository" : ""}`
       : "Complete evidence was not available");
+// A failing check produced one bolded table cell and nothing else - no output, no evidence - which
+// reads as a check nobody watches, advisory or not. The text was captured by the runner and
+// carried all the way to the report worker before being dropped. Cite the tail of it: the last
+// lines are where a test runner or a compiler puts the reason.
+const excerptLines = 6;
+const excerptChars = 600;
+function checkExcerpt(check: ReviewCheckDecision) {
+  if (!check.excerpt?.trim()) return "";
+  const tail = check.excerpt.replace(/\s+$/, "").split("\n").slice(-excerptLines).join("\n").slice(-excerptChars);
+  return `\n\n<details>\n<summary>What \`${code(check.name)}\` reported</summary>\n\n\`\`\`\n${fence(tail)}\n\`\`\`\n\n</details>`;
+}
+
   const checkRows = input.checks.length
     ? input.checks.map(check => `| ${safe(check.name)} | ${check.required ? "Required" : "Advisory"} | ${check.conclusion === "failed" ? `**${conclusion(check.conclusion)}**` : conclusion(check.conclusion)}${check.evidenceComplete ? "" : " · evidence incomplete"} |`)
     : ["| No checks configured | — | Not run |"];
+  const failedChecks = input.checks.filter(check => check.conclusion === "failed" || check.conclusion === "timed_out");
+  const checkExcerpts = failedChecks.map(checkExcerpt).filter(Boolean).join("");
   const evidenceReceipts = visibleFindings.map(finding => `- ${safe(finding.title)} — Evidence: ${finding.evidenceIds.length ? finding.evidenceIds.map(id => `\`${code(id)}\``).join(", ") : "none"}`);
   const claimReceipts = claims.map(claim => `- ${safe(claim.text)} — Evidence: ${claim.evidenceIds.map(id => `\`${code(id)}\``).join(", ")}`);
   const lines = [
@@ -101,6 +116,7 @@ export function composeVerifiedReport(input: { repository: string; prNumber: num
     "| Check | Policy | Result |",
     "| --- | --- | --- |",
     ...checkRows,
+    ...(checkExcerpts ? [checkExcerpts] : []),
     ...(claims.length ? ["", "### Additional evidence", "", ...claims.map(claim => `- ${safe(claim.text)}`)] : []),
     "",
     "<details>",

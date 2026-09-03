@@ -60,7 +60,7 @@ describe("native base/head execution boundary", () => {
   });
 
   it("rejects work that cannot finish inside the serverless budget", async () => {
-    const f = fixture({ install: { ...plans.install, timeoutMs: 200_000 }, checks: [{ ...plans.checks[0]!, timeoutMs: 100_000 }] }), deps = dependencies();
+    const f = fixture({ install: { ...plans.install!, timeoutMs: 500_000 }, checks: [{ ...plans.checks[0]!, timeoutMs: 300_000 }] }), deps = dependencies();
     const response = await handleExecution(new Request("https://broker/api/execute", { method: "POST", headers: { authorization: `Bearer ${f.grant}` }, body: JSON.stringify(f.body) }), { artifactBroker: deps.artifactBroker as never, runner: deps.runner as never, grantSecret: secret, consume: async () => true, now });
     expect(response.status).toBe(400);
     expect(deps.runner.run).not.toHaveBeenCalled();

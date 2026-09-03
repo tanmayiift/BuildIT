@@ -5,13 +5,14 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { composeVerifiedReport, type ReviewCheckDecision } from "@buildit/orchestrator";
+import { redact } from "@buildit/security";
 import { issueArtifactGrant } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 type ArtifactRef = { id: Id<"artifacts">; storageKey: string; checksum: string; size: number };
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; injectionUnscoped: boolean; environmentAvailable: boolean; isStale: boolean; expiresAt: number; costUsd: number; analysis: ArtifactRef; validation: ArtifactRef; completedArtifactId?: Id<"artifacts"> };
 type RunResult = { planId: string; required: boolean; conclusion: ReviewCheckDecision["conclusion"] };
-type Validation = { version?: number; pinned?: { headSha?: string; baseSha?: string }; output?: { head?: { results?: RunResult[]; outputs?: Array<{ planId: string; text?: string; truncated?: boolean; evidenceTruncated?: boolean }> }; scanners?: { head?: { scanner?: string; complete?: boolean; commitSha?: string; runs?: Array<{ scanner?: string; scannerVersion?: string }>; findings?: Array<{ scanner?: string; severity?: string }> } } } };
+type Validation = { version?: number; manager?: "npm" | "pnpm" | "yarn" | "none"; pinned?: { headSha?: string; baseSha?: string }; output?: { head?: { results?: RunResult[]; outputs?: Array<{ planId: string; text?: string; truncated?: boolean; evidenceTruncated?: boolean }> }; scanners?: { head?: { scanner?: string; complete?: boolean; commitSha?: string; runs?: Array<{ scanner?: string; scannerVersion?: string }>; findings?: Array<{ scanner?: string; severity?: string }> } } } };
 type Finding = { title: string; severity: "critical" | "high" | "warning" | "info"; resolution: "accepted" | "rejected" | "uncertain"; blocking: boolean; evidenceIds: string[]; path?: string; startLine?: number; endLine?: number; impact?: string; explanation?: string };
 type Analysis = { version?: number; pinned?: { headSha?: string; baseSha?: string }; arbitrated?: Finding[] };
 
@@ -27,7 +28,7 @@ async function download(scope: Scope, artifact: ArtifactRef, brokerUrl: string, 
 export function reportChecks(validation: Validation, headSha: string): ReviewCheckDecision[] {
   if (validation.version !== 1 || validation.pinned?.headSha !== headSha || !validation.output?.head) throw new Error("report_validation_pinning_failed");
   const outputs = new Map((validation.output.head.outputs ?? []).map(item => [item.planId, item]));
-  const checks = (validation.output.head.results ?? []).map(item => { const output = outputs.get(item.planId); return { name: item.planId, required: item.required, conclusion: item.conclusion, evidenceComplete: Boolean(output && typeof output.text === "string" && !output.truncated && !output.evidenceTruncated) }; });
+  const checks = (validation.output.head.results ?? []).map(item => { const output = outputs.get(item.planId); return { name: item.planId, required: item.required, conclusion: item.conclusion, ...(["failed", "timed_out"].includes(item.conclusion) && typeof output?.text === "string" && output.text.trim() ? { excerpt: redact(output.text) } : {}), evidenceComplete: Boolean(output && typeof output.text === "string" && !output.truncated && !output.evidenceTruncated) }; });
   const scanner = validation.output.scanners?.head;
   if (scanner) {
     const names: Record<string, string> = { builditRules: "buildit-rules", gitleaks: "gitleaks", osvScanner: "osv-scanner" };
@@ -51,7 +52,7 @@ export const compose = internalAction({
     const [analysisBody, validationBody] = await Promise.all([download(scope, scope.analysis, brokerUrl, secret), download(scope, scope.validation, brokerUrl, secret)]);
     const analysis = JSON.parse(analysisBody.toString("utf8")) as Analysis, validation = JSON.parse(validationBody.toString("utf8")) as Validation;
     if (analysis.version !== 1 || analysis.pinned?.headSha !== scope.headSha || analysis.pinned?.baseSha !== scope.baseSha || !Array.isArray(analysis.arbitrated)) throw new Error("report_analysis_pinning_failed");
-    const body = Buffer.from(composeVerifiedReport({ repository: scope.repository, prNumber: scope.prNumber, headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision,
+    const body = Buffer.from(composeVerifiedReport({ ...(validation.manager ? { ecosystem: validation.manager } : {}), repository: scope.repository, prNumber: scope.prNumber, headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision,
       coverage: scope.coverage, injectionUnscoped: scope.injectionUnscoped, checks: reportChecks(validation, scope.headSha), findings: analysis.arbitrated, claims: [], evidence: [], environmentAvailable: scope.environmentAvailable, isStale: scope.isStale,
       costUsd: scope.costUsd, retentionExpiresAt: scope.expiresAt }).body, "utf8");
     if (body.byteLength > 60_000) throw new Error("report_output_too_large");

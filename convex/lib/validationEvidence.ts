@@ -8,7 +8,7 @@ export type ScannerSummary = { scanner: string; scannerVersion: string; commitSh
   runs?: Array<{ scanner: string; scannerVersion: string }>;
   findings: Array<{ scanner?: string; severity: "critical" | "warning" | "info" }> };
 export type ExecutionResponse = { base: ExecutionResult; head: ExecutionResult; diagnostics?:{base:Record<string,DiagnosticRun[]>;head:Record<string,DiagnosticRun[]>}; scanners: { base: ScannerSummary; head: ScannerSummary } };
-export type ExecutionEnvironment={configRevision:string;runnerImage:string;runtime:"node22"|"node24";manager:PackageManager;architecture:string;networkPolicy:string;toolVersions:Array<{name:string;version:string}>;install:CommandPlan;checks:CommandPlan[]};
+export type ExecutionEnvironment={configRevision:string;runnerImage:string;runtime:"node22"|"node24";manager:PackageManager|"none";architecture:string;networkPolicy:string;toolVersions:Array<{name:string;version:string}>;install?:CommandPlan;checks:CommandPlan[]};
 
 export const sha256Json = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
@@ -18,10 +18,11 @@ export function revisionFromStorageKey(storageKey: string): "base" | "head" {
   return match[1] as "base" | "head";
 }
 
-export function detectPackageManager(pathsByRevision: { base: Set<string>; head: Set<string> }): PackageManager {
+export function detectPackageManager(pathsByRevision: { base: Set<string>; head: Set<string> }): PackageManager | undefined {
   const manager = (paths: Set<string>) => {
     const found = [["package-lock.json", "npm"], ["pnpm-lock.yaml", "pnpm"], ["yarn.lock", "yarn"]].filter(([path]) => paths.has(path!)).map(([, value]) => value as PackageManager);
-    if (found.length !== 1 || !paths.has("package.json")) throw new Error("package_manager_unsupported_or_ambiguous");
+    if (found.length > 1) throw new Error("package_manager_unsupported_or_ambiguous");
+    if (found.length === 0 || !paths.has("package.json")) return undefined;
     return found[0]!;
   };
   const base = manager(pathsByRevision.base), head = manager(pathsByRevision.head);

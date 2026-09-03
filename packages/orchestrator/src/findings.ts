@@ -14,3 +14,42 @@ export function reconcileArbitration(findings:ArbitratedFinding[],decisions:Arbi
   return{...finding,reason:"critic_and_arbitration_supported"};
  })
 }
+
+// A defect found by both the model and a pinned scanner arrived as two findings and was counted
+// twice: "3 blocking issues" where a reader could see two. Nothing collapsed them, because the two
+// carry different ids by construction - the scanner's is synthesised - so the fingerprint dedupe
+// downstream can never match them.
+//
+// The scanner entry survives as canonical: it is deterministic, reproducible, and already carries
+// confidence 1. The model's prose is merged into it rather than discarded, so the report keeps the
+// explanation a person actually wants to read and loses only the double count.
+export function dedupeSameDefect(findings: ArbitratedFinding[]): ArbitratedFinding[] {
+  // Keyed on overlap, not on equality. The first version of this required identical line ranges
+  // and production immediately proved that wrong: for one disabled-TLS line the model reported
+  // 4-7, spanning the construct it read, while the scanner reported 4, the line its regex matched.
+  // Same defect, different ranges, still counted twice.
+  const sameDefect = (a: ArbitratedFinding, b: ArbitratedFinding) =>
+    a.path === b.path && a.category === b.category && a.startLine <= b.endLine && b.startLine <= a.endLine;
+  const kept: ArbitratedFinding[] = [];
+  for (const finding of findings) {
+    const index = kept.findIndex(existing => sameDefect(existing, finding));
+    if (index === -1) { kept.push(finding); continue; }
+    const existing = kept[index]!;
+    // Prefer the scanner: it is deterministic and reproducible. Then prefer whichever actually
+    // blocks - a merge must never quietly downgrade a finding that would have blocked alone.
+    const winner = existing.origin === "scanner" ? existing
+      : finding.origin === "scanner" ? finding
+      : existing.blocking ? existing : finding;
+    const loser = winner === existing ? finding : existing;
+    kept[index] = {
+      ...winner,
+      blocking: winner.blocking || loser.blocking,
+      // The model explains why it matters; the scanner states the rule. Keep the longer text, and
+      // keep the winner's line range so the fingerprint stays stable across runs.
+      explanation: loser.explanation.length > winner.explanation.length ? loser.explanation : winner.explanation,
+      impact: loser.impact.length > winner.impact.length ? loser.impact : winner.impact,
+      evidenceIds: [...new Set([...winner.evidenceIds, ...loser.evidenceIds])],
+    };
+  }
+  return kept;
+}

@@ -55,12 +55,13 @@ export class VercelSandboxRunner {
     image?: string;
     credentials?: SandboxCredentials;
     files: Array<{ path: string; content: string }>;
-    install: CommandPlan;
+    install?: CommandPlan;
     checks: CommandPlan[];
   }) {
-    if (input.install.planId !== "install" || input.install.network !== "registry_only") throw new Error("sandbox_install_plan_required");
+    if (input.install && (input.install.planId !== "install" || input.install.network !== "registry_only")) throw new Error("sandbox_install_plan_required");
+    if (!input.install && input.checks.length) throw new Error("sandbox_checks_without_install");
     if (input.checks.some(plan => plan.network !== "none")) throw new Error("sandbox_check_network_must_be_denied");
-    const planBudget = input.install.timeoutMs + input.checks.reduce((sum, plan) => sum + plan.timeoutMs, 0);
+    const planBudget = (input.install?.timeoutMs ?? 0) + input.checks.reduce((sum, plan) => sum + plan.timeoutMs, 0);
     const diagnosticBudget = input.checks.filter(plan => plan.required).reduce((sum, plan) => sum + plan.timeoutMs * SANDBOX_DIAGNOSTIC_RERUN_LIMIT, 0);
     if (planBudget + diagnosticBudget > SERVERLESS_SANDBOX_WORK_BUDGET_MS) throw new Error("sandbox_execution_budget_exceeded");
     const timeout = planBudget + diagnosticBudget + SANDBOX_SCANNER_TIMEOUT_MS + SANDBOX_OVERHEAD_RESERVE_MS;
@@ -103,14 +104,20 @@ export class VercelSandboxRunner {
       const osvReport = noPackageSources ? Buffer.from('{"results":[]}') : await sandbox.readFileToBuffer({ path: "/tmp/buildit-osv.json" });
       if (!osvReport || osvReport.byteLength > 4_000_000) throw new Error("osv_report_invalid");
 
+      const installPlan = input.install;
+      if (!installPlan) return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), stopped: true };
+
       await sandbox.updateNetworkPolicy({ allow: registryDomains });
-      const installResult = await sandbox.runCommand({ cmd: input.install.executable, args: input.install.args, cwd: "/vercel/sandbox/repo", timeoutMs: input.install.timeoutMs });
-      const installOutput = await output(installResult, input.install.outputBytes);
-      outputs.push({ planId: input.install.planId, ...installOutput });
-      const installTimedOut = timedOut(installResult.exitCode, installResult.durationMs, input.install.timeoutMs);
-      results.push({ ...input.install, conclusion: installOutput.truncated ? "truncated" : installResult.exitCode === 0 ? "passed" : installTimedOut ? "timed_out" : "failed", exitCode: installResult.exitCode, durationMs: installResult.durationMs ?? 0, ...(installResult.exitCode === 0 ? {} : { failureClass: installTimedOut ? ("timeout" as const) : ("code" as const) }) });
+      const installResult = await sandbox.runCommand({ cmd: installPlan.executable, args: installPlan.args, cwd: "/vercel/sandbox/repo", timeoutMs: installPlan.timeoutMs });
+      const installOutput = await output(installResult, installPlan.outputBytes);
+      outputs.push({ planId: installPlan.planId, ...installOutput });
+      const installTimedOut = timedOut(installResult.exitCode, installResult.durationMs, installPlan.timeoutMs);
+      results.push({ ...installPlan, conclusion: installOutput.truncated ? "truncated" : installResult.exitCode === 0 ? "passed" : installTimedOut ? "timed_out" : "failed", exitCode: installResult.exitCode, durationMs: installResult.durationMs ?? 0, ...(installResult.exitCode === 0 ? {} : { failureClass: installTimedOut ? ("timeout" as const) : ("code" as const) }) });
       diagnostics.install = [{ conclusion: installResult.exitCode === 0 && !installOutput.truncated ? "passed" : "failed", ...(installResult.exitCode === 0 && !installOutput.truncated ? {} : { failureFingerprint: createHash("sha256").update(installOutput.text).digest("hex") }) }];
-      if (installResult.exitCode !== 0 || installOutput.truncated) return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), stopped: true };
+      if (installResult.exitCode !== 0 || installOutput.truncated) {
+        for (const plan of input.checks) results.push({ ...plan, conclusion: "not_run" as const, durationMs: 0, failureClass: "environment" as const });
+        return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), stopped: true };
+      }
 
       await sandbox.updateNetworkPolicy("deny-all");
       for (const plan of input.checks) {

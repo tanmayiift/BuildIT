@@ -107,3 +107,53 @@ describe("critic independence",()=>{
 
   it("forces risky model findings uncertain when independence is unavailable",()=>{const findings=[{id:"f1",severity:"critical",origin:"model"},{id:"s1",severity:"critical",origin:"scanner"}] as never;const decisions=[{findingId:"f1",verdict:"supported",missingEvidenceIds:[],injectionDetected:false,explanation:"ok"},{findingId:"s1",verdict:"supported",missingEvidenceIds:[],injectionDetected:false,explanation:"ok"}] as never;expect(requireIndependentCritic(findings,decisions,false)).toEqual([expect.objectContaining({findingId:"f1",verdict:"uncertain"}),expect.objectContaining({findingId:"s1",verdict:"supported"})])});
 });
+
+// BuildIT could not review its own repository. Every attempt reached the analysis stage - context
+// and validation both succeeded, the sandbox ran for four minutes - and then threw
+// analysis_context_too_large. The budget arithmetic was out by a byte, which only matters on a
+// tree big enough to run the budget flat against the ceiling. A 474-file repository is.
+describe("the context budget holds on a repository large enough to exhaust it", () => {
+  const manyFiles = (count: number, bytes: number) =>
+    Array.from({ length: count }, (_, index) => ({ path: `src/file-${index}.ts`, content: "x".repeat(bytes), size: bytes }));
+
+  it("never exceeds the ceiling, at any ceiling, however many files are offered", () => {
+    // Sweeping the ceiling is the point: the leak was a single separator byte plus counter digits,
+    // so it only surfaced at sizes where the loop packs the budget exactly full.
+    for (const ceiling of [4_000, 8_000, 20_000, 50_000, 80_000]) {
+      const result = boundedAnalysisContext(
+        [{ pull, snapshot: { coverage: "full", omitted: [], files: manyFiles(600, 300) } }], ceiling);
+      expect(Buffer.byteLength(JSON.stringify(result)), `ceiling ${ceiling}`).toBeLessThanOrEqual(ceiling);
+      // It must still do its job - a budget that fits by returning nothing is not a fix.
+      expect(result.files.length, `ceiling ${ceiling}`).toBeGreaterThan(0);
+      expect(result.coverage, `ceiling ${ceiling}`).toBe("partial");
+    }
+  });
+
+  it("fits even when recording the exclusions is itself what overflows", () => {
+    // The reserve alone did not fix production, and this is why: exclusions.paths had the full
+    // ceiling, so recording which files were dropped consumed exactly the room the counters needed,
+    // and increment() - which no pop can undo - then pushed past it. Heavy requirement context
+    // plus hundreds of excluded files is the shape that does it.
+    const requirementSources = Array.from({ length: 63 }, (_, index) => ({
+      id: `req-${index}`, type: "repository_document" as const, status: "resolved", urlHash: `${index}`.padStart(64, "0"), version: "v1", content: "r".repeat(5_000),
+    }));
+    const heavy = { ...pull, body: "b".repeat(20_000), requirementSources, requirementCoverage: "partial" as const };
+    const files = Array.from({ length: 500 }, (_, index) => ({ path: `src/deeply/nested/module-${index}/index.ts`, content: "x".repeat(900), size: 900 }));
+    const result = boundedAnalysisContext([{ pull: heavy, snapshot: { coverage: "full", omitted: [], files } }], 80_000);
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(80_000);
+    // The sample of paths may be trimmed, but the count of what was excluded must survive - that
+    // is the number a reader needs to know the review was partial.
+    expect(result.exclusions.totals.repositoryFiles).toBeGreaterThan(400);
+    expect(result.coverage).toBe("partial");
+  });
+
+  it("survives the counters growing a digit after the last file is admitted", () => {
+    // increment() writes into the same object the budget measures and is not covered by the
+    // pop-on-overflow, so exclusion counters crossing 9 -> 10 -> 100 used to grow the payload with
+    // nothing to undo it. Enough files to push every counter into three digits.
+    const result = boundedAnalysisContext(
+      [{ pull, snapshot: { coverage: "full", omitted: [], files: manyFiles(1_500, 120) } }], 30_000);
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(30_000);
+    expect(result.exclusions.totals.repositoryFiles).toBeGreaterThan(99);
+  });
+});

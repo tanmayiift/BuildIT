@@ -332,7 +332,7 @@ export const workflowRuntimeStatus = internalQuery({
 
 function safeWorkflowFailureCode(error: string): "configuration_missing" | "upstream_unavailable" | "unknown" {
   if (error.includes("missing_")) return "configuration_missing";
-  if (error.includes("artifact_") || error.includes("github_") || error.includes("provider_") || error.includes("model_") || error.includes("malformed_") || error.includes("execution_") || error.includes("validation_") || error.includes("scanner_") || error.includes("runner_")) return "upstream_unavailable";
+  if (error.includes("analysis_") || error.includes("context_") || error.includes("pull_request_") || error.includes("package_manager_") || error.includes("paired_") || error.includes("artifact_") || error.includes("github_") || error.includes("provider_") || error.includes("model_") || error.includes("malformed_") || error.includes("execution_") || error.includes("validation_") || error.includes("scanner_") || error.includes("runner_")) return "upstream_unavailable";
   return "unknown";
 }
 

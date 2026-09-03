@@ -22,7 +22,7 @@ import {
   validatePatchProposals,
   type PatchProposal,
 } from "@buildit/orchestrator";
-import { defaultExecutionPlans } from "@buildit/runner";
+import { BROKER_REQUEST_TIMEOUT_MS, defaultExecutionPlans } from "@buildit/runner";
 import {
   issueArtifactGrant,
   issueExecutionGrant,
@@ -247,6 +247,8 @@ async function assertActive(
 ) {
   await ctx.runQuery(internal.reviewAutofixData.assertActive, args);
 }
+
+function throwUnsupportedEcosystem(): never { throw new Error("autofix_requires_supported_ecosystem"); }
 
 export const runConvergence = internalAction({
   args: {
@@ -535,7 +537,7 @@ export const runConvergence = internalAction({
             head: new Set(candidate.files.map((file) => file.path)),
           },
           manager = detectPackageManager(paths),
-          { install, checks } = defaultExecutionPlans(manager),
+          { install, checks } = defaultExecutionPlans(manager ?? throwUnsupportedEcosystem()),
           runtime = "node24" as const;
         const baseDescriptors = baseContexts.map(({ context }) => ({
           revision: "base" as const,
@@ -615,14 +617,23 @@ export const runConvergence = internalAction({
             install,
             checks,
           }),
+          signal: AbortSignal.timeout(BROKER_REQUEST_TIMEOUT_MS),
         });
+        if (!executionResponse.ok) {
+          const detail = await executionResponse.text().catch(() => "");
+          let code: string | undefined;
+          try {
+            code = (JSON.parse(detail) as { error?: string }).error;
+          } catch {
+            code = undefined;
+          }
+          throw new Error(
+            code ?? `autofix_execution_${executionResponse.status}`,
+          );
+        }
         const output = (await executionResponse.json()) as ExecutionResponse & {
           error?: string;
         };
-        if (!executionResponse.ok)
-          throw new Error(
-            output.error ?? `autofix_execution_${executionResponse.status}`,
-          );
         const allSummaries = summarizeExecution(
             output,
             scope.baseSha,

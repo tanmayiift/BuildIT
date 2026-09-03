@@ -31,9 +31,9 @@ describe("Vercel sandbox runner", () => {
     expect(result.outputs).toEqual([{ planId: "install", text: "ok", truncated: false }, { planId: "test", text: "ok", truncated: false }]);
     expect(f.calls).toContainEqual(["network", { allow: ["registry.npmjs.org", "registry.yarnpkg.com"] }]);
     expect(f.calls).toContainEqual(["network", "deny-all"]);
-    expect(f.calls).toContainEqual(["command", { cmd: "pnpm", args: ["install", "--frozen-lockfile", "--ignore-scripts"], cwd: "/vercel/sandbox/repo", timeoutMs: 60_000 }]);
-    expect(f.calls).toContainEqual(["command", { cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", "--lockfile", "/vercel/sandbox/repo/pnpm-lock.yaml"], cwd: "/vercel/sandbox/repo", timeoutMs: 35_000 }]);
-    expect(f.create.mock.calls[0]![0]).toMatchObject({ timeout: 210_000, networkPolicy: "deny-all", env: { CI: "true" }, region: "cdg1", persistent: false });
+    expect(f.calls).toContainEqual(["command", { cmd: "pnpm", args: ["install", "--frozen-lockfile", "--ignore-scripts"], cwd: "/vercel/sandbox/repo", timeoutMs: 150_000 }]);
+    expect(f.calls).toContainEqual(["command", { cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", "--lockfile", "/vercel/sandbox/repo/pnpm-lock.yaml"], cwd: "/vercel/sandbox/repo", timeoutMs: 50_000 }]);
+    expect(f.create.mock.calls[0]![0]).toMatchObject({ timeout: 580_000, networkPolicy: "deny-all", env: { CI: "true" }, region: "cdg1", persistent: false });
     expect(f.stop).toHaveBeenCalledOnce();
   });
 
@@ -92,8 +92,7 @@ describe("Vercel sandbox runner", () => {
   it("never runs checks after install failure and always stops", async () => {
     const f = fixture({ installExit: 1 });
     const result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files: [{ path: "pnpm-lock.yaml", content: "lockfileVersion: '9.0'" }], install, checks: [test] });
-    expect(result.results).toHaveLength(1);
-    expect(result.results[0]!.conclusion).toBe("failed");
+    expect(result.results.map(item => [item.planId, item.conclusion])).toEqual([["install", "failed"], ["test", "not_run"]]);
     expect(f.calls.filter(call => Array.isArray(call) && call[0] === "command")).toHaveLength(4);
     expect(f.stop).toHaveBeenCalledOnce();
   });
@@ -148,5 +147,21 @@ describe("Vercel sandbox runner", () => {
     const result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files: [{ path: "package-lock.json", content: '{"lockfileVersion":3,"packages":{"":{}}}' }], install, checks: [test] });
     expect(result.osvReport).toBe('{"results":[]}');
     expect(f.stop).toHaveBeenCalledOnce();
+  });
+});
+
+// An install that overran on one revision but not the other truncated that revision's plan list,
+// and pairExecutionEvidence then threw paired_execution_incomplete - the review died as a platform
+// error for a reason that was not a timeout and that no report ever explained.
+describe("an install failure leaves both revisions the same shape", () => {
+  const plans = defaultExecutionPlans("pnpm");
+  it("records the checks that never ran instead of dropping them", async () => {
+    const f = fixture({ installExit: 1 }), runner = new VercelSandboxRunner(f.create);
+    const result = await runner.run({ runtime: "node22", files: [{ path: "package.json", content: "{}" }, { path: "pnpm-lock.yaml", content: "lockfileVersion: '9.0'" }], install: plans.install!, checks: plans.checks });
+    expect(result.results.map(item => [item.planId, item.conclusion]))
+      .toEqual([["install", "failed"], ["test", "not_run"], ["lint", "not_run"], ["typecheck", "not_run"]]);
+    // Still no check actually executed - the rows are a record, not a claim that they ran.
+    expect(f.calls.filter(call => Array.isArray(call) && call[0] === "command"
+      && (call[1] as { args?: string[] }).args?.[0] === "run")).toHaveLength(0);
   });
 });
