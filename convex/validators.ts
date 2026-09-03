@@ -79,6 +79,7 @@ export const configValidationState = v.union(v.literal("valid"), v.literal("inva
 export const configProvenance = v.union(v.literal("protected_ref_merge"), v.literal("explicit_admin_approval"), v.literal("defaults_only"));
 export const refProtectionState = v.union(v.literal("verified"), v.literal("unverified"));
 export const coverageLevel = v.union(v.literal("full"), v.literal("partial"), v.literal("limited"));
+export const coverageGap = v.union(v.literal("changed_files"), v.literal("diff_truncated"), v.literal("requirements"));
 export const reviewStage = v.union(
   v.literal("queue"), v.literal("context"), v.literal("analysis"), v.literal("validation"),
   v.literal("autofix"), v.literal("final_validation"), v.literal("delivery"), v.literal("complete"),
@@ -106,6 +107,7 @@ export const statusReasonCode = v.union(
   v.literal("required_check_failed"),
   v.literal("required_check_missing"), v.literal("unsupported_check"),
   v.literal("repository_too_large"), v.literal("repository_access_refused"),
+  v.literal("model_unavailable"), v.literal("change_too_large"), v.literal("platform_misconfigured"),
   v.literal("environment_unavailable"), v.literal("review_timeout"),
   v.literal("final_validation_incomplete"), v.literal("human_review_required"), v.literal("provider_credential_invalid"),
   v.literal("installation_suspended"), v.literal("permission_revoked"),

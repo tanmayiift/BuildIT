@@ -6,13 +6,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { DataModel } from "./_generated/dataModel";
 import type { GenericActionCtx } from "convex/server";
-import {
-  GitHubAppClient,
-  GitHubRepositoryWriter,
-  RepositoryContentClient,
-  chunkRepositorySnapshot,
-  sideEffectKey,
-} from "@buildit/github";
+import { chunkRepositorySnapshot, GitHubAppClient, GitHubRepositoryWriter, isForcedOmission, RepositoryContentClient, sideEffectKey } from "@buildit/github";
 import {
   assertAutofixBounds,
   candidateWorsened,
@@ -888,7 +882,10 @@ export const deliverPassed = internalAction({
           new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId, commitSha: scope.headSha, limits: { maxFiles: 10_000, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
           new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId, commitSha: passed.candidateCommitSha, limits: { maxFiles: 10_000, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
         ]);
-      if (deliveredFrom.coverage !== "full" || deliveredCandidate.coverage !== "full") throw new Error("effective_loc_context_partial");
+      const omittedFrom = new Set(deliveredFrom.omitted.filter(isForcedOmission).map(item => item.path));
+      const omittedCandidate = new Set(deliveredCandidate.omitted.filter(isForcedOmission).map(item => item.path));
+      const asymmetric = [...omittedFrom, ...omittedCandidate].filter(path => omittedFrom.has(path) !== omittedCandidate.has(path));
+      if (asymmetric.length) throw new Error("effective_loc_context_partial");
       const effectiveLoc = calculateEffectiveLoc(deliveredFrom.files, deliveredCandidate.files),
         results = validation.output.head.results,
         reportText = [

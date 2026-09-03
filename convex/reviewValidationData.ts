@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { checkConclusion, checkKind } from "./validators";
+import { blocksVerdict } from "./lib/coverageGate";
 import { assertReviewParent } from "./lib/parentConsistency";
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
@@ -108,7 +109,7 @@ export const finalizeDecision = internalMutation({
     // not know whether it reviewed the code or the attacker's instructions.
     if (review.promptInjectionUnscopedAt) incompleteReason = "injection_unscoped";
     else if (findings.some(item => (item.uncertainPasses ?? 0) >= uncertainEscalationLimit && item.resolution === "uncertain")) incompleteReason = "uncertain_escalated";
-    else if (review.coverageLevel !== "full") incompleteReason = "coverage_partial";
+    else if (blocksVerdict(review.coverageLevel, review.coverageGap)) incompleteReason = "coverage_partial";
     else if (!checks.some(item => item.required)) incompleteReason = "no_required_check";
     let failed = false;
     for (const check of checks.filter(item => item.required)) {

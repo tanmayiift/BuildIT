@@ -15,7 +15,7 @@ export const storedTextClassifications = {
   candidateCommitSha: "operational_identifier", checksum: "hashed_metadata",
   commandFingerprint: "hashed_metadata", commitSha: "operational_identifier", credentialScopeId: "operational_identifier",
   contentHash: "hashed_metadata", createdBy: "operational_identifier", currency: "metadata",
-  dedupeKey: "operational_identifier", statusDetail: "metadata", defaultBranch: "metadata", deliveryId: "operational_identifier",
+  dedupeKey: "operational_identifier", statusDetail: "metadata", coverageGap: "metadata", defaultBranch: "metadata", deliveryId: "operational_identifier",
   deletionLeaseId: "operational_identifier", deletionTerminalAt: "metadata", lastDeletionErrorCode: "metadata",
   dismissedBy: "operational_identifier", encryptedAccessToken: "encrypted_secret",
   encryptedCiphertext: "encrypted_secret", encryptedRefreshToken: "encrypted_secret",

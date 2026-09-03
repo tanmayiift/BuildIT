@@ -4,6 +4,10 @@ import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { GitHubAppClient } from "@buildit/github";
 
+// 20 pages of 100 is 2,000 repositories: past that the install is genuinely too large to attach
+// in one request, and the error says so rather than silently attaching a prefix.
+const maxInstallationRepositoryPages = 20;
+
 export const claim=action({args:{installationId:v.number()},handler:async(ctx,args):Promise<{organizationId:string;repositoryCount:number}>=>{
  const identity=await ctx.runQuery(internal.users.installationIdentity,{}),appId=process.env.GITHUB_APP_ID,privateKey=process.env.GITHUB_APP_PRIVATE_KEY;
  if(!appId||!privateKey)throw new Error("github_app_not_configured");
@@ -18,8 +22,16 @@ export const claim=action({args:{installationId:v.number()},handler:async(ctx,ar
   const membershipResponse=await fetch(`https://api.github.com/orgs/${encodeURIComponent(installation.account.login)}/memberships/${encodeURIComponent(identity.githubLogin)}`,{headers:{Accept:"application/vnd.github+json",Authorization:`Bearer ${token}`,"X-GitHub-Api-Version":"2022-11-28","User-Agent":"BuildIT"}});
   if(!membershipResponse.ok)throw new Error("organization_owner_verification_failed");const membership=await membershipResponse.json() as {state?:string;role?:string};if(membership.state!=="active"||membership.role!=="admin")throw new Error("organization_owner_required");
  }
- const repositoriesResponse=await fetch("https://api.github.com/installation/repositories?per_page=100",{headers:{Accept:"application/vnd.github+json",Authorization:`Bearer ${token}`,"X-GitHub-Api-Version":"2022-11-28","User-Agent":"BuildIT"}});if(!repositoriesResponse.ok)throw new Error(`github_repository_list_${repositoriesResponse.status}`);
- const data=await repositoriesResponse.json() as {total_count:number;repositories:Array<{id:number;owner:{login:string};name:string;default_branch:string;visibility?:"public"|"private"|"internal";private?:boolean}>};if(data.total_count!==data.repositories.length)throw new Error("repository_selection_too_large");
+ type InstallationRepository={id:number;owner:{login:string};name:string;default_branch:string;visibility?:"public"|"private"|"internal";private?:boolean};
+ const repositories:InstallationRepository[]=[];let total=0;
+ for(let page=1;page<=maxInstallationRepositoryPages;page+=1){
+  const response=await fetch(`https://api.github.com/installation/repositories?per_page=100&page=${page}`,{headers:{Accept:"application/vnd.github+json",Authorization:`Bearer ${token}`,"X-GitHub-Api-Version":"2022-11-28","User-Agent":"BuildIT"}});
+  if(!response.ok)throw new Error(`github_repository_list_${response.status}`);
+  const body=await response.json() as {total_count:number;repositories:InstallationRepository[]};
+  total=body.total_count;repositories.push(...body.repositories);
+  if(repositories.length>=total||body.repositories.length===0)break;
+ }
+ const data={total_count:total,repositories};if(data.total_count!==data.repositories.length)throw new Error("repository_selection_too_large");
  const result=await ctx.runMutation(internal.githubInstallationsData.attachInstallation,{userId:identity.userId,githubUserId:identity.githubUserId,githubLogin:identity.githubLogin,installationId:args.installationId,accountLogin:installation.account.login,accountId:installation.account.id,accountType,ownershipVerified:true,permissions:{metadata:"read",contents:installation.permissions.contents==="write"?"write":"read",pullRequests:"write",issues:"read",checks:installation.permissions.checks==="write"?"write":"read"},repositories:data.repositories.map(repo=>({githubRepositoryId:repo.id,owner:repo.owner.login,name:repo.name,defaultBranch:repo.default_branch||"main",visibility:repo.visibility??(repo.private?"private":"public")})),now:Date.now()});
  return{organizationId:String(result.organizationId),repositoryCount:result.repositoryCount};
 }});

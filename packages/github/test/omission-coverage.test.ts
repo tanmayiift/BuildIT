@@ -43,3 +43,38 @@ describe("repository coverage counts only forced omissions", () => {
     ])).toBe("partial");
   });
 });
+
+// Every real repository was coming back "partial", and partial coverage makes the verdict
+// inconclusive. One lockfile or one image over the size cap was enough, so a user could watch all
+// seven checks pass and still be told BuildIT could not decide. Measured across every review this
+// deployment produced: the vercel/ms forks and BuildIT's own repository were all partial; only the
+// tiny fixture ever reached full.
+//
+// Coverage has to answer "did I read the code this pull request changed", not "did I read every
+// byte of the repository". An unrelated asset that did not fit cannot make a verdict on a
+// three-line diff unsafe.
+describe("coverage is about the code under review", () => {
+  const oversized = (path: string): RepositoryOmission => ({ path, reason: "oversized" });
+
+  it("stays full when the skipped file is nothing to do with the change", () => {
+    const omitted = [oversized("assets/demo-video.mp4"), oversized("pnpm-lock.yaml")];
+    expect(omissionCoverage(omitted, new Set(["src/rates.js"]))).toBe("full");
+  });
+
+  it("goes partial when a file the pull request changed could not be read", () => {
+    const omitted = [oversized("assets/demo-video.mp4"), oversized("src/generated/schema.ts")];
+    expect(omissionCoverage(omitted, new Set(["src/generated/schema.ts"]))).toBe("partial");
+  });
+
+  it("stays strict when the changed set is unknown", () => {
+    // No changed set means no way to tell relevant from irrelevant, so it must not guess in the
+    // direction that produces a confident verdict.
+    expect(omissionCoverage([oversized("anything.bin")])).toBe("partial");
+    expect(omissionCoverage([oversized("anything.bin")], undefined)).toBe("partial");
+  });
+
+  it("still ignores omissions that were never evidence gaps", () => {
+    const permanent: RepositoryOmission[] = [{ path: "logo.png", reason: "excluded" }, { path: "a.bin", reason: "binary" }];
+    expect(omissionCoverage(permanent, new Set(["logo.png", "a.bin"]))).toBe("full");
+  });
+});

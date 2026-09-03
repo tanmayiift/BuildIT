@@ -233,6 +233,29 @@ export const workflowCompleted = internalMutation({
         stage: "delivery",
         outcome: "failed",
       });
+      if (review.status === "budget_exhausted") {
+        const repository = await ctx.db.get(review.repositoryId);
+        const installation = repository ? await ctx.db.get(repository.installationId) : null;
+        if (repository && installation) {
+          await ctx.scheduler.runAfter(0, internal.reviewPublicationWorker.acknowledge, {
+            installationId: installation.installationId,
+            githubRepositoryId: repository.githubRepositoryId,
+            headSha: review.headSha,
+            conclusion: "action_required",
+            title: "BuildIT stopped at this review's spending limit",
+            summary: [
+              `Head: \`${review.headSha.toLowerCase()}\``,
+              "",
+              `The next model step would have crossed the $${review.budgetLimit} limit chosen for this review, so BuildIT stopped before making that call.`,
+              "",
+              "No code decision was reached and no code was changed. Start a new review with a higher limit to continue.",
+              "",
+              "BuildIT did not merge this pull request.",
+            ].join("\n"),
+          });
+        }
+        return;
+      }
       await ctx.scheduler.runAfter(0, internal.reviewPublicationWorker.publish, {
         organizationId: review.organizationId,
         reviewId: review._id,

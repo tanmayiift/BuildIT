@@ -67,12 +67,41 @@ describe("a review that could not run says why", () => {
     expect(classifyPlatformFailure("Uncaught Error: repository_too_large:files=4210;limit=2500")).toBe("repository_too_large");
     expect(classifyPlatformFailure("Uncaught Error: repository_access_refused:files=3900;status=403")).toBe("repository_access_refused");
     expect(classifyPlatformFailure("provider rate_limited")).toBe("provider_rate_limited");
-    expect(classifyPlatformFailure("Uncaught Error: analysis_context_too_large")).toBe("platform_error");
+    expect(classifyPlatformFailure("Uncaught Error: analysis_context_too_large")).toBe("change_too_large");
+    expect(classifyPlatformFailure("Uncaught Error: nothing_recognisable")).toBe("platform_error");
   });
 
   it("never claims a merge happened", () => {
-    for (const reason of ["provider_rate_limited", "repository_too_large", "repository_access_refused", "platform_error"] as const) {
+    for (const reason of ["provider_rate_limited", "repository_too_large", "repository_access_refused", "model_unavailable", "change_too_large", "platform_misconfigured", "platform_error"] as const) {
       expect(platformFailureReport({ headSha: head, reason }).summary).toContain("BuildIT did not merge this pull request.");
     }
+  });
+});
+
+// Production ran 26 platform failures and 22 of them said "a required platform step failed", while
+// the real cause was already known internally in most cases. These are the ones seen live.
+describe("classifies the failures production actually produces", () => {
+  const cases: Array<[string, string]> = [
+    ["requirements:provider_error:malformed_response:http_404", "model_unavailable"],
+    ["provider_credential_invalid", "model_unavailable"],
+    ["analysis_context_too_large", "change_too_large"],
+    ["pull_request_context_too_large", "change_too_large"],
+    ["github_tree_truncated", "change_too_large"],
+    ["missing_ARTIFACT_GRANT_SECRET", "platform_misconfigured"],
+    ["something_nobody_has_seen", "platform_error"],
+  ];
+  for (const [error, reason] of cases) {
+    it(`reads ${error} as ${reason}`, () => {
+      expect(classifyPlatformFailure(error)).toBe(reason);
+      // And the message must name something the reader can do, not just restate the failure.
+      const report = platformFailureReport({ headSha: "a".repeat(40), reason: classifyPlatformFailure(error) });
+      expect(report.summary).toContain("BuildIT did not merge this pull request.");
+      expect(report.title).not.toBe("");
+    });
+  }
+
+  it("does not blame the user for a BuildIT-side misconfiguration", () => {
+    const report = platformFailureReport({ headSha: "b".repeat(40), reason: "platform_misconfigured" });
+    expect(report.summary).toContain("on the BuildIT side");
   });
 });

@@ -23,3 +23,11 @@ export function transitionAllowed(from: string, to: string, resume?: string): bo
   if (from === "blocked") return resume === to && interruptible.has(to);
   return Boolean(next[from]?.includes(to)) || (interruptible.has(from) && ["blocked", "cancelling", "budget_exhausted", "platform_failed"].includes(to));
 }
+
+// The retention a review actually gets, from the number the organization was told. Capped at the
+// 7-day ceiling the permission receipt states, and defaulting to it when the row is unreadable, so
+// a missing value can never extend retention past what was promised.
+export const maximumRetentionHours = 168;
+export function retentionMs(retentionHours: number | undefined) {
+  return Math.min(maximumRetentionHours, retentionHours && retentionHours > 0 ? retentionHours : maximumRetentionHours) * 3_600_000;
+}

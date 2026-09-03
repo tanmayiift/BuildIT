@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
 import { terminalStatuses } from "./lib/lifecycle";
+import { coverageGap } from "./validators";
 
 export const contextScope = internalQuery({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
@@ -46,7 +47,7 @@ export const reserve = internalMutation({
 export const complete = internalMutation({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number(),
     artifactId: v.id("artifacts"), checksum: v.string(), size: v.number(),
-    coverage: v.union(v.literal("full"), v.literal("partial")), now: v.number() },
+    coverage: v.union(v.literal("full"), v.literal("partial")), coverageGap: v.optional(coverageGap), now: v.number() },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), artifact = await ctx.db.get(args.artifactId);
     // This was the one completion mutation with no fence: it patched the review back to
@@ -60,7 +61,7 @@ export const complete = internalMutation({
     if (artifact.redactionStatus === "redacted") return artifact._id;
     if (artifact.redactionStatus !== "pending") throw new ConvexError("artifact_completion_mismatch");
     await ctx.db.patch(artifact._id, { redactionStatus: "redacted" });
-    await ctx.db.patch(review._id, { status: "gathering_context", currentStage: "context", coverageLevel: args.coverage, updatedAt: args.now });
+    await ctx.db.patch(review._id, { status: "gathering_context", currentStage: "context", coverageLevel: args.coverage, coverageGap: args.coverageGap, updatedAt: args.now });
     return artifact._id;
   },
 });

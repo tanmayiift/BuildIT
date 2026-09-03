@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { blocksVerdict } from "./lib/coverageGate";
 import { assertReviewParent } from "./lib/parentConsistency";
 import { totalCostUsd } from "./lib/usageCost";
 
@@ -20,7 +21,7 @@ export const reportScope = internalQuery({
     const completed = artifacts.find(item => item.type === "review_message" && item.redactionStatus === "redacted" && !item.deletedAt && item.storageKey.endsWith("/report.md"));
     const usage = await ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
     return { organizationId: review.organizationId, repositoryId: review.repositoryId, reviewId: review._id, repository: `${repository.owner}/${repository.name}`, prNumber: review.prNumber,
-      headSha: review.headSha, baseSha: review.baseSha, configRevision: String(review.configRevisionId), coverage: review.coverageLevel === "full" ? "complete" as const : "partial" as const, injectionUnscoped: Boolean(review.promptInjectionUnscopedAt),
+      headSha: review.headSha, baseSha: review.baseSha, configRevision: String(review.configRevisionId), coverage: blocksVerdict(review.coverageLevel, review.coverageGap) ? "partial" as const : "complete" as const, coverageGap: review.coverageGap, injectionUnscoped: Boolean(review.promptInjectionUnscopedAt),
       environmentAvailable: true, isStale: review.isStale, expiresAt: review.expiresAt, costUsd: totalCostUsd(usage),
       analysis: { id: analysis._id, storageKey: analysis.storageKey, checksum: analysis.checksum, size: analysis.size }, validation: { id: validation._id, storageKey: validation.storageKey, checksum: validation.checksum, size: validation.size },
       ...(completed ? { completedArtifactId: completed._id } : {}) };

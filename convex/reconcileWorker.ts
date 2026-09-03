@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import { activeStatuses } from "./lib/lifecycle";
 
@@ -43,6 +44,26 @@ export const sweep = internalMutation({
           executionGeneration: review.executionGeneration + 1,
           leaseOwner: undefined, leaseExpiresAt: undefined, updatedAt: now,
         });
+        const repository = await ctx.db.get(review.repositoryId);
+        const installation = repository ? await ctx.db.get(repository.installationId) : null;
+        if (repository && installation) {
+          await ctx.scheduler.runAfter(0, internal.reviewPublicationWorker.acknowledge, {
+            installationId: installation.installationId,
+            githubRepositoryId: repository.githubRepositoryId,
+            headSha: review.headSha,
+            conclusion: "action_required",
+            title: "BuildIT: review did not complete",
+            summary: [
+              `Head: \`${review.headSha.toLowerCase()}\``,
+              "",
+              "This review stopped responding and BuildIT gave up on it. No code decision was reached and no code was changed.",
+              "",
+              "Comment `@buildit review` to start a new one.",
+              "",
+              "BuildIT did not merge this pull request.",
+            ].join("\n"),
+          });
+        }
         reconciled += 1;
       }
     }
