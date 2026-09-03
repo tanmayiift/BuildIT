@@ -142,3 +142,51 @@ export class RepositoryContentClient {
     return { repositoryId: input.repositoryId, commitSha: input.commitSha.toLowerCase(), files, omitted, fetchedBytes, coverage: omissionCoverage(omitted) };
   }
 }
+
+// Every repository has a directory its own engineers would never review - a vendored dependency, a
+// generated client - and a finding there is one nobody acts on. A reviewer who scrolls past those
+// stops reading the ones that matter, so the team that owns the code gets to say which paths those
+// are, on top of the defaults BuildIT already skips.
+//
+// Deliberately a small glob dialect rather than regex. A pattern in configuration is written once
+// and read for years: a regex there is a footgun that silently drops half a repository, and the
+// person writing it gets no feedback until a review misses something.
+const maxFilters = 100, maxFilterLength = 200;
+
+function globToRegExp(glob: string) {
+  // Metacharacters are literal, or a stray dot in "a.b.ts" quietly matches "axbxts".
+  let source = "";
+  for (let index = 0; index < glob.length; index += 1) {
+    const character = glob[index]!;
+    if (character === "*") {
+      if (glob[index + 1] === "*") {
+        // ** spans separators; a trailing /** also matches the directory itself.
+        source += glob[index + 2] === "/" ? "(?:.*/)?" : ".*";
+        index += glob[index + 2] === "/" ? 2 : 1;
+      } else { source += "[^/]*"; }
+      continue;
+    }
+    if (character === "?") { source += "[^/]"; continue; }
+    source += character.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+  return new RegExp(`^${source}$`);
+}
+
+export function compilePathFilters(patterns: ReadonlyArray<string>) {
+  if (patterns.length > maxFilters) throw new Error("path_filter_invalid");
+  const rules = patterns.map(pattern => {
+    const negated = pattern.startsWith("!"), glob = negated ? pattern.slice(1) : pattern;
+    // A traversal or an absolute path cannot describe a repository path, and a very long pattern is
+    // a mistake rather than an intent.
+    if (!glob || glob.length > maxFilterLength || glob.startsWith("/") || glob.split("/").includes("..")) throw new Error("path_filter_invalid");
+    return { negated, test: globToRegExp(glob) };
+  });
+  // A list of bare includes is an allowlist; once anything is included, everything else is out.
+  const hasInclude = rules.some(rule => !rule.negated);
+  return (path: string) => {
+    let kept = !hasInclude;
+    // Order matters the way .gitignore's does, so a later include can rescue an earlier exclude.
+    for (const rule of rules) if (rule.test.test(path)) kept = !rule.negated;
+    return kept;
+  };
+}

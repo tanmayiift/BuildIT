@@ -56,6 +56,9 @@ export default defineSchema({
     // How much of what survived the evidence gate lands on the diff. The summary comment always
     // carries everything; this only decides what is loud.
     reviewProfile: v.optional(value.reviewProfile),
+    // Paths this team would never review - a vendored directory, a generated client - on top of
+    // the defaults BuildIT already skips. Glob, not regex, deliberately.
+    reviewPathFilters: v.optional(v.array(v.string())),
     forkPolicy: value.forkPolicy, configRevisionId: v.optional(v.id("configRevisions")),
     indexState: value.indexState, concurrencyLimit: v.number(), ...timestampFields,
   }).index("by_github_id", ["githubRepositoryId"])

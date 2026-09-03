@@ -81,6 +81,15 @@ export const processWebhook = internalAction({
         });
         return;
       }
+      if (decision.kind === "help") {
+        await ctx.scheduler.runAfter(0, internal.reviewCommandWorker.respond, {
+          organizationId: scope.organizationId,
+          repositoryId: scope.repositoryId,
+          prNumber: args.prNumber,
+          actor: await sha256(args.senderLogin.toLowerCase()),
+        });
+        return;
+      }
       if (decision.kind === "ask") {
         await ctx.scheduler.runAfter(0, internal.reviewAskWorker.answer, {
           organizationId: scope.organizationId,
