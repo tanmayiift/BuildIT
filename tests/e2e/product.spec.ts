@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("overview leads through the review queue to exact-commit evidence", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Autonomous code review that cites defects, fixes them, and opens a stacked PR." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Autonomous code review that cites its evidence." })).toBeVisible();
   await page.getByRole("link", { name: /inspect a sample review/i }).click();
   await expect(page.getByRole("heading", { name: "Review queue" })).toBeVisible();
   await Promise.all([
@@ -281,7 +281,7 @@ test("inline script is allowed only by nonce, and the page still hydrates under 
 
 
   // Content rendered by client hydration: proof the policy did not block the app's own scripts.
-  await expect(page.getByRole("heading", { name: "Autonomous code review that cites defects, fixes them, and opens a stacked PR." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Autonomous code review that cites its evidence." })).toBeVisible();
   expect(violations).toEqual([]);
 });
 

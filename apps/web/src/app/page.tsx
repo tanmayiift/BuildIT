@@ -1,10 +1,10 @@
 import { OverviewReadiness } from "./live-connections";
 
 const layers = [
-  { mark: "01", title: "Choose one pull request", body: "Connect only the GitHub repositories you want BuildIT to read. Public and private repositories use the same selected-access boundary." },
-  { mark: "02", title: "Compare intent with code", body: "BuildIT pins the exact base and head commits, gathers linked requirements, and reports anything it could not read." },
-  { mark: "03", title: "Run checks and challenge findings", body: "Tests and scanners provide the facts. AI findings must cite those facts and survive a separate critic before they can block a review." },
-  { mark: "04", title: "Hand back an inspectable fix", body: "With your consent, BuildIT can prepare a bounded stacked PR. A human reviews and merges it; BuildIT never merges." },
+  { mark: "01", title: "Choose one pull request", body: "You choose the repositories. Unselected ones stay invisible." },
+  { mark: "02", title: "Compare intent with code", body: "It pins the exact commits and says what it could not read." },
+  { mark: "03", title: "Run checks and challenge findings", body: "Tests and scanners supply the facts. A finding must cite them to block." },
+  { mark: "04", title: "Hand back an inspectable fix", body: "With your consent, a stacked PR you review and merge yourself." },
 ] as const;
 
 export default function Overview() {
@@ -12,11 +12,11 @@ export default function Overview() {
     <section className="landing-hero" aria-labelledby="landing-title">
       <div className="landing-promise">
         <p className="eyebrow">For lean B2B software teams</p>
-        <h1 id="landing-title">Autonomous code review that cites defects, fixes them, and opens a stacked PR.</h1>
-        <p className="landing-promise-line">It never merges. A human owns the merge decision.</p>
-        <p>BuildIT gives your technical lead proof before a pull request is merged. It compares the proposed code with its linked requirements, repository context, tests, and security rules, then hands back cited findings, clear limits, and—only with your consent—an independently reviewable fix.</p>
+        <h1 id="landing-title">Autonomous code review that cites its evidence.</h1>
+        <p className="landing-promise-line">It fixes what it finds and opens a stacked PR. It never merges. A human owns the merge decision.</p>
+        <p>Every finding names the file, the line, and the commit it was checked against.</p>
         <div className="button-row landing-actions"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
-        <small className="landing-boundary">GitHub sign-in identifies you. Repository installation controls code access. A model key is requested only for AI analysis or Autofix.</small>
+        <small className="landing-boundary">Sign-in identifies you. Repository access is a separate step. A model key is requested only when AI analysis starts.</small>
       </div>
       <aside className="review-proof" aria-label="What a BuildIT decision contains">
         <div className="proof-context"><span><small>Repository</small><strong>your-org/api</strong></span><span><small>Commit</small><code>exact head SHA</code></span></div>
@@ -28,8 +28,8 @@ export default function Overview() {
 
     <section className="landing-flow" aria-labelledby="flow-title"><div className="section-heading"><div><p className="eyebrow">One review, four working layers</p><h2 id="flow-title">From pull request to a decision you can inspect</h2></div></div><ol>{layers.map(layer => <li key={layer.mark}><code>{layer.mark}</code><div><h3>{layer.title}</h3><p>{layer.body}</p></div></li>)}</ol></section>
 
-    <section className="landing-trust" aria-labelledby="trust-title"><div><p className="eyebrow">The accuracy boundary</p><h2 id="trust-title">AI proposes. Evidence decides.</h2></div><p>A model does not mark a branch safe. BuildIT derives its final status from required checks, accepted evidence-backed findings, environment availability, and staleness. Missing or conflicting proof ends as <strong>inconclusive</strong>, not a confident guess.</p><a className="text-link" href="/data-handling">Read the data and access boundary →</a></section>
+    <section className="landing-trust" aria-labelledby="trust-title"><div><p className="eyebrow">The accuracy boundary</p><h2 id="trust-title">AI proposes. Evidence decides.</h2></div><p>A model does not mark a branch safe. The verdict comes from required checks, cited findings and staleness. Missing or conflicting proof ends as <strong>inconclusive</strong>, not a confident guess.</p><a className="text-link" href="/data-handling">Read the data and access boundary →</a></section>
 
-    <section className="landing-pricing" aria-labelledby="pricing-title"><div><p className="eyebrow">Pricing and limits</p><h2 id="pricing-title">Free while BuildIT earns your trust</h2></div><p>Every review is free today — no per-seat, per-repository or per-pull-request charge. You bring your own model key and pay your provider at cost; BuildIT adds nothing on top. Paid plans are coming, and repositories connected now keep free reviews through the change.</p><a className="text-link" href="/pricing">See pricing and limits →</a></section>
+    <section className="landing-pricing" aria-labelledby="pricing-title"><div><p className="eyebrow">Pricing and limits</p><h2 id="pricing-title">Free while BuildIT earns your trust</h2></div><p>Every review is free today. You bring your own model key and pay your provider at cost; BuildIT adds nothing on top.</p><a className="text-link" href="/pricing">See pricing and limits →</a></section>
   </div>;
 }
