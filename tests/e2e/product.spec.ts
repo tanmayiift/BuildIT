@@ -251,7 +251,7 @@ test("an unknown address is a real 404, and every real page still is not", async
   for (const path of ["/nonexistent-section", "/setup/nonexistent", "/repositories/extra/segments"]) {
     expect((await request.get(path)).status(), `${path} should be 404`).toBe(404);
   }
-  for (const path of ["/", "/reviews", "/notifications", "/setup/install", "/data-handling", "/sign-in", "/account"]) {
+  for (const path of ["/", "/reviews", "/notifications", "/setup/install", "/data-handling", "/pricing", "/sandbox", "/sign-in", "/account"]) {
     expect((await request.get(path)).status(), `${path} should be 200`).toBe(200);
   }
 });

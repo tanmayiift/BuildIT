@@ -107,6 +107,10 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .landing-trust .eyebrow { color: #9db8d5; }
 .landing-trust p { margin: 0; color: #d5e0ec; font-size: 13px; line-height: 1.65; }
 .landing-trust a { color: white; white-space: nowrap; }
+.landing-pricing { display: grid; grid-template-columns: minmax(230px,.65fr) minmax(360px,1.2fr) auto; gap: 40px; align-items: center; padding: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.landing-pricing h2 { margin: 0; font-size: 23px; letter-spacing: -.03em; }
+.landing-pricing p { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.65; }
+.landing-pricing a { white-space: nowrap; }
 .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; margin-bottom: 28px; }
 .page-heading > div:first-child { max-width: 760px; }
 .eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }

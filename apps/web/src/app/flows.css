@@ -137,3 +137,20 @@
 .run-diff-findings > div[data-side="lost"] { border-color: #e2b8b2; background: var(--danger-bg); }
 .run-diff-findings > div[data-side="new"] { border-color: #c7d7ea; background: var(--navy-soft); }
 .run-diff-empty { color: var(--muted); font-size: .85rem; }
+
+/* Open sandbox. Deliberately plain: it is two regex passes, and dressing it up as a verdict is
+   exactly what the page exists not to do. */
+.scan-result { margin-top: 20px; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.scan-result h2 { margin: 0 0 12px; font-size: 17px; }
+.scan-result ul { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 8px; font-size: 13px; }
+.scan-result strong[data-severity] { text-transform: uppercase; font-size: 11px; letter-spacing: .06em; }
+.scan-result strong[data-severity="critical"] { color: var(--danger); }
+.scan-result strong[data-severity="warning"] { color: var(--warning); }
+.scan-result strong[data-severity="info"] { color: var(--info); }
+.scan-boundary { margin: 0; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.6; }
+.scan-error { margin-top: 16px; padding: 12px 14px; background: var(--danger-bg); border: 1px solid #e2b8b2; border-radius: 7px; color: var(--danger); font-size: 13px; }
+.trust-page textarea { width: 100%; min-height: 220px; padding: 12px; font-family: "JetBrains Mono Variable", monospace; font-size: 12px; line-height: 1.6; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
+.trust-page .field { display: grid; gap: 6px; margin-bottom: 16px; }
+.trust-page .field label { font-size: 12px; font-weight: 700; color: var(--ink-2); }
+
+.trust-page .field input { min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); }

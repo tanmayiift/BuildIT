@@ -29,5 +29,7 @@ export default function Overview() {
     <section className="landing-flow" aria-labelledby="flow-title"><div className="section-heading"><div><p className="eyebrow">One review, four working layers</p><h2 id="flow-title">From pull request to a decision you can inspect</h2></div></div><ol>{layers.map(layer => <li key={layer.mark}><code>{layer.mark}</code><div><h3>{layer.title}</h3><p>{layer.body}</p></div></li>)}</ol></section>
 
     <section className="landing-trust" aria-labelledby="trust-title"><div><p className="eyebrow">The accuracy boundary</p><h2 id="trust-title">AI proposes. Evidence decides.</h2></div><p>A model does not mark a branch safe. BuildIT derives its final status from required checks, accepted evidence-backed findings, environment availability, and staleness. Missing or conflicting proof ends as <strong>inconclusive</strong>, not a confident guess.</p><a className="text-link" href="/data-handling">Read the data and access boundary →</a></section>
+
+    <section className="landing-pricing" aria-labelledby="pricing-title"><div><p className="eyebrow">Pricing and limits</p><h2 id="pricing-title">Free while BuildIT earns your trust</h2></div><p>Every review is free today — no per-seat, per-repository or per-pull-request charge. You bring your own model key and pay your provider at cost; BuildIT adds nothing on top. Paid plans are coming, and repositories connected now keep free reviews through the change.</p><a className="text-link" href="/pricing">See pricing and limits →</a></section>
   </div>;
 }

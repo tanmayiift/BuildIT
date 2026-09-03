@@ -24,6 +24,7 @@
   .landing-flow li:nth-child(2) { border-right: 0; }
   .landing-flow li:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
   .landing-trust { grid-template-columns: 1fr; gap: 16px; }
+  .landing-pricing { grid-template-columns: 1fr; gap: 18px; padding: 20px; }
   .metric-line { grid-template-columns: repeat(2, 1fr); }
   .metric:nth-child(2) { border-right: 0; }
   .metric:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
