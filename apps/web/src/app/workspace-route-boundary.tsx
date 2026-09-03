@@ -27,7 +27,10 @@ export function WorkspaceRouteBoundary({ children }: { children: ReactNode }) {
 
   if (!requiresWorkspace(pathname)) return <SampleTourContext.Provider value={false}>{children}</SampleTourContext.Provider>;
   if (sampleTour) return <SampleTourContext.Provider value>
-    <p className="sample-route-note">Sample tour · no live workspace data</p>
+    <p className="sample-route-note">
+      <span>Sample tour · no live workspace data</span>
+      <a className="sample-route-exit" href="/">Leave the tour</a>
+    </p>
     {children}
   </SampleTourContext.Provider>;
   if (!hydrated || isLoading) return <section className="content route-gate" aria-live="polite"><span className="state-pulse" /><h1>Checking your session…</h1><p>BuildIT is confirming access before requesting workspace data.</p></section>;
