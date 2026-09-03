@@ -80,6 +80,7 @@ export const configProvenance = v.union(v.literal("protected_ref_merge"), v.lite
 export const refProtectionState = v.union(v.literal("verified"), v.literal("unverified"));
 export const coverageLevel = v.union(v.literal("full"), v.literal("partial"), v.literal("limited"));
 export const injectionSurface = v.union(v.literal("code"), v.literal("narrative"), v.literal("checks"), v.literal("unknown"));
+export const reviewProfile = v.union(v.literal("quiet"), v.literal("balanced"), v.literal("thorough"));
 export const coverageGap = v.union(v.literal("changed_files"), v.literal("diff_truncated"), v.literal("requirements"));
 export const reviewStage = v.union(
   v.literal("queue"), v.literal("context"), v.literal("analysis"), v.literal("validation"),
@@ -95,7 +96,7 @@ export const suppressionScope = v.union(v.literal("commit"), v.literal("pull_req
 export const patchOutcome = v.union(v.literal("applied"), v.literal("rejected"), v.literal("empty"), v.literal("repeated"));
 export const validationScope = v.union(v.literal("affected_subset"), v.literal("final_validation"));
 export const validationOutcome = v.union(v.literal("passed"), v.literal("failed"), v.literal("incomplete"));
-export const usageKind = v.union(v.literal("model_tokens"), v.literal("model_spend"), v.literal("sandbox_seconds"), v.literal("vcpu_minutes"), v.literal("storage_bytes"));
+export const usageKind = v.union(v.literal("model_tokens"), v.literal("model_spend"), v.literal("sandbox_seconds"), v.literal("vcpu_minutes"), v.literal("storage_bytes"), v.literal("ask_tokens"));
 export const sideEffectType = v.union(v.literal("check_create"), v.literal("check_update"), v.literal("comment_create"), v.literal("comment_update"), v.literal("branch_create"), v.literal("commit_push"), v.literal("stacked_pr_create"), v.literal("token_revoke"));
 export const sideEffectStatus = v.union(v.literal("reserved"), v.literal("completed"), v.literal("failed"), v.literal("reconciled"));
 export const webhookDisposition = v.union(v.literal("processed"), v.literal("ignored_bot"), v.literal("ignored_edit"), v.literal("duplicate"), v.literal("rejected"));

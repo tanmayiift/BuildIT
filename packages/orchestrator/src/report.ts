@@ -66,7 +66,7 @@ function findingLines(finding: ReportFinding, index: number) {
 // than a phrase each report restates in its own words.
 export const neverMergedSentence = "BuildIT did not merge this pull request.";
 
-export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
+export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; unreadableSources?: { total: number; unreadable: number; summary: string; nextStep: string }; changeSummary?: string; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
   const decision = computeReviewDecision({ isStale: input.isStale, environmentAvailable: input.environmentAvailable, coverageComplete: input.coverage === "complete", ...(input.injectionUnscoped ? { injectionUnscoped: true } : {}), checks: input.checks, findings: input.findings });
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
@@ -108,6 +108,7 @@ function checkExcerpt(check: ReviewCheckDecision) {
     `## ${title(decision.status)}`,
     "",
     `**Repository** \`${code(input.repository)}\`  ·  **Pull request** #${input.prNumber}  ·  **Commit** \`${code(input.headSha.slice(0, 12))}\``,
+    ...(input.changeSummary ? ["", input.changeSummary] : []),
     "",
     `${summary}.${advisoryNote}`,
     "",
@@ -118,7 +119,11 @@ function checkExcerpt(check: ReviewCheckDecision) {
       ? ["", "> **Intent was not verified.** Instruction-like text appeared in this pull request's description or in a repository document, so BuildIT did not take either at face value when working out what the change is supposed to do. The checks and the cited findings below are unaffected: each one is tied to a file, a line and this exact commit."]
       : []),
     ...(input.coverageGap === "requirements"
-      ? ["", "> **Intent was not verified.** A requirement source linked from this pull request could not be read — a ticket in another repository, or a tracker with no connected credential. Everything above is about the code and its checks. Whether the change does what was asked is still an open question for a person."]
+      ? ["", input.unreadableSources
+        // Naming the source and the remedy is the difference between a receipt and a shrug. The
+        // generic sentence listed both possible causes instead of the one that happened.
+        ? `> **Intent was not verified.** ${input.unreadableSources.unreadable} of ${input.unreadableSources.total} requirement sources could not be read: ${input.unreadableSources.summary}. ${input.unreadableSources.nextStep} Everything above is about the code and its checks. Whether the change does what was asked is still an open question for a person.`
+        : "> **Intent was not verified.** A requirement source linked from this pull request could not be read. Everything above is about the code and its checks. Whether the change does what was asked is still an open question for a person."]
       : []),
     ...(visibleFindings.length ? ["", "### What needs attention", "", ...visibleFindings.flatMap(findingLines)] : []),
     "",
@@ -139,7 +144,7 @@ function checkExcerpt(check: ReviewCheckDecision) {
     `| Base commit | \`${code(input.baseSha)}\` |`,
     `| Trusted configuration | \`${code(input.configRevision)}\` |`,
     `| Code under review | ${input.coverage === "complete" ? "Read in full" : "Partially read"} |`,
-    `| Requirement sources | ${input.coverageGap === "requirements" ? "One or more unreadable" : "All read"} |`,
+    `| Requirement sources | ${input.coverageGap !== "requirements" ? "All read" : input.unreadableSources ? `${input.unreadableSources.unreadable} of ${input.unreadableSources.total} unreadable — ${input.unreadableSources.summary}` : "One or more unreadable"} |`,
     `| Model cost | $${input.costUsd.toFixed(4)} |`,
     `| Source evidence deleted after | ${istDate(input.retentionExpiresAt)} |`,
     ...(evidenceReceipts.length || claimReceipts.length ? ["", ...evidenceReceipts, ...claimReceipts] : []),
@@ -147,4 +152,48 @@ function checkExcerpt(check: ReviewCheckDecision) {
     "</details>",
   ];
   return { decision, body: lines.join("\n"), publishedClaimCount: claims.length };
+}
+
+// Every comparable tool opens with what the pull request does; BuildIT opens with a verdict, which
+// is the right order, but a reader still had to work out what changed before the verdict meant
+// anything. Derived from the diff already in hand - no second model call, and nothing it cannot
+// count. It deliberately does not describe intent: that is what the requirements section is for,
+// and guessing it here is how a summary starts being wrong.
+export function summariseChange(files: ReadonlyArray<{ path: string; additions: number; deletions: number; status: string }>) {
+  if (!files.length) return undefined;
+  const added = files.reduce((sum, file) => sum + (Number.isFinite(file.additions) ? file.additions : 0), 0);
+  const removed = files.reduce((sum, file) => sum + (Number.isFinite(file.deletions) ? file.deletions : 0), 0);
+  const head = `${files.length} file${files.length === 1 ? "" : "s"} changed, ${added} added and ${removed} removed.`;
+  // A rename is not a rewrite, and an added or removed file is a structural change a reader should
+  // see before the line counts, which can hide it.
+  const structural = [
+    [files.filter(file => file.status === "added").length, "added"],
+    [files.filter(file => file.status === "removed" || file.status === "deleted").length, "removed"],
+    [files.filter(file => file.status === "renamed").length, "renamed"],
+  ] as const;
+  const parts = structural.filter(([count]) => count > 0)
+    .map(([count, label], index) => index === 0 ? `${count} file${count === 1 ? "" : "s"} ${label}` : `${count} ${label}`);
+  return parts.length ? `${head} ${parts.join(", ")}.` : head;
+}
+
+// Noise is the standard complaint about this category, and inline comments are how a reviewer
+// becomes noisy: one per finding, on every file, every push. The evidence gate already keeps the
+// volume low, so this only lets a team choose how much of what survived that gate lands on the
+// diff. The summary comment always carries everything; the profile decides what is loud.
+export type ReviewProfile = "quiet" | "balanced" | "thorough";
+
+export function selectInlineFindings<T extends { severity: string; blocking?: boolean; resolution?: string }>(
+  findings: ReadonlyArray<T>, profile: ReviewProfile | undefined,
+): T[] {
+  const chosen = profile ?? "balanced";
+  return findings.filter(finding => {
+    // A rejected finding is one the critic disproved. No profile may put it on a line.
+    if (finding.resolution === "rejected") return false;
+    // An uncertain finding is one BuildIT could not settle; only the profile that asked for
+    // everything gets to hear about it, because a line comment reads as a statement.
+    if (finding.resolution === "uncertain") return chosen === "thorough";
+    if (chosen === "thorough") return true;
+    if (chosen === "quiet") return finding.blocking === true;
+    return finding.blocking === true || finding.severity === "critical" || finding.severity === "high";
+  });
 }

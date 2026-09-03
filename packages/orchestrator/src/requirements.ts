@@ -23,3 +23,57 @@ export function findRequirementConflicts(requirements:AtomicRequirement[]):Requi
 export type RequirementFetcher=(link:DiscoveredLink)=>Promise<{status:RequirementSourceStatus;version:string;content?:string}>;
 export async function acquireRequirements(input:{prBody:string;prUrl:string;repositoryUrl:string;headSha:string;now:number;maxSourceBytes:number;fetch:RequirementFetcher;repositorySources?:RequirementSource[]}){const prOversized=Buffer.byteLength(input.prBody)>input.maxSourceBytes,pr:RequirementSource={id:"pr-body",type:"pull_request",url:input.prUrl,version:input.headSha,fetchedAt:input.now,status:prOversized?"oversized":"available",...(prOversized?{}:{content:input.prBody})},sources=[pr];for(const [index,link] of discoverRequirementLinks(input.prBody,input.repositoryUrl).entries()){try{const fetched=await input.fetch(link),oversized=Boolean(fetched.content&&Buffer.byteLength(fetched.content)>input.maxSourceBytes);sources.push({id:`linked-${index+1}`,type:link.type,url:link.url,version:fetched.version,fetchedAt:input.now,status:oversized?"oversized":fetched.status,...(!oversized&&fetched.content!==undefined?{content:fetched.content}:{})})}catch{sources.push({id:`linked-${index+1}`,type:link.type,url:link.url,version:"unavailable",fetchedAt:input.now,status:"inaccessible"})}}sources.push(...(input.repositorySources??[]));const requirements=sources.flatMap(extractAtomicRequirements),conflicts=findRequirementConflicts(requirements);const referenced=sources.filter(source=>source.type!=="repository_document"&&source.type!=="test");
   return{sources,requirements,conflicts,coverage:referenced.some(source=>source.status!=="available")||conflicts.length?"partial" as const:"complete" as const}}
+
+// "One or more unreadable" told a reader nothing: not which source, not why, not what to do about
+// it - on a receipt whose whole purpose is that every claim names its evidence. Each source already
+// carries the answer in its status and the reason held in version, so this only has to say it.
+//
+// The pull request body is excluded deliberately. It is a source, but it is never the thing a
+// reader has to go and fix, and naming it would send them to the wrong place.
+const sourceLabel: Record<string, string> = {
+  github_issue: "a linked GitHub issue", linear: "a linked Linear ticket", jira: "a linked Jira ticket",
+  repository_document: "a repository document", test: "a test file",
+};
+
+type UnreadableCause = { summary: string; nextStep: string };
+
+function causeOf(source: { type: string; status: string; version: string }): UnreadableCause {
+  const label = sourceLabel[source.type] ?? "a linked requirement source";
+  if (source.version === "repository_scope_mismatch") {
+    return { summary: `${label} in another repository`,
+      nextStep: "Link the issue from this repository, or restate the requirement in the pull request description." };
+  }
+  if (source.version === "connection_unavailable") {
+    const tracker = source.type === "jira" ? "Jira" : source.type === "linear" ? "Linear" : "the tracker";
+    return { summary: `${label} with no connected credential`,
+      nextStep: `Connect ${tracker} under Integrations, then re-run the review.` };
+  }
+  if (source.status === "oversized") {
+    return { summary: `${label} too large to read`,
+      nextStep: "Shorten the document, or move the requirement into the pull request description." };
+  }
+  // No invented cause. Saying "could not be read" is honest; guessing why is not.
+  return { summary: `${label} that could not be read`,
+    nextStep: "Open the linked source and check BuildIT can reach it, then re-run the review." };
+}
+
+export function describeUnreadableSources(sources: ReadonlyArray<RequirementSource>) {
+  const linked = sources.filter(source => source.type !== "pull_request");
+  const unreadable = linked.filter(source => source.status !== "available");
+  if (!unreadable.length) return undefined;
+  const causes = unreadable.map(source => causeOf(source));
+  // Lead with the most common cause so a reader gets the one action that clears the most, and count
+  // the rest rather than listing every variant.
+  const tally = new Map<string, { cause: UnreadableCause; count: number }>();
+  for (const cause of causes) {
+    const entry = tally.get(cause.summary) ?? { cause, count: 0 };
+    entry.count += 1; tally.set(cause.summary, entry);
+  }
+  const ranked = [...tally.values()].sort((a, b) => b.count - a.count);
+  const lead = ranked[0]!, others = causes.length - lead.count;
+  return {
+    total: linked.length, unreadable: causes.length,
+    summary: others ? `${lead.cause.summary}, and ${others} other${others === 1 ? "" : "s"}` : lead.cause.summary,
+    nextStep: lead.cause.nextStep,
+  };
+}

@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 //
 // WCAG 2.5.5 asks for 44x44. This measures what is rendered, not what is declared, because padding
 // is what actually decides whether a thumb lands on the control.
-const routes = ["/", "/sign-in", "/data-handling", "/pricing", "/sandbox", "/setup/install", "/setup/repository", "/setup/model", "/setup/health", "/reviews?tour=1", "/reviews/22?tour=1", "/reviews/418?tour=1", "/reviews/91?tour=1", "/reviews/420?tour=1", "/reviews/418?tour=1&state=changes", "/reviews/418?tour=1&state=passed", "/reviews/418?tour=1&state=running", "/reviews/418?tour=1&state=cancelled", "/reviews/418?tour=1&state=empty", "/repositories?tour=1", "/usage?tour=1"];
+const routes = ["/", "/sign-in", "/data-handling", "/pricing", "/features", "/sandbox", "/setup/install", "/setup/repository", "/setup/model", "/setup/health", "/reviews?tour=1", "/reviews/22?tour=1", "/reviews/418?tour=1", "/reviews/91?tour=1", "/reviews/420?tour=1", "/reviews/418?tour=1&state=changes", "/reviews/418?tour=1&state=passed", "/reviews/418?tour=1&state=running", "/reviews/418?tour=1&state=cancelled", "/reviews/418?tour=1&state=empty", "/repositories?tour=1", "/usage?tour=1"];
 const minimum = 44;
 
 for (const route of routes) test(`every interactive element is at least ${minimum}x${minimum}: ${route}`, async ({ page }) => {

@@ -81,6 +81,16 @@ export const processWebhook = internalAction({
         });
         return;
       }
+      if (decision.kind === "ask") {
+        await ctx.scheduler.runAfter(0, internal.reviewAskWorker.answer, {
+          organizationId: scope.organizationId,
+          repositoryId: scope.repositoryId,
+          prNumber: args.prNumber,
+          question: decision.question,
+          askedBy: (await sha256(args.senderLogin.toLowerCase())) ?? "",
+        });
+        return;
+      }
       if (decision.kind === "cancel") {
         const actorId = await sha256(args.senderLogin.toLowerCase()),
           now = Date.now();

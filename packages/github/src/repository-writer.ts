@@ -106,6 +106,46 @@ export class GitHubRepositoryWriter {
     if (typeof value.id !== "number" || typeof value.html_url !== "string") throw new Error("github_check_run_malformed");
     return { id: value.id, url: value.html_url, operation: run ? "updated" as const : "created" as const };
   }
+  // The promise was always that a finding names its file, its line and its commit. Until now the
+  // finding went into one issue comment and the reader had to go and find the line themselves.
+  //
+  // Two things keep this honest. The caller passes only findings that survived arbitration with
+  // verified evidence - the same gate that decides what may block, so nothing the validator dropped
+  // can reach a line. And every comment is anchored to the commit the review pinned, never to
+  // whatever HEAD is now: an inline comment on the wrong line is worse than no inline comment.
+  async publishInlineFindings(input: { prNumber: number; headSha: string; marker: string;
+    findings: ReadonlyArray<{ id: string; path: string; startLine: number; endLine: number; severity: string; title: string; body: string }> }) {
+    if (!Number.isInteger(input.prNumber) || input.prNumber < 1 || !/^[0-9a-f]{40}$/i.test(input.headSha)
+      || !/^buildit-(?:review|autofix):[A-Za-z0-9_|-]+:[0-9a-f]{40}$/.test(input.marker)) throw new Error("inline_findings_input_invalid");
+
+    const comments: Array<Record<string, unknown>> = [];
+    let skipped = 0;
+    for (const finding of input.findings) {
+      // No line, no anchor. Guessing a position puts BuildIT's name on the wrong code.
+      if (!finding.path || !Number.isInteger(finding.startLine) || finding.startLine < 1
+        || !Number.isInteger(finding.endLine) || finding.endLine < finding.startLine) { skipped += 1; continue; }
+      const body = [`<!-- ${input.marker}:${finding.id} -->`, `**${finding.severity}** — ${finding.title}`, "", finding.body].join("\n");
+      comments.push({ path: finding.path, side: "RIGHT", body,
+        ...(finding.endLine > finding.startLine ? { start_line: finding.startLine, start_side: "RIGHT", line: finding.endLine } : { line: finding.startLine }) });
+    }
+    if (!comments.length) return { posted: 0, skipped };
+
+    // Clear BuildIT's own comments for this marker first, so a re-review of the same commit
+    // replaces its findings instead of stacking a second copy on every line. A comment written by
+    // a person is never touched.
+    const existing = await this.request(`/pulls/${input.prNumber}/comments?per_page=100`);
+    for (const item of (Array.isArray(existing) ? existing : []) as Array<{ id?: unknown; body?: unknown; user?: { type?: unknown } }>) {
+      if (item.user?.type !== "Bot" || typeof item.body !== "string" || !item.body.includes(`<!-- ${input.marker}:`) || typeof item.id !== "number") continue;
+      await this.request(`/pulls/comments/${item.id}`, { method: "DELETE" });
+    }
+
+    // COMMENT, never REQUEST_CHANGES. The check run carries the verdict; BuildIT does not reach for
+    // the merge button through the review API either.
+    await this.request(`/pulls/${input.prNumber}/reviews`, { method: "POST",
+      body: JSON.stringify({ commit_id: input.headSha, event: "COMMENT", comments }) });
+    return { posted: comments.length, skipped };
+  }
+
   async upsertIssueComment(input: { prNumber: number; marker: string; body: string }) {
     if (!Number.isInteger(input.prNumber) || input.prNumber < 1 || !/^buildit-(?:review|autofix):[A-Za-z0-9_|-]+:[0-9a-f]{40}$/.test(input.marker) || !input.body.trim()) throw new Error("comment_input_invalid");
     const marker = `<!-- ${input.marker} -->`, body = `${marker}\n${input.body}`;

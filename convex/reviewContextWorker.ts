@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { chunkRepositorySnapshot, GitHubAppClient, GitHubIssueContextClient, omissionCoverage, type PullRequestContext, PullRequestContextClient, RepositoryContentClient, type RepositorySnapshot } from "@buildit/github";
 import { dependencyManifest } from "@buildit/runner";
-import { acquireRequirements, isRequirementSourcePath, repositoryRequirementSources } from "@buildit/orchestrator";
+import { acquireRequirements, describeUnreadableSources, isRequirementSourcePath, repositoryRequirementSources, summariseChange } from "@buildit/orchestrator";
 import { issueArtifactGrant,issueTrackerGrant } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
@@ -87,9 +87,13 @@ export const gather = internalAction({
             : pullContext.coverage !== "full" ? "diff_truncated" as const
             : intentCoverage !== "complete" ? "requirements" as const : undefined;
           const coverage = coverageGap ? "partial" as const : "full" as const;
+          // Computed from the same sources the coverage decision used, so the receipt can name
+          // which one could not be read instead of gesturing at the category.
+          const changeSummary = summariseChange(pullContext.files);
+          const unreadableSources = coverageGap === "requirements" ? describeUnreadableSources([...intent.sources, ...repositoryIntent.sources]) : undefined;
           await ctx.runMutation(internal.reviewArtifactData.complete, { organizationId: scope.organizationId, reviewId: scope.reviewId,
             expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
-            artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, coverageGap, now: Date.now() });
+            artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, coverageGap, unreadableSources, changeSummary, now: Date.now() });
           artifactIds.push(String(reserved.artifactId));
         }
       }

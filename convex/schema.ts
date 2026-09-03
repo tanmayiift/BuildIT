@@ -53,6 +53,9 @@ export default defineSchema({
     organizationId: v.id("organizations"), installationId: v.id("githubInstallations"),
     githubRepositoryId: v.number(), owner: v.string(), name: v.string(), defaultBranch: v.string(), visibility: v.optional(value.repositoryVisibility),
     enabled: v.boolean(), pausedAt: v.optional(v.number()), autofixMode: value.autofixMode,
+    // How much of what survived the evidence gate lands on the diff. The summary comment always
+    // carries everything; this only decides what is loud.
+    reviewProfile: v.optional(value.reviewProfile),
     forkPolicy: value.forkPolicy, configRevisionId: v.optional(v.id("configRevisions")),
     indexState: value.indexState, concurrencyLimit: v.number(), ...timestampFields,
   }).index("by_github_id", ["githubRepositoryId"])
@@ -111,7 +114,13 @@ export default defineSchema({
     observedHeadSha: v.optional(v.string()), trustedRef: v.string(), trustedRefSha: v.string(),
     configRevisionId: v.id("configRevisions"), configProvenance: value.configProvenance,
     provider: value.provider, model: v.string(), modelVersion: v.string(), promptVersion: v.string(),
-    evalSetVersion: v.string(), coverageLevel: value.coverageLevel, coverageGap: v.optional(value.coverageGap), currentStage: value.reviewStage,
+    evalSetVersion: v.string(), coverageLevel: value.coverageLevel, coverageGap: v.optional(value.coverageGap),
+    // Beside the gap it explains, because "requirements" alone is what made the receipt say
+    // "One or more unreadable" and name neither which source nor why.
+    unreadableSources: v.optional(v.object({ total: v.number(), unreadable: v.number(), summary: v.string(), nextStep: v.string() })),
+    // Counted from the diff at context time, where the file list actually is.
+    changeSummary: v.optional(v.string()),
+    currentStage: value.reviewStage,
     promptInjectionUnscopedAt: v.optional(v.number()), promptInjectionSurfaces: v.optional(v.array(value.injectionSurface)),
     blockedReason: v.optional(v.string()), blockedSince: v.optional(v.number()),
     blockedExpiresAt: v.optional(v.number()), parentReviewId: v.optional(v.id("reviews")),

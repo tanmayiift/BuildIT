@@ -16,6 +16,7 @@ import { ConnectionBanner } from "./live-connections";
 // only the chrome was wrong. This is the chrome those routes should have had: the brand, the three
 // things a stranger asks for next, and one way in.
 const links = [
+  { label: "Features", href: "/features" },
   { label: "Pricing", href: "/pricing" },
   { label: "Try a scan", href: "/sandbox" },
   { label: "Data & privacy", href: "/data-handling" },
