@@ -66,7 +66,7 @@ function findingLines(finding: ReportFinding, index: number) {
 // than a phrase each report restates in its own words.
 export const neverMergedSentence = "BuildIT did not merge this pull request.";
 
-export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; unreadableSources?: { total: number; unreadable: number; summary: string; nextStep: string }; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
+export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; unreadableSources?: { total: number; unreadable: number; summary: string; nextStep: string }; changeSummary?: string; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
   const decision = computeReviewDecision({ isStale: input.isStale, environmentAvailable: input.environmentAvailable, coverageComplete: input.coverage === "complete", ...(input.injectionUnscoped ? { injectionUnscoped: true } : {}), checks: input.checks, findings: input.findings });
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
@@ -108,6 +108,7 @@ function checkExcerpt(check: ReviewCheckDecision) {
     `## ${title(decision.status)}`,
     "",
     `**Repository** \`${code(input.repository)}\`  ·  **Pull request** #${input.prNumber}  ·  **Commit** \`${code(input.headSha.slice(0, 12))}\``,
+    ...(input.changeSummary ? ["", input.changeSummary] : []),
     "",
     `${summary}.${advisoryNote}`,
     "",
@@ -151,4 +152,26 @@ function checkExcerpt(check: ReviewCheckDecision) {
     "</details>",
   ];
   return { decision, body: lines.join("\n"), publishedClaimCount: claims.length };
+}
+
+// Every comparable tool opens with what the pull request does; BuildIT opens with a verdict, which
+// is the right order, but a reader still had to work out what changed before the verdict meant
+// anything. Derived from the diff already in hand - no second model call, and nothing it cannot
+// count. It deliberately does not describe intent: that is what the requirements section is for,
+// and guessing it here is how a summary starts being wrong.
+export function summariseChange(files: ReadonlyArray<{ path: string; additions: number; deletions: number; status: string }>) {
+  if (!files.length) return undefined;
+  const added = files.reduce((sum, file) => sum + (Number.isFinite(file.additions) ? file.additions : 0), 0);
+  const removed = files.reduce((sum, file) => sum + (Number.isFinite(file.deletions) ? file.deletions : 0), 0);
+  const head = `${files.length} file${files.length === 1 ? "" : "s"} changed, ${added} added and ${removed} removed.`;
+  // A rename is not a rewrite, and an added or removed file is a structural change a reader should
+  // see before the line counts, which can hide it.
+  const structural = [
+    [files.filter(file => file.status === "added").length, "added"],
+    [files.filter(file => file.status === "removed" || file.status === "deleted").length, "removed"],
+    [files.filter(file => file.status === "renamed").length, "renamed"],
+  ] as const;
+  const parts = structural.filter(([count]) => count > 0)
+    .map(([count, label], index) => index === 0 ? `${count} file${count === 1 ? "" : "s"} ${label}` : `${count} ${label}`);
+  return parts.length ? `${head} ${parts.join(", ")}.` : head;
 }

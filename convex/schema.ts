@@ -115,6 +115,8 @@ export default defineSchema({
     // Beside the gap it explains, because "requirements" alone is what made the receipt say
     // "One or more unreadable" and name neither which source nor why.
     unreadableSources: v.optional(v.object({ total: v.number(), unreadable: v.number(), summary: v.string(), nextStep: v.string() })),
+    // Counted from the diff at context time, where the file list actually is.
+    changeSummary: v.optional(v.string()),
     currentStage: value.reviewStage,
     promptInjectionUnscopedAt: v.optional(v.number()), promptInjectionSurfaces: v.optional(v.array(value.injectionSurface)),
     blockedReason: v.optional(v.string()), blockedSince: v.optional(v.number()),
