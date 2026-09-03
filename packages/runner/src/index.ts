@@ -25,3 +25,22 @@ export type DiagnosticRun={conclusion:"passed"|"failed";failureFingerprint?:stri
 export function diagnoseFlakiness(runs:DiagnosticRun[],maxRuns=3){if(!Number.isInteger(maxRuns)||maxRuns<2||maxRuns>5)throw new Error("invalid_flaky_rerun_limit");if(runs.length<2)return{classification:"insufficient" as const,nextRunAllowed:runs.length<maxRuns};if(runs.length>maxRuns)throw new Error("flaky_rerun_limit_exceeded");const outcomes=new Set(runs.map(run=>run.conclusion)),failureFingerprints=new Set(runs.filter(run=>run.conclusion==="failed").map(run=>run.failureFingerprint??"missing"));if(outcomes.size>1)return{classification:"flaky" as const,nextRunAllowed:false,fingerprintStable:failureFingerprints.size<=1};if(outcomes.has("passed"))return{classification:"stable_pass" as const,nextRunAllowed:false};if(failureFingerprints.size===1&&!failureFingerprints.has("missing"))return{classification:"stable_failure" as const,nextRunAllowed:false,failureFingerprint:[...failureFingerprints][0]!};return{classification:"unknown_failure" as const,nextRunAllowed:runs.length<maxRuns}}
 export async function runFlakyDiagnostics(initial:DiagnosticRun,rerun:()=>Promise<DiagnosticRun>,maxRuns=3){const runs=[initial];if(initial.conclusion==="passed")return{runs,diagnosis:{classification:"stable_pass" as const,nextRunAllowed:false}};while(runs.length<maxRuns){runs.push(await rerun());const diagnosis=diagnoseFlakiness(runs,maxRuns);if(!diagnosis.nextRunAllowed)return{runs,diagnosis}}return{runs,diagnosis:diagnoseFlakiness(runs,maxRuns)}}
 export * from "./vercelSandbox.js";
+
+// A published review said `typecheck  Advisory  **Failed**` and quoted npm's whole complaint
+// beneath it, when the repository simply has no typecheck script. That is a configuration fact
+// wearing the costume of a failure, and a table that calls it failure is one readers learn to skip.
+//
+// The exit code cannot tell these apart - npm exits 1 for a missing script and 1 for a type error -
+// so the manager's own wording is what distinguishes them. Anchored to the start of a line, because
+// a test whose assertion text happens to contain the phrase is still a real failure.
+const missingScript = [
+  /^\s*npm error Missing script:/m,
+  /^\s*ERR_PNPM_NO_SCRIPT\b/m,
+  /^\s*error Command ".*" not found\./m,
+  /^\s*Usage Error: Couldn't find a script named/m,
+];
+
+export function classifyCheckConclusion(input: { exitCode: number; output: string }): CheckConclusion {
+  if (input.exitCode === 0) return "passed";
+  return missingScript.some(pattern => pattern.test(input.output)) ? "not_configured" : "failed";
+}
