@@ -36,8 +36,9 @@ export type SampleReview = {
   tone: "danger" | "warning" | "running" | "success";
   state: "changes" | "budget" | "empty" | "running";
   coverage: string;
-  signal: string;
-  owner: string;
+  /** For an inconclusive review, the recorded cause and what clears it. Mirrors the
+   *  incompleteReason ladder in convex/reviewValidationData.ts. */
+  cause?: { reason: string; detail: string; nextStep: string };
   age: string;
   group: "ready" | "progress";
   /** The real check table from the review this row was transcribed from. */
@@ -50,7 +51,7 @@ export const sampleReviews: SampleReview[] = [
     pr: 22, repo: "nexus/web", commit: "b2c8f41", baseCommit: "7b2e004",
     title: "Update landing page typography",
     status: "Changes requested", tone: "danger", state: "changes",
-    coverage: "2 / 2", signal: "1 critical", owner: "Author", age: "12m", group: "ready",
+    coverage: "2 / 2", age: "12m", group: "ready",
     checks: [
       { name: "install", policy: "Required", result: "Passed" },
       { name: "test", policy: "Required", result: "Failed" },
@@ -111,19 +112,24 @@ export const sampleReviews: SampleReview[] = [
     pr: 418, repo: "nexus/api", commit: "d9f2e1a", baseCommit: "c40aa19",
     title: "Refactor user authentication",
     status: "Failed after bounds", tone: "danger", state: "budget",
-    coverage: "3 / 4", signal: "1 critical", owner: "You", age: "45m", group: "ready",
+    coverage: "3 / 4", age: "45m", group: "ready",
   },
   {
     pr: 91, repo: "nexus/core", commit: "f1a2b3c", baseCommit: "0d18ba7",
     title: "Add support for webhooks",
     status: "Inconclusive", tone: "warning", state: "empty",
-    coverage: "0 / 1", signal: "1 medium", owner: "You", age: "1h", group: "ready",
+    coverage: "0 required checks", age: "1h", group: "ready",
+    cause: {
+      reason: "No required check is configured",
+      detail: "BuildIT reached this repository and read the pull request, but it defines no required check for BuildIT to run. There is no evidence to base a decision on, so it does not offer one.",
+      nextStep: "Add at least one required check \u2014 a test, lint or typecheck command \u2014 in the repository settings, then start a new review.",
+    },
   },
   {
     pr: 420, repo: "nexus/api", commit: "e5a1d2c", baseCommit: "9ac7f30",
     title: "Fix database race",
     status: "Running", tone: "running", state: "running",
-    coverage: "Stage 3 / 4", signal: "Checks", owner: "You", age: "2m", group: "progress",
+    coverage: "Stage 3 / 4", age: "2m", group: "progress",
   },
 ];
 

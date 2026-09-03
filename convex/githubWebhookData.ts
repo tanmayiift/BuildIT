@@ -3,9 +3,13 @@ import { selectProviderModel } from "@buildit/providers";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { terminalStatuses } from "./lib/lifecycle";
+import { retentionMs, terminalStatuses } from "./lib/lifecycle";
 import { activeReviewCount, concurrencyExceeded } from "./lib/tenantLimits";
 import { provider as providerValidator } from "./validators";
+
+// A blocked review is waiting on a person: connect a model key, or let an earlier review finish.
+// Two hours is long enough for either and short enough that a forgotten one frees its slot.
+const blockedReviewTtlMs = 2 * 60 * 60_000;
 
 export function webhookTelemetryOutcome(disposition: "processed" | "ignored_bot" | "ignored_edit" | "duplicate" | "rejected", status: "enqueued" | "completed" | "failed") {
   return { operation: "webhook.process" as const, stage: "context" as const, outcome: status === "failed" ? "failed" as const : disposition === "rejected" ? "blocked" as const : "succeeded" as const };
@@ -322,6 +326,7 @@ export const materializeReview = internalMutation({
       statusReasonCode: overConcurrency ? "concurrency_limit_reached" : credential ? undefined : "provider_credential_invalid",
       nextActionCode: overConcurrency ? "retry_review" : credential ? "none" : "reconnect_provider",
       isStale: false,
+      ...(status === "blocked" ? { blockedExpiresAt: args.now + blockedReviewTtlMs } : {}),
       trustedRef: args.baseRef,
       trustedRefSha: delivery.baseSha,
       configRevisionId: config._id,
@@ -336,7 +341,7 @@ export const materializeReview = internalMutation({
       executionGeneration: 0,
       queuePriority: 0,
       runnerImageVersion: RUNNER_IMAGE_VERSION,
-      expiresAt: args.now + 7 * 86_400_000,
+      expiresAt: args.now + retentionMs(organization?.retentionHours),
       createdAt: args.now,
       updatedAt: args.now,
     });
@@ -362,6 +367,8 @@ export const materializeReview = internalMutation({
     return {
       reviewId,
       status,
+      // The caller tells the pull request why nothing is going to happen, which needs the reason.
+      blockedReason: overConcurrency ? ("concurrency_limit_reached" as const) : credential ? undefined : ("provider_credential_invalid" as const),
       headSha: delivery.headSha,
       executionGeneration: 0,
     };

@@ -96,12 +96,12 @@ export class GitHubRepositoryWriter {
     if (typeof value.id !== "number" || typeof value.html_url !== "string") throw new Error("github_check_run_malformed");
     return { id: value.id, url: value.html_url };
   }
-  async upsertCheckRun(input: { name: string; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; title: string; summary: string; detailsUrl?: string }) {
+  async upsertCheckRun(input: { name: string; headSha: string; conclusion?: "success" | "failure" | "neutral" | "action_required"; title: string; summary: string; detailsUrl?: string }) {
     if (!/^[0-9a-f]{40}$/i.test(input.headSha) || !input.name.trim() || !input.title.trim() || !input.summary.trim() || Buffer.byteLength(input.summary) > 60_000) throw new Error("check_run_input_invalid");
     const detailsUrl = safeDetailsUrl(input.detailsUrl);
     const existing = await this.request(`/commits/${input.headSha}/check-runs?check_name=${encodeURIComponent(input.name)}&filter=latest&per_page=100`);
     const run = Array.isArray(existing.check_runs) ? (existing.check_runs as Array<{ id?: unknown; name?: unknown; app?: { slug?: unknown } }>).find(item => item.name === input.name && item.app?.slug === "buildit-agentic-review") : undefined;
-    const body = JSON.stringify({ name: input.name, head_sha: input.headSha, status: "completed", conclusion: input.conclusion, ...(detailsUrl ? { details_url: detailsUrl } : {}), output: { title: input.title, summary: input.summary } });
+    const body = JSON.stringify({ name: input.name, head_sha: input.headSha, ...(input.conclusion ? { status: "completed", conclusion: input.conclusion } : { status: "in_progress" }), ...(detailsUrl ? { details_url: detailsUrl } : {}), output: { title: input.title, summary: input.summary } });
     const value = run && typeof run.id === "number" ? await this.request(`/check-runs/${run.id}`, { method: "PATCH", body }) : await this.request("/check-runs", { method: "POST", body });
     if (typeof value.id !== "number" || typeof value.html_url !== "string") throw new Error("github_check_run_malformed");
     return { id: value.id, url: value.html_url, operation: run ? "updated" as const : "created" as const };

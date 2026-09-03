@@ -21,6 +21,30 @@ describe("one sample fixture, read by both routes", () => {
     expect(new Set(sampleReviews.map(review => review.state)).size).toBe(sampleReviews.length);
   });
 
+  // #91 advertised "1 medium" in the queue while its page said BuildIT had read nothing. The row
+  // and the page disagreed because nothing forced them to agree, and the number was invisible in
+  // the UI so nobody caught it. This is the rule that number would have broken.
+  it("never lets a review with no evidence advertise a result", () => {
+    for (const review of sampleReviews.filter(item => item.state === "empty")) {
+      const claims = Object.entries(review).filter(([key, value]) =>
+        !["pr", "commit", "baseCommit", "age"].includes(key) && typeof value === "string" && /\b\d+\b/.test(value) && !/^0\b/.test(value));
+      expect(claims, `#${review.pr} claims a count while showing no evidence: ${JSON.stringify(claims)}`).toEqual([]);
+      expect(review.checks, `#${review.pr} lists checks while showing no evidence`).toBeUndefined();
+      expect(review.finding, `#${review.pr} cites a finding while showing no evidence`).toBeUndefined();
+    }
+  });
+
+  // An inconclusive review that does not say what stopped it leaves a person with nothing to do.
+  it("gives every inconclusive sample a cause and a way to clear it", () => {
+    for (const review of sampleReviews.filter(item => item.status === "Inconclusive")) {
+      expect(review.cause?.reason, `#${review.pr} has no recorded cause`).toBeTruthy();
+      expect(review.cause?.nextStep, `#${review.pr} has no next step`).toBeTruthy();
+    }
+    // And the page must read it, not restate it.
+    expect(detailRoute).toContain("row?.cause?.reason");
+    expect(detailRoute).toContain("row?.cause?.detail");
+  });
+
   it("resolves every queue row to a detail row that matches it exactly", () => {
     for (const review of sampleReviews) {
       const resolved = sampleReviewFor(String(review.pr));

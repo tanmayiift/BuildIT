@@ -30,10 +30,10 @@ export default async function Review({ params, searchParams }: { params: Promise
   const repo = row?.repo ?? "nexus/api", commit = row?.commit ?? "a3f91c2", baseCommit = row?.baseCommit ?? "7b2e004";
   return <div className="content review-detail review-tour">
     <div className="crumbs"><a href="/reviews?tour=1">Review queue</a><span>›</span><strong>{repo} #{id}</strong><span className="sample-badge">Example</span></div>
-    <section className="verdict-card"><div className="verdict-message"><span className={`verdict-symbol ${verdict.tone}`} aria-hidden="true">{verdict.symbol}</span><div><span className={`status ${verdict.tone}`}>{verdict.label}</span><h1>{verdict.title}</h1><p>{current.detail}</p></div></div><div className="verdict-actions"><a className="button secondary" href="/reviews?tour=1">{hasReviewEvidence ? "Back to queue" : "Open review queue"}</a></div></section>
+    <section className="verdict-card"><div className="verdict-message"><span className={`verdict-symbol ${verdict.tone}`} aria-hidden="true">{verdict.symbol}</span><div><span className={`status ${verdict.tone}`}>{verdict.label}</span><h1>{verdict.title}</h1><p>{row?.cause?.detail ?? current.detail}</p></div></div><div className="verdict-actions"><a className="button secondary" href="/reviews?tour=1">{hasReviewEvidence ? "Back to queue" : "Open review queue"}</a></div></section>
     <section className={`tour-scope${hasReviewEvidence ? "" : " minimal"}`} aria-label="Pinned review context"><span><small>Repository</small><strong>{repo}</strong></span><span><small>Pull request</small><strong>#{id}</strong></span><span><small>Exact commit</small><code>{commit}</code></span>{hasReviewEvidence ? <span><small>Review coverage</small><strong>Full</strong></span> : null}</section>
     {hasReviewEvidence ? <><div className="next-action"><span className="next-mark" aria-hidden="true">→</span><div><small>What to do next</small><strong>{next.title}</strong><p>{next.detail}</p></div></div><Journey stage={current.stage} /></> : null}
-    {current.evidence === "empty" ? <section className="evidence-empty"><span aria-hidden="true">◇</span><div><h2>No review evidence</h2><p>BuildIT does not fill the page with guesses. It has not read code, run checks, or made a decision for this pull request.</p></div></section> : null}
+    {current.evidence === "empty" ? <section className="evidence-empty"><span aria-hidden="true">◇</span><div><h2>{row?.cause?.reason ?? "No review evidence"}</h2><p>{row?.cause ? row.cause.nextStep : "BuildIT does not fill the page with guesses. It has not read code, run checks, or made a decision for this pull request."}</p></div></section> : null}
     {current.evidence === "progress" ? <Evidence title="What BuildIT is doing" eyebrow="In progress" detail="2 sources read"><Row lead="Pull request and linked requirements" outcome="Gathered" tone="running" note="Exact commit and ticket context are being checked." /><Row lead="Code and test plan" outcome="Next" tone="warning" note="No finding is shown until evidence exists." /></Evidence> : null}
     {current.evidence === "findings" ? (row?.checks
       ? <Evidence title="Checks run" eyebrow="Verification" detail={`${row.checks.filter(check => check.policy === "Required").length} required`}>
@@ -58,9 +58,9 @@ function CompleteFinding({ finding }: { finding: NonNullable<SampleReview["findi
     <p className="finding-source">Transcribed from a review BuildIT ran on {finding.reviewedAt}: <a className="text-link" href={finding.source.href} rel="noreferrer noopener" target="_blank">{finding.source.label}</a>. Every value below is quotable from it.</p>
     <p className="finding-why">{finding.why}</p>
     <p className="finding-why">{finding.inspect}</p>
-    <div className="finding-block"><h3>The code it read</h3><pre><code>{finding.excerpt}</code></pre></div>
-    <div className="finding-block"><h3>What <code>{finding.checkName}</code> reported</h3><pre><code>{finding.checkOutput}</code></pre></div>
-    <div className="finding-block"><h3>The change it proposes</h3><pre className="finding-diff"><code>{finding.fix}</code></pre></div>
+    <div className="finding-block"><h3>The code it read</h3><pre tabIndex={0} role="region" aria-label="The code it read"><code>{finding.excerpt}</code></pre></div>
+    <div className="finding-block"><h3>What <code>{finding.checkName}</code> reported</h3><pre tabIndex={0} role="region" aria-label={`What ${finding.checkName} reported`}><code>{finding.checkOutput}</code></pre></div>
+    <div className="finding-block"><h3>The change it proposes</h3><pre className="finding-diff" tabIndex={0} role="region" aria-label="The change it proposes"><code>{finding.fix}</code></pre></div>
     <p className="finding-delivery">Delivered as a stacked pull request a person reviews and merges — BuildIT never merges: <a className="text-link" href={finding.stackedPr.href} rel="noreferrer noopener" target="_blank">{finding.stackedPr.label}</a></p>
   </section>;
 }

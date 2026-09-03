@@ -10,7 +10,7 @@ const routes = [
   "/account",
   "/data-handling", "/pricing", "/sandbox",
   "/reviews?tour=1",
-  "/reviews/418?tour=1",
+  "/reviews/22?tour=1", "/reviews/418?tour=1", "/reviews/91?tour=1", "/reviews/420?tour=1",
   "/reviews/418?tour=1&state=cancelled",
   "/reviews/418?tour=1&state=running",
   "/reviews/418?tour=1&state=changes",
@@ -40,7 +40,7 @@ for (const route of routes) test(`has no serious accessibility violation: ${rout
   expect(result.violations.filter(item => ["serious", "critical"].includes(item.impact ?? "")), JSON.stringify(result.violations, null, 2)).toEqual([]);
 });
 
-for (const route of ["/", "/reviews?tour=1", "/setup/model", "/reviews/418?tour=1&state=cancelled", "/reviews/418?tour=1&state=running", "/reviews/418?tour=1&state=changes", "/reviews/418?tour=1&state=passed", "/reviews/418?tour=1&state=empty", "/reviews/418?tour=1&state=populated"]) test(`matches the release screenshot: ${route}`, async ({ page }) => {
+for (const route of ["/", "/reviews?tour=1", "/setup/model", "/reviews/22?tour=1", "/reviews/91?tour=1", "/reviews/420?tour=1", "/reviews/418?tour=1&state=cancelled", "/reviews/418?tour=1&state=running", "/reviews/418?tour=1&state=changes", "/reviews/418?tour=1&state=passed", "/reviews/418?tour=1&state=empty", "/reviews/418?tour=1&state=populated"]) test(`matches the release screenshot: ${route}`, async ({ page }) => {
   await page.goto(route);
   await page.locator("body").waitFor();
   await expect(page).toHaveScreenshot(`${route.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "landing"}.png`, { fullPage: false, animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.08 });

@@ -3032,6 +3032,44 @@ describe("GitHub webhook durability", () => {
       await t.run((ctx) => ctx.db.query("webhookDeliveries").collect()),
     ).toHaveLength(1);
   });
+  // A review blocked for a missing model key counted against the organization's concurrency limit
+  // and had no expiry, so it held that slot for good. Three of them and the workspace could not
+  // start any review at all, while the queue promised it would start "when an earlier review
+  // finishes". The sweeper already cancels an expired blocked review; it needed an expiry to act on.
+  it("gives a review blocked on a missing model key an expiry the sweeper can act on", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "blocked-ttl", "user-blocked-ttl");
+    const repository = await t.run(ctx => ctx.db.get(tenant.repositoryId));
+    // The new-user shape: the App is installed, no model key is connected yet.
+    await t.run(async ctx => {
+      for (const credential of await ctx.db.query("providerCredentials").collect()) await ctx.db.delete(credential._id);
+    });
+    await t.mutation(internal.githubWebhookData.reserve, {
+      deliveryId: "delivery-blocked", event: "issue_comment", action: "created",
+      installationId: 20, disposition: "processed" as const, signatureValid: true, now: 1,
+    });
+    await t.mutation(internal.githubWebhookData.recordPinnedSnapshot, {
+      deliveryId: "delivery-blocked", prNumber: 77, headSha: "a".repeat(40), baseSha: "b".repeat(40),
+      headRefHash: "c".repeat(64), baseRefHash: "d".repeat(64), isFork: false, triggerVerb: "review",
+    });
+    const now = 1_000;
+    await t.mutation(internal.githubWebhookData.materializeReview, {
+      deliveryId: "delivery-blocked", organizationId: tenant.organizationId,
+      repositoryId: tenant.repositoryId, baseRef: repository!.defaultBranch ?? "main",
+      triggerActor: "someone", actorPermission: "write" as const, now,
+    });
+    const review = await t.run(async ctx =>
+      (await ctx.db.query("reviews").collect()).find(item => item.prNumber === 77));
+    expect(review?.status).toBe("blocked");
+    expect(review?.blockedExpiresAt, "a blocked review with no expiry holds its slot for good").toBeGreaterThan(now);
+
+    // And the sweeper must actually free it, or the expiry is decoration.
+    await t.mutation(internal.reconcileWorker.sweep, { now: review!.blockedExpiresAt! + 1 });
+    const swept = await t.run(ctx => ctx.db.get(review!._id));
+    expect(swept?.status).toBe("cancelled");
+    expect(swept?.statusReasonCode).toBe("blocked_expired");
+  });
+
   it("pins one exact PR snapshot on a reserved command delivery", async () => {
     const t = convexTest(schema, modules),
       reserved = await t.mutation(internal.githubWebhookData.reserve, {

@@ -159,3 +159,35 @@ export const publishPlatformFailure = internalAction({
     }
   },
 });
+
+// Between "@buildit review" and the final report the pull request showed nothing, and on any of the
+// paths that end without publishing - no model key connected, execution disabled, a crash, a review
+// the sweeper later gives up on - it showed nothing for good. This is the acknowledgement: it goes
+// up when the review is queued and is replaced in place by whatever the review concludes.
+//
+// It never throws into the caller. A review that runs and reports is worth more than one refused
+// because GitHub was briefly unavailable for a status update.
+export const acknowledge = internalAction({
+  args: {
+    installationId: v.number(), githubRepositoryId: v.number(), headSha: v.string(),
+    title: v.string(), summary: v.string(),
+    conclusion: v.optional(v.union(v.literal("neutral"), v.literal("action_required"))),
+  },
+  handler: async (ctx, args) => {
+    const github = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
+    const tokenScope = { installationId: args.installationId, repositoryId: args.githubRepositoryId, stage: "review" as const };
+    try {
+      const token = await github.tokenFor(tokenScope);
+      const writer = new GitHubRepositoryWriter({ repositoryId: args.githubRepositoryId, installationToken: token });
+      await writer.upsertCheckRun({
+        name: "BuildIT / review", headSha: args.headSha,
+        ...(args.conclusion ? { conclusion: args.conclusion } : {}),
+        title: args.title, summary: args.summary,
+      });
+    } catch {
+      // Deliberately swallowed: see above.
+    } finally {
+      await github.revoke(tokenScope).catch(() => {});
+    }
+  },
+});

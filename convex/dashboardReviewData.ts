@@ -3,7 +3,7 @@ import { internalMutation, internalQuery, query } from "./_generated/server";
 import { requireRepositoryRole } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
-import { terminalStatuses } from "./lib/lifecycle";
+import { retentionMs, terminalStatuses } from "./lib/lifecycle";
 import { activeReviewCount, concurrencyExceeded } from "./lib/tenantLimits";
 import { selectProviderModel, type ProviderName } from "@buildit/providers";
 
@@ -112,7 +112,7 @@ export const create = internalMutation({
       trustedRef: args.baseRef, trustedRefSha: args.baseSha, configRevisionId: config._id, configProvenance: "defaults_only",
       provider: credential.provider, model, modelVersion: "pinned-at-execution", promptVersion: "chain-v1", evalSetVersion: "buildit-eval-v1",
       coverageLevel: "limited", currentStage: "queue", executionGeneration: 0, queuePriority: 0, runnerImageVersion: RUNNER_IMAGE_VERSION,
-      expiresAt: args.now + 7 * 86_400_000, createdAt: args.now, updatedAt: args.now });
+      expiresAt: args.now + retentionMs(organization?.retentionHours), createdAt: args.now, updatedAt: args.now });
     await ctx.db.insert("reviewLocks", { repositoryId: repository._id, prNumber: args.prNumber, headSha: args.headSha, mode: "review", reviewId, createdAt: args.now });
     await ctx.db.insert("reviewEvents", { organizationId: repository.organizationId, reviewId, sequence: 1, type: "review_created", stage: "queue", internalCode: "dashboard_consent", metadata: {}, createdAt: args.now });
     await appendAuditEvent(ctx, { organizationId: repository.organizationId, actorId: args.actorId, action: "review.created", resourceType: "review", resourceId: reviewId, requestId: `dashboard-review:${reviewId}`, result: "allowed", createdAt: args.now });

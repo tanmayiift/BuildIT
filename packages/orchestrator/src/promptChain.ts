@@ -57,20 +57,30 @@ export function detectInjectionSignals(value:unknown,path="$",signals:InjectionS
 
 export type InjectionScope={unscoped:boolean;paths:ReadonlySet<string>};
 const filePathSignal=/^\$\.files\[(\d+)\]/;
+const changePathSignal=/^\$(?:\[\d+\])?\.pull\.changes\[(\d+)\]/;
 
 // A signal found inside one changed file taints that file. A signal in the pull request body,
 // a ticket, or anywhere else is review-global: there is no path to attribute it to, so it can
 // only be handled by refusing to reach a verdict. Separating the two is what lets a scoped
 // signal downgrade its own file without making every noisy pull request inconclusive.
+function pathAt(list:unknown,index:number){
+ const item=Array.isArray(list)?list[index]:undefined;
+ const path=item&&typeof item==="object"?(item as Record<string,unknown>).path:undefined;
+ return typeof path==="string"&&path.length>0?path:undefined;
+}
+
 export function injectionScope(untrusted:Record<string,unknown>,signals:InjectionSignal[]):InjectionScope{
- const files=Array.isArray(untrusted.files)?untrusted.files:[];
+ const pull=untrusted.pull&&typeof untrusted.pull==="object"?untrusted.pull as Record<string,unknown>:{};
  const paths=new Set<string>();
  let unscoped=false;
  for(const signal of signals){
-   const match=filePathSignal.exec(signal.path);
-   const file=match?files[Number(match[1])]:undefined;
-   const path=file&&typeof file==="object"?(file as Record<string,unknown>).path:undefined;
-   if(typeof path==="string"&&path.length>0)paths.add(path);else unscoped=true;
+   const inFile=filePathSignal.exec(signal.path);
+   // A diff is the code under review just as much as the file it came from. Attributing one and
+   // not the other made any pull request that adds instruction-like text - an agent prompt, a
+   // workflow with a `tool:` key - impossible to review at all.
+   const inPatch=changePathSignal.exec(signal.path);
+   const path=inFile?pathAt(untrusted.files,Number(inFile[1])):inPatch?pathAt(pull.changes,Number(inPatch[1])):undefined;
+   if(path)paths.add(path);else unscoped=true;
  }
  return {unscoped,paths};
 }
@@ -140,12 +150,7 @@ export async function runPromptChain(input:{definitions:StageDefinition[];expect
    const stageSignals = records.length
      ? [...injectionSignals, ...detectInjectionSignals(records.map(record => record.value), "$.prior")]
      : injectionSignals;
-   // A signal in model-authored output has no changed file behind it, so it is unscoped by
-   // construction: merging can only widen the scope, never narrow it.
-   const stageScope = stageSignals.length > injectionSignals.length ? {unscoped:true,paths:scope.paths} : scope;
-   // The caller must hear about a signal that first appears in model output too, or the review
-   // would still reach a verdict on evidence a poisoned prior stage shaped.
-   if (stageScope !== scope && !scope.unscoped) await input.onInjection?.({signals:stageSignals,scope:stageScope});
+   const stageScope = scope;
    const slices=input.partition?.(definition.stage)??[input.untrusted];
    const values:Array<Record<string,unknown>>=[];
    let attempts=0;

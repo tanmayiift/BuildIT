@@ -161,6 +161,12 @@ export const processWebhook = internalAction({
       const mode: "review" | "autofix" =
         decision.kind === "autofix" ? "autofix" : "review";
       if (!reviewPolicy(snapshot, mode, scope.forkPolicy).allowed) {
+        await ctx.runAction(internal.reviewPublicationWorker.acknowledge, {
+          installationId: args.installationId, githubRepositoryId: args.githubRepositoryId,
+          headSha: snapshot.headSha, conclusion: "neutral",
+          title: "BuildIT did not review this pull request",
+          summary: "This repository does not allow BuildIT to review pull requests from forks. A maintainer can change that in the repository's BuildIT settings, or push the branch to this repository and open the pull request from there.",
+        });
         await ctx.runMutation(internal.githubWebhookData.complete, {
           deliveryId: args.deliveryId,
           disposition: "rejected",
@@ -195,7 +201,24 @@ export const processWebhook = internalAction({
           now: Date.now(),
         },
       );
-      if (review.status !== "queued") throw new Error("review_not_runnable");
+      if (review.status !== "queued") {
+        const blocked = review.blockedReason === "concurrency_limit_reached"
+          ? { title: "BuildIT is at its review limit", summary: "This workspace already has as many reviews running as its plan allows. This one will not start. Wait for a running review to finish, or cancel one, then comment again." }
+          : { title: "BuildIT needs a model key before it can review", summary: "No model provider is connected to this workspace yet, so there is nothing to run the review with. Connect a key in BuildIT, then comment `@buildit review` again." };
+        await ctx.runAction(internal.reviewPublicationWorker.acknowledge, {
+          installationId: args.installationId, githubRepositoryId: args.githubRepositoryId,
+          headSha: snapshot.headSha, conclusion: "action_required", ...blocked,
+        });
+        throw new Error("review_not_runnable");
+      }
+      // The acknowledgement goes up before the work starts, so the pull request is never silent
+      // while a review is in flight - and never silent for good if the review dies mid-flight.
+      await ctx.runAction(internal.reviewPublicationWorker.acknowledge, {
+        installationId: args.installationId, githubRepositoryId: args.githubRepositoryId,
+        headSha: snapshot.headSha,
+        title: "BuildIT is reviewing this pull request",
+        summary: "Reading the pull request and the code it changes, then running this repository's required checks against the exact commit. The result replaces this message.",
+      });
       await ctx.runMutation(internal.durableReview.start, {
         organizationId: scope.organizationId,
         reviewId: review.reviewId,
