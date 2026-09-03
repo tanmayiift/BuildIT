@@ -388,7 +388,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
           detail={`$${evidence.spend.costUsd.toFixed(4)} · ${(evidence.spend.inputTokens + evidence.spend.outputTokens).toLocaleString()} tokens`}
           foot="Recorded per model call. No prompt or repository source is stored here."
         >
-          <div className="stage-table-scroll">
+          <div className="stage-table-scroll" tabIndex={0} role="region" aria-label="Stage details, scrolls horizontally">
             <table className="stage-table">
               <thead>
                 <tr>
@@ -434,13 +434,14 @@ export function LiveReviewDetail({ id }: { id: string }) {
             <span>Compare against</span>
             <select value={comparedTo} onChange={event => setComparedTo(event.target.value)}>
               <option value="">Select an earlier run…</option>
-              {runs.filter(run => run.id !== id).map(run => (
+              {runs.filter(run => run.createdAt < (runs.find(item => item.id === id)?.createdAt ?? Infinity)).map(run => (
                 <option key={run.id} value={run.id}>
                   {new Date(run.createdAt).toLocaleString()} · {run.headSha.slice(0, 7)} · {statusPresentation(run.status, false, run.statusReasonCode).label} · ${run.costUsd.toFixed(4)}
                 </option>
               ))}
             </select>
           </label>
+          <div aria-live="polite">
           {comparison ? (
             <>
               <dl className="run-diff-summary">
@@ -453,7 +454,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
                 {/* Lost is the column that matters: a defect the earlier run reported and this one
                     did not is either fixed in the diff or a regression in the reviewer. */}
                 <div data-side="lost">
-                  <h4>Lost · {comparison.onlyInLeft.length}</h4>
+                  <h3>Lost · {comparison.onlyInLeft.length}</h3>
                   <p>Reported by the earlier run only.</p>
                   {comparison.onlyInLeft.length ? (
                     <ul>{comparison.onlyInLeft.map((finding, index) => (
@@ -461,9 +462,9 @@ export function LiveReviewDetail({ id }: { id: string }) {
                     ))}</ul>
                   ) : null}
                 </div>
-                <div data-side="kept"><h4>In both · {comparison.inBoth}</h4><p>Reported by each run.</p></div>
+                <div data-side="kept"><h3>In both · {comparison.inBoth}</h3><p>Reported by each run.</p></div>
                 <div data-side="new">
-                  <h4>New · {comparison.onlyInRight.length}</h4>
+                  <h3>New · {comparison.onlyInRight.length}</h3>
                   <p>Reported by this run only.</p>
                   {comparison.onlyInRight.length ? (
                     <ul>{comparison.onlyInRight.map((finding, index) => (
@@ -472,7 +473,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
                   ) : null}
                 </div>
               </div>
-              <div className="stage-table-scroll">
+              <div className="stage-table-scroll" tabIndex={0} role="region" aria-label="Stage details, scrolls horizontally">
                 <table className="stage-table">
                   <thead><tr><th scope="col">Stage</th><th scope="col">Earlier</th><th scope="col">This run</th></tr></thead>
                   <tbody>
@@ -491,6 +492,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
               </div>
             </>
           ) : comparedTo ? <p className="run-diff-empty">Loading the comparison…</p> : null}
+          </div>
         </Section>
       ) : null}
       <Section

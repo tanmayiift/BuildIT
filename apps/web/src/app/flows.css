@@ -103,6 +103,7 @@
 
 /* Model stage table. Digits line up because the columns are compared down, not read across. */
 .stage-table-scroll { overflow-x: auto; }
+.stage-table-scroll:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
 .stage-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
 .stage-table th, .stage-table td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .stage-table thead th { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -125,7 +126,7 @@
 .run-diff-summary dd { margin: .2rem 0 0; font-size: .9rem; font-weight: 650; font-variant-numeric: tabular-nums; }
 .run-diff-findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .7rem; margin-bottom: 1rem; }
 .run-diff-findings > div { padding: .7rem .8rem; border: 1px solid var(--line); border-radius: 8px; }
-.run-diff-findings h4 { margin: 0; font-size: .88rem; }
+.run-diff-findings h3 { margin: 0; font-size: .88rem; }
 .run-diff-findings p { margin: .25rem 0 0; color: var(--muted); font-size: .78rem; }
 .run-diff-findings ul { margin: .55rem 0 0; padding-left: 1rem; display: grid; gap: .3rem; font-size: .8rem; }
 .run-diff-findings span[data-tone] { font-weight: 700; }
