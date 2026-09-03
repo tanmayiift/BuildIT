@@ -16,7 +16,19 @@ export type RepositoryOmission = { path: string; reason: "excluded" | "oversized
 // "budget" are real gaps — that content was wanted and did not fit.
 const forcedOmissionReasons = new Set<RepositoryOmission["reason"]>(["oversized", "budget"]);
 export function isForcedOmission(omission: RepositoryOmission) { return forcedOmissionReasons.has(omission.reason); }
-export function omissionCoverage(omitted: RepositoryOmission[]) { return omitted.some(isForcedOmission) ? "partial" as const : "full" as const; }
+// Coverage conflated two questions: did I read the code this pull request changed, and did I read
+// every byte of the repository. Only the first can make a verdict unsafe, and answering the second
+// made every real repository inconclusive - one oversized lockfile or image was enough, so a user
+// could watch all seven checks pass and still be told BuildIT could not decide.
+//
+// With no changed set it stays strict, because then there is no way to tell a relevant gap from an
+// irrelevant one, and it must not guess in the direction that produces a confident verdict.
+export function omissionCoverage(omitted: RepositoryOmission[], changedPaths?: ReadonlySet<string>) {
+  const gaps = omitted.filter(isForcedOmission);
+  if (!gaps.length) return "full" as const;
+  if (!changedPaths) return "partial" as const;
+  return gaps.some(gap => changedPaths.has(gap.path)) ? "partial" as const : "full" as const;
+}
 export type RepositorySnapshot = {
   repositoryId: number;
   commitSha: string;

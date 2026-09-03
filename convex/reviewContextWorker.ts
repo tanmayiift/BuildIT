@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { chunkRepositorySnapshot, GitHubAppClient, GitHubIssueContextClient, PullRequestContextClient, RepositoryContentClient, type PullRequestContext, type RepositorySnapshot } from "@buildit/github";
+import { chunkRepositorySnapshot, GitHubAppClient, GitHubIssueContextClient, omissionCoverage, type PullRequestContext, PullRequestContextClient, RepositoryContentClient, type RepositorySnapshot } from "@buildit/github";
 import { acquireRequirements,repositoryRequirementSources } from "@buildit/orchestrator";
 import { issueArtifactGrant,issueTrackerGrant } from "@buildit/security";
 
@@ -69,10 +69,19 @@ export const gather = internalAction({
           await ctx.runQuery(internal.durableReview.assertActive, args);
           const response = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${grant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body });
           if (!response.ok) throw new Error(`artifact_upload_${response.status}`);
-          const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" && intentCoverage === "complete" ? "full" as const : "partial" as const;
+          const changedPaths = new Set(pullContext.files.map(file => file.path));
+          const headCoverage = omissionCoverage(headSnapshot.omitted, changedPaths);
+          const baseCoverage = omissionCoverage(baseSnapshot.omitted, changedPaths);
+          // Ordered worst-first: an unreadable changed file is a bigger hole than a truncated diff,
+          // which is bigger than a ticket that could not be fetched. The first one that applies is
+          // the cause the review reports, so "inconclusive" can name what stopped it.
+          const coverageGap = headCoverage !== "full" || baseCoverage !== "full" ? "changed_files" as const
+            : pullContext.coverage !== "full" ? "diff_truncated" as const
+            : intentCoverage !== "complete" ? "requirements" as const : undefined;
+          const coverage = coverageGap ? "partial" as const : "full" as const;
           await ctx.runMutation(internal.reviewArtifactData.complete, { organizationId: scope.organizationId, reviewId: scope.reviewId,
             expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
-            artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, now: Date.now() });
+            artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, coverageGap, now: Date.now() });
           artifactIds.push(String(reserved.artifactId));
         }
       }

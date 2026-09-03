@@ -61,7 +61,7 @@ function findingLines(finding: ReportFinding, index: number) {
   ];
 }
 
-export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
+export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
   const decision = computeReviewDecision({ isStale: input.isStale, environmentAvailable: input.environmentAvailable, coverageComplete: input.coverage === "complete", ...(input.injectionUnscoped ? { injectionUnscoped: true } : {}), checks: input.checks, findings: input.findings });
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
@@ -109,6 +109,9 @@ function checkExcerpt(check: ReviewCheckDecision) {
     `**Next step** — ${nextStep(decision.nextAction)}`,
     "",
     "> BuildIT did not merge this pull request. A human owns the merge decision.",
+    ...(input.coverageGap === "requirements"
+      ? ["", "> **Intent was not verified.** A requirement source linked from this pull request could not be read — a ticket in another repository, or a tracker with no connected credential. Everything above is about the code and its checks. Whether the change does what was asked is still an open question for a person."]
+      : []),
     ...(visibleFindings.length ? ["", "### What needs attention", "", ...visibleFindings.flatMap(findingLines)] : []),
     "",
     "### Validation checks",
@@ -127,7 +130,8 @@ function checkExcerpt(check: ReviewCheckDecision) {
     `| Head commit | \`${code(input.headSha)}\` |`,
     `| Base commit | \`${code(input.baseSha)}\` |`,
     `| Trusted configuration | \`${code(input.configRevision)}\` |`,
-    `| Repository coverage | ${input.coverage === "complete" ? "Complete" : "Partial"} |`,
+    `| Code under review | ${input.coverage === "complete" ? "Read in full" : "Partially read"} |`,
+    `| Requirement sources | ${input.coverageGap === "requirements" ? "One or more unreadable" : "All read"} |`,
     `| Model cost | $${input.costUsd.toFixed(4)} |`,
     `| Source evidence deleted after | ${istDate(input.retentionExpiresAt)} |`,
     ...(evidenceReceipts.length || claimReceipts.length ? ["", ...evidenceReceipts, ...claimReceipts] : []),

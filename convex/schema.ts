@@ -110,7 +110,7 @@ export default defineSchema({
     observedHeadSha: v.optional(v.string()), trustedRef: v.string(), trustedRefSha: v.string(),
     configRevisionId: v.id("configRevisions"), configProvenance: value.configProvenance,
     provider: value.provider, model: v.string(), modelVersion: v.string(), promptVersion: v.string(),
-    evalSetVersion: v.string(), coverageLevel: value.coverageLevel, currentStage: value.reviewStage,
+    evalSetVersion: v.string(), coverageLevel: value.coverageLevel, coverageGap: v.optional(value.coverageGap), currentStage: value.reviewStage,
     promptInjectionUnscopedAt: v.optional(v.number()),
     blockedReason: v.optional(v.string()), blockedSince: v.optional(v.number()),
     blockedExpiresAt: v.optional(v.number()), parentReviewId: v.optional(v.id("reviews")),

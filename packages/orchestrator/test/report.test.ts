@@ -53,7 +53,18 @@ describe("verified report", () => {
     const report = composeVerifiedReport({ ...input(), prNumber: 8, configRevision: "cfg:2", coverage: "partial", checks: [{ name: "test", required: true, conclusion: "passed", evidenceComplete: true }], findings: [], claims: [], evidence: [], costUsd: 0 });
     expect(report.decision).toMatchObject({ status: "inconclusive", reason: "incomplete_coverage" });
     expect(report.body).toContain("## Review needs attention");
-    expect(report.body).toContain("| Repository coverage | Partial |");
+    expect(report.body).toContain("| Code under review | Partially read |");
+  });
+
+  // A verdict is allowed to stand when only a requirement source was unreadable, so the report has
+  // to say which half was checked. Silence there would read as "intent verified".
+  it("states the intent limitation and keeps the receipt consistent with it", () => {
+    const report = composeVerifiedReport({ ...input(), prNumber: 9, configRevision: "cfg:3", coverage: "complete", coverageGap: "requirements",
+      checks: [{ name: "test", required: true, conclusion: "passed", evidenceComplete: true }], findings: [] });
+    expect(report.decision).toMatchObject({ status: "checks_passed" });
+    expect(report.body).toContain("**Intent was not verified.**");
+    expect(report.body).toContain("| Code under review | Read in full |");
+    expect(report.body).toContain("| Requirement sources | One or more unreadable |");
   });
 
   it("drops unsupported claims and neutralizes mentions and markup", () => {
