@@ -22,7 +22,7 @@ import {
   validatePatchProposals,
   type PatchProposal,
 } from "@buildit/orchestrator";
-import { defaultExecutionPlans } from "@buildit/runner";
+import { BROKER_REQUEST_TIMEOUT_MS, defaultExecutionPlans } from "@buildit/runner";
 import {
   issueArtifactGrant,
   issueExecutionGrant,
@@ -617,14 +617,23 @@ export const runConvergence = internalAction({
             install,
             checks,
           }),
+          signal: AbortSignal.timeout(BROKER_REQUEST_TIMEOUT_MS),
         });
+        if (!executionResponse.ok) {
+          const detail = await executionResponse.text().catch(() => "");
+          let code: string | undefined;
+          try {
+            code = (JSON.parse(detail) as { error?: string }).error;
+          } catch {
+            code = undefined;
+          }
+          throw new Error(
+            code ?? `autofix_execution_${executionResponse.status}`,
+          );
+        }
         const output = (await executionResponse.json()) as ExecutionResponse & {
           error?: string;
         };
-        if (!executionResponse.ok)
-          throw new Error(
-            output.error ?? `autofix_execution_${executionResponse.status}`,
-          );
         const allSummaries = summarizeExecution(
             output,
             scope.baseSha,

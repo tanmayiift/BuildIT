@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { defaultExecutionPlans, type PackageManager } from "@buildit/runner";
+import { BROKER_REQUEST_TIMEOUT_MS, defaultExecutionPlans, type PackageManager } from "@buildit/runner";
 import { issueArtifactGrant, issueExecutionGrant } from "@buildit/security";
 import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, sha256Json, type ExecutionResponse } from "./lib/validationEvidence";
 
@@ -35,9 +35,14 @@ export const validate = internalAction({
     const artifactsHash = sha256Json(descriptors.map(({ readGrant: _, ...item }) => item)), plansHash = sha256Json({ runnerImageVersion: scope.runnerImageVersion, runtime, install, checks });
     const executionGrant = issueExecutionGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), baseSha: scope.baseSha, headSha: scope.headSha, artifactsHash, plansHash, ttlMs: 120_000 }, executionSecret);
     await ctx.runQuery(internal.durableReview.assertActive, args);
-    const response = await fetch(`${brokerUrl}/api/execute`, { method: "POST", headers: { authorization: `Bearer ${executionGrant}`, "content-type": "application/json" }, body: JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), baseSha: scope.baseSha, headSha: scope.headSha, runnerImageVersion: scope.runnerImageVersion, runtime, artifacts: descriptors, install, checks }) });
+    const response = await fetch(`${brokerUrl}/api/execute`, { method: "POST", headers: { authorization: `Bearer ${executionGrant}`, "content-type": "application/json" }, body: JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), baseSha: scope.baseSha, headSha: scope.headSha, runnerImageVersion: scope.runnerImageVersion, runtime, artifacts: descriptors, install, checks , signal: AbortSignal.timeout(BROKER_REQUEST_TIMEOUT_MS)}) });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      let code: string | undefined;
+      try { code = (JSON.parse(detail) as { error?: string }).error; } catch { code = undefined; }
+      throw new Error(code ?? `validation_execution_${response.status}`);
+    }
     const output = await response.json() as ExecutionResponse & { error?: string };
-    if (!response.ok) throw new Error(output.error ?? `validation_execution_${response.status}`);
     const environment = { configRevision: String(scope.configRevisionId), runnerImage: scope.runnerImageVersion, runtime, manager: manager ?? "none" as const, architecture: "linux-x64", networkPolicy: "deny-all-v1", toolVersions: [{ name: "node", version: "24" }, { name: "package-manager", version: manager ?? "none" }], install, checks }, paired = pairExecutionEvidence(output, scope.baseSha, scope.headSha, environment), summaries = paired.summaries.map(item => ({ ...item, nameHash: createHash("sha256").update(item.planId).digest("hex") }));
     const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { baseSha: scope.baseSha, headSha: scope.headSha, configRevisionId: String(scope.configRevisionId), runnerImageVersion: scope.runnerImageVersion }, manager: manager ?? "none", executionFingerprint: paired.executionFingerprint, output }));
     if (outputBody.byteLength > 4_000_000) throw new Error("validation_output_too_large");
