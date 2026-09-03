@@ -43,6 +43,26 @@ describe("one defect is one finding", () => {
     expect([...merged[0]!.evidenceIds].sort()).toEqual(["ev-1", "ev-2"]);
   });
 
+  it("collapses ranges that overlap without being identical", () => {
+    // The shape production actually produces, and the one the first version of this missed: the
+    // model spans the construct it read, the scanner marks the line its regex matched.
+    const merged = dedupeSameDefect([
+      at({ id: "m1", origin: "model", startLine: 4, endLine: 7, explanation: "A hostile proxy can forge rate data." }),
+      at({ id: "scanner-0-buildit-tls-disabled", origin: "scanner", startLine: 4, endLine: 4, explanation: "rule" }),
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ origin: "scanner", startLine: 4, endLine: 4 });
+    expect(merged[0]!.explanation).toBe("A hostile proxy can forge rate data.");
+  });
+
+  it("leaves defects on adjacent but non-overlapping lines alone", () => {
+    const merged = dedupeSameDefect([
+      at({ id: "a", startLine: 4, endLine: 7 }),
+      at({ id: "b", startLine: 8, endLine: 9 }),
+    ]);
+    expect(merged).toHaveLength(2);
+  });
+
   it("never downgrades a finding that would have blocked on its own", () => {
     const merged = dedupeSameDefect([
       at({ id: "s1", origin: "scanner", blocking: false, severity: "warning" }),

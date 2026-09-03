@@ -24,28 +24,32 @@ export function reconcileArbitration(findings:ArbitratedFinding[],decisions:Arbi
 // confidence 1. The model's prose is merged into it rather than discarded, so the report keeps the
 // explanation a person actually wants to read and loses only the double count.
 export function dedupeSameDefect(findings: ArbitratedFinding[]): ArbitratedFinding[] {
-  const key = (finding: ArbitratedFinding) =>
-    `${finding.path} ${finding.startLine} ${finding.endLine} ${finding.category}`;
-  const order: string[] = [];
-  const chosen = new Map<string, ArbitratedFinding>();
+  // Keyed on overlap, not on equality. The first version of this required identical line ranges
+  // and production immediately proved that wrong: for one disabled-TLS line the model reported
+  // 4-7, spanning the construct it read, while the scanner reported 4, the line its regex matched.
+  // Same defect, different ranges, still counted twice.
+  const sameDefect = (a: ArbitratedFinding, b: ArbitratedFinding) =>
+    a.path === b.path && a.category === b.category && a.startLine <= b.endLine && b.startLine <= a.endLine;
+  const kept: ArbitratedFinding[] = [];
   for (const finding of findings) {
-    const id = key(finding);
-    const existing = chosen.get(id);
-    if (!existing) { order.push(id); chosen.set(id, finding); continue; }
-    // Two entries for one defect. Prefer the scanner, then the one that is actually blocking - a
-    // merge must never quietly downgrade a finding that would have blocked on its own.
+    const index = kept.findIndex(existing => sameDefect(existing, finding));
+    if (index === -1) { kept.push(finding); continue; }
+    const existing = kept[index]!;
+    // Prefer the scanner: it is deterministic and reproducible. Then prefer whichever actually
+    // blocks - a merge must never quietly downgrade a finding that would have blocked alone.
     const winner = existing.origin === "scanner" ? existing
       : finding.origin === "scanner" ? finding
       : existing.blocking ? existing : finding;
     const loser = winner === existing ? finding : existing;
-    chosen.set(id, {
+    kept[index] = {
       ...winner,
       blocking: winner.blocking || loser.blocking,
-      // The model explains why it matters; the scanner states the rule. Keep the longer one.
+      // The model explains why it matters; the scanner states the rule. Keep the longer text, and
+      // keep the winner's line range so the fingerprint stays stable across runs.
       explanation: loser.explanation.length > winner.explanation.length ? loser.explanation : winner.explanation,
       impact: loser.impact.length > winner.impact.length ? loser.impact : winner.impact,
       evidenceIds: [...new Set([...winner.evidenceIds, ...loser.evidenceIds])],
-    });
+    };
   }
-  return order.map(id => chosen.get(id)!);
+  return kept;
 }
