@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { revokeCredentialSecret } from "./lib/credentialRevocation";
 import { mutation, query } from "./_generated/server";
 import { requireOrganizationRole, requireRecentGitHubLogin, requireRepositoryRole } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
@@ -78,7 +79,7 @@ export const storeEncryptedCredential = mutation({
     const credentialId = await ctx.db.insert("providerCredentials", {
       ...encrypted, status: "valid", createdBy: access.userId, createdAt: Date.now(),
     });
-    if (replaced) await ctx.db.patch(replaced._id, { status: "revoked", revokedAt: Date.now() });
+    if (replaced) await revokeCredentialSecret(ctx, replaced._id, Date.now());
     await appendAuditEvent(ctx, { organizationId: args.organizationId, actorId: access.userId,
       action: replaced ? "credential.rotated" : "credential.created", resourceType: "provider_credential", resourceId: credentialId,
       requestId, result: "allowed", createdAt: Date.now() });
@@ -95,7 +96,7 @@ export const revokeProviderCredential = mutation({
     if (!credential || credential.organizationId !== args.organizationId) throw new Error("not_found_or_forbidden");
     if (credential.status === "revoked") return { id: credential._id, status: "revoked" as const };
     const now = Date.now();
-    await ctx.db.patch(credential._id, { status: "revoked", revokedAt: now });
+    await revokeCredentialSecret(ctx, credential._id, now);
     await appendAuditEvent(ctx, { organizationId: args.organizationId, actorId: access.userId,
       action: "credential.revoked", resourceType: "provider_credential", resourceId: credential._id,
       requestId: args.requestId, result: "allowed", createdAt: now });

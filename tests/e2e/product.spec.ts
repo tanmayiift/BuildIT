@@ -134,8 +134,12 @@ test("production repository control reaches the registered GitHub App", async ({
   );
 });
 
+// Deliberately moved off "/". The landing page now has a public header instead of the workspace
+// sidebar, because a stranger met ten admin destinations before a sentence said what BuildIT does.
+// The contract still matters, so it is asserted where the workspace actually is rather than
+// weakened or deleted.
 test("navigation exposes all promised product areas", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/reviews?tour=1");
   const menu = page.getByText("Menu", { exact: true });
   if (await menu.isVisible()) await menu.click();
   for (const name of ["Review queue", "Repositories", "Metrics", "Usage", "Integrations", "Policies", "Members", "Audit log"]) {
@@ -162,8 +166,8 @@ test("public data handling states the current access boundary", async ({ page })
   await expect(page.getByText(/encrypted artifacts in AWS Ireland/i)).toBeVisible();
   await expect(page.getByText(/isolated checks run in a Vercel Sandbox in Paris, France/i)).toBeVisible();
   await expect(page.getByText(/BuildIT does not promise that AI makes code bug-free/i)).toBeVisible();
-  await expect(page.getByText(/remains a release blocker/i)).toBeVisible();
-  await expect(page.getByText(/Key rotation proof is still outstanding/i)).toBeVisible();
+  await expect(page.getByText(/What is still not proved is a track record/i)).toBeVisible();
+  await expect(page.getByText(/not that the product is reliable on an unfamiliar codebase/i)).toBeVisible();
   await expect(page.getByText(/review screens remain sample data/i)).toHaveCount(0);
 });
 

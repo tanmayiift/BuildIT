@@ -17,6 +17,7 @@ export default defineSchema({
     name: v.string(), slug: v.string(), timezone: v.string(), region: v.literal("eu-west-1"),
     retentionHours: v.number(), monthlyBudget: v.number(), concurrencyLimit: v.number(),
     planId: v.string(), fingerprintKeyVersion: v.number(), createdAt: v.number(),
+    monthlySpendMicros: v.optional(v.number()), monthlySpendMonth: v.optional(v.string()),
     deletedAt: v.optional(v.number()),
   }).index("by_slug", ["slug"]).index("by_deleted", ["deletedAt"]).index("by_created", ["createdAt"]),
 
@@ -269,9 +270,10 @@ export default defineSchema({
     reviewId: v.optional(v.id("reviews")), prNumber: v.optional(v.number()), headSha: v.optional(v.string()),
     baseSha: v.optional(v.string()), headRefHash: v.optional(v.string()), baseRefHash: v.optional(v.string()),
     isFork: v.optional(v.boolean()), triggerVerb: v.optional(value.triggerVerb),
-    receivedAt: v.number(), completedAt: v.optional(v.number()),
+    receivedAt: v.number(), completedAt: v.optional(v.number()), expiresAt: v.optional(v.number()),
   }).index("by_delivery_id", ["deliveryId"])
-    .index("by_status_received", ["status", "receivedAt"]),
+    .index("by_status_received", ["status", "receivedAt"])
+    .index("by_expiry", ["expiresAt"]),
 
   notifications: defineTable({
     organizationId: v.id("organizations"), userId: v.string(), type: value.notificationType,

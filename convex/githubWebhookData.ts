@@ -3,7 +3,7 @@ import { selectProviderModel } from "@buildit/providers";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { retentionMs, terminalStatuses } from "./lib/lifecycle";
+import { retentionMs, terminalStatuses, webhookDeliveryRetentionMs } from "./lib/lifecycle";
 import { activeReviewCount, concurrencyExceeded } from "./lib/tenantLimits";
 import { provider as providerValidator } from "./validators";
 
@@ -51,6 +51,7 @@ export const reserve = internalMutation({
       return { duplicate: false, id: existing._id };
     }
     const id = await ctx.db.insert("webhookDeliveries", {
+      expiresAt: args.now + webhookDeliveryRetentionMs,
       deliveryId: args.deliveryId,
       event: args.event,
       action: args.action,

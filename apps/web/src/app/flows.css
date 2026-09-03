@@ -25,12 +25,27 @@
 @media(max-width:760px){.connection-hero{align-items:flex-start;flex-direction:column}.connection-overview{grid-template-columns:1fr;gap:16px}.connection-facts{grid-template-columns:repeat(2,1fr);border-top:1px solid var(--line);border-left:0;padding-top:12px}.connection-facts span{padding:6px 10px}.connection-overview>.action{grid-column:auto}.repository-row{grid-template-columns:1fr;gap:16px}.repository-control-group{grid-template-columns:1fr}.repository-review-state{grid-template-columns:1fr auto;align-items:center}.repository-review-state .button{min-width:108px}.repository-actions{justify-content:flex-start}.repository-actions .action{padding-left:0}}
 @media(max-width:480px){.connection-facts{grid-template-columns:1fr}.connection-overview>.action{width:100%}.repository-review-state{grid-template-columns:1fr}.repository-review-state .button{width:100%}.repository-actions .action{width:100%;justify-content:flex-start}}
 .sample-route-note {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   margin: 18px 40px 0;
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.sample-route-exit {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--navy);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .route-gate {

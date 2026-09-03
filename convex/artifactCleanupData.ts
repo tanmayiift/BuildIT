@@ -30,6 +30,27 @@ export const claimExpired = internalMutation({
   },
 });
 
+// Retention was the only thing that ever deleted evidence, so "we delete your source" meant "in
+// up to 24 hours" and an owner who wanted it gone now had nothing to invoke. This brings the
+// expiry forward and stops there: the cleanup worker still does the deleting, because its
+// read-back-and-require-NotFound is the only step that can prove the object left storage. Marking
+// rows deleted here would turn the promise back into an assertion.
+export const eraseReviewEvidence = internalMutation({
+  args: { reviewId: v.id("reviews"), now: v.number() },
+  handler: async (ctx, args) => {
+    const review = await ctx.db.get(args.reviewId);
+    if (!review) throw new ConvexError("artifact_erasure_review_missing");
+    const artifacts = await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", args.reviewId)).collect();
+    let expired = 0;
+    for (const artifact of artifacts) {
+      if (artifact.deletedAt || artifact.expiresAt < args.now) continue;
+      await ctx.db.patch(artifact._id, { expiresAt: args.now - 1 });
+      expired += 1;
+    }
+    return { expired };
+  },
+});
+
 export const completeDeletion = internalMutation({
   args: { artifactId: v.id("artifacts"), leaseId: v.string(), now: v.number() },
   handler: async (ctx, args) => {
