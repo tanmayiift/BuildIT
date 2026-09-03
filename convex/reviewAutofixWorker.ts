@@ -650,7 +650,7 @@ export const runConvergence = internalAction({
             : requiredRuns.some((item) => item.conclusion === "failed")
               ? ("failed" as const)
               : ("passed" as const);
-        const parentChecks=((failure?.head.results??analysis.validation?.head?.results??[]) as Array<{planId:string;required:boolean;conclusion:"passed"|"failed"|"not_run"|"timed_out"|"truncated"|"flaky"}>),parentCritical=(failure?.scanners.head.findings??analysis.validation?.scanners?.head?.findings??[]).filter(item=>item.severity==="critical").length,candidateCritical=output.scanners.head.findings.filter(item=>item.severity==="critical").length,worsening=candidateWorsened({parent:parentChecks,candidate:headSummaries,parentCriticalFindings:parentCritical,candidateCriticalFindings:candidateCritical});
+        const parentChecks=((failure?.head.results??analysis.validation?.head?.results??[]) as Array<{planId:string;required:boolean;conclusion:"passed"|"failed"|"not_run"|"not_configured"|"timed_out"|"truncated"|"flaky"}>),parentCritical=(failure?.scanners.head.findings??analysis.validation?.scanners?.head?.findings??[]).filter(item=>item.severity==="critical").length,candidateCritical=output.scanners.head.findings.filter(item=>item.severity==="critical").length,worsening=candidateWorsened({parent:parentChecks,candidate:headSummaries,parentCriticalFindings:parentCritical,candidateCriticalFindings:candidateCritical});
         if(worsening.worsened)throw new Error(`autofix_worsened:${worsening.reason}`);
         const validationBody = Buffer.from(
             JSON.stringify({
@@ -888,11 +888,14 @@ export const deliverPassed = internalAction({
           `Rounds completed: **${passed.roundNumber} of 3 maximum**`,
           `Effective LOC: **+${effectiveLoc.added} / -${effectiveLoc.removed}** executable lines (comments, formatting, generated files, and lockfiles excluded)`,
           ``,
-          `### Final required checks`,
-          ...results
-            .filter((item) => item.required)
-            .map((item) => `- ${item.planId}: **${item.conclusion}**`),
-          ...autofixScannerLines(validation.output.scanners.head),
+          ...(() => {
+            const required = results.filter(item => item.required);
+            const failed = required.filter(item => item.conclusion !== "passed");
+            const scannerFailures = autofixScannerLines(validation.output.scanners.head).filter(line => !line.includes("no findings"));
+            return failed.length || scannerFailures.length
+              ? [`### What still fails on the candidate`, ...failed.map(item => `- ${item.planId}: **${item.conclusion}**`), ...scannerFailures]
+              : [`All ${required.length} required checks and every scanner pass on the candidate. The review comment above has the full table.`];
+          })(),
           ``,
           `${neverMergedSentence} It did not merge the stacked one either — a person inspects and merges that.`,
         ].join("\n"),

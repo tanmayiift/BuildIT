@@ -70,3 +70,25 @@ export * from "./pull-request-context.js";
 export * from "./issue-context.js";
 export * from "./tracker-context.js";
 export * from "./repository-writer.js";
+
+// One pull request accumulated nine full review comments, because the marker embedded the review
+// id and every run mints a new one, so the upsert matched nothing and appended every time. Nine
+// walls of text on one pull request is how a bot gets muted, and a muted bot has no findings at
+// all however good they were.
+//
+// The marker names the thing being reported on - this pull request - not the run reporting on it.
+// The commit and the verdict live in the body, which GitHub keeps an edit history of, so nothing
+// is lost by replacing the text rather than stacking a new comment beside it.
+export function reviewCommentMarker(prNumber: number) {
+  if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error("review_comment_marker_invalid");
+  return `buildit-review:pr-${prNumber}`;
+}
+
+// Inline comments are keyed the same way, and for the same reason plus one more: a comment left on
+// a line of a commit that has since been pushed over is stale, and the diff a reader is looking at
+// is the current one. Clearing BuildIT's own inline comments before posting means what is on the
+// diff is always what the latest review found, never a sediment of older ones.
+export function inlineCommentMarker(prNumber: number) {
+  if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error("review_comment_marker_invalid");
+  return `buildit-review:inline-pr-${prNumber}`;
+}

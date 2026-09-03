@@ -26,12 +26,17 @@ Alert: {{ .CommonLabels.alertname }}
 {{ end }}
 What happened
 {{ .CommonAnnotations.summary }}
-
+{{ if gt (len .Alerts.Firing) 1 }}{{ len .Alerts.Firing }} instances are firing.
+{{ end }}{{ range .Alerts.Firing }}{{ if .Labels.buildit_operation }}Operation: {{ .Labels.buildit_operation }}
+{{ end }}{{ if .Labels.buildit_provider }}Provider: {{ .Labels.buildit_provider }}
+{{ end }}{{ if .Labels.buildit_reason }}Reason: {{ .Labels.buildit_reason }}
+{{ end }}{{ if .ValueString }}Observed: {{ .ValueString }}
+{{ end }}{{ end }}
 Next action
 {{ .CommonAnnotations.action }}
 
 Runbook
 {{ .CommonAnnotations.runbook_url }}
 
-This alert contains only global BuildIT service health.
+This alert contains only global BuildIT service health: no repository, pull request or source.
 {{- end }}

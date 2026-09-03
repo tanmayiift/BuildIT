@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { GitHubAppClient, GitHubRepositoryWriter, sideEffectKey } from "@buildit/github";
+import { GitHubAppClient, GitHubRepositoryWriter, inlineCommentMarker, reviewCommentMarker, sideEffectKey } from "@buildit/github";
 import { neverMergedSentence, selectInlineFindings } from "@buildit/orchestrator";
 import { issueArtifactGrant } from "@buildit/security";
 import { platformFailureReport, type PlatformFailureReason } from "./lib/platformFailureReport";
@@ -51,7 +51,7 @@ async function publishInlineFindings(scope: Scope, token: string) {
     if (!findings.length) return;
     const writer = new GitHubRepositoryWriter({ repositoryId: scope.githubRepositoryId, installationToken: token });
     await writer.publishInlineFindings({ prNumber: scope.prNumber, headSha: scope.headSha,
-      marker: `buildit-review:inline-${scope.reviewId}:${scope.headSha}`, findings });
+      marker: inlineCommentMarker(scope.prNumber), findings });
   } catch {
     // Deliberately swallowed: see above. The review has already been published.
   }
@@ -80,7 +80,7 @@ export const publish = internalAction({
       const check = await writer.upsertCheckRun({ name: "BuildIT / review", headSha: scope.headSha, conclusion: scope.conclusion, title: publicationTitle(scope.status), summary: body, detailsUrl: reviewDetailsUrl(String(scope.reviewId)) });
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, { ...args, sideEffectId: checkEffect, requestHash, externalId: String(check.id), status: "completed", now: Date.now() });
       const commentEffect: Id<"githubSideEffects"> = await ctx.runMutation(internal.reviewState.reserveSideEffect, { ...args, operationKey: commentKey, type: "comment_update", requestHash, now });
-      const comment = await writer.upsertIssueComment({ prNumber: scope.prNumber, marker: `buildit-review:${scope.reviewId}:${scope.headSha}`, body });
+      const comment = await writer.upsertIssueComment({ prNumber: scope.prNumber, marker: reviewCommentMarker(scope.prNumber), body });
       // The verdict lives in the check run and the summary comment. These put each finding on the
       // line it cites - the thing the headline has always promised and never delivered. Only
       // findings that survived arbitration reach here, so nothing the validator dropped lands on a

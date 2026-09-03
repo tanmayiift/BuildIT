@@ -1,5 +1,5 @@
 export type CheckKind="test"|"lint"|"typecheck"|"build"|"static_analysis"|"dependency_audit"|"secret_scan";
-export type CheckConclusion="passed"|"failed"|"not_run"|"timed_out"|"truncated";
+export type CheckConclusion="passed"|"failed"|"not_run"|"not_configured"|"timed_out"|"truncated";
 export type NamedCommand="install"|"test"|"lint"|"typecheck"|"build";
 export type PackageManager="npm"|"pnpm"|"yarn";
 export type CommandPlan={planId:NamedCommand;origin:"built_in"|"trusted_ref";kind:CheckKind;executable:PackageManager;args:string[];required:boolean;timeoutMs:number;cpuLimit:number;memoryMb:number;outputBytes:number;fileBytes:number;network:"none"|"registry_only"};
@@ -19,9 +19,28 @@ export type Workspace={files:Map<string,string>;environment:Record<string,string
 export function teardownCredentials(workspace:Workspace){for(const key of Object.keys(workspace.environment))if(/TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL/i.test(key))delete workspace.environment[key];delete workspace.remote;delete workspace.credentialHelper;workspace.tokenRevoked=true;return workspace}
 export function executionReady(workspace:Workspace){return workspace.tokenRevoked&&!workspace.remote&&!workspace.credentialHelper&&!Object.keys(workspace.environment).some(k=>/TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL/i.test(k))}
 export function finalStatus(results:CheckResult[]){const required=results.filter(r=>r.required);if(required.some(r=>r.conclusion==="not_run"||r.conclusion==="timed_out"||r.conclusion==="truncated"))return "inconclusive" as const;if(required.some(r=>r.conclusion==="failed"))return "changes_requested" as const;return "checks_passed" as const}
-export type ComparableCheck={commitSha:string;commandFingerprint:string;configRevision:string;runnerImage:string;toolVersions:string;architecture:string;networkPolicy:string;conclusion:"passed"|"failed"|"flaky"|"not_run"|"timed_out"|"truncated"};
+export type ComparableCheck={commitSha:string;commandFingerprint:string;configRevision:string;runnerImage:string;toolVersions:string;architecture:string;networkPolicy:string;conclusion:"passed"|"failed"|"flaky"|"not_run"|"not_configured"|"timed_out"|"truncated"};
 export function classifyRegression(base:ComparableCheck,head:ComparableCheck){for(const field of ["commandFingerprint","configRevision","runnerImage","toolVersions","architecture","networkPolicy"] as const)if(base[field]!==head[field])return{classification:"unknown" as const,reason:`configuration_mismatch:${field}`};if(base.commitSha===head.commitSha)return{classification:"unknown" as const,reason:"same_commit"};if(base.conclusion==="flaky"||head.conclusion==="flaky")return{classification:"flaky" as const};if(!["passed","failed"].includes(base.conclusion)||!["passed","failed"].includes(head.conclusion))return{classification:"unknown" as const,reason:"incomplete_evidence"};if(base.conclusion==="passed"&&head.conclusion==="failed")return{classification:"introduced" as const};if(base.conclusion==="failed"&&head.conclusion==="failed")return{classification:"pre_existing" as const};if(base.conclusion==="failed"&&head.conclusion==="passed")return{classification:"resolved" as const};return{classification:"unchanged_pass" as const}}
 export type DiagnosticRun={conclusion:"passed"|"failed";failureFingerprint?:string};
 export function diagnoseFlakiness(runs:DiagnosticRun[],maxRuns=3){if(!Number.isInteger(maxRuns)||maxRuns<2||maxRuns>5)throw new Error("invalid_flaky_rerun_limit");if(runs.length<2)return{classification:"insufficient" as const,nextRunAllowed:runs.length<maxRuns};if(runs.length>maxRuns)throw new Error("flaky_rerun_limit_exceeded");const outcomes=new Set(runs.map(run=>run.conclusion)),failureFingerprints=new Set(runs.filter(run=>run.conclusion==="failed").map(run=>run.failureFingerprint??"missing"));if(outcomes.size>1)return{classification:"flaky" as const,nextRunAllowed:false,fingerprintStable:failureFingerprints.size<=1};if(outcomes.has("passed"))return{classification:"stable_pass" as const,nextRunAllowed:false};if(failureFingerprints.size===1&&!failureFingerprints.has("missing"))return{classification:"stable_failure" as const,nextRunAllowed:false,failureFingerprint:[...failureFingerprints][0]!};return{classification:"unknown_failure" as const,nextRunAllowed:runs.length<maxRuns}}
 export async function runFlakyDiagnostics(initial:DiagnosticRun,rerun:()=>Promise<DiagnosticRun>,maxRuns=3){const runs=[initial];if(initial.conclusion==="passed")return{runs,diagnosis:{classification:"stable_pass" as const,nextRunAllowed:false}};while(runs.length<maxRuns){runs.push(await rerun());const diagnosis=diagnoseFlakiness(runs,maxRuns);if(!diagnosis.nextRunAllowed)return{runs,diagnosis}}return{runs,diagnosis:diagnoseFlakiness(runs,maxRuns)}}
 export * from "./vercelSandbox.js";
+
+// A published review said `typecheck  Advisory  **Failed**` and quoted npm's whole complaint
+// beneath it, when the repository simply has no typecheck script. That is a configuration fact
+// wearing the costume of a failure, and a table that calls it failure is one readers learn to skip.
+//
+// The exit code cannot tell these apart - npm exits 1 for a missing script and 1 for a type error -
+// so the manager's own wording is what distinguishes them. Anchored to the start of a line, because
+// a test whose assertion text happens to contain the phrase is still a real failure.
+const missingScript = [
+  /^\s*npm error Missing script:/m,
+  /^\s*ERR_PNPM_NO_SCRIPT\b/m,
+  /^\s*error Command ".*" not found\./m,
+  /^\s*Usage Error: Couldn't find a script named/m,
+];
+
+export function classifyCheckConclusion(input: { exitCode: number; output: string }): CheckConclusion {
+  if (input.exitCode === 0) return "passed";
+  return missingScript.some(pattern => pattern.test(input.output)) ? "not_configured" : "failed";
+}

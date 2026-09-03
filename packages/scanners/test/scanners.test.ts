@@ -31,7 +31,7 @@ describe("deterministic scanner evidence", () => {
   it("runs BuildIT-owned rules with exact lines", () => {
     const run = scanBuildITRules([{ path: "src/server.ts", content: `const ok = 1;\neval(userInput);\nconst agent = { ${tlsOff()} };` }], sha);
     expect(run.findings.map(item => [item.ruleId, item.startLine, item.severity])).toEqual([
-      ["buildit-js-eval", 2, "warning"],
+      ["buildit-dynamic-eval", 2, "warning"],
       ["buildit-tls-disabled", 3, "critical"],
     ]);
   });
@@ -55,17 +55,17 @@ describe("deterministic scanner evidence", () => {
   });
 });
 
-// BuildIT reviewed its own pull request and raised three findings, all false: buildit-js-eval on
-// a Markdown file, buildit-js-eval on a comment reading "React's development build needs eval()",
-// and buildit-node-shell on a test file. A finding a reviewer has to dismiss is worse than no
+// BuildIT reviewed its own pull request and raised three findings, all false: buildit-dynamic-eval on
+// a Markdown file, buildit-dynamic-eval on a comment reading "React's development build needs eval()",
+// and buildit-shell-interpolation on a test file. A finding a reviewer has to dismiss is worse than no
 // finding, because it trains people to skim the list that also carries the real ones.
 describe("authored rules do not cry wolf", () => {
   const scan = (path: string, content: string) => scanBuildITRules([{ path, content }], "a".repeat(40)).findings;
 
   it("still catches the thing it is for", () => {
-    expect(scan("src/run.ts", "const result = eval(userInput);").map(f => f.ruleId)).toEqual(["buildit-js-eval"]);
-    expect(scan("src/run.ts", "execSync(command);").map(f => f.ruleId)).toEqual(["buildit-node-shell"]);
-    expect(scan("src/run.ts", "eval(payload) // deliberately dynamic").map(f => f.ruleId)).toEqual(["buildit-js-eval"]);
+    expect(scan("src/run.ts", "const result = eval(userInput);").map(f => f.ruleId)).toEqual(["buildit-dynamic-eval"]);
+    expect(scan("src/run.ts", "execSync(command);").map(f => f.ruleId)).toEqual(["buildit-shell-interpolation"]);
+    expect(scan("src/run.ts", "eval(payload) // deliberately dynamic").map(f => f.ruleId)).toEqual(["buildit-dynamic-eval"]);
   });
 
   it("does not scan prose for JavaScript", () => {
@@ -101,9 +101,9 @@ describe("shell rule tells a regex from a shell", () => {
   });
 
   it("still catches a shell call", () => {
-    expect(ruleIds("exec(command);")).toEqual(["buildit-node-shell"]);
-    expect(ruleIds("execSync(`rm -rf ${dir}`);")).toEqual(["buildit-node-shell"]);
-    expect(ruleIds("child_process.execSync(command);")).toEqual(["buildit-node-shell"]);
-    expect(ruleIds("  const output = exec(userInput);")).toEqual(["buildit-node-shell"]);
+    expect(ruleIds("exec(command);")).toEqual(["buildit-shell-interpolation"]);
+    expect(ruleIds("execSync(`rm -rf ${dir}`);")).toEqual(["buildit-shell-interpolation"]);
+    expect(ruleIds("child_process.execSync(command);")).toEqual(["buildit-shell-interpolation"]);
+    expect(ruleIds("  const output = exec(userInput);")).toEqual(["buildit-shell-interpolation"]);
   });
 });

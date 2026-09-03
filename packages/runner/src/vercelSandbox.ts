@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Sandbox } from "@vercel/sandbox";
-import { diagnoseFlakiness, executionReady, SANDBOX_DIAGNOSTIC_RERUN_LIMIT, SANDBOX_OVERHEAD_RESERVE_MS, SANDBOX_SCANNER_TIMEOUT_MS, SERVERLESS_SANDBOX_WORK_BUDGET_MS, type CheckResult, type CommandPlan, type DiagnosticRun, type Workspace } from "./index.js";
+import { type CheckResult, classifyCheckConclusion, type CommandPlan, diagnoseFlakiness, type DiagnosticRun, executionReady, SANDBOX_DIAGNOSTIC_RERUN_LIMIT, SANDBOX_OVERHEAD_RESERVE_MS, SANDBOX_SCANNER_TIMEOUT_MS, SERVERLESS_SANDBOX_WORK_BUDGET_MS, type Workspace } from "./index.js";
 
 type Finished = { exitCode: number; durationMs?: number; stdout(): Promise<string>; stderr(): Promise<string> };
 type SandboxCommand = { cmd: string; args: string[]; cwd?: string; timeoutMs: number };
@@ -126,7 +126,7 @@ export class VercelSandboxRunner {
         const captured = await output(result, plan.outputBytes);
         outputs.push({ planId: plan.planId, ...captured });
         const checkTimedOut = timedOut(result.exitCode, result.durationMs, plan.timeoutMs);
-        results.push({ ...plan, conclusion: captured.truncated ? "truncated" : result.exitCode === 0 ? "passed" : checkTimedOut ? "timed_out" : "failed", exitCode: result.exitCode, durationMs: result.durationMs ?? 0, ...(result.exitCode === 0 ? {} : { failureClass: checkTimedOut ? ("timeout" as const) : ("code" as const) }) });
+        results.push({ ...plan, conclusion: captured.truncated ? "truncated" : checkTimedOut ? "timed_out" : classifyCheckConclusion({ exitCode: result.exitCode, output: captured.text }), exitCode: result.exitCode, durationMs: result.durationMs ?? 0, ...(result.exitCode === 0 ? {} : { failureClass: checkTimedOut ? ("timeout" as const) : ("code" as const) }) });
         const firstPassed = result.exitCode === 0 && !captured.truncated;
         const runs: DiagnosticRun[] = [{ conclusion: firstPassed ? "passed" : "failed", ...(firstPassed ? {} : { failureFingerprint: createHash("sha256").update(captured.text).digest("hex") }) }];
         if (plan.required && !firstPassed) {

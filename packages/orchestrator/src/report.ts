@@ -101,8 +101,14 @@ function checkExcerpt(check: ReviewCheckDecision) {
     ? input.checks.map(check => `| ${safe(check.name)} | ${check.required ? "Required" : "Advisory"} | ${check.conclusion === "failed" ? `**${conclusion(check.conclusion)}**` : conclusion(check.conclusion)}${check.evidenceComplete ? "" : " · evidence incomplete"} |`)
     : ["| No checks configured | — | Not run |"];
   const failedChecks = input.checks.filter(check => check.conclusion === "failed" || check.conclusion === "timed_out");
+  // not_configured deliberately excluded: there is no output, only the package manager saying so.
   const checkExcerpts = failedChecks.map(checkExcerpt).filter(Boolean).join("");
-  const evidenceReceipts = visibleFindings.map(finding => `- ${safe(finding.title)} — Evidence: ${finding.evidenceIds.length ? finding.evidenceIds.map(id => `\`${code(id)}\``).join(", ") : "none"}`);
+  const evidenceReceipts = visibleFindings.map(finding => {
+    const where = typeof finding.path === "string" && Number.isInteger(finding.startLine)
+      ? `\`${code(finding.path)}:${finding.startLine}\`` : "location not recorded";
+    const count = finding.evidenceIds.length;
+    return `- ${safe(finding.title)} — ${where}, ${count ? `verified against ${count} source${count === 1 ? "" : "s"}` : "no cited evidence"}`;
+  });
   const claimReceipts = claims.map(claim => `- ${safe(claim.text)} — Evidence: ${claim.evidenceIds.map(id => `\`${code(id)}\``).join(", ")}`);
   const lines = [
     `## ${title(decision.status)}`,
