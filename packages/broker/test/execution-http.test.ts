@@ -40,7 +40,7 @@ describe("native base/head execution boundary", () => {
     for (const [run] of deps.runner.run.mock.calls) {
       expect(run.files.map((file: { path: string }) => file.path)).toEqual(["src/a.ts", "package-lock.json"]);
     }
-    expect(output).toMatchObject({ base: { credentialTeardownProved: true }, head: { credentialTeardownProved: true }, scanners: { head: { runs: [{ scanner: "builditRules", scannerVersion: "1.0.0" }, { scanner: "gitleaks", scannerVersion: "8.28.0" }, { scanner: "osvScanner", scannerVersion: "2.2.3" }], findings: [expect.objectContaining({ ruleId: "buildit-js-eval" })] } } });
+    expect(output).toMatchObject({ base: { credentialTeardownProved: true }, head: { credentialTeardownProved: true }, scanners: { head: { runs: [{ scanner: "builditRules", scannerVersion: "1.0.0" }, { scanner: "gitleaks", scannerVersion: "8.28.0" }, { scanner: "osvScanner", scannerVersion: "2.2.3" }], findings: [expect.objectContaining({ ruleId: "buildit-dynamic-eval" })] } } });
   });
 
   it("never recreates a full sandbox to diagnose a failed required check", async () => {

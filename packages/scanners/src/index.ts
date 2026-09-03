@@ -76,14 +76,49 @@ const configExtensions = /\.(?:json|ya?ml|toml|env|conf)$/i;
 // as a trailing comment still matches, because the rule tests the whole line.
 const commentLine = /^\s*(?:\/\/|\/\*|\*|#|<!--|--)/;
 
+// `buildit-rules` is a REQUIRED check, which sets the bar: a rule earns a place here only if it
+// fires on the vulnerable form AND stays silent on the ordinary form. The previous set failed that
+// on two of its three rules - `exec` matched `regex.exec(input)`, the commonest correct use of the
+// word in JavaScript, and blocking a merge over that is how a required check gets turned off in a
+// week. packages/scanners/test/rule-corpus.test.ts holds both halves, and the silent half is the
+// one that decides whether a team keeps this on.
+//
+// Severity is proportionate for the same reason. Critical means exploitable as written; anything
+// needing human judgement is a warning, because a wolf cried once is a check disabled forever.
 const authoredRules = [
-  { id: "buildit-js-eval", pattern: /\beval\s*\(/g, summary: "Dynamic code execution through eval", severity: "warning" as const, scope: "script" as const },
-  { id: "buildit-node-shell", pattern: /(?<![.\w])exec(?:Sync)?\s*\(|child_process\.exec(?:Sync)?\s*\(/g, summary: "Shell command execution requires manual taint review", severity: "warning" as const, scope: "script" as const },
-  // Configuration can disable TLS as readily as code can.
-  { id: "buildit-tls-disabled", pattern: /["']?rejectUnauthorized["']?\s*:\s*false/g, summary: "TLS certificate verification is disabled", severity: "critical" as const, scope: "script_or_config" as const },
+  // CWE-295. Exploitable as written: any active network attacker can present any certificate.
+  { id: "buildit-tls-disabled", pattern: /["']?rejectUnauthorized["']?\s*:\s*false\b/g,
+    summary: "TLS certificate verification is disabled", severity: "critical" as const, scope: "script_or_config" as const },
+  // Same defect, process-wide, and easy to miss in review because it looks like configuration.
+  { id: "buildit-tls-env-disabled", pattern: /NODE_TLS_REJECT_UNAUTHORIZED\s*(?::|=)\s*["']?0["']?/g,
+    summary: "TLS verification disabled for the whole process", severity: "critical" as const, scope: "script_or_config" as const },
+  // CWE-78. Only when the command is built from a template or concatenation - a fixed string
+  // argument is how everyone correctly shells out, and flagging it is pure noise.
+  { id: "buildit-shell-interpolation", pattern: /(?:(?<![.\w])|(?<=child_process\.))(?:exec|execSync|spawn|spawnSync)\s*\(\s*(?:[A-Za-z_$][\w$.]*\s*[,)]|`[^`]*\$\{|["'][^"']*["']\s*\+)/g,
+    summary: "Shell command built from interpolated input", severity: "warning" as const, scope: "script" as const },
+  // CWE-95. eval of a literal cannot be attacker-controlled, so the rule requires a non-literal.
+  { id: "buildit-dynamic-eval", pattern: /(?<![.\w])eval\s*\(\s*(?!["'`])|new\s+Function\s*\(\s*(?!\s*\))/g,
+    summary: "Dynamic code execution over a value that is not a literal", severity: "warning" as const, scope: "script" as const },
+  // CWE-347. decode() reads the claims without checking the signature; verify() is the correct call.
+  { id: "buildit-jwt-unverified", pattern: /\bjwt\s*\.\s*decode\s*\(/g,
+    summary: "JWT read without verifying its signature", severity: "critical" as const, scope: "script" as const },
+  // CWE-208. Comparing a secret with === leaks its prefix through timing.
+  { id: "buildit-timing-unsafe-compare", pattern: /\b(?:\w*(?:password|passwd|secret|token|apiKey|api_key|signature|hmac|digest)\w*)\s*(?:===|!==|==|!=)\s*\w/gi,
+    summary: "Secret compared without a constant-time comparison", severity: "warning" as const, scope: "script" as const },
+  // CWE-89. Only interpolation inside something that reads as SQL, so a template literal in a log
+  // line does not match.
+  { id: "buildit-sql-interpolation", pattern: /`[^`]*\b(?:SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM|WHERE|UNION\s+ALL|DROP\s+TABLE)\b[^`]*\$\{/gi,
+    summary: "SQL assembled by string interpolation", severity: "critical" as const, scope: "script" as const },
+  // CWE-942. A wildcard origin is ordinary for a public API; paired with credentials it is not,
+  // and browsers reject the combination precisely because it is unsafe.
+  { id: "buildit-cors-wildcard-credentials", pattern: /origin\s*:\s*["']\*["'][^}]{0,120}?credentials\s*:\s*true|credentials\s*:\s*true[^}]{0,120}?origin\s*:\s*["']\*["']/g,
+    summary: "CORS allows any origin while sending credentials", severity: "critical" as const, scope: "script_or_config" as const },
 ];
 
+const testPath = /(?:^|\/)(?:test|tests|spec|specs|__tests__|__fixtures__|fixtures)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$/i;
+
 function ruleApplies(rule: { scope: "script" | "script_or_config" }, path: string) {
+  if (testPath.test(path)) return false;
   if (scriptExtensions.test(path)) return true;
   return rule.scope === "script_or_config" && configExtensions.test(path);
 }
@@ -99,5 +134,6 @@ export function scanBuildITRules(files: Array<{ path: string; content: string }>
       if (rule.pattern.test(line)) findings.push({ scanner: "builditRules", scannerVersion: scannerInventory.builditRules, ruleId: rule.id, severity: rule.severity, path: file.path, startLine: index + 1, endLine: index + 1, fingerprint: `${file.path}:${index + 1}:${rule.id}`, summary: rule.summary });
     });
   }
+  findings.sort((left, right) => left.path.localeCompare(right.path) || left.startLine - right.startLine || left.ruleId.localeCompare(right.ruleId));
   return { scanner: "builditRules", scannerVersion: scannerInventory.builditRules, commitSha: pinnedCommit(commitSha), complete: true, findings };
 }

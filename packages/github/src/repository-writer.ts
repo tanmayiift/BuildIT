@@ -116,7 +116,7 @@ export class GitHubRepositoryWriter {
   async publishInlineFindings(input: { prNumber: number; headSha: string; marker: string;
     findings: ReadonlyArray<{ id: string; path: string; startLine: number; endLine: number; severity: string; title: string; body: string }> }) {
     if (!Number.isInteger(input.prNumber) || input.prNumber < 1 || !/^[0-9a-f]{40}$/i.test(input.headSha)
-      || !/^buildit-(?:review|autofix):[A-Za-z0-9_|-]+:[0-9a-f]{40}$/.test(input.marker)) throw new Error("inline_findings_input_invalid");
+      || !/^buildit-(?:review|autofix):(?:(?:inline-)?pr-[1-9]\d{0,9}|[A-Za-z0-9_|-]+:[0-9a-f]{40})$/.test(input.marker)) throw new Error("inline_findings_input_invalid");
 
     const comments: Array<Record<string, unknown>> = [];
     let skipped = 0;
@@ -147,7 +147,7 @@ export class GitHubRepositoryWriter {
   }
 
   async upsertIssueComment(input: { prNumber: number; marker: string; body: string }) {
-    if (!Number.isInteger(input.prNumber) || input.prNumber < 1 || !/^buildit-(?:review|autofix):[A-Za-z0-9_|-]+:[0-9a-f]{40}$/.test(input.marker) || !input.body.trim()) throw new Error("comment_input_invalid");
+    if (!Number.isInteger(input.prNumber) || input.prNumber < 1 || !/^buildit-(?:review|autofix):(?:(?:inline-)?pr-[1-9]\d{0,9}|[A-Za-z0-9_|-]+:[0-9a-f]{40})$/.test(input.marker) || !input.body.trim()) throw new Error("comment_input_invalid");
     const marker = `<!-- ${input.marker} -->`, body = `${marker}\n${input.body}`;
     if (Buffer.byteLength(body) > 65_000) throw new Error("comment_too_large");
     const comments = await this.request(`/issues/${input.prNumber}/comments?per_page=100&sort=created&direction=desc`), items = Array.isArray(comments) ? comments : [];

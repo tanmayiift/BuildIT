@@ -54,7 +54,12 @@ describe("observability release assets", () => {
     expect(template).toContain("Environment: production");
     expect(template).toContain(".Alerts.Firing");
     expect(template).toContain(".StartsAt");
-    expect(template).not.toMatch(/\.Labels|\.ValueString|\.GeneratorURL|organization|workspace|repository|pull request|review id|member|customer|source|prompt|finding|credential|token/i);
+    const expressions = (template.match(/\{\{[^}]*\}\}/g) ?? []).join(" ");
+    const allowedLabels = ["buildit_operation", "buildit_provider", "buildit_reason", "severity", "alertname"];
+    for (const reference of expressions.match(/\.(?:Common)?Labels\.\w+/g) ?? []) {
+      expect(allowedLabels).toContain(reference.split(".").pop());
+    }
+    expect(expressions).not.toMatch(/\.GeneratorURL|organization|workspace|repository|pullRequest|prNumber|headSha|reviewId|member|customer|prompt|finding|credential|token/i);
     const runbooks = read("docs/operations/alert-runbooks.md");
     for (const alert of ["BuildITHighFailureRate", "BuildITP95LatencyHigh", "BuildITTelemetrySilent", "BuildITCriticalBoundaryFailure", "BuildITQueueDepthHigh", "BuildITProviderFailure", "BuildITRunnerFailure", "BuildITArtifactDeletionBacklog", "BuildITWebhookSignatureSpike", "BuildITLoopGuardTrip", "BuildITStaleCheck", "BuildITBudgetExhaustionSpike"]) expect(runbooks).toContain(`## ${alert}`);
   });
@@ -101,5 +106,36 @@ describe("observability release assets", () => {
     expect(assets).not.toMatch(/api.?key|authorization|credential|email|github.?token|repo.?name|source.?code/i);
     expect(assets).not.toMatch(/buildit_(?:organization|tenant|workspace|repository|repo|review_id|pr_number|user|member|email|owner|source|prompt|finding|credential|token)/i);
     expect(read("observability/alerts.yml")).not.toMatch(/annotations:[^\n]*\{\{[^}]+\}\}/i);
+  });
+});
+
+// An emailed BuildIT provider failure read, in full: "What happened — BuildIT provider failure."
+// That is the alert's own name restated, and it names no provider, no error, no count and no
+// window. An on-call engineer holding it cannot do the one thing the next line asks of them,
+// which is "check provider status" - of which provider?
+//
+// The deployed Grafana rule does not match observability/alerts.yml, whose summary for this alert
+// is "BuildIT model calls are repeatedly failing". The template cannot fix a rule it does not own,
+// so it stops depending on the summary being useful and prints what Alertmanager always carries:
+// how many instances are firing, the observed value, and the labels that say which route it was.
+describe("an alert an engineer can act on", () => {
+  const template = read("observability/grafana/notification-templates/buildit-operator-v1.tmpl");
+
+  it("prints the observed value, not only a restated title", () => {
+    expect(template).toContain(".ValueString");
+  });
+
+  it("names the failing operation, so 'check the provider' has an antecedent", () => {
+    expect(template).toContain("buildit_operation");
+  });
+
+  it("says how many instances are firing rather than implying one", () => {
+    expect(template).toContain("len .Alerts.Firing");
+  });
+
+  it("still carries no source, repository or customer identity", () => {
+    for (const forbidden of [".Labels.repository", ".Labels.pr", "prNumber", "headSha"]) {
+      expect(template).not.toContain(forbidden);
+    }
   });
 });

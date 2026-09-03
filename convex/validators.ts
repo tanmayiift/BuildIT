@@ -42,7 +42,7 @@ export const checkKind = v.union(
   v.literal("secret_scan"), v.literal("custom"),
 );
 export const checkConclusion = v.union(
-  v.literal("passed"), v.literal("failed"), v.literal("not_run"),
+  v.literal("passed"), v.literal("failed"), v.literal("not_run"), v.literal("not_configured"),
   v.literal("timed_out"), v.literal("truncated"), v.literal("flaky"),
 );
 export const failureClass = v.union(
