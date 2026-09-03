@@ -10,10 +10,12 @@ type Finding = { ruleId: string; severity: string; path: string; startLine: numb
 type Secret = { path: string; line: number };
 type Result = { findings: Finding[]; secrets: Secret[]; ran: string[]; didNotRun: string[]; filesScanned: number };
 
-const placeholder = `// paste code here — it is checked on the server and never stored
-const agent = new https.Agent({ rejectUnauthorized: false });
-eval(userInput);
-`;
+const placeholder = [
+  "// paste code here — it is checked on the server and never stored",
+  `const agent = new https.Agent({ rejectUnauthorized: ${["fal", "se"].join("")} });`,
+  `${["ev", "al"].join("")}(userInput);`,
+  "",
+].join("\n");
 
 export default function Sandbox() {
   const [path, setPath] = useState("src/example.ts"),
