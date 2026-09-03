@@ -19,7 +19,9 @@ const capabilities = [
   ["Your key, your bill",
     "Bring a key for Anthropic, OpenAI or Google. You pay your provider at cost and BuildIT adds nothing on top. Every rupee is itemised on the Usage page, per review."],
   ["As loud as you want it",
-    "Choose per repository whether inline comments cover only what blocks a merge, the serious findings too, or everything that survived the evidence gate."],
+    "Choose per repository whether inline comments cover only what blocks a merge, the serious findings too, or everything that survived the evidence gate. The review comment always carries every finding either way."],
+  ["Skip what your team would never review",
+    "Exclude vendored directories, generated clients or anything else with glob patterns, on top of the lockfiles, build output and binaries BuildIT already skips. Dependency manifests are always read, so quietening a folder never turns off the vulnerability scan."],
 ];
 
 const boundaries = [
@@ -28,6 +30,8 @@ const boundaries = [
   ["Source evidence is deleted", "Checked-out code and command output are encrypted, kept for the retention window you set, and then deleted — with the deletion confirmed against storage, not assumed."],
   ["A large repository is refused, not half-read", "Above roughly 1,300 files GitHub's rate limits make a complete read unreliable, so BuildIT says so instead of reviewing part of your code and calling it done."],
 ];
+
+import record from "../../../../../docs/evidence/track-record.json";
 
 export default function Features() {
   return <div className="content trust-page">
@@ -41,7 +45,7 @@ export default function Features() {
     <h2 className="section-title">Where it stops</h2>
     <dl className="trust-list">{boundaries.map(([term, detail]) => <div key={term}><dt>{term}</dt><dd>{detail}</dd></div>)}</dl>
 
-    <div className="next"><strong>The honest limit:</strong> BuildIT is early. It has reviewed a small number of repositories well; the next unfamiliar codebase may find something it handles badly. It refuses rather than guesses, which means you will sometimes get no answer instead of a wrong one.</div>
+    <div className="next"><strong>The honest limit:</strong> BuildIT has reviewed {record.reviews} pull requests across {record.repositories} repositories, {record.decisive} of which reached a blocking or passing verdict, and {record.sinceLastPlatformFailure} consecutive reviews since the last platform failure on {record.lastPlatformFailureAt}. That is a real record and a small one — the next unfamiliar codebase may still find something it handles badly. It refuses rather than guesses, so you will sometimes get no answer instead of a wrong one.</div>
     <div className="button-row"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
   </div>;
 }

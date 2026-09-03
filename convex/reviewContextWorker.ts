@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { chunkRepositorySnapshot, GitHubAppClient, GitHubIssueContextClient, omissionCoverage, type PullRequestContext, PullRequestContextClient, RepositoryContentClient, type RepositorySnapshot } from "@buildit/github";
+import { chunkRepositorySnapshot, compilePathFilters, GitHubAppClient, GitHubIssueContextClient, omissionCoverage, type PullRequestContext, PullRequestContextClient, RepositoryContentClient, type RepositorySnapshot } from "@buildit/github";
 import { dependencyManifest } from "@buildit/runner";
 import { acquireRequirements, describeUnreadableSources, isRequirementSourcePath, repositoryRequirementSources, summariseChange } from "@buildit/orchestrator";
 import { issueArtifactGrant,issueTrackerGrant } from "@buildit/security";
@@ -22,7 +22,7 @@ export function sameRepositoryIssueNumber(url: string, repositoryUrl: string) {
 export const gather = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
   handler: async (ctx, args): Promise<{ artifactIds: string[]; chunkCount: number; fileCount: number; omittedCount: number }> => {
-    const scope: { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; baseSha: string; executionGeneration: number; expiresAt: number;trackers:Array<{documentId:Id<"trackerConnections">;id:string;organizationId:string;provider:"github"|"linear"|"jira";workspaceId:string;ciphertext:string;nonce:string;tag:string;wrappedDataKey:string;kmsKeyId:string;envelopeVersion:1;keyVersion:number;aadDigest:string;status:"active";createdBy:string;createdAt:number}> } = await ctx.runQuery(internal.reviewArtifactData.contextScope, args);
+    const scope: { reviewPathFilters?: string[]; organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; baseSha: string; executionGeneration: number; expiresAt: number;trackers:Array<{documentId:Id<"trackerConnections">;id:string;organizationId:string;provider:"github"|"linear"|"jira";workspaceId:string;ciphertext:string;nonce:string;tag:string;wrappedDataKey:string;kmsKeyId:string;envelopeVersion:1;keyVersion:number;aadDigest:string;status:"active";createdBy:string;createdAt:number}> } = await ctx.runQuery(internal.reviewArtifactData.contextScope, args);
     const github = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
     const tokenScope = { installationId: scope.installationId, repositoryId: scope.githubRepositoryId, stage: "review" as const };
     await ctx.runQuery(internal.durableReview.assertActive, args);
@@ -36,8 +36,10 @@ export const gather = internalAction({
       // Head keeps the documents, because requirements are read from them. Base does not: its file
       // contents are filtered out of the model context entirely (reviewAnalysisWorker filters
       // revision !== "base"), so fetching anything beyond the changed files buys a presence check.
-      const headSelect = { keep: (path: string) => changedPaths.has(path) || isRequirementSourcePath(path) || dependencyManifest.test(path), relevantOnlyAbove: 400 };
-      const baseSelect = { keep: (path: string) => changedPaths.has(path), relevantOnlyAbove: 400 };
+      const allowedByRepository = compilePathFilters(scope.reviewPathFilters ?? []);
+      const headSelect = { keep: (path: string) => dependencyManifest.test(path)
+        || ((changedPaths.has(path) || isRequirementSourcePath(path)) && allowedByRepository(path)), relevantOnlyAbove: 400 };
+      const baseSelect = { keep: (path: string) => changedPaths.has(path) && allowedByRepository(path), relevantOnlyAbove: 400 };
       await ctx.runQuery(internal.durableReview.assertActive, args);
       const [headSnapshot, baseSnapshot]: [RepositorySnapshot, RepositorySnapshot] = await Promise.all([
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
