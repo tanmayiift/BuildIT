@@ -96,11 +96,11 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .review-proof dl div:nth-child(odd) { border-right: 1px solid var(--line); }
 .review-proof dl div:nth-last-child(-n+2) { border-bottom: 0; }
 .review-proof dd { margin: 0; color: var(--ink); font-size: 12px; font-weight: 750; }
-.landing-flow>ol { display: grid; grid-template-columns: repeat(4,1fr); margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; list-style: none; overflow: hidden; }
-.landing-flow li { min-height: 230px; display: grid; align-content: space-between; gap: 34px; padding: 22px; border-right: 1px solid var(--line); }
+.landing-flow>ol { display: grid; grid-template-columns: repeat(4,1fr); grid-template-rows: auto auto auto; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; list-style: none; overflow: hidden; }
+.landing-flow li { display: grid; grid-row: span 3; grid-template-rows: subgrid; gap: 10px; padding: 20px; border-right: 1px solid var(--line); }
 .landing-flow li:last-child { border-right: 0; }
-.landing-flow li>code { color: var(--navy); font-size: 11px; }
-.landing-flow h3 { margin: 0 0 8px; font-size: 16px; letter-spacing: -.02em; }
+.landing-flow li>code { color: var(--navy); font-size: 11px; align-self: start; }
+.landing-flow h3 { margin: 0; font-size: 15px; letter-spacing: -.02em; align-self: start; }
 .landing-flow p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .landing-trust { display: grid; grid-template-columns: minmax(230px,.65fr) minmax(360px,1.2fr) auto; gap: 40px; align-items: center; padding: 28px; color: white; background: var(--navy); border-radius: 8px; }
 .landing-trust h2 { margin: 0; font-size: 23px; letter-spacing: -.03em; }
@@ -254,7 +254,8 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .trust-list dt { font-weight: 800; }
 .trust-list dd { margin: 0; color: var(--ink-2); line-height: 1.55; }
 .panel, .detail-head { border: 1px solid var(--line); border-radius: 7px; }
-.next { padding: 13px 15px; background: var(--info-bg); border: 1px solid #bfd3ec; }
+.next { margin-top: 24px; padding: 14px 16px; background: var(--info-bg); border: 1px solid #bfd3ec; border-radius: 7px; line-height: 1.6; }
+.trust-page .next + .button-row { margin-top: 18px; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .session-panel { display: grid; gap: 16px; margin: 28px 0; padding: 20px; background: var(--workbench); border: 1px solid var(--line); border-radius: 7px; }
 .session-panel h2, .session-panel p { margin: 0; }
