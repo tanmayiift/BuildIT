@@ -248,6 +248,8 @@ async function assertActive(
   await ctx.runQuery(internal.reviewAutofixData.assertActive, args);
 }
 
+function throwUnsupportedEcosystem(): never { throw new Error("autofix_requires_supported_ecosystem"); }
+
 export const runConvergence = internalAction({
   args: {
     organizationId: v.id("organizations"),
@@ -535,7 +537,7 @@ export const runConvergence = internalAction({
             head: new Set(candidate.files.map((file) => file.path)),
           },
           manager = detectPackageManager(paths),
-          { install, checks } = defaultExecutionPlans(manager),
+          { install, checks } = defaultExecutionPlans(manager ?? throwUnsupportedEcosystem()),
           runtime = "node24" as const;
         const baseDescriptors = baseContexts.map(({ context }) => ({
           revision: "base" as const,

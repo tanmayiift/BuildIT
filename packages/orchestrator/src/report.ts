@@ -61,7 +61,7 @@ function findingLines(finding: ReportFinding, index: number) {
   ];
 }
 
-export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
+export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
   const decision = computeReviewDecision({ isStale: input.isStale, environmentAvailable: input.environmentAvailable, coverageComplete: input.coverage === "complete", ...(input.injectionUnscoped ? { injectionUnscoped: true } : {}), checks: input.checks, findings: input.findings });
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
@@ -78,7 +78,7 @@ export function composeVerifiedReport(input: { repository: string; prNumber: num
   ].filter(Boolean).join(" and ");
   const summary = problems
     || (decision.status === "checks_passed"
-      ? `All ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"} passed with complete evidence`
+      ? `All ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"} passed with complete evidence${input.ecosystem === "none" ? ", and no test, lint or typecheck command was run because BuildIT recognised no package manager in this repository" : ""}`
       : "Complete evidence was not available");
 // A failing check produced one bolded table cell and nothing else - no output, no evidence - which
 // reads as a check nobody watches, advisory or not. The text was captured by the runner and

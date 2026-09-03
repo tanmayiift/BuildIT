@@ -13,7 +13,7 @@ type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositori
 
 export const validate = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
-  handler: async (ctx, args): Promise<{ artifactId: string; checks: number; manager: PackageManager; reused: boolean }> => {
+  handler: async (ctx, args): Promise<{ artifactId: string; checks: number; manager: PackageManager | "none"; reused: boolean }> => {
     const scope: Scope = await ctx.runQuery(internal.reviewValidationData.validationScope, args);
     if (scope.completedArtifactId) return { artifactId: String(scope.completedArtifactId), checks: 0, manager: "npm", reused: true };
     const brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""), artifactSecret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url"), executionSecret = Buffer.from(required("EXECUTION_GRANT_SECRET"), "base64url");
@@ -29,7 +29,7 @@ export const validate = internalAction({
       if (chunk.revision !== revision || !Array.isArray(chunk.snapshot?.files)) throw new Error("context_artifact_revision_invalid");
       for (const file of chunk.snapshot.files) if (typeof file.path === "string") paths[revision].add(file.path); else throw new Error("context_artifact_path_invalid");
     }
-    const manager = detectPackageManager(paths), { install, checks } = defaultExecutionPlans(manager), runtime = "node24" as const;
+    const manager = detectPackageManager(paths), plans = manager ? defaultExecutionPlans(manager) : { install: undefined, checks: [] }, { install, checks } = plans, runtime = "node24" as const;
     const descriptors = revisions.map(({ context, revision }) => ({ revision, artifactId: String(context.id), storageKey: context.storageKey, checksum: context.checksum, size: context.size,
       readGrant: issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(context.id), storageKey: context.storageKey, operation: "read" }, artifactSecret) }));
     const artifactsHash = sha256Json(descriptors.map(({ readGrant: _, ...item }) => item)), plansHash = sha256Json({ runnerImageVersion: scope.runnerImageVersion, runtime, install, checks });
@@ -38,8 +38,8 @@ export const validate = internalAction({
     const response = await fetch(`${brokerUrl}/api/execute`, { method: "POST", headers: { authorization: `Bearer ${executionGrant}`, "content-type": "application/json" }, body: JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), baseSha: scope.baseSha, headSha: scope.headSha, runnerImageVersion: scope.runnerImageVersion, runtime, artifacts: descriptors, install, checks }) });
     const output = await response.json() as ExecutionResponse & { error?: string };
     if (!response.ok) throw new Error(output.error ?? `validation_execution_${response.status}`);
-    const environment = { configRevision: String(scope.configRevisionId), runnerImage: scope.runnerImageVersion, runtime, manager, architecture: "linux-x64", networkPolicy: "deny-all-v1", toolVersions: [{ name: "node", version: "24" }, { name: "package-manager", version: manager }], install, checks }, paired = pairExecutionEvidence(output, scope.baseSha, scope.headSha, environment), summaries = paired.summaries.map(item => ({ ...item, nameHash: createHash("sha256").update(item.planId).digest("hex") }));
-    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { baseSha: scope.baseSha, headSha: scope.headSha, configRevisionId: String(scope.configRevisionId), runnerImageVersion: scope.runnerImageVersion }, manager, executionFingerprint: paired.executionFingerprint, output }));
+    const environment = { configRevision: String(scope.configRevisionId), runnerImage: scope.runnerImageVersion, runtime, manager: manager ?? "none" as const, architecture: "linux-x64", networkPolicy: "deny-all-v1", toolVersions: [{ name: "node", version: "24" }, { name: "package-manager", version: manager ?? "none" }], install, checks }, paired = pairExecutionEvidence(output, scope.baseSha, scope.headSha, environment), summaries = paired.summaries.map(item => ({ ...item, nameHash: createHash("sha256").update(item.planId).digest("hex") }));
+    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { baseSha: scope.baseSha, headSha: scope.headSha, configRevisionId: String(scope.configRevisionId), runnerImageVersion: scope.runnerImageVersion }, manager: manager ?? "none", executionFingerprint: paired.executionFingerprint, output }));
     if (outputBody.byteLength > 4_000_000) throw new Error("validation_output_too_large");
     const checksum = createHash("sha256").update(outputBody).digest("hex"), now = Date.now();
     const reserved: { artifactId: Id<"artifacts">; storageKey: string } = await ctx.runMutation(internal.reviewValidationData.reserveOutput, { ...args, checksum, size: outputBody.byteLength, now });
@@ -47,7 +47,7 @@ export const validate = internalAction({
     await ctx.runQuery(internal.durableReview.assertActive, args);
     const upload = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${writeGrant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body: outputBody });
     if (!upload.ok) throw new Error(`validation_artifact_upload_${upload.status}`);
-    await ctx.runMutation(internal.reviewValidationData.completeValidation, { ...args, artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, summaries, manager, now: Date.now() });
-    return { artifactId: String(reserved.artifactId), checks: summaries.length, manager, reused: false };
+    await ctx.runMutation(internal.reviewValidationData.completeValidation, { ...args, artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, summaries, manager: manager ?? "none" as const, now: Date.now() });
+    return { artifactId: String(reserved.artifactId), checks: summaries.length, manager: manager ?? "none", reused: false };
   },
 });

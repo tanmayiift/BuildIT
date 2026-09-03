@@ -141,6 +141,26 @@ describe("the report reads honestly in an inbox", () => {
     expect(body).not.toContain("reported");
   });
 
+  // On a repository BuildIT has no command plans for, the scanners are the only required checks.
+  // "All 3 required checks passed" is true and still misleads, because a reader assumes the tests
+  // ran. Say what did not.
+  it("says plainly when no test, lint or typecheck command ran", () => {
+    const body = composeVerifiedReport({ ...input(), findings: [], claims: [], ecosystem: "none", checks: [
+      { name: "buildit-rules", required: true, conclusion: "passed", evidenceComplete: true },
+      { name: "gitleaks", required: true, conclusion: "passed", evidenceComplete: true },
+      { name: "osv-scanner", required: true, conclusion: "passed", evidenceComplete: true },
+    ] }).body;
+    expect(body).toContain("recognised no package manager in this repository");
+    expect(body).toContain("no test, lint or typecheck command was run");
+  });
+
+  it("adds no such caveat to a repository whose checks did run", () => {
+    const body = composeVerifiedReport({ ...input(), findings: [], claims: [], ecosystem: "pnpm", checks: [
+      { name: "test", required: true, conclusion: "passed", evidenceComplete: true },
+    ] }).body;
+    expect(body).not.toContain("recognised no package manager");
+  });
+
   it("does not invent an advisory caveat when there is none", () => {
     const body = withChecks([
       { name: "install", required: true, conclusion: "passed" },
