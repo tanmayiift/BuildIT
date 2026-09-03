@@ -10,7 +10,7 @@ import { issueArtifactGrant } from "@buildit/security";
 import { platformFailureReport, type PlatformFailureReason } from "./lib/platformFailureReport";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
-type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; status: string; reason: string; report: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number } };
+type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; status: string; reason: string; report: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number }; analysis?: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number };};
 
 export function assertReportPublicationContract(body: string, headSha: string) {
   if (!body.includes(headSha) || !body.includes(neverMergedSentence)) {
@@ -26,6 +26,36 @@ export function publicationTitle(status: string) {
 
 export function reviewDetailsUrl(reviewId: string) {
   return new URL(`/reviews/${encodeURIComponent(reviewId)}`, "https://buildit-agentic-review.vercel.app").toString();
+}
+
+// Inline delivery is best-effort by design: the verdict is already published on the check run and
+// the summary comment before this runs, so a GitHub hiccup here must not fail a review that has
+// already decided. It logs and moves on rather than throwing.
+async function publishInlineFindings(scope: Scope, token: string) {
+  if (!scope.analysis) return;
+  try {
+    const brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""), secret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url");
+    const grant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
+      artifactId: String(scope.analysis.id), storageKey: scope.analysis.storageKey, operation: "read" }, secret, Date.now());
+    const response = await fetch(`${brokerUrl}/api/artifacts`, { headers: { authorization: `Bearer ${grant}` } });
+    if (!response.ok) return;
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.byteLength !== scope.analysis.size || createHash("sha256").update(buffer).digest("hex") !== scope.analysis.checksum) return;
+    const value = JSON.parse(buffer.toString("utf8")) as { arbitrated?: Array<Record<string, unknown>> };
+    const findings = (value.arbitrated ?? [])
+      .filter(item => item.resolution !== "rejected" && typeof item.path === "string" && typeof item.id === "string")
+      .filter(item => item.blocking === true || item.severity === "critical" || item.severity === "high")
+      .map(item => ({ id: String(item.id), path: String(item.path), startLine: Number(item.startLine), endLine: Number(item.endLine),
+        severity: String(item.severity ?? "warning"),
+        title: String(item.title ?? "Finding"),
+        body: [item.explanation, item.impact].filter(text => typeof text === "string" && text).join("\n\n") || "See the review summary for detail." }));
+    if (!findings.length) return;
+    const writer = new GitHubRepositoryWriter({ repositoryId: scope.githubRepositoryId, installationToken: token });
+    await writer.publishInlineFindings({ prNumber: scope.prNumber, headSha: scope.headSha,
+      marker: `buildit-review:inline-${scope.reviewId}:${scope.headSha}`, findings });
+  } catch {
+    // Deliberately swallowed: see above. The review has already been published.
+  }
 }
 
 export const publish = internalAction({
@@ -52,6 +82,11 @@ export const publish = internalAction({
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, { ...args, sideEffectId: checkEffect, requestHash, externalId: String(check.id), status: "completed", now: Date.now() });
       const commentEffect: Id<"githubSideEffects"> = await ctx.runMutation(internal.reviewState.reserveSideEffect, { ...args, operationKey: commentKey, type: "comment_update", requestHash, now });
       const comment = await writer.upsertIssueComment({ prNumber: scope.prNumber, marker: `buildit-review:${scope.reviewId}:${scope.headSha}`, body });
+      // The verdict lives in the check run and the summary comment. These put each finding on the
+      // line it cites - the thing the headline has always promised and never delivered. Only
+      // findings that survived arbitration reach here, so nothing the validator dropped lands on a
+      // line, and they are anchored to the pinned commit rather than to whatever HEAD is now.
+      await publishInlineFindings(scope, token);
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, { ...args, sideEffectId: commentEffect, requestHash, externalId: String(comment.id), status: "completed", now: Date.now() });
       return { checkId: String(check.id), commentId: String(comment.id) };
     } finally { await github.revoke(tokenScope); }
