@@ -14,3 +14,38 @@ export function reconcileArbitration(findings:ArbitratedFinding[],decisions:Arbi
   return{...finding,reason:"critic_and_arbitration_supported"};
  })
 }
+
+// A defect found by both the model and a pinned scanner arrived as two findings and was counted
+// twice: "3 blocking issues" where a reader could see two. Nothing collapsed them, because the two
+// carry different ids by construction - the scanner's is synthesised - so the fingerprint dedupe
+// downstream can never match them.
+//
+// The scanner entry survives as canonical: it is deterministic, reproducible, and already carries
+// confidence 1. The model's prose is merged into it rather than discarded, so the report keeps the
+// explanation a person actually wants to read and loses only the double count.
+export function dedupeSameDefect(findings: ArbitratedFinding[]): ArbitratedFinding[] {
+  const key = (finding: ArbitratedFinding) =>
+    `${finding.path} ${finding.startLine} ${finding.endLine} ${finding.category}`;
+  const order: string[] = [];
+  const chosen = new Map<string, ArbitratedFinding>();
+  for (const finding of findings) {
+    const id = key(finding);
+    const existing = chosen.get(id);
+    if (!existing) { order.push(id); chosen.set(id, finding); continue; }
+    // Two entries for one defect. Prefer the scanner, then the one that is actually blocking - a
+    // merge must never quietly downgrade a finding that would have blocked on its own.
+    const winner = existing.origin === "scanner" ? existing
+      : finding.origin === "scanner" ? finding
+      : existing.blocking ? existing : finding;
+    const loser = winner === existing ? finding : existing;
+    chosen.set(id, {
+      ...winner,
+      blocking: winner.blocking || loser.blocking,
+      // The model explains why it matters; the scanner states the rule. Keep the longer one.
+      explanation: loser.explanation.length > winner.explanation.length ? loser.explanation : winner.explanation,
+      impact: loser.impact.length > winner.impact.length ? loser.impact : winner.impact,
+      evidenceIds: [...new Set([...winner.evidenceIds, ...loser.evidenceIds])],
+    });
+  }
+  return order.map(id => chosen.get(id)!);
+}

@@ -19,6 +19,9 @@ describe("review report evidence", () => {
       { scanner: "gitleaks", scannerVersion: "8.28.0" },
       { scanner: "osvScanner", scannerVersion: "2.2.3" },
     ], findings: [{ scanner: "gitleaks", severity: "critical" }] } } } }, headSha);
+    // No excerpt on a passing check: only a failure needs to say what it reported, and this
+    // payload becomes a public pull request comment.
+    expect(checks.every(check => !("excerpt" in check))).toBe(true);
     expect(checks).toEqual([
       { name: "test", required: true, conclusion: "passed", evidenceComplete: true },
       { name: "lint", required: false, conclusion: "passed", evidenceComplete: false },
@@ -26,6 +29,23 @@ describe("review report evidence", () => {
       { name: "gitleaks", required: true, conclusion: "failed", evidenceComplete: true },
       { name: "osv-scanner", required: true, conclusion: "passed", evidenceComplete: true },
     ]);
+  });
+
+  // The reviewer's complaint: a failing typecheck said nothing at all, which reads as a check
+  // nobody watches. The text was carried this far and read only for a boolean.
+  it("carries what a failing check reported, redacted", () => {
+    const checks = reportChecks({ version: 1, pinned: { headSha }, output: { head: {
+      results: [{ planId: "typecheck", required: false, conclusion: "failed" }],
+      outputs: [{ planId: "typecheck", text: `error TS2322 with token ${["sk-", "ant-", "a".repeat(40)].join("")}`, truncated: false, evidenceTruncated: false }],
+    }, scanners: { head: { complete: true, commitSha: headSha, runs: [
+      { scanner: "builditRules", scannerVersion: "1.0.0" },
+      { scanner: "gitleaks", scannerVersion: "8.28.0" },
+      { scanner: "osvScanner", scannerVersion: "2.2.3" },
+    ], findings: [] } } } }, headSha);
+    const typecheck = checks.find(check => check.name === "typecheck")!;
+    expect(typecheck.excerpt).toContain("error TS2322");
+    // It becomes a public comment, so a secret in build output must not survive the trip.
+    expect(typecheck.excerpt).not.toContain("a".repeat(40));
   });
 
   it("rejects unknown or duplicated scanner inventory", () => {

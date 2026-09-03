@@ -5,6 +5,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { composeVerifiedReport, type ReviewCheckDecision } from "@buildit/orchestrator";
+import { redact } from "@buildit/security";
 import { issueArtifactGrant } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
@@ -27,7 +28,7 @@ async function download(scope: Scope, artifact: ArtifactRef, brokerUrl: string, 
 export function reportChecks(validation: Validation, headSha: string): ReviewCheckDecision[] {
   if (validation.version !== 1 || validation.pinned?.headSha !== headSha || !validation.output?.head) throw new Error("report_validation_pinning_failed");
   const outputs = new Map((validation.output.head.outputs ?? []).map(item => [item.planId, item]));
-  const checks = (validation.output.head.results ?? []).map(item => { const output = outputs.get(item.planId); return { name: item.planId, required: item.required, conclusion: item.conclusion, evidenceComplete: Boolean(output && typeof output.text === "string" && !output.truncated && !output.evidenceTruncated) }; });
+  const checks = (validation.output.head.results ?? []).map(item => { const output = outputs.get(item.planId); return { name: item.planId, required: item.required, conclusion: item.conclusion, ...(["failed", "timed_out"].includes(item.conclusion) && typeof output?.text === "string" && output.text.trim() ? { excerpt: redact(output.text) } : {}), evidenceComplete: Boolean(output && typeof output.text === "string" && !output.truncated && !output.evidenceTruncated) }; });
   const scanner = validation.output.scanners?.head;
   if (scanner) {
     const names: Record<string, string> = { builditRules: "buildit-rules", gitleaks: "gitleaks", osvScanner: "osv-scanner" };

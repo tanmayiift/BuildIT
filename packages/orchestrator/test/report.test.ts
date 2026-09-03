@@ -111,6 +111,36 @@ describe("the report reads honestly in an inbox", () => {
     expect(body).toContain("Advisory checks do not block a merge");
   });
 
+  // A reviewer said the silence around a failing typecheck "reads as a broken check nobody
+  // watches". The output was captured by the runner and carried all the way here before being
+  // dropped, so the report could say a check failed but never what it said.
+  it("shows what a failing check actually reported", () => {
+    const body = composeVerifiedReport({ ...input(), findings: [], claims: [], checks: [
+      { name: "test", required: true, conclusion: "passed", evidenceComplete: true },
+      { name: "typecheck", required: false, conclusion: "failed", evidenceComplete: true,
+        excerpt: "src/rates.ts(4,7): error TS2322: Type 'string' is not assignable to type 'number'.\nFound 1 error." },
+    ] }).body;
+    expect(body).toContain("What `typecheck` reported");
+    expect(body).toContain("error TS2322");
+    expect(body).toContain("Found 1 error.");
+  });
+
+  it("cannot be made to break out of its code fence", () => {
+    const body = composeVerifiedReport({ ...input(), findings: [], claims: [], checks: [
+      { name: "test", required: true, conclusion: "failed", evidenceComplete: true,
+        excerpt: "boom\n```\n## injected heading\n" },
+    ] }).body;
+    expect(body).not.toContain("\n```\n## injected heading");
+    expect(body).toContain("boom");
+  });
+
+  it("stays silent when a failing check produced no output", () => {
+    const body = composeVerifiedReport({ ...input(), findings: [], claims: [], checks: [
+      { name: "test", required: true, conclusion: "failed", evidenceComplete: false },
+    ] }).body;
+    expect(body).not.toContain("reported");
+  });
+
   it("does not invent an advisory caveat when there is none", () => {
     const body = withChecks([
       { name: "install", required: true, conclusion: "passed" },

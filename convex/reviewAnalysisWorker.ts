@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { arbitrateFindings, normalizeFindingCriteria, reconcileArbitration, runModelReviewChain, validateFindingCandidates, type ArbitrationDecision, type CriticDecision, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, type PromptStage } from "@buildit/orchestrator";
+import { arbitrateFindings, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, validateFindingCandidates } from "@buildit/orchestrator";
 import { approvedProviderModels, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact, redactForModel } from "@buildit/security";
 
@@ -235,7 +235,7 @@ export const analyze = internalAction({
       return [{ id: `scanner-${index}-${item.ruleId}`, title: item.summary ?? item.ruleId, category: "security", severity: item.severity, confidence: 1, path: item.path, startLine: item.startLine!, endLine: item.endLine!, evidenceIds: [evidence.record.id], impact: item.summary ?? "Deterministic scanner finding", explanation: `${item.ruleId} was detected by the pinned BuildIT scanner.`, origin: "scanner" as const }];
     });
     const candidates = validateFindingCandidates({ findings: [...modelFindings, ...scannerFindings], criteriaIds, allowedPaths: new Set([...headEvidence.values()].flatMap(item => item.record.path ? [item.record.path] : [])), evidence: [...headEvidence.values()].map(item => item.record), pinnedCommit: scope.headSha });
-    const arbitration = ((stage("arbitration").findings ?? []) as ArbitrationDecision[]), arbitrated = reconcileArbitration(arbitrateFindings(candidates, critic), arbitration), fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
+    const arbitration = ((stage("arbitration").findings ?? []) as ArbitrationDecision[]), arbitrated = dedupeSameDefect(reconcileArbitration(arbitrateFindings(candidates, critic), arbitration)), fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
     if (fingerprintKey.byteLength < 32) throw new Error("finding_fingerprint_secret_invalid");
     const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, coverage: untrusted.coverage, validation: untrusted.validation, records, arbitrated }));
     if (outputBody.byteLength > 4_000_000) throw new Error("analysis_output_too_large");
