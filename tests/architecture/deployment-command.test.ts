@@ -5,6 +5,7 @@ import {
   deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, probeWithRetry, resolveDeployLink,
 } from "../../scripts/deploy-buildit-web.mjs";
 import { assertBuildITBrokerDeployContext } from "../../scripts/deploy-buildit-broker.mjs";
+import { assertBrokerServesCommit, assertProductionDeployContext, brokerHealthUrl, checkOrder, deploymentOrder, uncommittedFileCount } from "../../scripts/deploy-buildit-production.mjs";
 
 const repoRoot = process.cwd();
 const correctLink = {
@@ -227,5 +228,71 @@ describe("release runs on a runner with no link file", () => {
     expect(workflow).toContain(`VERCEL_PROJECT_ID: ${correctLink.projectId}`);
     expect(workflow).toContain(`VERCEL_ORG_ID: ${correctLink.orgId}`);
     expect(workflow).toContain("secrets.VERCEL_TOKEN");
+  });
+});
+
+// BuildIT is three deployments and nothing sequenced them: `convex deploy` appeared in no script
+// and no workflow, and release.yml shipped web and broker but never Convex. packages/runner
+// executes in the broker rather than in Convex, so a runner fix could be deployed to Convex, pass
+// every check, and still be stale - which happened twice and looked identical to the fix not
+// working.
+describe("BuildIT production deployment command", () => {
+  it("accepts only the repository root", () => {
+    expect(assertProductionDeployContext({ cwd: repoRoot, repoRoot })).toEqual({
+      steps: ["convex", "web", "broker"],
+      healthUrl: "https://buildit-content-broker.vercel.app/api/health",
+    });
+    expect(() => assertProductionDeployContext({ cwd: `${repoRoot}/packages/broker`, repoRoot }))
+      .toThrow("buildit_production_deploy_must_run_from_repo_root");
+  });
+
+  // Convex first so the workers accept what the new web and broker send; broker last because it is
+  // the one whose freshness is then asserted.
+  it("deploys Convex, then web, then the broker", () => {
+    expect(deploymentOrder.map(step => step.name)).toEqual(["convex", "web", "broker"]);
+    expect(deploymentOrder[0]).toMatchObject({ command: "pnpm", args: ["exec", "convex", "deploy", "-y"] });
+    expect(deploymentOrder.at(-1)).toMatchObject({ args: ["deploy:broker:production"] });
+  });
+
+  it("runs both existing contract checks before touching production", () => {
+    expect(checkOrder.map(step => step.args[0])).toEqual(["deploy:web:check", "deploy:broker:check"]);
+  });
+
+  // The static health.json could not tell a fresh deploy from a stale one, so the probe went green
+  // either way. These are the three answers that must fail.
+  it("refuses a broker that is not serving the commit just deployed", () => {
+    const expectedCommit = "a".repeat(40);
+    expect(assertBrokerServesCommit({ body: { commit: expectedCommit }, expectedCommit })).toBe(true);
+    expect(() => assertBrokerServesCommit({ body: { commit: "b".repeat(40) }, expectedCommit }))
+      .toThrow(/buildit_broker_stale:served=bbbbbbbbbbbb:expected=aaaaaaaaaaaa/);
+    expect(() => assertBrokerServesCommit({ body: { commit: "unknown" }, expectedCommit }))
+      .toThrow("buildit_broker_commit_unreadable:unknown");
+    expect(() => assertBrokerServesCommit({ body: {}, expectedCommit }))
+      .toThrow("buildit_broker_commit_unreadable:missing");
+  });
+
+  // Vercel stamps the commit, not the tree, so a dirty deploy would report a clean sha while
+  // serving something on top of it. Reported rather than refused: deploying to verify before
+  // committing is legitimate, but it must not read as a clean release.
+  it("counts what was deployed on top of the commit", () => {
+    expect(uncommittedFileCount(repoRoot, () => ({ status: 0, stdout: " M a.ts\n?? b.ts\n" }))).toBe(2);
+    expect(uncommittedFileCount(repoRoot, () => ({ status: 0, stdout: "" }))).toBe(0);
+    expect(uncommittedFileCount(repoRoot, () => ({ status: 1, stdout: "" }))).toBeUndefined();
+  });
+
+  it("probes the alias the broker deploy already aliases", () => {
+    expect(brokerHealthUrl).toBe("https://buildit-content-broker.vercel.app/api/health");
+  });
+
+  // The dynamic endpoint must keep the shape and the path the probe and release.yml already use.
+  it("serves the commit alongside the static liveness file", () => {
+    // The static file stays: Vercel serves packages/broker/public as the output directory, and
+    // release.yml plus the broker deploy already probe /health.json for liveness.
+    expect(JSON.parse(readFileSync(`${repoRoot}/packages/broker/public/health.json`, "utf8")))
+      .toMatchObject({ service: "buildit-content-broker", status: "available" });
+    const handler = readFileSync(`${repoRoot}/packages/broker/api/health.ts`, "utf8");
+    expect(handler).toContain("VERCEL_GIT_COMMIT_SHA");
+    expect(handler).toContain('service: "buildit-content-broker"');
+    expect(handler).toContain('status: "available"');
   });
 });

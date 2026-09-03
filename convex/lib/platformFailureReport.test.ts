@@ -105,3 +105,25 @@ describe("classifies the failures production actually produces", () => {
     expect(report.summary).toContain("on the BuildIT side");
   });
 });
+
+// Measured, not assumed: production recorded one sandbox_unavailable and it reached the author as
+// "a required platform step failed". packages/broker/test/execution-failure-modes.test.ts proves
+// the broker names it; this proves the review keeps the name instead of flattening it.
+describe("an unreachable check environment says so", () => {
+  it("classifies the broker's code instead of falling back to platform_error", () => {
+    expect(classifyPlatformFailure("sandbox_unavailable")).toBe("sandbox_unavailable");
+    expect(classifyPlatformFailure("runner_image_unavailable")).toBe("sandbox_unavailable");
+  });
+
+  it("tells the author it is BuildIT's infrastructure and a new review is the move", () => {
+    const report = platformFailureReport({ headSha: "c".repeat(40), reason: "sandbox_unavailable" });
+    expect(report.summary).toContain("could not be reached");
+    expect(report.summary).toContain("rather than anything in your pull request");
+    expect(report.summary).toContain("BuildIT did not merge this pull request.");
+  });
+
+  // execution_failed stays the honest unknown. Giving it a friendlier message would be a lie.
+  it("leaves a genuine unknown as platform_error", () => {
+    expect(classifyPlatformFailure("execution_failed")).toBe("platform_error");
+  });
+});

@@ -8,6 +8,7 @@ export type PlatformFailureReason =
   | "model_unavailable"
   | "change_too_large"
   | "platform_misconfigured"
+  | "sandbox_unavailable"
   | "platform_error";
 
 // The failure travels as a string across the workflow boundary, so the numbers are carried in it
@@ -28,6 +29,7 @@ export function classifyPlatformFailure(error: string): PlatformFailureReason {
   if (error.includes("http_404") || error.includes("http_401") || error.includes("http_403") || error.includes("provider_credential")) return "model_unavailable";
   if (error.includes("_too_large") || error.includes("tree_truncated")) return "change_too_large";
   if (error.includes("missing_") || error.includes("not_configured")) return "platform_misconfigured";
+  if (error.includes("sandbox_unavailable") || error.includes("runner_image_unavailable")) return "sandbox_unavailable";
   return "platform_error";
 }
 
@@ -63,6 +65,11 @@ function body(reason: PlatformFailureReason, detail: string | undefined) {
       "No code decision was made and nothing was charged.",
       "This one is on the BuildIT side rather than yours - an operator has to finish the setup. Retrying will not help until they do."];
   }
+  if (reason === "sandbox_unavailable") {
+    return ["The isolated environment BuildIT runs your checks in could not be reached, so no check was run.",
+      "No code decision was made and nothing was charged.",
+      "This is BuildIT's infrastructure rather than anything in your pull request. Starting a new review is the right move once it is back."];
+  }
   return ["BuildIT stopped because a required platform step failed.",
     "No code decision was made. No code was changed. Retry only after the service is available."];
 }
@@ -74,6 +81,7 @@ const titles: Record<PlatformFailureReason, string> = {
   model_unavailable: "BuildIT: the connected model could not be used",
   change_too_large: "BuildIT: this pull request is too large to review",
   platform_misconfigured: "BuildIT: not finished setting up",
+  sandbox_unavailable: "BuildIT: the check environment was unreachable",
   platform_error: "BuildIT: review did not complete",
 };
 

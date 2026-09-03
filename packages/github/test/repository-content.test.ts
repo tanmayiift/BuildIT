@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { dependencyManifest } from "@buildit/runner";
 import { RepositoryContentClient } from "../src/repository-content";
 
 const sha = "a".repeat(40);
@@ -104,5 +105,30 @@ describe("large repositories fetch the code under review", () => {
       installationToken: "token", repositoryId: 7, commitSha: sha,
       select: { keep: () => true, relevantOnlyAbove: 400 },
     })).rejects.toThrow(/repository_too_large:files=3000/);
+  });
+});
+
+// Fetching fewer files nearly shipped a silent security regression: the sandbox scans dependency
+// manifests from this same snapshot, so a keep predicate that only kept changed files and documents
+// would have stopped dependency scanning on any large Node repository - while still producing a
+// green review, which is the worst shape a regression can take.
+describe("dependency manifests survive a narrowed fetch", () => {
+  it("fetches a lockfile the pull request never touched", async () => {
+    const entries = [
+      ...Array.from({ length: 2_000 }, (_, index) => ({ path: `src/mod${index}/file.ts`, type: "blob", sha: blobSha, size: 10 })),
+      { path: "pnpm-lock.yaml", type: "blob", sha: blobSha, size: 10 },
+      { path: "src/rates.ts", type: "blob", sha: blobSha, size: 10 },
+    ];
+    const http = vi.fn(async (url: string | URL) => {
+      const value = String(url);
+      return value.includes("/commits/") ? commit() : value.includes("/trees/") ? tree(entries) : blob("1234567890");
+    });
+    // Exactly what reviewContextWorker composes: the changed file, documents, and manifests.
+    const keep = (path: string) => path === "src/rates.ts" || dependencyManifest.test(path);
+    const result = await new RepositoryContentClient(http).fetchExactCommit({
+      installationToken: "token", repositoryId: 7, commitSha: sha,
+      select: { keep, relevantOnlyAbove: 400 },
+    });
+    expect(result.files.map(file => file.path).sort()).toEqual(["pnpm-lock.yaml", "src/rates.ts"]);
   });
 });
