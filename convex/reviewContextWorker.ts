@@ -5,7 +5,8 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { chunkRepositorySnapshot, GitHubAppClient, GitHubIssueContextClient, omissionCoverage, type PullRequestContext, PullRequestContextClient, RepositoryContentClient, type RepositorySnapshot } from "@buildit/github";
-import { acquireRequirements,repositoryRequirementSources } from "@buildit/orchestrator";
+import { dependencyManifest } from "@buildit/runner";
+import { acquireRequirements, isRequirementSourcePath, repositoryRequirementSources } from "@buildit/orchestrator";
 import { issueArtifactGrant,issueTrackerGrant } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
@@ -20,7 +21,7 @@ export function sameRepositoryIssueNumber(url: string, repositoryUrl: string) {
 
 export const gather = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
-  handler: async (ctx, args): Promise<{ artifactIds: string[]; chunkCount: number; fileCount: number; omittedCount: number; coverage: "full" | "partial" }> => {
+  handler: async (ctx, args): Promise<{ artifactIds: string[]; chunkCount: number; fileCount: number; omittedCount: number }> => {
     const scope: { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; baseSha: string; executionGeneration: number; expiresAt: number;trackers:Array<{documentId:Id<"trackerConnections">;id:string;organizationId:string;provider:"github"|"linear"|"jira";workspaceId:string;ciphertext:string;nonce:string;tag:string;wrappedDataKey:string;kmsKeyId:string;envelopeVersion:1;keyVersion:number;aadDigest:string;status:"active";createdBy:string;createdAt:number}> } = await ctx.runQuery(internal.reviewArtifactData.contextScope, args);
     const github = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
     const tokenScope = { installationId: scope.installationId, repositoryId: scope.githubRepositoryId, stage: "review" as const };
@@ -28,13 +29,21 @@ export const gather = internalAction({
     const token = await github.tokenFor(tokenScope);
     try {
       await ctx.runQuery(internal.durableReview.assertActive, args);
-      const [headSnapshot, baseSnapshot, pullContext]: [RepositorySnapshot, RepositorySnapshot, PullRequestContext] = await Promise.all([
+      const pullContext: PullRequestContext = await new PullRequestContextClient().fetch({ installationToken: token,
+        repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, expectedHeadSha: scope.headSha, expectedBaseSha: scope.baseSha });
+      const changedPaths = new Set(pullContext.files.map(file => file.path));
+      const limits = { maxFiles: 10_000, maxFetchFiles: 2_500, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 };
+      // Head keeps the documents, because requirements are read from them. Base does not: its file
+      // contents are filtered out of the model context entirely (reviewAnalysisWorker filters
+      // revision !== "base"), so fetching anything beyond the changed files buys a presence check.
+      const headSelect = { keep: (path: string) => changedPaths.has(path) || isRequirementSourcePath(path) || dependencyManifest.test(path), relevantOnlyAbove: 400 };
+      const baseSelect = { keep: (path: string) => changedPaths.has(path), relevantOnlyAbove: 400 };
+      await ctx.runQuery(internal.durableReview.assertActive, args);
+      const [headSnapshot, baseSnapshot]: [RepositorySnapshot, RepositorySnapshot] = await Promise.all([
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
-          commitSha: scope.headSha, limits: { maxFiles: 10_000, maxFetchFiles: 2_500, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
+          commitSha: scope.headSha, limits, select: headSelect }),
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
-          commitSha: scope.baseSha, limits: { maxFiles: 10_000, maxFetchFiles: 2_500, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
-        new PullRequestContextClient().fetch({ installationToken: token, repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber,
-          expectedHeadSha: scope.headSha, expectedBaseSha: scope.baseSha }),
+          commitSha: scope.baseSha, limits, select: baseSelect }),
       ]);
       const repositoryMatch = pullContext.htmlUrl.match(/^(https:\/\/github\.com\/[^/]+\/[^/]+)\/pull\/\d+$/i);
       if (!repositoryMatch) throw new Error("pull_request_url_invalid");
@@ -69,7 +78,6 @@ export const gather = internalAction({
           await ctx.runQuery(internal.durableReview.assertActive, args);
           const response = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${grant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body });
           if (!response.ok) throw new Error(`artifact_upload_${response.status}`);
-          const changedPaths = new Set(pullContext.files.map(file => file.path));
           const headCoverage = omissionCoverage(headSnapshot.omitted, changedPaths);
           const baseCoverage = omissionCoverage(baseSnapshot.omitted, changedPaths);
           // Ordered worst-first: an unreadable changed file is a bigger hole than a truncated diff,
@@ -85,9 +93,8 @@ export const gather = internalAction({
           artifactIds.push(String(reserved.artifactId));
         }
       }
-      const coverage = headSnapshot.coverage === "full" && baseSnapshot.coverage === "full" && pullContext.coverage === "full" && intentCoverage === "complete" ? "full" as const : "partial" as const;
       return { artifactIds, chunkCount, fileCount: headSnapshot.files.length + baseSnapshot.files.length,
-        omittedCount: headSnapshot.omitted.length + baseSnapshot.omitted.length + pullContext.omitted.length + intent.sources.filter(source => source.status !== "available").length+repositoryIntent.omitted.length, coverage };
+        omittedCount: headSnapshot.omitted.length + baseSnapshot.omitted.length + pullContext.omitted.length + intent.sources.filter(source => source.status !== "available").length+repositoryIntent.omitted.length };
     } finally { await github.revoke(tokenScope); }
   },
 });

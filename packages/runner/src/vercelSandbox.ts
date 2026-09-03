@@ -18,7 +18,7 @@ const registryDomains = ["registry.npmjs.org", "registry.yarnpkg.com"];
 const sensitive = /(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|GITHUB_|VERCEL_|CONVEX_|ANTHROPIC_|OPENAI_|GEMINI_|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)/i;
 const unsafeInstallControl = /(^|\/)(?:\.git|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfile\.cjs|pnpmfile\.cjs|\.pnp\.(?:cjs|js)|\.yarn\/plugins|\.gitleaks\.toml|\.gitleaksignore|\.?osv-scanner\.(?:toml|json))(\/|$)/i;
 export function isUnsafeInstallControlPath(path: string) { return unsafeInstallControl.test(path); }
-const nodeLockfile = /(^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock)$/;
+export const dependencyManifest = /(^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock(?:b)?|Cargo\.lock|go\.mod|go\.sum|poetry\.lock|Pipfile\.lock|pdm\.lock|uv\.lock|requirements(?:[-.][\w.-]+)?\.txt|Gemfile\.lock|composer\.lock|mix\.lock|pubspec\.lock|conan\.lock|gradle\.lockfile|buildscript-gradle\.lockfile|packages\.lock\.json|renv\.lock|pom\.xml)$/;
 
 // The SDK kills a command with SIGKILL when it passes timeoutMs and still resolves with a plain
 // non-zero exitCode - there is no timeout flag on CommandFinished. So a 30-second kill and a
@@ -76,8 +76,7 @@ export class VercelSandboxRunner {
         if (!file.path || file.path.startsWith("/") || file.path.split("/").includes("..")) throw new Error("sandbox_unsafe_path");
         if (isUnsafeInstallControlPath(file.path)) throw new Error("sandbox_untrusted_install_control");
       }
-      const lockfiles = input.files.map(file => file.path).filter(path => nodeLockfile.test(path));
-      if (!lockfiles.length || lockfiles.length > 32) throw new Error("osv_lockfile_required");
+      const lockfiles = input.files.map(file => file.path).filter(path => dependencyManifest.test(path)).slice(0, 32);
       await sandbox.writeFiles(input.files.map(file => ({ path: `/vercel/sandbox/repo/${file.path}`, content: Buffer.from(file.content) })));
       const environment = await sandbox.runCommand({ cmd: "env", args: [], timeoutMs: 10_000 });
       const environmentText = await environment.stdout();
@@ -96,10 +95,12 @@ export class VercelSandboxRunner {
       // An absolute, sandbox-owned path prevents a false scanner failure while
       // preserving the same no-network, read-only scan boundary.
       const osvOutput = await output(osv, 8_192);
+      // No manifest means no dependencies to scan. Reported as an empty result so the check is
+      // honest about having run and found nothing, rather than claiming the scanner was down.
       // OSV-Scanner exits 128 and writes no report for a valid lockfile with no
       // package sources. That is a complete empty dependency scan, not a scanner
       // outage. Every other non-result remains a hard failure.
-      const noPackageSources = osv.exitCode === 128 && /No package sources found/.test(osvOutput.text);
+      const noPackageSources = !lockfiles.length || (osv.exitCode === 128 && /No package sources found/.test(osvOutput.text));
       if (![0, 1].includes(osv.exitCode) && !noPackageSources) throw new Error("osv_execution_failed");
       const osvReport = noPackageSources ? Buffer.from('{"results":[]}') : await sandbox.readFileToBuffer({ path: "/tmp/buildit-osv.json" });
       if (!osvReport || osvReport.byteLength > 4_000_000) throw new Error("osv_report_invalid");

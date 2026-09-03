@@ -7,7 +7,7 @@ const headers = {
 };
 
 export type RepositoryFile = { path: string; sha: string; size: number; content: string };
-export type RepositoryOmission = { path: string; reason: "excluded" | "oversized" | "budget" | "binary" };
+export type RepositoryOmission = { path: string; reason: "excluded" | "oversized" | "budget" | "binary" | "not_selected" };
 
 // Coverage records what BuildIT was asked to read and could not, not what it deliberately
 // never reads. "excluded" (images, lockdirs, minified bundles) and "binary" (no reviewable
@@ -38,6 +38,13 @@ export type RepositorySnapshot = {
   coverage: "full" | "partial";
 };
 
+// Which paths this review actually reads, and the tree size past which that starts to matter.
+// Below the threshold everything is fetched, because a small repository's extra files are cheap and
+// do reach the model. Above it they are neither: boundedAnalysisContext stops at 80KB with changed
+// files sorted first, so on a large repository the rest is fetched, stored, re-downloaded and
+// dropped - while costing two blob requests each against GitHub's secondary rate limit.
+export type RepositorySelection = { keep: (path: string) => boolean; relevantOnlyAbove: number };
+
 export type RepositoryFetchLimits = {
   maxFiles: number;
   maxFetchFiles: number;
@@ -64,7 +71,7 @@ export class RepositoryContentClient {
   constructor(http: GitHubHttp = fetch) { this.http = githubRequester(http); }
   private readonly http: GitHubHttp;
 
-  async fetchExactCommit(input: { installationToken: string; repositoryId: number; commitSha: string; limits?: Partial<RepositoryFetchLimits> }): Promise<RepositorySnapshot> {
+  async fetchExactCommit(input: { installationToken: string; repositoryId: number; commitSha: string; limits?: Partial<RepositoryFetchLimits>; select?: RepositorySelection }): Promise<RepositorySnapshot> {
     if (!/^[0-9a-f]{40}$/i.test(input.commitSha)) throw new Error("invalid_commit_sha");
     const limits = { ...defaults, ...input.limits };
     if (limits.maxFiles < 1 || limits.maxFileBytes < 1 || limits.maxTotalBytes < 1) throw new Error("invalid_repository_fetch_limits");
@@ -98,21 +105,31 @@ export class RepositoryContentClient {
       plannedBytes += entry.size;
     }
 
+    // Past the threshold, read what this review reads. A 1,440-blob repository was fetching 1,373
+    // files per revision - 2,746 blob requests - to answer a question about one changed file.
+    let fetchList = selected;
+    if (input.select && selected.length > input.select.relevantOnlyAbove) {
+      const keep = input.select.keep;
+      fetchList = selected.filter(entry => keep(entry.path));
+      for (const entry of selected) if (!keep(entry.path)) omitted.push({ path: entry.path, reason: "not_selected" });
+    }
+
     // Blobs are fetched one at a time, eight in flight, so a repository with thousands of files
     // means hundreds of sequential rounds and GitHub eventually refuses with a 403. Refusing here
     // costs nothing and tells the author a number; discovering it four minutes in tells them
-    // "a required platform step failed".
-    if (selected.length > limits.maxFetchFiles) {
-      throw new Error(`repository_too_large:files=${selected.length};limit=${limits.maxFetchFiles}`);
+    // "a required platform step failed". The count is of what will actually be fetched, so a large
+    // repository with a small change is no longer refused for files nobody was going to read.
+    if (fetchList.length > limits.maxFetchFiles) {
+      throw new Error(`repository_too_large:files=${fetchList.length};limit=${limits.maxFetchFiles}`);
     }
 
     const files: RepositoryFile[] = [];
-    for (let offset = 0; offset < selected.length; offset += 8) {
-      const batch = selected.slice(offset, offset + 8);
+    for (let offset = 0; offset < fetchList.length; offset += 8) {
+      const batch = fetchList.slice(offset, offset + 8);
       const values = await Promise.all(batch.map(async entry => {
         const response = await this.http(`https://api.github.com/repositories/${input.repositoryId}/git/blobs/${entry.sha}`, { headers: authHeaders });
         if (response.status === 403 || response.status === 429) {
-          throw new Error(`repository_access_refused:files=${selected.length};status=${response.status}`);
+          throw new Error(`repository_access_refused:files=${fetchList.length};status=${response.status}`);
         }
         if (!response.ok) throw new Error(`github_blob_${response.status}`);
         const content = decodeBlob(await response.json() as { encoding?: string; content?: string }, entry.path);
