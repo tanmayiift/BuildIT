@@ -30,9 +30,9 @@ export const gather = internalAction({
       await ctx.runQuery(internal.durableReview.assertActive, args);
       const [headSnapshot, baseSnapshot, pullContext]: [RepositorySnapshot, RepositorySnapshot, PullRequestContext] = await Promise.all([
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
-          commitSha: scope.headSha, limits: { maxFiles: 10_000, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
+          commitSha: scope.headSha, limits: { maxFiles: 10_000, maxFetchFiles: 2_500, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
-          commitSha: scope.baseSha, limits: { maxFiles: 10_000, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
+          commitSha: scope.baseSha, limits: { maxFiles: 10_000, maxFetchFiles: 2_500, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 } }),
         new PullRequestContextClient().fetch({ installationToken: token, repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber,
           expectedHeadSha: scope.headSha, expectedBaseSha: scope.baseSha }),
       ]);

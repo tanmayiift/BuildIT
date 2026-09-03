@@ -105,6 +105,7 @@ export const statusReasonCode = v.union(
   v.literal("checks_complete"), v.literal("blocking_findings"),
   v.literal("required_check_failed"),
   v.literal("required_check_missing"), v.literal("unsupported_check"),
+  v.literal("repository_too_large"), v.literal("repository_access_refused"),
   v.literal("environment_unavailable"), v.literal("review_timeout"),
   v.literal("final_validation_incomplete"), v.literal("human_review_required"), v.literal("provider_credential_invalid"),
   v.literal("installation_suspended"), v.literal("permission_revoked"),

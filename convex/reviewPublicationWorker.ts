@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { GitHubAppClient, GitHubRepositoryWriter, sideEffectKey } from "@buildit/github";
 import { issueArtifactGrant } from "@buildit/security";
-import { platformFailureReport } from "./lib/platformFailureReport";
+import { platformFailureReport, type PlatformFailureReason } from "./lib/platformFailureReport";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; status: string; reason: string; report: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number } };
@@ -65,7 +65,8 @@ type FailureScope = {
   githubRepositoryId: number;
   prNumber: number;
   headSha: string;
-  reason: "provider_rate_limited" | "platform_error";
+  reason: PlatformFailureReason;
+  detail?: string;
 };
 
 export const publishPlatformFailure = internalAction({
@@ -83,6 +84,7 @@ export const publishPlatformFailure = internalAction({
       report = platformFailureReport({
         headSha: scope.headSha,
         reason: scope.reason,
+        ...(scope.detail ? { detail: scope.detail } : {}),
       }),
       github = new GitHubAppClient({
         appId: required("GITHUB_APP_ID"),

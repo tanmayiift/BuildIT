@@ -105,7 +105,7 @@ export default defineSchema({
     triggerVerb: value.triggerVerb, triggerActor: v.string(), triggerActorPermission: value.actorPermission,
     mode: value.reviewMode, status: value.reviewStatus,
     terminationBound: v.optional(value.terminationBound), budgetCeilingId: v.optional(v.string()),
-    budgetLimit: v.number(), budgetConsumed: v.number(), statusReasonCode: v.optional(value.statusReasonCode),
+    budgetLimit: v.number(), budgetConsumed: v.number(), statusReasonCode: v.optional(value.statusReasonCode), statusDetail: v.optional(v.string()),
     nextActionCode: value.nextActionCode, isStale: v.boolean(), staleSince: v.optional(v.number()),
     observedHeadSha: v.optional(v.string()), trustedRef: v.string(), trustedRefSha: v.string(),
     configRevisionId: v.id("configRevisions"), configProvenance: value.configProvenance,

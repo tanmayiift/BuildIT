@@ -1,3 +1,4 @@
+import { classifyPlatformFailure } from "./lib/platformFailureReport";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -68,10 +69,8 @@ export const platformFailureScope = internalQuery({
       githubRepositoryId: repository.githubRepositoryId,
       prNumber: review.prNumber,
       headSha: review.headSha,
-      reason:
-        review.statusReasonCode === "provider_rate_limited"
-          ? ("provider_rate_limited" as const)
-          : ("platform_error" as const),
+      reason: classifyPlatformFailure(review.statusReasonCode ?? ""),
+      ...(review.statusDetail ? { detail: review.statusDetail } : {}),
     };
   },
 });

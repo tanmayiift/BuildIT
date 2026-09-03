@@ -2,6 +2,7 @@ import { vWorkflowId, type WorkflowId } from "@convex-dev/workflow";
 import { vResultValidator } from "@convex-dev/workpool";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
+import { classifyPlatformFailure } from "./lib/platformFailureReport";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { durableReviewStages } from "./lib/durableStages";
 import { terminalStatuses } from "./lib/lifecycle";
@@ -242,11 +243,15 @@ export const workflowCompleted = internalMutation({
     }
     if (args.result.kind === "failed") {
       const now = Date.now();
-      const providerRateLimited = args.result.error.includes("rate_limited");
+      const failureReason = classifyPlatformFailure(args.result.error);
+      const failureDetailText = args.result.error.match(/(?:files|limit|status)=[^\s"]*/)?.[0]
+        ? args.result.error.slice(args.result.error.indexOf("files=")).split(/[\s"]/)[0]
+        : undefined;
       const nextGeneration = review.executionGeneration + 1;
       await ctx.db.patch(review._id, {
         status: "platform_failed",
-        statusReasonCode: providerRateLimited ? "provider_rate_limited" : "platform_error",
+        statusReasonCode: failureReason,
+        ...(failureDetailText ? { statusDetail: failureDetailText } : {}),
         nextActionCode: "retry_review",
         currentStage: "complete",
         completedAt: now,

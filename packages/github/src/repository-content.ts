@@ -28,11 +28,12 @@ export type RepositorySnapshot = {
 
 export type RepositoryFetchLimits = {
   maxFiles: number;
+  maxFetchFiles: number;
   maxFileBytes: number;
   maxTotalBytes: number;
 };
 
-const defaults: RepositoryFetchLimits = { maxFiles: 10_000, maxFileBytes: 1_000_000, maxTotalBytes: 50_000_000 };
+const defaults: RepositoryFetchLimits = { maxFiles: 10_000, maxFetchFiles: 2_500, maxFileBytes: 1_000_000, maxTotalBytes: 50_000_000 };
 const excludedSegment = /(^|\/)(?:\.git|node_modules|vendor|dist|build|coverage|\.next|target|__pycache__)(\/|$)/;
 const excludedFile = /(?:\.min\.(?:js|css)|\.(?:png|jpe?g|gif|webp|ico|pdf|zip|gz|jar|class|wasm|woff2?|ttf|eot))$/i;
 
@@ -85,11 +86,22 @@ export class RepositoryContentClient {
       plannedBytes += entry.size;
     }
 
+    // Blobs are fetched one at a time, eight in flight, so a repository with thousands of files
+    // means hundreds of sequential rounds and GitHub eventually refuses with a 403. Refusing here
+    // costs nothing and tells the author a number; discovering it four minutes in tells them
+    // "a required platform step failed".
+    if (selected.length > limits.maxFetchFiles) {
+      throw new Error(`repository_too_large:files=${selected.length};limit=${limits.maxFetchFiles}`);
+    }
+
     const files: RepositoryFile[] = [];
     for (let offset = 0; offset < selected.length; offset += 8) {
       const batch = selected.slice(offset, offset + 8);
       const values = await Promise.all(batch.map(async entry => {
         const response = await this.http(`https://api.github.com/repositories/${input.repositoryId}/git/blobs/${entry.sha}`, { headers: authHeaders });
+        if (response.status === 403 || response.status === 429) {
+          throw new Error(`repository_access_refused:files=${selected.length};status=${response.status}`);
+        }
         if (!response.ok) throw new Error(`github_blob_${response.status}`);
         const content = decodeBlob(await response.json() as { encoding?: string; content?: string }, entry.path);
         if (content === null) { omitted.push({ path: entry.path, reason: "binary" }); return null; }
