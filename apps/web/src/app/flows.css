@@ -160,7 +160,8 @@
    marketing. */
 .complete-finding { margin: 0 0 18px; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .complete-finding .section-heading { margin-bottom: 12px; }
-.finding-where { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+.finding-source { margin: 0 0 14px; padding: 8px 10px; background: var(--info-bg); border: 1px solid #bfd3ec; border-radius: 6px; color: var(--ink-2); font-size: 12px; line-height: 1.55; }
+.finding-where { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
 .finding-where code { color: var(--ink); font-size: 12px; }
 .finding-why { margin: 0 0 16px; max-width: 68ch; color: var(--ink-2); font-size: 13px; line-height: 1.6; }
 .finding-block { margin-bottom: 14px; }

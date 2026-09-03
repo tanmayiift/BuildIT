@@ -49,10 +49,10 @@ test("one review shows a complete, checkable finding", async ({ page }) => {
   const finding = complete.finding!;
   const body = page.locator("body");
   await expect(body).toContainText(finding.path);
-  await expect(body).toContainText(finding.lines);
-  await expect(body).toContainText(complete.commit);
-  await expect(body).toContainText("applyDailyLimit");
-  await expect(body).toContainText("AssertionError");
-  await expect(body).toContainText("auditLog.record");
-  await expect(page.getByRole("link", { name: /buildit-public-fixture #19/ })).toHaveAttribute("href", finding.stackedPr.href);
+  await expect(body).toContainText(finding.commit.slice(0, 12));
+  await expect(body).toContainText("rejectUnauthorized");
+  await expect(body).toContainText("ERR_ASSERTION");
+  // The attribution to the real review it was transcribed from must be on the page.
+  await expect(page.getByRole("link", { name: finding.source.label })).toHaveAttribute("href", finding.source.href);
+  await expect(page.getByRole("link", { name: new RegExp(finding.stackedPr.label.split(" ·")[0]!) })).toHaveAttribute("href", finding.stackedPr.href);
 });

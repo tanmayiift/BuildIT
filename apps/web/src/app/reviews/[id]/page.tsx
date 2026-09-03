@@ -35,9 +35,13 @@ export default async function Review({ params, searchParams }: { params: Promise
     {hasReviewEvidence ? <><div className="next-action"><span className="next-mark" aria-hidden="true">→</span><div><small>What to do next</small><strong>{next.title}</strong><p>{next.detail}</p></div></div><Journey stage={current.stage} /></> : null}
     {current.evidence === "empty" ? <section className="evidence-empty"><span aria-hidden="true">◇</span><div><h2>No review evidence</h2><p>BuildIT does not fill the page with guesses. It has not read code, run checks, or made a decision for this pull request.</p></div></section> : null}
     {current.evidence === "progress" ? <Evidence title="What BuildIT is doing" eyebrow="In progress" detail="2 sources read"><Row lead="Pull request and linked requirements" outcome="Gathered" tone="running" note="Exact commit and ticket context are being checked." /><Row lead="Code and test plan" outcome="Next" tone="warning" note="No finding is shown until evidence exists." /></Evidence> : null}
-    {current.evidence === "findings" ? <><Evidence title="What this change must do" eyebrow="Intent" detail="4 requirements"><Row lead="Reject transfers above daily limit" outcome="Covered" tone="success" note="Pinned source evidence recorded." /><Row lead="Log every rejected transfer" outcome="Not covered" tone="danger" note="No matching code change found." /></Evidence><Evidence title="Checks run" eyebrow="Verification" detail="1 required"><Row lead="pnpm test" outcome="Failed" tone="danger" note="1m 42s · exact stdout retained." /><Row lead="pnpm lint" outcome="Not run" tone="warning" note="Optional check is not configured." /></Evidence></> : null}
+    {current.evidence === "findings" ? (row?.checks
+      ? <Evidence title="Checks run" eyebrow="Verification" detail={`${row.checks.filter(check => check.policy === "Required").length} required`}>
+          {row.checks.map(check => <Row key={check.name} lead={check.name} outcome={check.result} tone={check.result === "Passed" ? "success" : "danger"} note={`${check.policy} check at this exact commit.`} />)}
+        </Evidence>
+      : <><Evidence title="What this change must do" eyebrow="Intent" detail="4 requirements"><Row lead="Reject transfers above daily limit" outcome="Covered" tone="success" note="Pinned source evidence recorded." /><Row lead="Log every rejected transfer" outcome="Not covered" tone="danger" note="No matching code change found." /></Evidence><Evidence title="Checks run" eyebrow="Verification" detail="1 required"><Row lead="pnpm test" outcome="Failed" tone="danger" note="1m 42s · exact stdout retained." /><Row lead="pnpm lint" outcome="Not run" tone="warning" note="Optional check is not configured." /></Evidence></>) : null}
     {current.evidence === "checks" ? <Evidence title="Checks run" eyebrow="Verification" detail="2 required"><Row lead="pnpm test" outcome="Passed" tone="success" note="Exact stdout retained for this commit." /><Row lead="pnpm lint" outcome="Passed" tone="success" note="Required policy completed." /></Evidence> : null}
-    {row?.finding ? <CompleteFinding finding={row.finding} commit={commit} /> : null}
+    {row?.finding ? <CompleteFinding finding={row.finding} /> : null}
     {hasReviewEvidence ? <details className="technical-details"><summary>Technical details</summary><dl><div><dt>Base commit</dt><dd><code>{baseCommit}</code></dd></div><div><dt>Current step</dt><dd>{stagePresentation(current.stage)}</dd></div><div><dt>Model</dt><dd>Configured by workspace policy</dd></div><div><dt>Internal state</dt><dd>{technicalLabel(current.status)}</dd></div></dl></details> : null}
   </div>;
 }
@@ -45,15 +49,17 @@ export default async function Review({ params, searchParams }: { params: Promise
 // The headline promises every finding names the file, the line and the commit. The tour said
 // "No matching code change found" and stopped there, so an engineer could not judge that claim at
 // all. This shows the six things that make a finding checkable: where it is, the code it read, why
-// it matters, what the test actually printed, the change it proposes, and the pull request that
+// it matters, what the check that caught it printed, the change it proposes, and the pull request
 // change would arrive in.
-function CompleteFinding({ finding, commit }: { finding: NonNullable<SampleReview["finding"]>; commit: string }) {
+function CompleteFinding({ finding }: { finding: NonNullable<SampleReview["finding"]> }) {
   return <section className="complete-finding" aria-labelledby="complete-finding-title">
     <div className="section-heading compact"><div><p className="eyebrow">Cited evidence</p><h2 id="complete-finding-title">{finding.title}</h2></div><span className="status danger">{finding.severity}</span></div>
-    <p className="finding-where"><code>{finding.path}:{finding.lines}</code> at commit <code>{commit}</code></p>
+    <p className="finding-where"><code>{finding.path}:{finding.lines}</code> at commit <code>{finding.commit.slice(0, 12)}</code> · {finding.verdict}</p>
+    <p className="finding-source">Transcribed from a review BuildIT ran on {finding.reviewedAt}: <a className="text-link" href={finding.source.href} rel="noreferrer noopener" target="_blank">{finding.source.label}</a>. Every value below is quotable from it.</p>
     <p className="finding-why">{finding.why}</p>
+    <p className="finding-why">{finding.inspect}</p>
     <div className="finding-block"><h3>The code it read</h3><pre><code>{finding.excerpt}</code></pre></div>
-    <div className="finding-block"><h3>What the test printed</h3><pre><code>{finding.testOutput}</code></pre></div>
+    <div className="finding-block"><h3>What <code>{finding.checkName}</code> reported</h3><pre><code>{finding.checkOutput}</code></pre></div>
     <div className="finding-block"><h3>The change it proposes</h3><pre className="finding-diff"><code>{finding.fix}</code></pre></div>
     <p className="finding-delivery">Delivered as a stacked pull request a person reviews and merges — BuildIT never merges: <a className="text-link" href={finding.stackedPr.href} rel="noreferrer noopener" target="_blank">{finding.stackedPr.label}</a></p>
   </section>;

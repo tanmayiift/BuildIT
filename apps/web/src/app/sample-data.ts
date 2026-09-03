@@ -7,11 +7,21 @@
 export type SampleFinding = {
   title: string;
   severity: string;
+  verdict: string;
   path: string;
   lines: string;
+  /** The date the review this was transcribed from actually ran. */
+  reviewedAt: string;
+  /** The real commit the finding was raised against - not the row's illustrative one. */
+  commit: string;
+  /** Where a reader can check every value above for themselves. */
+  source: { label: string; href: string };
   excerpt: string;
   why: string;
-  testOutput: string;
+  inspect: string;
+  /** Which check produced the output below - not always a test. */
+  checkName: string;
+  checkOutput: string;
   fix: string;
   stackedPr: { label: string; href: string };
 };
@@ -30,6 +40,8 @@ export type SampleReview = {
   owner: string;
   age: string;
   group: "ready" | "progress";
+  /** The real check table from the review this row was transcribed from. */
+  checks?: Array<{ name: string; policy: "Required" | "Advisory"; result: "Passed" | "Failed" }>;
   finding?: SampleFinding;
 };
 
@@ -38,40 +50,61 @@ export const sampleReviews: SampleReview[] = [
     pr: 22, repo: "nexus/web", commit: "b2c8f41", baseCommit: "7b2e004",
     title: "Update landing page typography",
     status: "Changes requested", tone: "danger", state: "changes",
-    coverage: "2 / 2", signal: "1 high", owner: "Author", age: "12m", group: "ready",
-    // The one complete example. An engineer judging the core claim needs the file, the line, the
-    // code, the failing output, the proposed change and the pull request it would arrive in -
-    // "no matching code change found" proves nothing on its own.
+    coverage: "2 / 2", signal: "1 critical", owner: "Author", age: "12m", group: "ready",
+    checks: [
+      { name: "install", policy: "Required", result: "Passed" },
+      { name: "test", policy: "Required", result: "Failed" },
+      { name: "lint", policy: "Advisory", result: "Passed" },
+      { name: "typecheck", policy: "Advisory", result: "Failed" },
+      { name: "buildit-rules", policy: "Required", result: "Failed" },
+      { name: "gitleaks", policy: "Required", result: "Passed" },
+      { name: "osv-scanner", policy: "Required", result: "Passed" },
+    ],
+    // Transcribed from a review BuildIT actually ran: tanmayiift/buildit-public-fixture#22 at
+    // commit 699dd5f2f177, 2026-09-03. Every field below is quotable from that review, the file at
+    // that commit, or the Autofix pull request it produced. Nothing here is composed.
     finding: {
-      title: "Rejected transfers are never written to the audit log",
-      severity: "High",
-      path: "src/transfers/limit.ts",
-      lines: "41-47",
+      title: "TLS certificate verification is disabled",
+      severity: "Critical",
+      verdict: "Blocking · Confirmed by evidence",
+      path: "src/rates.js",
+      lines: "4",
+      reviewedAt: "2026-09-03",
+      commit: "699dd5f2f177a82f12a054daa7f68486cdcaf5b1",
+      source: { label: "tanmayiift/buildit-public-fixture #22", href: "https://github.com/tanmayiift/buildit-public-fixture/pull/22" },
+      // The file as it stood at 699dd5f2f177.
       excerpt: [
-        "export function applyDailyLimit(transfer: Transfer, spentToday: number) {",
-        "  if (spentToday + transfer.amount > DAILY_LIMIT) {",
-        "    return { accepted: false, reason: \"daily_limit\" };",
-        "    // no auditLog.record(...) on this path",
-        "  }",
-        "  return { accepted: true };",
-        "}",
-      ].join("\n"),
-      why: "The acceptance criterion says every rejected transfer must be logged. This branch returns before any audit write, so a rejection leaves no trace for a later dispute.",
-      testOutput: [
-        "FAIL  src/transfers/limit.test.ts > logs every rejected transfer",
-        "  AssertionError: expected auditLog.record to have been called 1 time, but it was called 0 times",
-        "    at src/transfers/limit.test.ts:63:5",
+        'import https from "node:https";',
         "",
-        "Tests  1 failed | 11 passed (12)",
+        "// Fetches the current tax rate table from the rates service.",
+        "export const agentOptions = { rejectUnauthorized: false };",
+        "const agent = new https.Agent(agentOptions);",
+        "",
+        "export async function fetchRates(url) {",
+        "  const response = await fetch(url, { agent });",
+      ].join("\n"),
+      why: "An active network attacker can impersonate the rates service and supply a forged rate table, causing the application to trust and use tampered tax rates.",
+      inspect: "The changed code exports `agentOptions = { rejectUnauthorized: false }`, which turns off server certificate validation for HTTPS requests in `fetchRates`. The supplied test explicitly requires `agentOptions.rejectUnauthorized` to be `true`, and head validation shows that test failing with `false !== true`.",
+      // Verbatim from the review's "What `test` reported" block - the tail of the real run.
+      checkName: "test",
+      checkOutput: [
+        "    code: 'ERR_ASSERTION',",
+        "    actual: false,",
+        "    expected: true,",
+        "    operator: 'strictEqual',",
+        "    diff: 'simple'",
+        "  }",
       ].join("\n"),
       fix: [
-        " if (spentToday + transfer.amount > DAILY_LIMIT) {",
-        "+  auditLog.record({ transferId: transfer.id, outcome: \"rejected\", reason: \"daily_limit\" });",
-        "   return { accepted: false, reason: \"daily_limit\" };",
-        " }",
+        " // Fetches the current tax rate table from the rates service.",
+        "-export const agentOptions = { rejectUnauthorized: false };",
+        "+export const agentOptions = { rejectUnauthorized: true };",
+        " const agent = new https.Agent(agentOptions);",
       ].join("\n"),
-      // A real, human-merged Autofix pull request on the public fixture repository, not a mock.
-      stackedPr: { label: "buildit-public-fixture #19 · +1 / −1, merged by a human", href: "https://github.com/tanmayiift/buildit-public-fixture/pull/19" },
+      stackedPr: {
+        label: "buildit-public-fixture #23 · +1 / −1 · test and buildit-rules pass after the fix",
+        href: "https://github.com/tanmayiift/buildit-public-fixture/pull/23",
+      },
     },
   },
   {
