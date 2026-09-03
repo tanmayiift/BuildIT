@@ -20,7 +20,16 @@ export const sweep = internalMutation({
   args: { now: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const now = args.now ?? Date.now();
-    let expired = 0, reconciled = 0;
+    let expired = 0, reconciled = 0, deliveriesDeleted = 0;
+
+    // webhookDeliveries grows with commit volume rather than review volume, so it outruns every
+    // other table and had no expiry at all. Swept here rather than under a fifth cron, because
+    // this one already exists to retire things whose time is up.
+    const staleDeliveries = await ctx.db.query("webhookDeliveries").withIndex("by_expiry", q => q.lt("expiresAt", now)).take(sweepLimit);
+    for (const delivery of staleDeliveries) {
+      await ctx.db.delete(delivery._id);
+      deliveriesDeleted += 1;
+    }
 
     const blocked = await ctx.db.query("reviews").withIndex("by_status", q => q.eq("status", "blocked")).take(sweepLimit);
     for (const review of blocked) {
@@ -67,6 +76,6 @@ export const sweep = internalMutation({
         reconciled += 1;
       }
     }
-    return { expired, reconciled };
+    return { expired, reconciled, deliveriesDeleted };
   },
 });

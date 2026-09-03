@@ -44,7 +44,7 @@ describe("social preview", () => {
   });
 
   it("keeps the sidebar mark and the card the same drawing", () => {
-    const shell = readFileSync(join(root, "apps/web/src/app/app-shell.tsx"), "utf8");
+    const shell = readFileSync(join(root, "apps/web/src/app/brand-glyph.tsx"), "utf8");
     const mark = readFileSync(join(root, "apps/web/public/mark.svg"), "utf8");
     for (const stroke of ["M24 18h-6v28h6", "M40 18h6v28h-6", "M25.5 32.5 30.5 38 38.5 26"]) {
       expect(shell).toContain(stroke);

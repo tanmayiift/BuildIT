@@ -31,3 +31,9 @@ export const maximumRetentionHours = 168;
 export function retentionMs(retentionHours: number | undefined) {
   return Math.min(maximumRetentionHours, retentionHours && retentionHours > 0 ? retentionHours : maximumRetentionHours) * 3_600_000;
 }
+
+// GitHub keeps its delivery log for 30 days and lets a person replay a delivery inside that
+// window. All four webhookDeliveries reads are point lookups on deliveryId - the check that stops
+// a replay starting a second review of the same event - so deleting a row sooner than GitHub can
+// resend it would make a replay read as new. 30 days is therefore the floor, not a preference.
+export const webhookDeliveryRetentionMs = 30 * 86_400_000;

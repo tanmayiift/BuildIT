@@ -134,8 +134,12 @@ test("production repository control reaches the registered GitHub App", async ({
   );
 });
 
+// Deliberately moved off "/". The landing page now has a public header instead of the workspace
+// sidebar, because a stranger met ten admin destinations before a sentence said what BuildIT does.
+// The contract still matters, so it is asserted where the workspace actually is rather than
+// weakened or deleted.
 test("navigation exposes all promised product areas", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/reviews?tour=1");
   const menu = page.getByText("Menu", { exact: true });
   if (await menu.isVisible()) await menu.click();
   for (const name of ["Review queue", "Repositories", "Metrics", "Usage", "Integrations", "Policies", "Members", "Audit log"]) {

@@ -293,3 +293,37 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; }
 
 /* WCAG 2.2 AA 2.5.8: inline text links were 15-22px tall. */
 .text-link, .account-link, .preview-banner a, .crumbs a, .back-link, .integration-card a, .section-heading a, .empty-band a { display: inline-flex; align-items: center; padding-block: 10px; min-height: 44px }
+
+/* The public shell. A stranger used to arrive inside the workspace: sidebar, workspace switcher,
+   ten destinations and a setup meter, before any sentence said what BuildIT does. These routes are
+   read, not operated, so the chrome is a header, the page, and a footer - same tokens, same
+   palette, nothing new. */
+.public-shell { min-height: 100vh; display: flex; flex-direction: column; background: var(--canvas); }
+.public-top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 24px;
+  width: min(1180px, 100%); margin: 0 auto; padding: 14px 32px; background: var(--canvas);
+  border-bottom: 1px solid var(--line); }
+.public-top nav { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.public-brand { display: inline-flex; align-items: center; gap: 10px; min-height: 44px;
+  font-size: 17px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+.public-brand small { display: block; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+.public-link { min-height: 44px; display: inline-flex; align-items: center; padding: 0 12px;
+  color: var(--ink-2); border-radius: 6px; font-size: 13px; font-weight: 600; }
+.public-link:hover { background: var(--surface-inset); color: var(--ink); }
+.public-main { flex: 1; min-width: 0; }
+.public-foot { border-top: 1px solid var(--line); background: var(--workbench); }
+.public-foot p { width: min(1180px, 100%); margin: 0 auto; padding: 22px 32px 0; max-width: 640px;
+  color: var(--muted); font-size: 12px; line-height: 1.55; }
+.public-foot nav { display: flex; flex-wrap: wrap; gap: 6px 12px; width: min(1180px, 100%);
+  margin: 0 auto; padding: 4px 32px 22px; }
+.public-foot nav .quiet-link { min-width: 44px; padding: 0 8px; justify-content: center; }
+
+/* The public pages are read top to bottom, so they get a reading measure rather than the
+   workspace's full-bleed 1440. */
+.public-main .content { width: min(1180px, 100%); padding: 40px 32px 56px; }
+
+@media (max-width: 720px) {
+  .public-top { flex-wrap: wrap; gap: 8px 16px; padding: 12px 20px; }
+  .public-top nav { order: 3; width: 100%; margin-left: 0; overflow-x: auto; }
+  .public-main .content { padding: 28px 20px 40px; }
+  .public-foot p, .public-foot nav { padding-inline: 20px; }
+}
