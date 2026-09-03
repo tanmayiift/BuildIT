@@ -23,8 +23,25 @@ corrected code then reached `main`. BuildIT merged nothing.
 second GitHub account signed in independently, received its own workspace, and was refused on every
 public function and direct object reference belonging to the first tenant.
 
+**Key rotation.** Closed 2026-09-03, recorded in `key-rotation-2026-09-03.md`. Revoking a provider
+credential now destroys the envelope rather than flagging the row, so the old ciphertext is
+unusable structurally and not only by query filtering. The KMS rewrap helper `rotateEnvelope` still
+has no production caller, and that document says so rather than counting it as evidence.
+
+**Retention deletion.** Executed in production 2026-09-03, recorded in
+`retention-executed-2026-09-03.md`. Five artifacts on a real review, including two repository
+snapshots, were claimed and deleted, each confirmed by the broker reading the key back from S3 and
+accepting only a NotFound. The expiry was brought forward deliberately; the clock is the only thing
+that was simulated, and nothing about the deletion path was stubbed.
+
 ## Still open
 
-**Key rotation proof.** No dated evidence exists that a stored provider key can be rotated and the
-old ciphertext rendered unusable end to end. The code path exists; the proof does not. This remains
-a release blocker and is stated as one on the trust page.
+**A track record.** Nine reviews across two repositories is evidence that the specific failures
+found on 2026-09-03 are fixed. It is not evidence of general reliability, and it is not presented
+as any. Both repositories are small Node and Kotlin projects. The honest expectation is that an
+unfamiliar repository shape finds something new.
+
+**A staged sandbox outage.** `execution_failed` and `sandbox_unavailable` are measured in the sense
+that every failure BuildIT can reach now becomes one specific, honest, non-leaking code, pinned by
+tests over the real runner and the real broker classifier. A genuine Vercel Sandbox outage still
+cannot be caused on demand, and no document here implies one was staged.
