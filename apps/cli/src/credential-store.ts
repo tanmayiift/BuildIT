@@ -177,3 +177,55 @@ export async function readHidden(
     input.on("data", onData);
   });
 }
+export type Reader = (
+  command: string,
+  args: string[],
+) => { status: number | null; stdout?: string | Buffer; error?: Error };
+// The key was written to the keychain by `buildit configure` and could only be checked for
+// presence, never read back - so every other internal tool needed the same secret pasted into its
+// own environment again. One store, read by whatever needs it, is the point of storing it.
+export function readCredential(
+  provider: Provider,
+  input: {
+    platform?: NodeJS.Platform;
+    environment?: NodeJS.ProcessEnv;
+    read?: Reader;
+  } = {},
+): string | undefined {
+  const fromEnvironment = environmentKey(provider, input.environment);
+  if (fromEnvironment) return fromEnvironment;
+  const platform = input.platform ?? process.platform;
+  const read =
+    input.read ??
+    ((command: string, args: string[]) =>
+      spawnSync(command, args, {
+        timeout: 10_000,
+        windowsHide: true,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }));
+  const result =
+    platform === "darwin"
+      ? read("security", [
+          "find-generic-password",
+          "-a",
+          "default",
+          "-s",
+          service(provider),
+          "-w",
+        ])
+      : platform === "linux"
+        ? read("secret-tool", [
+            "lookup",
+            "service",
+            "BuildIT",
+            "provider",
+            provider,
+          ])
+        : null;
+  if (!result || result.error || result.status !== 0) return undefined;
+  // `security -w` appends a newline; secret-tool does not. Trimming is safe because a key with
+  // surrounding whitespace was rejected at write time.
+  const value = String(result.stdout ?? "").trim();
+  return value.length >= 16 ? value : undefined;
+}

@@ -106,7 +106,7 @@ export const statusReasonCode = v.union(
   v.literal("required_check_failed"),
   v.literal("required_check_missing"), v.literal("unsupported_check"),
   v.literal("environment_unavailable"), v.literal("review_timeout"),
-  v.literal("final_validation_incomplete"), v.literal("provider_credential_invalid"),
+  v.literal("final_validation_incomplete"), v.literal("human_review_required"), v.literal("provider_credential_invalid"),
   v.literal("installation_suspended"), v.literal("permission_revoked"),
   v.literal("user_cancelled"), v.literal("blocked_expired"),
   v.literal("spend_ceiling_reached"), v.literal("concurrency_limit_reached"), v.literal("superseded_by_new_commit"), v.literal("provider_rate_limited"), v.literal("platform_error"),

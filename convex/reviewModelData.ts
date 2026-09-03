@@ -90,9 +90,13 @@ export const completeAnalysis = internalMutation({
       const requirementId = item.requirementExternalIdHash ? requirementIds.get(item.requirementExternalIdHash) : undefined;
       if (item.requirementExternalIdHash && !requirementId) throw new ConvexError("finding_requirement_missing");
       const existing = await ctx.db.query("findings").withIndex("by_review_fingerprint", q => q.eq("reviewId", review._id).eq("fingerprintHmac", item.fingerprintHmac)).unique();
-      if (!existing) await ctx.db.insert("findings", { organizationId: args.organizationId, reviewId: review._id, fingerprintHmac: item.fingerprintHmac, category: item.category, severity: item.severity,
+      if (existing) {
+        if (item.resolution === "uncertain" && existing.resolution === "uncertain") {
+          await ctx.db.patch(existing._id, { uncertainPasses: (existing.uncertainPasses ?? 1) + 1, updatedAt: args.now });
+        }
+      } else await ctx.db.insert("findings", { organizationId: args.organizationId, reviewId: review._id, fingerprintHmac: item.fingerprintHmac, category: item.category, severity: item.severity,
         confidence: item.confidence, blocking: item.blocking, contentArtifactId: artifact._id, evidenceIds: item.evidenceIds, pathHmac: item.pathHmac, startLine: item.startLine, endLine: item.endLine,
-        ...(item.ruleId ? { ruleId: item.ruleId } : {}), ...(requirementId ? { requirementId } : {}), ...(item.injectionSuspected ? { injectionSuspected: true } : {}), resolution: item.resolution, createdAt: args.now, updatedAt: args.now, expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000) });
+        ...(item.ruleId ? { ruleId: item.ruleId } : {}), ...(requirementId ? { requirementId } : {}), ...(item.injectionSuspected ? { injectionSuspected: true } : {}), resolution: item.resolution, ...(item.resolution === "uncertain" ? { uncertainPasses: 1 } : {}), createdAt: args.now, updatedAt: args.now, expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000) });
     }
     // An injection signal with no changed file to attribute it to leaves nothing safe to scope,
     // so record it on the review. reviewValidationData refuses a pass/fail verdict on this.

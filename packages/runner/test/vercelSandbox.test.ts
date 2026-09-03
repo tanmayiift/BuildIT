@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { defaultExecutionPlans } from "../src/index";
 import { VercelSandboxRunner, type SandboxFactory, type SandboxLike } from "../src/vercelSandbox";
 
-function fixture(options: { env?: string; installExit?: number; testExits?: number[]; osvExit?: number; osvOutput?: string } = {}) {
+function fixture(options: { env?: string; installExit?: number; testExits?: number[]; osvExit?: number; osvOutput?: string; testDurationMs?: number; installDurationMs?: number } = {}) {
   const calls: Array<unknown> = [], stop = vi.fn(async () => ({}));
   const sandbox: SandboxLike = {
     writeFiles: vi.fn(async files => { calls.push(["files", files]); }),
@@ -11,7 +11,8 @@ function fixture(options: { env?: string; installExit?: number; testExits?: numb
     runCommand: vi.fn(async command => {
       calls.push(["command", command]);
       const isEnv = command.cmd === "env", isOsv = command.cmd === "osv-scanner", isTest = command.cmd === "pnpm" && command.args[0] === "run" && command.args[1] === "test", exitCode = isEnv ? 0 : isOsv ? options.osvExit ?? 0 : command.cmd === "pnpm" && command.args[0] === "install" ? options.installExit ?? 0 : isTest ? options.testExits?.shift() ?? 0 : 0;
-      return { exitCode, durationMs: 10, stdout: async () => isEnv ? options.env ?? "CI=true\n" : isOsv ? options.osvOutput ?? "ok" : "ok", stderr: async () => "" };
+      const durationMs = isTest ? options.testDurationMs ?? 10 : command.cmd === "pnpm" && command.args[0] === "install" ? options.installDurationMs ?? 10 : 10;
+      return { exitCode, durationMs, stdout: async () => isEnv ? options.env ?? "CI=true\n" : isOsv ? options.osvOutput ?? "ok" : "ok", stderr: async () => "" };
     }),
     stop,
   };
@@ -34,6 +35,30 @@ describe("Vercel sandbox runner", () => {
     expect(f.calls).toContainEqual(["command", { cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", "--lockfile", "/vercel/sandbox/repo/pnpm-lock.yaml"], cwd: "/vercel/sandbox/repo", timeoutMs: 35_000 }]);
     expect(f.create.mock.calls[0]![0]).toMatchObject({ timeout: 210_000, networkPolicy: "deny-all", env: { CI: "true" }, region: "cdg1", persistent: false });
     expect(f.stop).toHaveBeenCalledOnce();
+  });
+
+  it("reports a command killed at its ceiling as a timeout, not as a failure", async () => {
+    // SIGKILL on timeoutMs surfaces as a plain non-zero exit with no flag, which is exactly what a
+    // genuine test failure looks like. Telling them apart is the difference between saying the
+    // author's tests are broken and saying BuildIT ran out of time - and the second is the truth
+    // on any repository whose suite outlives the 30-second budget.
+    const f = fixture({ testExits: [137], testDurationMs: test.timeoutMs }), runner = new VercelSandboxRunner(f.create);
+    const result = await runner.run({ runtime: "node22", files: [{ path: "package.json", content: "{}" }, { path: "pnpm-lock.yaml", content: "lockfileVersion: '9.0'" }], install, checks: [test] });
+    expect(result.results.find(item => item.planId === "test")).toMatchObject({ conclusion: "timed_out", failureClass: "timeout" });
+  });
+
+  it("still calls a genuine non-zero exit a failure", async () => {
+    const f = fixture({ testExits: [1], testDurationMs: 900 }), runner = new VercelSandboxRunner(f.create);
+    const result = await runner.run({ runtime: "node22", files: [{ path: "package.json", content: "{}" }, { path: "pnpm-lock.yaml", content: "lockfileVersion: '9.0'" }], install, checks: [test] });
+    expect(result.results.find(item => item.planId === "test")).toMatchObject({ conclusion: "failed", failureClass: "code" });
+  });
+
+  it("reports an install killed at its ceiling as a timeout too", async () => {
+    // An install that overruns short-circuits every check, so calling it a failure tells the
+    // author their dependencies are broken when nothing was ever installed.
+    const f = fixture({ installExit: 137, installDurationMs: install.timeoutMs }), runner = new VercelSandboxRunner(f.create);
+    const result = await runner.run({ runtime: "node22", files: [{ path: "package.json", content: "{}" }, { path: "pnpm-lock.yaml", content: "lockfileVersion: '9.0'" }], install, checks: [test] });
+    expect(result.results.find(item => item.planId === "install")).toMatchObject({ conclusion: "timed_out", failureClass: "timeout" });
   });
 
   it("starts both read-only scanners before either scanner is allowed to finish", async () => {

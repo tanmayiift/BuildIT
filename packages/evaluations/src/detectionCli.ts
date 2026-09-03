@@ -9,32 +9,69 @@ import { runDetectionSuite, type StageInvoker } from "./detectionRunner.js";
 // flakes gets switched off. Run it before a release and when a prompt or the chain changes, and
 // keep the report: a rate that moves is the signal, not any single run.
 //
+//   pnpm eval:detection                              (uses the key `buildit configure` stored)
 //   OPENAI_API_KEY=… pnpm eval:detection            (or ANTHROPIC_API_KEY / GEMINI_API_KEY)
+//   BUILDIT_EVAL_PROVIDER=openai pnpm eval:detection (pin one; otherwise a dead key fails over)
 //   pnpm eval:detection --out docs/evidence/detection-<date>.json
 
-function providerFromEnv() {
-  if (process.env.ANTHROPIC_API_KEY) return { provider: "anthropic" as const, model: "claude-sonnet-4-5", key: process.env.ANTHROPIC_API_KEY };
-  if (process.env.OPENAI_API_KEY) return { provider: "openai" as const, model: "gpt-5", key: process.env.OPENAI_API_KEY };
-  if (process.env.GEMINI_API_KEY) return { provider: "gemini" as const, model: "gemini-2.5-pro", key: process.env.GEMINI_API_KEY };
-  return undefined;
+const providers = [
+  { provider: "anthropic" as const, model: "claude-sonnet-4-5" },
+  { provider: "openai" as const, model: "gpt-5" },
+  { provider: "gemini" as const, model: "gemini-2.5-pro" },
+];
+
+async function availableProviders() {
+  const { readCredential } = await import("@buildit/cli/credential-store");
+  const only = process.env.BUILDIT_EVAL_PROVIDER;
+  const found: Array<{ provider: (typeof providers)[number]["provider"]; model: string; key: string }> = [];
+  for (const candidate of providers) {
+    if (only && candidate.provider !== only) continue;
+    const key = readCredential(candidate.provider);
+    if (key) found.push({ ...candidate, key });
+  }
+  return found;
 }
 
+// A provider that rejects the key, is out of quota or is rate-limited is worth failing over. A
+// schema-invalid response is not: that is the model answering badly, which the chain repairs and
+// the score is supposed to see.
+const credentialFailure = /401|403|429|invalid[_ ]api[_ ]key|unauthorized|quota|rate[_ ]limit|insufficient_quota/i;
+
 async function main() {
-  const chosen = providerFromEnv();
+  const configured = await availableProviders();
+  const chosen = configured[0];
   if (!chosen) {
-    process.stderr.write("set ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY to run the detection suite\n");
+    process.stderr.write("no model key: run `buildit configure --provider openai --from-env` once, or set OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY for this run\n");
     process.exitCode = 2;
     return;
   }
 
   const { ProviderClient } = await import("@buildit/providers");
   const client = new ProviderClient();
-  const invoke: StageInvoker = async request => client.generateWithRetry(
-    chosen.provider,
-    chosen.key!,
-    { model: chosen.model, system: request.system, input: request.input, schemaName: request.schemaName, schema: request.schema, maxOutputTokens: request.maxOutputTokens },
-    new Set([chosen.model]),
-  );
+  // Which provider is answering can change mid-suite, so the report says who actually did the work
+  // rather than who was asked first.
+  let active = chosen;
+  const failedOver: string[] = [];
+  const invoke: StageInvoker = async request => {
+    const remaining = configured.slice(configured.indexOf(active));
+    let lastError: unknown;
+    for (const candidate of remaining) {
+      try {
+        const result = await client.generateWithRetry(
+          candidate.provider, candidate.key,
+          { model: candidate.model, system: request.system, input: request.input, schemaName: request.schemaName, schema: request.schema, maxOutputTokens: request.maxOutputTokens },
+          new Set([candidate.model]),
+        );
+        if (candidate !== active) { failedOver.push(`${active.provider}→${candidate.provider}`); active = candidate; }
+        return result;
+      } catch (error) {
+        lastError = error;
+        if (!credentialFailure.test(String((error as Error)?.message ?? error))) throw error;
+        process.stderr.write(`${candidate.provider}: key unusable, trying the next configured provider\n`);
+      }
+    }
+    throw lastError;
+  };
 
   const started = Date.now();
   const report = await runDetectionSuite({
@@ -45,7 +82,8 @@ async function main() {
 
   // Source-free: case ids, counts and a rate. No repository content and no model output.
   const evidence = {
-    suite: "detection", cases: detectionCases.length, provider: chosen.provider, model: chosen.model,
+    suite: "detection", cases: detectionCases.length, provider: active.provider, model: active.model,
+    ...(failedOver.length ? { failedOver } : {}),
     detected: report.detected, ofDefects: report.defects,
     detectionRate: Number(report.detectionRate.toFixed(3)),
     missed: report.missed, falseBlocking: report.falseBlocking,

@@ -20,6 +20,24 @@ const unsafeInstallControl = /(^|\/)(?:\.git|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfi
 export function isUnsafeInstallControlPath(path: string) { return unsafeInstallControl.test(path); }
 const nodeLockfile = /(^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock)$/;
 
+// The SDK kills a command with SIGKILL when it passes timeoutMs and still resolves with a plain
+// non-zero exitCode - there is no timeout flag on CommandFinished. So a 30-second kill and a
+// genuine test failure arrive here identical, and every timeout was reported as "failed". That is
+// not a label problem: computeReviewDecision routes failed to changes_requested, so BuildIT told
+// the author their tests were broken when in truth it ran out of time. What the SDK does give us
+// is the duration and SIGKILL's 128+9 exit code, and both must agree before we call it a timeout.
+//
+// Two adjacent traps this exposed, recorded rather than fixed because both need the sandbox moved
+// off the synchronous request path, which the 300s ceiling in packages/broker/vercel.json forces:
+// an install that overruns 60s returns early below and no check runs at all, so the report shows
+// one install row and nothing else; and a gitleaks SIGKILL at SANDBOX_SCANNER_TIMEOUT_MS throws
+// gitleaks_execution_failed, which becomes a 503 and kills the review outright rather than
+// degrading it.
+const sigkillExit = 137;
+function timedOut(exitCode: number | undefined, durationMs: number | undefined, timeoutMs: number) {
+  return exitCode === sigkillExit && (durationMs ?? 0) >= timeoutMs;
+}
+
 async function output(result: Finished, limit: number) {
   const [stdout, stderr] = await Promise.all([result.stdout(), result.stderr()]);
   const combined = `${stdout}${stderr ? `\n${stderr}` : ""}`;
@@ -89,7 +107,8 @@ export class VercelSandboxRunner {
       const installResult = await sandbox.runCommand({ cmd: input.install.executable, args: input.install.args, cwd: "/vercel/sandbox/repo", timeoutMs: input.install.timeoutMs });
       const installOutput = await output(installResult, input.install.outputBytes);
       outputs.push({ planId: input.install.planId, ...installOutput });
-      results.push({ ...input.install, conclusion: installOutput.truncated ? "truncated" : installResult.exitCode === 0 ? "passed" : "failed", exitCode: installResult.exitCode, durationMs: installResult.durationMs ?? 0, ...(installResult.exitCode === 0 ? {} : { failureClass: "code" as const }) });
+      const installTimedOut = timedOut(installResult.exitCode, installResult.durationMs, input.install.timeoutMs);
+      results.push({ ...input.install, conclusion: installOutput.truncated ? "truncated" : installResult.exitCode === 0 ? "passed" : installTimedOut ? "timed_out" : "failed", exitCode: installResult.exitCode, durationMs: installResult.durationMs ?? 0, ...(installResult.exitCode === 0 ? {} : { failureClass: installTimedOut ? ("timeout" as const) : ("code" as const) }) });
       diagnostics.install = [{ conclusion: installResult.exitCode === 0 && !installOutput.truncated ? "passed" : "failed", ...(installResult.exitCode === 0 && !installOutput.truncated ? {} : { failureFingerprint: createHash("sha256").update(installOutput.text).digest("hex") }) }];
       if (installResult.exitCode !== 0 || installOutput.truncated) return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), stopped: true };
 
@@ -98,7 +117,8 @@ export class VercelSandboxRunner {
         const result = await sandbox.runCommand({ cmd: plan.executable, args: plan.args, cwd: "/vercel/sandbox/repo", timeoutMs: plan.timeoutMs });
         const captured = await output(result, plan.outputBytes);
         outputs.push({ planId: plan.planId, ...captured });
-        results.push({ ...plan, conclusion: captured.truncated ? "truncated" : result.exitCode === 0 ? "passed" : "failed", exitCode: result.exitCode, durationMs: result.durationMs ?? 0, ...(result.exitCode === 0 ? {} : { failureClass: "code" as const }) });
+        const checkTimedOut = timedOut(result.exitCode, result.durationMs, plan.timeoutMs);
+        results.push({ ...plan, conclusion: captured.truncated ? "truncated" : result.exitCode === 0 ? "passed" : checkTimedOut ? "timed_out" : "failed", exitCode: result.exitCode, durationMs: result.durationMs ?? 0, ...(result.exitCode === 0 ? {} : { failureClass: checkTimedOut ? ("timeout" as const) : ("code" as const) }) });
         const firstPassed = result.exitCode === 0 && !captured.truncated;
         const runs: DiagnosticRun[] = [{ conclusion: firstPassed ? "passed" : "failed", ...(firstPassed ? {} : { failureFingerprint: createHash("sha256").update(captured.text).digest("hex") }) }];
         if (plan.required && !firstPassed) {

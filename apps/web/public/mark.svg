@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BuildIT">
+  <title>BuildIT</title>
+  <rect width="64" height="64" rx="14" fill="#0b315f"/>
+  <g fill="none" stroke="#f4f7fb" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M24 18h-6v28h6"/>
+    <path d="M40 18h6v28h-6"/>
+    <path d="M25.5 32.5 30.5 38 38.5 26" stroke-width="4.5"/>
+  </g>
+</svg>

@@ -42,7 +42,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <ConnectionBanner />
     <div className="shell">
       <aside className="side">
-        <div className="brand-row"><span className="brand-glyph" aria-hidden="true">B</span><a className="brand" href="/">BuildIT<span>Evidence room</span></a></div>
+        <div className="brand-row"><span className="brand-glyph" aria-hidden="true"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth={4.5} strokeLinecap="round" strokeLinejoin="round"><path d="M24 18h-6v28h6"/><path d="M40 18h6v28h-6"/><path d="M25.5 32.5 30.5 38 38.5 26" strokeWidth={5}/></svg></span><a className="brand" href="/">BuildIT<span>Evidence room</span></a></div>
         <WorkspaceSwitcher />
         <nav aria-label="Primary"><p className="nav-heading">Workspace</p>{work.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} sampleTour={sampleTour} />)}<p className="nav-heading">Operations</p>{operations.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} sampleTour={sampleTour} />)}</nav>
         <nav className="settings-nav" aria-label="Organization settings">{settings.map(item => <NavLink key={item.href} item={item} current={isCurrent(pathname, item.href)} sampleTour={sampleTour} />)}</nav>

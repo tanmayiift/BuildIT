@@ -83,6 +83,10 @@ export const completeValidation = internalMutation({
   },
 });
 
+// Mirrors uncertainEscalationLimit in @buildit/orchestrator, which cannot be imported into the
+// default Convex runtime. tests/architecture pins them to the same value.
+const uncertainEscalationLimit = 2;
+
 export const finalizeDecision = internalMutation({
   args: { ...executionArgs, reportArtifactId: v.id("artifacts"), now: v.number() },
   handler: async (ctx, args) => {
@@ -97,12 +101,13 @@ export const finalizeDecision = internalMutation({
     // Record which condition made the evidence incomplete. Without this the review ends as a
     // flat "required check missing" and the real cause — partial context, a missing artifact,
     // a flaky rerun — is unrecoverable afterwards.
-    let incompleteReason: "injection_unscoped" | "coverage_partial" | "no_required_check" | "evidence_missing" | "conclusion_unusable" | undefined;
+    let incompleteReason: "injection_unscoped" | "uncertain_escalated" | "coverage_partial" | "no_required_check" | "evidence_missing" | "conclusion_unusable" | undefined;
     // An injection signal that could not be attributed to a changed file downgraded every critic
     // decision to uncertain, which made blocking false, which landed the review on checks_passed
     // with a green check. The verdict has to fail closed: an unscoped signal means BuildIT does
     // not know whether it reviewed the code or the attacker's instructions.
     if (review.promptInjectionUnscopedAt) incompleteReason = "injection_unscoped";
+    else if (findings.some(item => (item.uncertainPasses ?? 0) >= uncertainEscalationLimit && item.resolution === "uncertain")) incompleteReason = "uncertain_escalated";
     else if (review.coverageLevel !== "full") incompleteReason = "coverage_partial";
     else if (!checks.some(item => item.required)) incompleteReason = "no_required_check";
     let failed = false;
@@ -116,12 +121,19 @@ export const finalizeDecision = internalMutation({
     const incomplete = incompleteReason !== undefined;
     const blocking = findings.some(item => item.resolution === "open" && item.blocking);
     const status = incomplete ? "inconclusive" as const : failed || blocking ? "changes_requested" as const : "checks_passed" as const;
-    const statusReasonCode = incomplete ? "required_check_missing" as const : failed ? "required_check_failed" as const : blocking ? "blocking_findings" as const : "checks_complete" as const;
-    const nextActionCode = incomplete ? "retry_review" as const : failed || blocking ? "inspect_findings" as const : "none" as const;
+    const escalated = incompleteReason === "uncertain_escalated";
+    const statusReasonCode = escalated ? "human_review_required" as const : incomplete ? "required_check_missing" as const : failed ? "required_check_failed" as const : blocking ? "blocking_findings" as const : "checks_complete" as const;
+    const nextActionCode = escalated ? "inspect_findings" as const : incomplete ? "retry_review" as const : failed || blocking ? "inspect_findings" as const : "none" as const;
     const githubCheckConclusion = status === "checks_passed" ? "success" as const : status === "changes_requested" ? "failure" as const : "neutral" as const;
     await ctx.db.patch(review._id, { status, statusReasonCode, nextActionCode, githubCheckConclusion, currentStage: "complete", completedAt: args.now, updatedAt: args.now });
     await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", publicMessageArtifactId: report._id, internalCode: `decision_${statusReasonCode}`, metadata: { count: findings.length, ...(incompleteReason ? { reasonCode: incompleteReason } : {}) }, createdAt: args.now });
     await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, name: "review_completed", value: 1, organizationTimezone: organization.timezone, occurredAt: args.now });
+    if (incomplete) {
+      await ctx.scheduler.runAfter(0, internal.evalLoop.recordMissedVerdict, {
+        organizationId: args.organizationId, reviewId: review._id,
+        reasonCode: incompleteReason ?? "unknown", now: args.now,
+      });
+    }
     await ctx.scheduler.runAfter(0, internal.telemetryWorker.emit, { operation: "review.decision", stage: "decision", outcome: "succeeded" });
     return { status, statusReasonCode, nextActionCode };
   },

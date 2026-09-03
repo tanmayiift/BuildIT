@@ -62,6 +62,7 @@ export const parentConsistencyPolicies = {
   usageLedger: "organization_repository_review_optional_round",
   githubSideEffects: "organization_repository_review",
   deliveries: "organization_review",
+  evalCandidates: "organization_review",
   webhookDeliveries: "optional_review",
   notifications: "organization_optional_review",
   metricEvents: "organization_optional_repository_review_round",

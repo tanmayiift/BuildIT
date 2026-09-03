@@ -53,6 +53,17 @@ node apps/cli/dist/index.js configure --provider gemini --revoke
 
 Local deterministic review does not call a provider. Hosted review uses the repository-scoped credential saved through the web credential broker.
 
+That one keychain entry is the key for every internal tool that needs a provider, not just the CLI.
+The detection evaluation reads the same entry, so it needs no environment variable of its own:
+
+```sh
+node apps/cli/dist/index.js configure --provider openai --from-env   # once
+pnpm eval:detection --out docs/evidence/detection-$(date +%F).json
+```
+
+Set `BUILDIT_EVAL_PROVIDER` when more than one provider is configured and you want a specific one;
+an environment variable still wins over the stored key for a single run.
+
 ## Hosted reviewer journey
 
 Authenticate GitHub CLI first with `gh auth login`, then run:

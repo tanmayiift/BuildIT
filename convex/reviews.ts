@@ -10,6 +10,9 @@ import { totalCostUsd } from "./lib/usageCost";
 // real review.
 const listCeiling = 500;
 const evidenceCeiling = 1_000;
+// A pull request reviewed more times than this is being debugged, not read: the newest runs are
+// the ones a diff is asked about.
+const historyCeiling = 50;
 
 const publicReview = (review: {
   _id: unknown; repositoryId: unknown; prNumber: number; headSha: string; status: string; statusReasonCode?: string;
@@ -82,6 +85,101 @@ export const getEvidence = query({
         promptVersion: item.promptVersion, createdAt: item.createdAt })),
       spend: { costUsd: totalCostUsd(ledger), inputTokens: stageRuns.reduce((sum, item) => sum + item.inputTokens, 0),
         outputTokens: stageRuns.reduce((sum, item) => sum + item.outputTokens, 0) },
+    };
+  },
+});
+
+// L5 observability asks whether two runs can be compared. Until now each run could only be read on
+// its own, so "it found this last time and not this time" - the exact failure that motivated the
+// detection suite - could not be seen in the product at all.
+export const runHistory = query({
+  args: { reviewId: v.id("reviews") },
+  handler: async (ctx, args) => {
+    const review = await ctx.db.get(args.reviewId);
+    if (!review) throw new Error("not_found_or_forbidden");
+    await requireRepositoryRole(ctx, review.repositoryId, "viewer", review.organizationId);
+    // Every run of the same pull request, newest first, whatever commit it pinned - comparing runs
+    // across commits is the point, since that is how a regression in the reviewer shows up.
+    const runs = await ctx.db.query("reviews")
+      .withIndex("by_repo_pr_head_mode", q => q.eq("repositoryId", review.repositoryId).eq("prNumber", review.prNumber))
+      .take(historyCeiling);
+    const summaries = await Promise.all(runs.map(async run => {
+      const [stages, ledger, findings] = await Promise.all([
+        ctx.db.query("modelStageRuns").withIndex("by_review", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
+        ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
+        ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
+      ]);
+      return {
+        id: run._id, headSha: run.headSha, status: run.status, mode: run.mode,
+        statusReasonCode: run.statusReasonCode, createdAt: run.createdAt, completedAt: run.completedAt,
+        promptVersion: run.promptVersion, model: run.model, provider: run.provider,
+        stageCount: stages.length,
+        repairedStages: stages.filter(item => item.outcome !== "valid").length,
+        inputTokens: stages.reduce((sum, item) => sum + item.inputTokens, 0),
+        outputTokens: stages.reduce((sum, item) => sum + item.outputTokens, 0),
+        costUsd: totalCostUsd(ledger),
+        blockingFindings: findings.filter(item => item.blocking && item.resolution === "open").length,
+        totalFindings: findings.length,
+        isCurrent: run._id === review._id,
+      };
+    }));
+    return summaries.sort((left, right) => right.createdAt - left.createdAt);
+  },
+});
+
+// The comparison itself. Findings are matched on their fingerprint, which is what makes "the same
+// defect" a fact rather than a guess about two titles that read alike.
+export const compareRuns = query({
+  args: { leftReviewId: v.id("reviews"), rightReviewId: v.id("reviews") },
+  handler: async (ctx, args) => {
+    const [left, right] = await Promise.all([ctx.db.get(args.leftReviewId), ctx.db.get(args.rightReviewId)]);
+    if (!left || !right) throw new Error("not_found_or_forbidden");
+    // Both sides are authorized separately, so a comparison can never be a way to read across a
+    // repository boundary.
+    await requireRepositoryRole(ctx, left.repositoryId, "viewer", left.organizationId);
+    await requireRepositoryRole(ctx, right.repositoryId, "viewer", right.organizationId);
+    if (left.repositoryId !== right.repositoryId || left.prNumber !== right.prNumber) throw new Error("not_found_or_forbidden");
+
+    const side = async (run: typeof left) => {
+      const [stages, ledger, findings] = await Promise.all([
+        ctx.db.query("modelStageRuns").withIndex("by_review", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
+        ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
+        ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
+      ]);
+      return { run, stages, costUsd: totalCostUsd(ledger), findings };
+    };
+    const [a, b] = await Promise.all([side(left), side(right)]);
+
+    const stageNames = [...new Set([...a.stages, ...b.stages].map(item => item.stage))];
+    const stageRows = stageNames.map(stage => {
+      const leftStage = a.stages.filter(item => item.stage === stage);
+      const rightStage = b.stages.filter(item => item.stage === stage);
+      const tokens = (items: typeof leftStage) => items.reduce((sum, item) => sum + item.inputTokens + item.outputTokens, 0);
+      return {
+        stage,
+        left: leftStage.length ? { ran: true, attempts: leftStage.length, tokens: tokens(leftStage), repaired: leftStage.some(item => item.outcome !== "valid") } : { ran: false, attempts: 0, tokens: 0, repaired: false },
+        right: rightStage.length ? { ran: true, attempts: rightStage.length, tokens: tokens(rightStage), repaired: rightStage.some(item => item.outcome !== "valid") } : { ran: false, attempts: 0, tokens: 0, repaired: false },
+      };
+    });
+
+    const leftPrints = new Set(a.findings.map(item => item.fingerprintHmac));
+    const rightPrints = new Set(b.findings.map(item => item.fingerprintHmac));
+    const describe = (item: (typeof a.findings)[number]) => ({
+      severity: item.severity, category: item.category, blocking: item.blocking, resolution: item.resolution,
+      startLine: item.startLine, endLine: item.endLine,
+    });
+    return {
+      left: { id: left._id, headSha: left.headSha, status: left.status, costUsd: a.costUsd, promptVersion: left.promptVersion, model: left.model },
+      right: { id: right._id, headSha: right.headSha, status: right.status, costUsd: b.costUsd, promptVersion: right.promptVersion, model: right.model },
+      statusChanged: left.status !== right.status,
+      costDeltaUsd: b.costUsd - a.costUsd,
+      stages: stageRows,
+      // "Lost" is the column that matters: a defect reported by the earlier run and not the later
+      // one is either fixed in the diff or a regression in the reviewer, and only a person can say
+      // which.
+      onlyInLeft: a.findings.filter(item => !rightPrints.has(item.fingerprintHmac)).map(describe),
+      onlyInRight: b.findings.filter(item => !leftPrints.has(item.fingerprintHmac)).map(describe),
+      inBoth: a.findings.filter(item => rightPrints.has(item.fingerprintHmac)).length,
     };
   },
 });

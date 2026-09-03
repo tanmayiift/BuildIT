@@ -156,12 +156,23 @@ export default defineSchema({
     category: value.findingCategory, severity: value.severity, confidence: v.number(), blocking: v.boolean(),
     contentArtifactId: v.id("artifacts"), evidenceIds: v.array(v.id("artifacts")), pathHmac: v.string(),
     startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()),
-    requirementId: v.optional(v.id("requirements")), resolution: value.findingResolution,
+    requirementId: v.optional(v.id("requirements")), resolution: value.findingResolution, uncertainPasses: v.optional(v.number()),
     injectionSuspected: v.optional(v.boolean()),
     createdAt: v.number(), updatedAt: v.number(), expiresAt: v.number(),
   }).index("by_organization", ["organizationId"])
     .index("by_review_severity", ["reviewId", "severity"])
     .index("by_review_fingerprint", ["reviewId", "fingerprintHmac"]),
+
+  evalCandidates: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.id("reviews"),
+    // "missed" is a run that reached no verdict; "false_positive" is a finding a person dismissed.
+    kind: v.union(v.literal("missed"), v.literal("false_positive")),
+    reasonCode: v.string(), fingerprintHmac: v.optional(v.string()),
+    promptVersion: v.string(), model: v.string(), headSha: v.string(),
+    reviewedIntoEvalSet: v.optional(v.boolean()), createdAt: v.number(),
+  }).index("by_org_created", ["organizationId", "createdAt"])
+    .index("by_pending", ["reviewedIntoEvalSet", "createdAt"])
+    .index("by_review", ["reviewId"]),
 
   findingSuppressions: defineTable({
     organizationId: v.id("organizations"), repositoryId: v.id("repositories"),

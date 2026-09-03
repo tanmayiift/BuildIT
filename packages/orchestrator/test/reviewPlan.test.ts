@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runModelReviewChain } from "../src/modelChain.js";
 import { largeDiffFiles, partitionFiles, planReview, shouldEscalateToHuman, uncertainEscalationLimit } from "../src/reviewPlan.js";
 
 // The chain was fixed: every review ran all six stages in the same order whatever the request
@@ -68,5 +69,64 @@ describe("the manager plans the run", () => {
     });
     expect(steered.stages).toContain("critic");
     expect(steered.stages).toContain("arbitration");
+  });
+});
+
+// The plan was computed and then ignored: findingsSpecialists and the escalation limit were
+// returned to nobody, so a 200-file diff was still read by a single pass and a finding the critic
+// could not resolve twice still fell out of the verdict silently.
+describe("the plan actually changes the run", () => {
+  const files = (count: number) => Array.from({ length: count }, (_, index) => ({ path: `src/file-${index}.ts`, content: `// ${index}` }));
+
+  async function run(fileCount: number) {
+    const seen: Array<{ stage: string; input: string }> = [];
+    const records = await runModelReviewChain({
+      pinned: { headSha: "a".repeat(40), baseSha: "b".repeat(40), configRevision: "plan-test" },
+      untrusted: { files: files(fileCount) },
+      invoke: async request => {
+        seen.push({ stage: request.stage, input: request.input });
+        // One finding per file the specialist was actually given, so the merge is observable.
+        const findings = [...new Set([...request.input.matchAll(/src\/file-(\d+)\.ts/g)].map(match => match[1]!))].map(id => ({
+          id, title: `finding ${id}`, category: "correctness", severity: "warning", confidence: 0.5,
+          criterionId: "", path: `src/file-${id}.ts`, startLine: 1, endLine: 1, evidenceIds: [],
+          impact: "", explanation: "",
+        }));
+        return {
+          value: request.stage === "findings" ? { findings }
+            : request.stage === "arbitration" ? { findings: [] }
+            : request.stage === "critic" ? { decisions: [] }
+            : request.stage === "review_plan" ? { checks: [], evidenceOperations: [], riskAreas: [], exclusions: [] }
+            : { claims: [] },
+          provider: "gemini" as const, model: "gemini-test", finishReason: "STOP",
+          inputTokens: 1, outputTokens: 1, requestId: `request-${seen.length}`,
+        };
+      },
+    });
+    return { records, findingsCalls: seen.filter(item => item.stage === "findings") };
+  }
+
+  it("reads a small diff in one pass", async () => {
+    const { findingsCalls } = await run(4);
+    expect(findingsCalls).toHaveLength(1);
+  });
+
+  it("splits a large diff across specialists and merges what they found", async () => {
+    const count = largeDiffFiles * 2 + 1;
+    const { records, findingsCalls } = await run(count);
+    expect(findingsCalls.length).toBeGreaterThan(1);
+    // Slices are disjoint, so no file is read twice and none is dropped.
+    const perCall = findingsCalls.map(call => [...call.input.matchAll(/src\/file-(\d+)\.ts/g)].map(match => match[1]!));
+    expect(new Set(perCall.flat()).size).toBe(count);
+    expect(perCall.flat()).toHaveLength(count);
+    // Downstream stages and the caller still see one findings record, not one per specialist.
+    const findingsRecords = records.filter(record => record.stage === "findings");
+    expect(findingsRecords).toHaveLength(1);
+    expect((findingsRecords[0]!.value as { findings: unknown[] }).findings).toHaveLength(count);
+  });
+
+  it("escalates only after the allowed number of uncertain passes", () => {
+    const plan = planReview({ files: files(2) });
+    expect(shouldEscalateToHuman(uncertainEscalationLimit - 1, plan)).toBe(false);
+    expect(shouldEscalateToHuman(uncertainEscalationLimit, plan)).toBe(true);
   });
 });

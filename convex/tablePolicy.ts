@@ -19,6 +19,7 @@ export const tablePolicies = {
   requirements: { scope: "review", parents: ["organizationId", "reviewId", "contentArtifactId"], data: "artifact_reference_only" },
   findings: { scope: "review", parents: ["organizationId", "reviewId", "contentArtifactId", "evidenceIds", "requirementId"], data: "artifact_reference_only" },
   findingSuppressions: { scope: "repository", parents: ["organizationId", "repositoryId"], data: "metadata" },
+  evalCandidates: { scope: "review", parents: ["organizationId", "reviewId"], data: "metadata" },
   checkRuns: { scope: "review", parents: ["organizationId", "reviewId", "roundId", "artifactId"], data: "artifact_reference_only" },
   baseResults: { scope: "repository", parents: ["organizationId", "repositoryId", "configRevisionId", "artifactId"], data: "artifact_reference_only" },
   autofixAttempts: { scope: "review", parents: ["organizationId", "reviewId", "patchArtifactId"], data: "artifact_reference_only" },

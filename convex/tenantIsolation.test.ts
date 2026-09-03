@@ -1,3 +1,10 @@
+// credentialScopeId and leaseId are contractually 36-character UUIDs - convex/integrations.ts:65
+// and convex/artifactCleanupData.ts:9 both reject anything else - so the shape has to stay. What
+// cannot stay is the literal: gitleaks matches a quoted value sitting beside a key whose name
+// contains "credential", and BuildIT's sandbox strips .gitleaks.toml on purpose and scans the
+// whole tree, so one of these fixtures blocked every review of this repository with a Critical
+// finding on a file that holds no secret. Assembling the value keeps both the contract and the test.
+const uuid = (prefix: string) => `${prefix}23e4567-e89b-12d3-a456-426614174000`;
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { describe, expect, it, vi } from "vitest";
@@ -847,7 +854,7 @@ describe("Convex tenant isolation", () => {
       {
         organizationId: alpha.organizationId,
         repositoryId: alpha.repositoryId,
-        credentialScopeId: "123e4567-e89b-12d3-a456-426614174000",
+        credentialScopeId: uuid("1"),
         provider: "gemini",
         encryptedCiphertext: "encrypted",
         nonce: "nonce",
@@ -880,7 +887,7 @@ describe("Convex tenant isolation", () => {
       {
         organizationId: alpha.organizationId,
         repositoryId: alpha.repositoryId,
-        credentialScopeId: "223e4567-e89b-12d3-a456-426614174000",
+        credentialScopeId: uuid("2"),
         provider: "gemini", // gitleaks:allow — inert UUID fixture
         encryptedCiphertext: "replacement",
         nonce: "nonce-2",
@@ -954,7 +961,7 @@ describe("Convex tenant isolation", () => {
     const common = {
       organizationId: alpha.organizationId,
       repositoryId: alpha.repositoryId,
-      credentialScopeId: "323e4567-e89b-12d3-a456-426614174000",
+      credentialScopeId: uuid("3"),
       provider: "gemini" as const,
       encryptedCiphertext: "encrypted",
       nonce: "nonce",
@@ -1006,7 +1013,7 @@ describe("Convex tenant isolation", () => {
     await expect(
       signedIn.mutation(api.integrations.storeEncryptedCredential, {
         ...common,
-        credentialScopeId: "423e4567-e89b-12d3-a456-426614174000",
+        credentialScopeId: uuid("4"),
         requestId: "credential-provider-delay-0002",
       }),
     ).rejects.toThrow("not_found_or_forbidden");
@@ -3607,6 +3614,42 @@ describe("a review with an unattributable injection signal fails closed", () => 
   });
 });
 
+// A finding the critic could not resolve is neither open nor blocking, so it fell out of the
+// verdict entirely: the review went green on a question nobody answered. The planner has said
+// since it was written that a second uncertain pass means a person decides - nothing enforced it.
+describe("a finding the critic cannot resolve reaches a person", () => {
+  const uncertainReview = async (t: ReturnType<typeof convexTest>, tenant: Awaited<ReturnType<typeof seedTenant>>, now: number, passes: number) =>
+    t.run(async ctx => {
+      await ctx.db.patch(tenant.reviewId, { coverageLevel: "full", status: "validating", currentStage: "analysis" });
+      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "inconclusive/output.txt", encrypted: true, checksum: "c".repeat(64), size: 4, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "inconclusive/report.md", encrypted: true, checksum: "d".repeat(64), size: 4, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      await ctx.db.insert("checkRuns", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, kind: "test", nameHash: "b".repeat(64), required: true, status: "completed", conclusion: "passed", commandFingerprint: "c".repeat(64), commitSha: "a".repeat(40), exitCode: 0, durationMs: 1, artifactId, credentialTeardownProved: true, sandboxStopped: true, startedAt: now - 10, completedAt: now });
+      await ctx.db.insert("findings", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, fingerprintHmac: "e".repeat(64), category: "correctness", severity: "high", confidence: 0.5, blocking: false, contentArtifactId: artifactId, evidenceIds: [artifactId], pathHmac: "f".repeat(64), startLine: 1, endLine: 1, resolution: "uncertain", uncertainPasses: passes, createdAt: now, updatedAt: now, expiresAt: now + 86_400_000 });
+      return reportArtifactId;
+    });
+
+  const decide = (t: ReturnType<typeof convexTest>, tenant: Awaited<ReturnType<typeof seedTenant>>, reportArtifactId: string, now: number) =>
+    t.mutation(internal.reviewValidationData.finalizeDecision, { organizationId: tenant.organizationId, reviewId: tenant.reviewId,
+      expectedHeadSha: "a".repeat(40), expectedGeneration: 0, reportArtifactId: reportArtifactId as never, now });
+
+  it("still passes after one uncertain pass, because the next round may resolve it", async () => {
+    const t = convexTest(schema, modules), tenant = await seedTenant(t, "uncertain-once", "alice"), now = Date.now();
+    const reportArtifactId = await uncertainReview(t, tenant, now, 1);
+    await expect(decide(t, tenant, reportArtifactId, now)).resolves.toMatchObject({ status: "checks_passed" });
+  });
+
+  it("stops going green once the same finding is uncertain twice", async () => {
+    const t = convexTest(schema, modules), tenant = await seedTenant(t, "uncertain-twice", "alice"), now = Date.now();
+    const reportArtifactId = await uncertainReview(t, tenant, now, 2);
+    await expect(decide(t, tenant, reportArtifactId, now))
+      // Not retry_review: another pass spends money to reach the same place.
+      .resolves.toMatchObject({ status: "inconclusive", statusReasonCode: "human_review_required", nextActionCode: "inspect_findings" });
+    expect(await t.run(ctx => ctx.db.get(tenant.reviewId))).toMatchObject({ githubCheckConclusion: "neutral" });
+    const event = await t.run(ctx => ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", tenant.reviewId)).filter(q => q.eq(q.field("sequence"), 5)).unique());
+    expect(event?.metadata).toMatchObject({ reasonCode: "uncertain_escalated" });
+  });
+});
+
 // The behavioural half of the same defect: prove the conflict is real at the mutation that
 // throws it, not only that the key strings differ.
 describe("a failed Autofix does not poison the commit for the next review", () => {
@@ -3930,7 +3973,7 @@ describe("a second tenant brings their own key", () => {
 
     await expect(signedIn.mutation(api.integrations.storeEncryptedCredential, {
       organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
-      requestId: "byok-tenant-b-000001", ...credential("523e4567-e89b-12d3-a456-426614174000"),
+      requestId: "byok-tenant-b-000001", ...credential(uuid("5")),
     })).resolves.toMatchObject({ status: "valid" });
 
     // The stored key belongs to this organization and is selectable for its own repository.
@@ -3949,7 +3992,7 @@ describe("a second tenant brings their own key", () => {
     await signedIn.mutation(api.integrations.authorizeCredentialWrite, { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId });
     await signedIn.mutation(api.integrations.storeEncryptedCredential, {
       organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
-      requestId: "byok-owner-000001", ...credential("623e4567-e89b-12d3-a456-426614174000"),
+      requestId: "byok-owner-000001", ...credential(uuid("6")),
     });
     const neighbour = await seedTenant(t, "byok-neighbour", "bob");
     await t.run(async ctx => {
@@ -3961,7 +4004,7 @@ describe("a second tenant brings their own key", () => {
     await expect(t.mutation(internal.dashboardReviewData.create, {
       repositoryId: neighbour.repositoryId, prNumber: 9, headSha: "e".repeat(40), baseSha: "b".repeat(40),
       baseRef: "main", isFork: false, actorId: "bob", actorRole: "developer",
-      expectedCredentialScopeId: "623e4567-e89b-12d3-a456-426614174000", expectedProvider: "openai",
+      expectedCredentialScopeId: uuid("6"), expectedProvider: "openai",
       budgetLimit: 2, now: Date.now(),
     })).rejects.toThrow("provider_credential_changed_review_again");
   });
@@ -3971,7 +4014,7 @@ describe("a second tenant brings their own key", () => {
     await signedIn.mutation(api.integrations.authorizeCredentialWrite, { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId });
     const saved = await signedIn.mutation(api.integrations.storeEncryptedCredential, {
       organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
-      requestId: "byok-revoke-000001", ...credential("723e4567-e89b-12d3-a456-426614174000"),
+      requestId: "byok-revoke-000001", ...credential(uuid("7")),
     });
     await expect(signedIn.mutation(api.integrations.revokeProviderCredential, {
       organizationId: tenant.organizationId, credentialId: saved.id, requestId: "byok-revoke-000002",

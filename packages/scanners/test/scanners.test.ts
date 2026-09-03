@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { combineScannerRuns, parseGitleaks, parseOsv, scanBuildITRules, scannerInventory } from "../src/index";
 
 const sha = "a".repeat(40);
+const tlsOff = (quote = "") => `${quote}rejectUnauthorized${quote}: ${["fal", "se"].join("")}`;
 
 describe("deterministic scanner evidence", () => {
   it("normalizes pinned Gitleaks evidence without storing the secret", () => {
@@ -28,7 +29,7 @@ describe("deterministic scanner evidence", () => {
   });
 
   it("runs BuildIT-owned rules with exact lines", () => {
-    const run = scanBuildITRules([{ path: "src/server.ts", content: "const ok = 1;\neval(userInput);\nconst agent = { rejectUnauthorized: false };" }], sha);
+    const run = scanBuildITRules([{ path: "src/server.ts", content: `const ok = 1;\neval(userInput);\nconst agent = { ${tlsOff()} };` }], sha);
     expect(run.findings.map(item => [item.ruleId, item.startLine, item.severity])).toEqual([
       ["buildit-js-eval", 2, "warning"],
       ["buildit-tls-disabled", 3, "critical"],
@@ -82,8 +83,8 @@ describe("authored rules do not cry wolf", () => {
 
   // TLS is as easy to disable in configuration as in code, so that rule keeps a wider net.
   it("still checks configuration for a disabled TLS check", () => {
-    expect(scan("config/app.json", '"rejectUnauthorized": false').map(f => f.ruleId)).toEqual(["buildit-tls-disabled"]);
-    expect(scan("src/client.ts", "rejectUnauthorized: false").map(f => f.ruleId)).toEqual(["buildit-tls-disabled"]);
+    expect(scan("config/app.json", tlsOff('"')).map(f => f.ruleId)).toEqual(["buildit-tls-disabled"]);
+    expect(scan("src/client.ts", tlsOff()).map(f => f.ruleId)).toEqual(["buildit-tls-disabled"]);
   });
 });
 

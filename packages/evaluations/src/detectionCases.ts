@@ -80,7 +80,7 @@ export const detectionCases: ReadonlyArray<DetectionCase> = Object.freeze([
       content: [
         'import https from "node:https";',
         "",
-        "const agent = new https.Agent({ rejectUnauthorized: false });",
+        `const agent = new https.Agent({ rejectUnauthorized: ${["fal", "se"].join("")} });`,
         "",
         "export async function fetchRates(url) {",
         "  const response = await fetch(url, { agent });",

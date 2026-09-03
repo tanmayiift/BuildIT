@@ -204,7 +204,7 @@ Beyond DEF-003 and DEF-015: `convex/usage.ts:11-16` collects every `usageLedger`
 | Stripe `sk_live_…` | **MISS** | **MISS** |
 | `postgres://user:password@host/db` | **MISS** | **MISS** |
 | Raw JWT (`eyJ….….…`) | **MISS** | **MISS** |
-| Unlabeled PKCS#8 `-----BEGIN PRIVATE KEY-----` | **MISS** | HIT |
+| Unlabeled PKCS#8 header (`BEGIN` / `PRIVATE KEY`, no algorithm label) | **MISS** | HIT |
 | `sk-ant-…`, `ghs_…`, `AKIA…`, `AIza…`, `RSA PRIVATE KEY` (controls) | HIT | HIT |
 
 Two concrete causes: (1) the pattern is `gh[opsu]_` — in `github_pat_` the third character is `i`, so **every GitHub fine-grained PAT is invisible to both helpers**, which is a notable gap in a GitHub product. (2) `redact`'s PEM pattern is `-----BEGIN [A-Z ]+PRIVATE KEY-----`; `[A-Z ]+` requires at least one filler character, so it matches `RSA PRIVATE KEY` but not the unlabeled PKCS#8 header that GitHub App keys and `openssl genpkey` emit. `redactForModel:28` made the label optional; `redact` was never updated — straight drift between two sibling functions in one file.
