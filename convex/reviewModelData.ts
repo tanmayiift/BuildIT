@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
 import { monthStart, monthlyBudgetExceeded, noLimit } from "./lib/tenantLimits";
-import { findingCategory, findingResolution, modelStage, modelStageOutcome, provider, requirementStatus, severity, sourceType } from "./validators";
+import { findingCategory, findingResolution, injectionSurface, modelStage, modelStageOutcome, provider, requirementStatus, severity, sourceType } from "./validators";
 import type { Id } from "./_generated/dataModel";
 import { approvedProviderModels, conservativeProviderModelCost, conservativeProviderStageCost } from "@buildit/providers";
 import { toMicros, totalCostUsd } from "./lib/usageCost";
@@ -74,7 +74,7 @@ export const reserveOutput = internalMutation({
 export const completeAnalysis = internalMutation({
   args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: v.string(), size: v.number(), credentialId: v.id("providerCredentials"), inputTokens: v.number(), outputTokens: v.number(),
     requirements: v.array(v.object({ externalIdHash: v.string(), sourceType, sourceUrlHash: v.string(), fetchedVersion: v.string(), status: requirementStatus, confidence: v.number() })),
-    findings: v.array(v.object({ fingerprintHmac: v.string(), pathHmac: v.string(), category: findingCategory, severity, confidence: v.number(), blocking: v.boolean(), evidenceIds: v.array(v.id("artifacts")), startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()), requirementExternalIdHash: v.optional(v.string()), resolution: findingResolution, injectionSuspected: v.optional(v.boolean()) })), injectionUnscoped: v.optional(v.boolean()), now: v.number() },
+    findings: v.array(v.object({ fingerprintHmac: v.string(), pathHmac: v.string(), category: findingCategory, severity, confidence: v.number(), blocking: v.boolean(), evidenceIds: v.array(v.id("artifacts")), startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()), requirementExternalIdHash: v.optional(v.string()), resolution: findingResolution, injectionSuspected: v.optional(v.boolean()) })), injectionUnscoped: v.optional(v.boolean()), injectionSurfaces: v.optional(v.array(injectionSurface)), now: v.number() },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), artifact = await ctx.db.get(args.artifactId), credential = await ctx.db.get(args.credentialId);
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
@@ -113,6 +113,10 @@ export const completeAnalysis = internalMutation({
     // An injection signal with no changed file to attribute it to leaves nothing safe to scope,
     // so record it on the review. reviewValidationData refuses a pass/fail verdict on this.
     if (args.injectionUnscoped) await ctx.db.patch(review._id, { promptInjectionUnscopedAt: args.now });
+    // Only a boolean survived, so when this fired four times in production there was no way to
+    // learn which surface caused it. The surfaces are recorded; the matched text never is, because
+    // it is written by whoever opened the pull request.
+    if (args.injectionSurfaces?.length) await ctx.db.patch(review._id, { promptInjectionSurfaces: args.injectionSurfaces });
     // Each model call records its own token use and conservative cost when it
     // completes. Do not add a second aggregate record here.
     await ctx.db.patch(credential._id, { lastUsedAt: args.now });

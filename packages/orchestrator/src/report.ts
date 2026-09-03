@@ -39,7 +39,7 @@ function title(status: "changes_requested" | "inconclusive" | "checks_passed") {
   return "Review needs attention";
 }
 function nextStep(action: "start_new_review" | "retry_review" | "inspect_findings" | "human_merge" | "none") {
-  if (action === "human_merge") return "Untrusted text in this pull request tried to steer the review. Read the changes yourself before merging.";
+  if (action === "human_merge") return "BuildIT found instruction-like text it could not attribute to a specific file, so it cannot be sure whose instructions it followed. Read the changes yourself before merging.";
   if (action === "inspect_findings") return "Inspect the evidence and decide what to change.";
   if (action === "start_new_review") return "The pull request changed. Start a new review at the current commit.";
   if (action === "retry_review") return "Resolve the missing context or checks, then retry once.";
@@ -66,7 +66,7 @@ function findingLines(finding: ReportFinding, index: number) {
 // than a phrase each report restates in its own words.
 export const neverMergedSentence = "BuildIT did not merge this pull request.";
 
-export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
+export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
   const decision = computeReviewDecision({ isStale: input.isStale, environmentAvailable: input.environmentAvailable, coverageComplete: input.coverage === "complete", ...(input.injectionUnscoped ? { injectionUnscoped: true } : {}), checks: input.checks, findings: input.findings });
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
@@ -114,6 +114,9 @@ function checkExcerpt(check: ReviewCheckDecision) {
     `**Next step** — ${nextStep(decision.nextAction)}`,
     "",
     `> ${neverMergedSentence} A human owns the merge decision.`,
+    ...(input.injectionSurfaces?.includes("narrative") && !input.injectionSurfaces.includes("unknown")
+      ? ["", "> **Intent was not verified.** Instruction-like text appeared in this pull request's description or in a repository document, so BuildIT did not take either at face value when working out what the change is supposed to do. The checks and the cited findings below are unaffected: each one is tied to a file, a line and this exact commit."]
+      : []),
     ...(input.coverageGap === "requirements"
       ? ["", "> **Intent was not verified.** A requirement source linked from this pull request could not be read — a ticket in another repository, or a tracker with no connected credential. Everything above is about the code and its checks. Whether the change does what was asked is still an open question for a person."]
       : []),

@@ -37,6 +37,8 @@ import type * as lib_lifecycle from "../lib/lifecycle.js";
 import type * as lib_parentConsistency from "../lib/parentConsistency.js";
 import type * as lib_parentScope from "../lib/parentScope.js";
 import type * as lib_platformFailureReport from "../lib/platformFailureReport.js";
+import type * as lib_providerFallback from "../lib/providerFallback.js";
+import type * as lib_providerRetry from "../lib/providerRetry.js";
 import type * as lib_runtimeVersion from "../lib/runtimeVersion.js";
 import type * as lib_tenantLimits from "../lib/tenantLimits.js";
 import type * as lib_usageCost from "../lib/usageCost.js";
@@ -113,6 +115,8 @@ declare const fullApi: ApiFromModules<{
   "lib/parentConsistency": typeof lib_parentConsistency;
   "lib/parentScope": typeof lib_parentScope;
   "lib/platformFailureReport": typeof lib_platformFailureReport;
+  "lib/providerFallback": typeof lib_providerFallback;
+  "lib/providerRetry": typeof lib_providerRetry;
   "lib/runtimeVersion": typeof lib_runtimeVersion;
   "lib/tenantLimits": typeof lib_tenantLimits;
   "lib/usageCost": typeof lib_usageCost;

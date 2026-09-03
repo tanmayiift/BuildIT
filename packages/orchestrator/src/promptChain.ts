@@ -55,9 +55,26 @@ export function detectInjectionSignals(value:unknown,path="$",signals:InjectionS
  return signals;
 }
 
-export type InjectionScope={unscoped:boolean;paths:ReadonlySet<string>};
+// Where a signal was found, because that decides what it could plausibly have influenced.
+//
+// "code" is the changed files and their diffs: an attacker there can steer a finding about that
+// file. "narrative" is the pull request description and the repository documents requirements are
+// read from: an attacker there can steer what the change is *supposed* to do. "checks" is command
+// output: it can steer how a check result is read. "unknown" is anything BuildIT cannot place, and
+// stays review-global.
+//
+// Treating all three of the first as unknown is what made four production reviews inconclusive with
+// complete coverage, and made a repository containing a `system:` line in a README unreviewable.
+// Every finding is already gated by validateFindingCandidates against a verified path, line hash,
+// content hash and commit, so a steered model cannot fabricate one; scanner findings never pass
+// through a model at all. The residual risk is suppression - and refusing to answer does not
+// restore a suppressed finding either, it only withholds the ones that were found.
+export type InjectionSurface="code"|"narrative"|"checks"|"unknown";
+export type InjectionScope={unscoped:boolean;paths:ReadonlySet<string>;surfaces:ReadonlySet<InjectionSurface>};
 const filePathSignal=/^\$\.files\[(\d+)\]/;
 const changePathSignal=/^\$(?:\[\d+\])?\.pull\.changes\[(\d+)\]/;
+const narrativeSignal=/^\$(?:\[\d+\])?\.pull\.(?:title|body|requirementSources|requirements|requirementConflicts)\b/;
+const checkSignal=/^\$(?:\[\d+\])?\.validation\b/;
 
 // A signal found inside one changed file taints that file. A signal in the pull request body,
 // a ticket, or anywhere else is review-global: there is no path to attribute it to, so it can
@@ -72,6 +89,7 @@ function pathAt(list:unknown,index:number){
 export function injectionScope(untrusted:Record<string,unknown>,signals:InjectionSignal[]):InjectionScope{
  const pull=untrusted.pull&&typeof untrusted.pull==="object"?untrusted.pull as Record<string,unknown>:{};
  const paths=new Set<string>();
+ const surfaces=new Set<InjectionSurface>();
  let unscoped=false;
  for(const signal of signals){
    const inFile=filePathSignal.exec(signal.path);
@@ -80,9 +98,12 @@ export function injectionScope(untrusted:Record<string,unknown>,signals:Injectio
    // workflow with a `tool:` key - impossible to review at all.
    const inPatch=changePathSignal.exec(signal.path);
    const path=inFile?pathAt(untrusted.files,Number(inFile[1])):inPatch?pathAt(pull.changes,Number(inPatch[1])):undefined;
-   if(path)paths.add(path);else unscoped=true;
+   if(path){paths.add(path);surfaces.add("code");continue}
+   if(narrativeSignal.test(signal.path)){surfaces.add("narrative");continue}
+   if(checkSignal.test(signal.path)){surfaces.add("checks");continue}
+   surfaces.add("unknown");unscoped=true;
  }
- return {unscoped,paths};
+ return {unscoped,paths,surfaces};
 }
 
 function taintedPaths(records:ValidatedStage[],scope:InjectionScope){
@@ -102,8 +123,10 @@ export function applyInjectionPolicy(stage:PromptStage,value:Record<string,unkno
  const copy=structuredClone(value);
  if(stage==="patch")throw new Error("patch_blocked_prompt_injection");
  // Without a scope every signal is treated as review-global, which is the original behaviour.
- const effective=scope??{unscoped:true,paths:new Set<string>()};
+ const effective=scope??{unscoped:true,paths:new Set<string>(),surfaces:new Set<InjectionSurface>(["unknown"])};
  const tainted=effective.unscoped?null:taintedPaths(prior,effective);
+ const narrativeOnly=!effective.unscoped&&effective.surfaces.has("narrative")&&!effective.paths.size;
+ if(narrativeOnly&&stage!=="requirements"&&stage!=="report")return copy;
  const affected=(item:Record<string,unknown>)=>{
    if(!tainted)return true;
    if(typeof item.path==="string")return effective.paths.has(item.path);

@@ -111,7 +111,7 @@ export default defineSchema({
     configRevisionId: v.id("configRevisions"), configProvenance: value.configProvenance,
     provider: value.provider, model: v.string(), modelVersion: v.string(), promptVersion: v.string(),
     evalSetVersion: v.string(), coverageLevel: value.coverageLevel, coverageGap: v.optional(value.coverageGap), currentStage: value.reviewStage,
-    promptInjectionUnscopedAt: v.optional(v.number()),
+    promptInjectionUnscopedAt: v.optional(v.number()), promptInjectionSurfaces: v.optional(v.array(value.injectionSurface)),
     blockedReason: v.optional(v.string()), blockedSince: v.optional(v.number()),
     blockedExpiresAt: v.optional(v.number()), parentReviewId: v.optional(v.id("reviews")),
     attemptOfReviewId: v.optional(v.id("reviews")), cancelledBy: v.optional(v.string()),
