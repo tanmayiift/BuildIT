@@ -1,6 +1,8 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
-export const modelStages = ["requirements", "review_plan", "findings", "critic", "arbitration", "patch", "report"] as const;
+export const promptChainStages = ["requirements", "review_plan", "findings", "critic", "arbitration", "patch", "report"] as const;
+export const nonChainStages = ["ask"] as const;
+export const modelStages = [...promptChainStages, ...nonChainStages] as const;
 export type ModelStage = typeof modelStages[number];
 export type ModelInvocationGrant = {
   version: 1;

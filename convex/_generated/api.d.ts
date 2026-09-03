@@ -57,6 +57,8 @@ import type * as repositoryConnections from "../repositoryConnections.js";
 import type * as repositoryMemory from "../repositoryMemory.js";
 import type * as reviewAnalysisWorker from "../reviewAnalysisWorker.js";
 import type * as reviewArtifactData from "../reviewArtifactData.js";
+import type * as reviewAskData from "../reviewAskData.js";
+import type * as reviewAskWorker from "../reviewAskWorker.js";
 import type * as reviewAutofixData from "../reviewAutofixData.js";
 import type * as reviewAutofixWorker from "../reviewAutofixWorker.js";
 import type * as reviewContextWorker from "../reviewContextWorker.js";
@@ -137,6 +139,8 @@ declare const fullApi: ApiFromModules<{
   repositoryMemory: typeof repositoryMemory;
   reviewAnalysisWorker: typeof reviewAnalysisWorker;
   reviewArtifactData: typeof reviewArtifactData;
+  reviewAskData: typeof reviewAskData;
+  reviewAskWorker: typeof reviewAskWorker;
   reviewAutofixData: typeof reviewAutofixData;
   reviewAutofixWorker: typeof reviewAutofixWorker;
   reviewContextWorker: typeof reviewContextWorker;
