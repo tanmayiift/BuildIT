@@ -53,3 +53,20 @@ describe("one review comment per pull request", () => {
     expect(calls.some(call => call.path === "/issues/7/comments" && call.method === "POST")).toBe(false);
   });
 });
+
+// Each new per-pull-request comment kind was widening the marker format by hand, and the one that
+// was missed - `help-pr-22` - failed in production as comment_input_invalid after passing every
+// test. The format takes a named prefix now, so a new kind needs no change here.
+describe("the marker format", () => {
+  it("accepts any named per-pull-request kind", () => {
+    for (const marker of ["buildit-review:pr-22", "buildit-review:inline-pr-22", "buildit-review:help-pr-22", "buildit-review:ask-pr-9"]) {
+      expect(marker).toMatch(/^buildit-(?:review|autofix):(?:(?:[a-z]{1,16}-)?pr-[1-9]\d{0,9}|[A-Za-z0-9_|-]+:[0-9a-f]{40})$/);
+    }
+  });
+
+  it("still refuses something that is not a marker", () => {
+    for (const marker of ["buildit-review:pr-0", "review:pr-1", "buildit-review:pr-", "buildit-review:PR-1"]) {
+      expect(marker).not.toMatch(/^buildit-(?:review|autofix):(?:(?:[a-z]{1,16}-)?pr-[1-9]\d{0,9}|[A-Za-z0-9_|-]+:[0-9a-f]{40})$/);
+    }
+  });
+});
