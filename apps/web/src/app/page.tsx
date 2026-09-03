@@ -12,8 +12,9 @@ export default function Overview() {
     <section className="landing-hero" aria-labelledby="landing-title">
       <div className="landing-promise">
         <p className="eyebrow">For lean B2B software teams</p>
-        <h1 id="landing-title">Give your technical lead proof before a pull request is merged.</h1>
-        <p>BuildIT compares the proposed code with its linked requirements, repository context, tests, and security rules. It hands back cited findings, clear limits, and—only with your consent—an independently reviewable fix.</p>
+        <h1 id="landing-title">Autonomous code review that cites defects, fixes them, and opens a stacked PR.</h1>
+        <p className="landing-promise-line">It never merges. A human owns the merge decision.</p>
+        <p>BuildIT gives your technical lead proof before a pull request is merged. It compares the proposed code with its linked requirements, repository context, tests, and security rules, then hands back cited findings, clear limits, and—only with your consent—an independently reviewable fix.</p>
         <div className="button-row landing-actions"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
         <small className="landing-boundary">GitHub sign-in identifies you. Repository installation controls code access. A model key is requested only for AI analysis or Autofix.</small>
       </div>
