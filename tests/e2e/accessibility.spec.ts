@@ -8,7 +8,7 @@ const routes = [
   "/",
   "/sign-in",
   "/account",
-  "/data-handling", "/pricing", "/sandbox",
+  "/data-handling", "/pricing", "/features", "/sandbox",
   "/reviews?tour=1",
   "/reviews/22?tour=1", "/reviews/418?tour=1", "/reviews/91?tour=1", "/reviews/420?tour=1",
   "/reviews/418?tour=1&state=cancelled",

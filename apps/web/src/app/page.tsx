@@ -3,8 +3,8 @@ import { OverviewReadiness } from "./live-connections";
 const layers = [
   { mark: "01", title: "Choose one pull request", body: "You choose the repositories. Unselected ones stay invisible." },
   { mark: "02", title: "Compare intent with code", body: "It pins the exact commits and says what it could not read." },
-  { mark: "03", title: "Run checks and challenge findings", body: "Tests and scanners supply the facts. A finding must cite them to block." },
-  { mark: "04", title: "Hand back an inspectable fix", body: "With your consent, a stacked PR you review and merge yourself." },
+  { mark: "03", title: "Run checks and challenge findings", body: "Tests and scanners supply the facts. A finding must cite them to block, and you can ask it why." },
+  { mark: "04", title: "Hand back an inspectable fix", body: "Findings land on the lines they cite, and with your consent a stacked PR you review and merge yourself." },
 ] as const;
 
 export default function Overview() {
