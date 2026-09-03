@@ -53,6 +53,9 @@ export default defineSchema({
     organizationId: v.id("organizations"), installationId: v.id("githubInstallations"),
     githubRepositoryId: v.number(), owner: v.string(), name: v.string(), defaultBranch: v.string(), visibility: v.optional(value.repositoryVisibility),
     enabled: v.boolean(), pausedAt: v.optional(v.number()), autofixMode: value.autofixMode,
+    // How much of what survived the evidence gate lands on the diff. The summary comment always
+    // carries everything; this only decides what is loud.
+    reviewProfile: v.optional(value.reviewProfile),
     forkPolicy: value.forkPolicy, configRevisionId: v.optional(v.id("configRevisions")),
     indexState: value.indexState, concurrencyLimit: v.number(), ...timestampFields,
   }).index("by_github_id", ["githubRepositoryId"])

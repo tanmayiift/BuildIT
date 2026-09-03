@@ -80,6 +80,7 @@ export const configProvenance = v.union(v.literal("protected_ref_merge"), v.lite
 export const refProtectionState = v.union(v.literal("verified"), v.literal("unverified"));
 export const coverageLevel = v.union(v.literal("full"), v.literal("partial"), v.literal("limited"));
 export const injectionSurface = v.union(v.literal("code"), v.literal("narrative"), v.literal("checks"), v.literal("unknown"));
+export const reviewProfile = v.union(v.literal("quiet"), v.literal("balanced"), v.literal("thorough"));
 export const coverageGap = v.union(v.literal("changed_files"), v.literal("diff_truncated"), v.literal("requirements"));
 export const reviewStage = v.union(
   v.literal("queue"), v.literal("context"), v.literal("analysis"), v.literal("validation"),

@@ -5,12 +5,12 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { GitHubAppClient, GitHubRepositoryWriter, sideEffectKey } from "@buildit/github";
-import { neverMergedSentence } from "@buildit/orchestrator";
+import { neverMergedSentence, selectInlineFindings } from "@buildit/orchestrator";
 import { issueArtifactGrant } from "@buildit/security";
 import { platformFailureReport, type PlatformFailureReason } from "./lib/platformFailureReport";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
-type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; status: string; reason: string; report: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number }; analysis?: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number };};
+type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; status: string; reason: string; report: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number }; reviewProfile?: "quiet" | "balanced" | "thorough"; analysis?: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number };};
 
 export function assertReportPublicationContract(body: string, headSha: string) {
   if (!body.includes(headSha) || !body.includes(neverMergedSentence)) {
@@ -42,9 +42,8 @@ async function publishInlineFindings(scope: Scope, token: string) {
     const buffer = Buffer.from(await response.arrayBuffer());
     if (buffer.byteLength !== scope.analysis.size || createHash("sha256").update(buffer).digest("hex") !== scope.analysis.checksum) return;
     const value = JSON.parse(buffer.toString("utf8")) as { arbitrated?: Array<Record<string, unknown>> };
-    const findings = (value.arbitrated ?? [])
-      .filter(item => item.resolution !== "rejected" && typeof item.path === "string" && typeof item.id === "string")
-      .filter(item => item.blocking === true || item.severity === "critical" || item.severity === "high")
+    const findings = selectInlineFindings((value.arbitrated ?? []).filter(item => typeof item.path === "string" && typeof item.id === "string") as Array<Record<string, unknown> & { severity: string; blocking?: boolean; resolution?: string }>, scope.reviewProfile)
+
       .map(item => ({ id: String(item.id), path: String(item.path), startLine: Number(item.startLine), endLine: Number(item.endLine),
         severity: String(item.severity ?? "warning"),
         title: String(item.title ?? "Finding"),

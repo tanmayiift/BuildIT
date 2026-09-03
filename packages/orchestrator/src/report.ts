@@ -175,3 +175,25 @@ export function summariseChange(files: ReadonlyArray<{ path: string; additions: 
     .map(([count, label], index) => index === 0 ? `${count} file${count === 1 ? "" : "s"} ${label}` : `${count} ${label}`);
   return parts.length ? `${head} ${parts.join(", ")}.` : head;
 }
+
+// Noise is the standard complaint about this category, and inline comments are how a reviewer
+// becomes noisy: one per finding, on every file, every push. The evidence gate already keeps the
+// volume low, so this only lets a team choose how much of what survived that gate lands on the
+// diff. The summary comment always carries everything; the profile decides what is loud.
+export type ReviewProfile = "quiet" | "balanced" | "thorough";
+
+export function selectInlineFindings<T extends { severity: string; blocking?: boolean; resolution?: string }>(
+  findings: ReadonlyArray<T>, profile: ReviewProfile | undefined,
+): T[] {
+  const chosen = profile ?? "balanced";
+  return findings.filter(finding => {
+    // A rejected finding is one the critic disproved. No profile may put it on a line.
+    if (finding.resolution === "rejected") return false;
+    // An uncertain finding is one BuildIT could not settle; only the profile that asked for
+    // everything gets to hear about it, because a line comment reads as a statement.
+    if (finding.resolution === "uncertain") return chosen === "thorough";
+    if (chosen === "thorough") return true;
+    if (chosen === "quiet") return finding.blocking === true;
+    return finding.blocking === true || finding.severity === "critical" || finding.severity === "high";
+  });
+}

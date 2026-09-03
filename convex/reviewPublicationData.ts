@@ -30,7 +30,7 @@ export const publicationScope = internalQuery({
     const event = await ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", review._id).eq("sequence", 5)).unique(), report = event?.publicMessageArtifactId ? await ctx.db.get(event.publicMessageArtifactId) : null;
     if (!event || !report || report.organizationId !== args.organizationId || report.repositoryId !== repository._id || report.reviewId !== review._id || report.type !== "review_message" || report.redactionStatus !== "redacted" || report.deletedAt) throw new ConvexError("report_artifact_mismatch");
     return { organizationId: review.organizationId, repositoryId: repository._id, reviewId: review._id, installationId: installation.installationId, githubRepositoryId: repository.githubRepositoryId,
-      prNumber: review.prNumber, headSha: review.headSha, conclusion: review.githubCheckConclusion, status: review.status, reason: review.statusReasonCode ?? "platform_error",
+      prNumber: review.prNumber, headSha: review.headSha, reviewProfile: repository.reviewProfile, conclusion: review.githubCheckConclusion, status: review.status, reason: review.statusReasonCode ?? "platform_error",
       report: { id: report._id, storageKey: report.storageKey, checksum: report.checksum, size: report.size },
       ...(analysis ? { analysis: { id: analysis._id, storageKey: analysis.storageKey, checksum: analysis.checksum, size: analysis.size } } : {}) };
   },
