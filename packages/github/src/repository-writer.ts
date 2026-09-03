@@ -89,10 +89,10 @@ export class GitHubRepositoryWriter {
     if (existing && typeof existing.number === "number" && typeof existing.html_url === "string") return { number: existing.number, url: existing.html_url, operation: "reused" as const };
     return { ...await this.createPullRequest(input), operation: "created" as const };
   }
-  async createCheckRun(input: { name: string; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; title: string; summary: string; detailsUrl?: string }) {
+  async createCheckRun(input: { name: string; headSha: string; conclusion?: "success" | "failure" | "neutral" | "action_required"; title: string; summary: string; detailsUrl?: string }) {
     if (!/^[0-9a-f]{40}$/i.test(input.headSha) || !input.name.trim() || !input.title.trim() || !input.summary.trim() || Buffer.byteLength(input.summary) > 60_000) throw new Error("check_run_input_invalid");
     const detailsUrl = safeDetailsUrl(input.detailsUrl);
-    const value = await this.request("/check-runs", { method: "POST", body: JSON.stringify({ name: input.name, head_sha: input.headSha, status: "completed", conclusion: input.conclusion, ...(detailsUrl ? { details_url: detailsUrl } : {}), output: { title: input.title, summary: input.summary } }) });
+    const value = await this.request("/check-runs", { method: "POST", body: JSON.stringify({ name: input.name, head_sha: input.headSha, ...(input.conclusion ? { status: "completed", conclusion: input.conclusion } : { status: "in_progress" }), ...(detailsUrl ? { details_url: detailsUrl } : {}), output: { title: input.title, summary: input.summary } }) });
     if (typeof value.id !== "number" || typeof value.html_url !== "string") throw new Error("github_check_run_malformed");
     return { id: value.id, url: value.html_url };
   }

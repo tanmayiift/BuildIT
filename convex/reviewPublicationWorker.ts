@@ -179,7 +179,7 @@ export const acknowledge = internalAction({
     try {
       const token = await github.tokenFor(tokenScope);
       const writer = new GitHubRepositoryWriter({ repositoryId: args.githubRepositoryId, installationToken: token });
-      await writer.upsertCheckRun({
+      await writer.createCheckRun({
         name: "BuildIT / review", headSha: args.headSha,
         ...(args.conclusion ? { conclusion: args.conclusion } : {}),
         title: args.title, summary: args.summary,
