@@ -1,4 +1,5 @@
 import { LiveReviewDetail } from "./live-review-detail";
+import { sampleReviewFor, type SampleReview } from "../../sample-data";
 import { nextActionPresentation, stagePresentation, statusPresentation, technicalLabel } from "./review-presentation";
 
 type TourState = "cancelled" | "running" | "changes" | "passed" | "delivered" | "budget" | "empty" | "populated";
@@ -23,18 +24,39 @@ export default async function Review({ params, searchParams }: { params: Promise
   const { id } = await params;
   const { tour, state } = await searchParams;
   if (tour !== "1") return <LiveReviewDetail id={id} />;
-  const chosen = stateFrom(state), current = sample[chosen], verdict = statusPresentation(current.status, false), next = nextActionPresentation(current.action, false), hasReviewEvidence = current.evidence !== "empty";
+  const row = sampleReviewFor(id);
+  const chosen = state ? stateFrom(state) : row?.state ?? "changes";
+  const current = sample[chosen], verdict = statusPresentation(current.status, false), next = nextActionPresentation(current.action, false), hasReviewEvidence = current.evidence !== "empty";
+  const repo = row?.repo ?? "nexus/api", commit = row?.commit ?? "a3f91c2", baseCommit = row?.baseCommit ?? "7b2e004";
   return <div className="content review-detail review-tour">
-    <div className="crumbs"><a href="/reviews?tour=1">Review queue</a><span>›</span><strong>nexus/api #{id}</strong><span className="sample-badge">Example</span></div>
+    <div className="crumbs"><a href="/reviews?tour=1">Review queue</a><span>›</span><strong>{repo} #{id}</strong><span className="sample-badge">Example</span></div>
     <section className="verdict-card"><div className="verdict-message"><span className={`verdict-symbol ${verdict.tone}`} aria-hidden="true">{verdict.symbol}</span><div><span className={`status ${verdict.tone}`}>{verdict.label}</span><h1>{verdict.title}</h1><p>{current.detail}</p></div></div><div className="verdict-actions"><a className="button secondary" href="/reviews?tour=1">{hasReviewEvidence ? "Back to queue" : "Open review queue"}</a></div></section>
-    <section className={`tour-scope${hasReviewEvidence ? "" : " minimal"}`} aria-label="Pinned review context"><span><small>Repository</small><strong>nexus/api</strong></span><span><small>Pull request</small><strong>#{id}</strong></span><span><small>Exact commit</small><code>a3f91c2</code></span>{hasReviewEvidence ? <span><small>Review coverage</small><strong>Full</strong></span> : null}</section>
+    <section className={`tour-scope${hasReviewEvidence ? "" : " minimal"}`} aria-label="Pinned review context"><span><small>Repository</small><strong>{repo}</strong></span><span><small>Pull request</small><strong>#{id}</strong></span><span><small>Exact commit</small><code>{commit}</code></span>{hasReviewEvidence ? <span><small>Review coverage</small><strong>Full</strong></span> : null}</section>
     {hasReviewEvidence ? <><div className="next-action"><span className="next-mark" aria-hidden="true">→</span><div><small>What to do next</small><strong>{next.title}</strong><p>{next.detail}</p></div></div><Journey stage={current.stage} /></> : null}
     {current.evidence === "empty" ? <section className="evidence-empty"><span aria-hidden="true">◇</span><div><h2>No review evidence</h2><p>BuildIT does not fill the page with guesses. It has not read code, run checks, or made a decision for this pull request.</p></div></section> : null}
     {current.evidence === "progress" ? <Evidence title="What BuildIT is doing" eyebrow="In progress" detail="2 sources read"><Row lead="Pull request and linked requirements" outcome="Gathered" tone="running" note="Exact commit and ticket context are being checked." /><Row lead="Code and test plan" outcome="Next" tone="warning" note="No finding is shown until evidence exists." /></Evidence> : null}
     {current.evidence === "findings" ? <><Evidence title="What this change must do" eyebrow="Intent" detail="4 requirements"><Row lead="Reject transfers above daily limit" outcome="Covered" tone="success" note="Pinned source evidence recorded." /><Row lead="Log every rejected transfer" outcome="Not covered" tone="danger" note="No matching code change found." /></Evidence><Evidence title="Checks run" eyebrow="Verification" detail="1 required"><Row lead="pnpm test" outcome="Failed" tone="danger" note="1m 42s · exact stdout retained." /><Row lead="pnpm lint" outcome="Not run" tone="warning" note="Optional check is not configured." /></Evidence></> : null}
     {current.evidence === "checks" ? <Evidence title="Checks run" eyebrow="Verification" detail="2 required"><Row lead="pnpm test" outcome="Passed" tone="success" note="Exact stdout retained for this commit." /><Row lead="pnpm lint" outcome="Passed" tone="success" note="Required policy completed." /></Evidence> : null}
-    {hasReviewEvidence ? <details className="technical-details"><summary>Technical details</summary><dl><div><dt>Base commit</dt><dd><code>7b2e004</code></dd></div><div><dt>Current step</dt><dd>{stagePresentation(current.stage)}</dd></div><div><dt>Model</dt><dd>Configured by workspace policy</dd></div><div><dt>Internal state</dt><dd>{technicalLabel(current.status)}</dd></div></dl></details> : null}
+    {row?.finding ? <CompleteFinding finding={row.finding} commit={commit} /> : null}
+    {hasReviewEvidence ? <details className="technical-details"><summary>Technical details</summary><dl><div><dt>Base commit</dt><dd><code>{baseCommit}</code></dd></div><div><dt>Current step</dt><dd>{stagePresentation(current.stage)}</dd></div><div><dt>Model</dt><dd>Configured by workspace policy</dd></div><div><dt>Internal state</dt><dd>{technicalLabel(current.status)}</dd></div></dl></details> : null}
   </div>;
+}
+
+// The headline promises every finding names the file, the line and the commit. The tour said
+// "No matching code change found" and stopped there, so an engineer could not judge that claim at
+// all. This shows the six things that make a finding checkable: where it is, the code it read, why
+// it matters, what the test actually printed, the change it proposes, and the pull request that
+// change would arrive in.
+function CompleteFinding({ finding, commit }: { finding: NonNullable<SampleReview["finding"]>; commit: string }) {
+  return <section className="complete-finding" aria-labelledby="complete-finding-title">
+    <div className="section-heading compact"><div><p className="eyebrow">Cited evidence</p><h2 id="complete-finding-title">{finding.title}</h2></div><span className="status danger">{finding.severity}</span></div>
+    <p className="finding-where"><code>{finding.path}:{finding.lines}</code> at commit <code>{commit}</code></p>
+    <p className="finding-why">{finding.why}</p>
+    <div className="finding-block"><h3>The code it read</h3><pre><code>{finding.excerpt}</code></pre></div>
+    <div className="finding-block"><h3>What the test printed</h3><pre><code>{finding.testOutput}</code></pre></div>
+    <div className="finding-block"><h3>The change it proposes</h3><pre className="finding-diff"><code>{finding.fix}</code></pre></div>
+    <p className="finding-delivery">Delivered as a stacked pull request a person reviews and merges — BuildIT never merges: <a className="text-link" href={finding.stackedPr.href} rel="noreferrer noopener" target="_blank">{finding.stackedPr.label}</a></p>
+  </section>;
 }
 
 function Journey({ stage }: { stage: string }) {

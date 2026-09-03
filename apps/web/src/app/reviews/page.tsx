@@ -98,9 +98,7 @@ function LiveGroup({ copy, groups, connection }: { copy: { title: string; descri
 }
 
 function SampleQueue() {
-  const needsDecision = sampleReviews.filter(review => review.status !== "Running");
-  const running = sampleReviews.filter(review => review.status === "Running");
-  return <div className="content"><Heading /><SampleGroup title="Ready for you" reviews={needsDecision} /><SampleGroup title="In progress" reviews={running} /><section className="empty-band"><div><strong>This is an interactive product tour</strong><p>Connect GitHub to replace these clearly marked examples with tenant-scoped review records.</p></div><a href="/data-handling">Read retention policy →</a></section></div>;
+  return <div className="content"><Heading /><SampleGroup title="Ready for you" reviews={sampleReviews.filter(review => review.group === "ready")} /><SampleGroup title="In progress" reviews={sampleReviews.filter(review => review.group === "progress")} /><section className="empty-band"><div><strong>This is an interactive product tour</strong><p>Connect GitHub to replace these clearly marked examples with tenant-scoped review records.</p></div><a href="/data-handling">Read retention policy →</a></section></div>;
 }
 
 function SampleGroup({ title, reviews }: { title: string; reviews: typeof sampleReviews }) {

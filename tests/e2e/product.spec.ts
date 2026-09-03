@@ -10,7 +10,7 @@ test("overview leads through the review queue to exact-commit evidence", async (
     page.getByRole("row", { name: /nexus\/api #418/i }).click(),
   ]);
   const pinnedContext = page.getByRole("region", { name: "Pinned review context" });
-  await expect(pinnedContext.getByText("a3f91c2", { exact: true })).toBeVisible();
+  await expect(pinnedContext.getByText("d9f2e1a", { exact: true })).toBeVisible();
   await expect(pinnedContext.getByText("Full", { exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toHaveCSS("overflow-x", "scroll");
 });
@@ -162,7 +162,8 @@ test("public data handling states the current access boundary", async ({ page })
   await expect(page.getByText(/encrypted artifacts in AWS Ireland/i)).toBeVisible();
   await expect(page.getByText(/isolated checks run in a Vercel Sandbox in Paris, France/i)).toBeVisible();
   await expect(page.getByText(/BuildIT does not promise that AI makes code bug-free/i)).toBeVisible();
-  await expect(page.getByText(/still being production-validated/i)).toBeVisible();
+  await expect(page.getByText(/remains a release blocker/i)).toBeVisible();
+  await expect(page.getByText(/Key rotation proof is still outstanding/i)).toBeVisible();
   await expect(page.getByText(/review screens remain sample data/i)).toHaveCount(0);
 });
 
