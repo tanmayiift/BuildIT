@@ -7,15 +7,7 @@ import type { Id } from "./_generated/dataModel";
 import type { DataModel } from "./_generated/dataModel";
 import type { GenericActionCtx } from "convex/server";
 import { chunkRepositorySnapshot, GitHubAppClient, GitHubRepositoryWriter, isForcedOmission, RepositoryContentClient, sideEffectKey } from "@buildit/github";
-import {
-  assertAutofixBounds,
-  candidateWorsened,
-  contentHash,
-  runModelPatchChain,
-  stageSchemas,
-  validatePatchProposals,
-  type PatchProposal,
-} from "@buildit/orchestrator";
+import { assertAutofixBounds, candidateWorsened, contentHash, neverMergedSentence, type PatchProposal, runModelPatchChain, stageSchemas, validatePatchProposals } from "@buildit/orchestrator";
 import { BROKER_REQUEST_TIMEOUT_MS, defaultExecutionPlans } from "@buildit/runner";
 import {
   issueArtifactGrant,
@@ -902,7 +894,7 @@ export const deliverPassed = internalAction({
             .map((item) => `- ${item.planId}: **${item.conclusion}**`),
           ...autofixScannerLines(validation.output.scanners.head),
           ``,
-          `BuildIT did not merge either pull request. A human must inspect and merge the stacked PR.`,
+          `${neverMergedSentence} It did not merge the stacked one either — a person inspects and merges that.`,
         ].join("\n"),
         reportBody = Buffer.from(reportText);
       if (reportBody.byteLength > 60_000)
@@ -1057,7 +1049,7 @@ export const publishFailure = internalAction({
           : ["- Required scanner or evidence validation remained incomplete."]),
         "",
         "No stacked PR was opened because final validation did not pass.",
-        "BuildIT did not merge or modify the original PR branch. A human owns the next decision.",
+        `${neverMergedSentence} It did not modify the original branch, and a human owns the next decision.`,
       ].join("\n"),
       report = await storeArtifact(
         ctx,

@@ -38,7 +38,7 @@ export function conservativeProviderStageCost(provider: ProviderName, model: str
 type Http = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export class ProviderError extends Error {
-  constructor(public readonly code: "invalid_key" | "rate_limited" | "provider_unavailable" | "refused" | "truncated" | "malformed_response", public readonly status?: number, public readonly retryAfterMs?: number) { super(code); this.name = "ProviderError"; }
+  constructor(public readonly code: "invalid_key" | "model_unavailable" | "rate_limited" | "provider_unavailable" | "refused" | "truncated" | "malformed_response", public readonly status?: number, public readonly retryAfterMs?: number) { super(code); this.name = "ProviderError"; }
 }
 
 const generateTimeoutMs = 90_000;
@@ -55,6 +55,7 @@ async function checked(response: Response) {
   if (response.status === 401 || response.status === 403) throw new ProviderError("invalid_key", response.status);
   if (response.status === 429) throw new ProviderError("rate_limited", 429, retryAfter(response));
   if (response.status >= 500) throw new ProviderError("provider_unavailable", response.status, retryAfter(response));
+  if (response.status === 404) throw new ProviderError("model_unavailable", 404);
   if (!response.ok) throw new ProviderError("malformed_response", response.status);
   try { return await response.json() as Record<string, unknown>; } catch { throw new ProviderError("malformed_response", response.status); }
 }

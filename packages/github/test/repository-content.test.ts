@@ -49,3 +49,60 @@ describe("exact repository content fetch", () => {
     expect(result.omitted).toEqual([{ path: "unknown.dat", reason: "binary" }]);
   });
 });
+
+// buildit-review-komi#1 has 1,440 blobs. BuildIT selected 1,373 and fetched them for head and base
+// - 2,746 blob requests - and GitHub's secondary rate limit refused. The review needed one changed
+// file and the repository's documents. Everything else was fetched, uploaded as an artifact,
+// downloaded again, and dropped by an 80KB model budget that sorts changed files first.
+describe("large repositories fetch the code under review", () => {
+  const big = (count: number) => Array.from({ length: count }, (_, index) => ({ path: `src/mod${index}/file.ts`, type: "blob", sha: blobSha, size: 10 }));
+
+  function harness(entries: unknown[]) {
+    const blobs: string[] = [];
+    const http = vi.fn(async (url: string | URL) => {
+      const value = String(url);
+      if (value.includes("/commits/")) return commit();
+      if (value.includes("/trees/")) return tree(entries);
+      blobs.push(value);
+      return blob("1234567890");
+    });
+    return { http, blobs };
+  }
+
+  it("fetches only the changed files and the documents when the tree is large", async () => {
+    const entries = [...big(2_000), { path: "README.md", type: "blob", sha: blobSha, size: 10 }, { path: "src/rates.ts", type: "blob", sha: blobSha, size: 10 }];
+    const { http, blobs } = harness(entries);
+    const keep = (path: string) => path === "src/rates.ts" || path === "README.md";
+    const result = await new RepositoryContentClient(http).fetchExactCommit({
+      installationToken: "token", repositoryId: 7, commitSha: sha,
+      select: { keep, relevantOnlyAbove: 400 },
+    });
+    expect(result.files.map(file => file.path).sort()).toEqual(["README.md", "src/rates.ts"]);
+    // The point of the change: the request count, not the file count.
+    expect(blobs).toHaveLength(2);
+    // Skipping a file nobody asked for is a recorded note, not an evidence gap.
+    expect(result.coverage).toBe("full");
+    expect(new Set(result.omitted.map(item => item.reason))).toEqual(new Set(["not_selected"]));
+  });
+
+  it("still reads the whole repository when it is small enough to be useful", async () => {
+    const entries = [{ path: "src/a.ts", type: "blob", sha: blobSha, size: 10 }, { path: "src/b.ts", type: "blob", sha: blobSha, size: 10 }];
+    const { http, blobs } = harness(entries);
+    const result = await new RepositoryContentClient(http).fetchExactCommit({
+      installationToken: "token", repositoryId: 7, commitSha: sha,
+      select: { keep: (path: string) => path === "src/a.ts", relevantOnlyAbove: 400 },
+    });
+    expect(result.files.map(file => file.path).sort()).toEqual(["src/a.ts", "src/b.ts"]);
+    expect(blobs).toHaveLength(2);
+    expect(result.coverage).toBe("full");
+  });
+
+  it("keeps the old ceiling for a change too large to fetch even selectively", async () => {
+    const entries = big(3_000);
+    const { http } = harness(entries);
+    await expect(new RepositoryContentClient(http).fetchExactCommit({
+      installationToken: "token", repositoryId: 7, commitSha: sha,
+      select: { keep: () => true, relevantOnlyAbove: 400 },
+    })).rejects.toThrow(/repository_too_large:files=3000/);
+  });
+});

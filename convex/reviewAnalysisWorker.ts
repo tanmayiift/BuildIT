@@ -1,4 +1,5 @@
 "use node";
+import { isRetryableProviderReason, maxProviderAttempts, providerReasonIsModelUnavailable, retryDelayMs } from "./lib/providerRetry";
 import { createHash } from "node:crypto";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
@@ -206,8 +207,9 @@ export const analyze = internalAction({
     const memory = await ctx.runQuery(internal.repositoryMemory.forRepository, { repositoryId: scope.repositoryId });
     const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }), memory }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
     let injectionUnscoped = false;
+    const injectionSurfaces = new Set<"code" | "narrative" | "checks" | "unknown">();
     const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
-      onInjection: report => { injectionUnscoped ||= report.scope.unscoped; },
+      onInjection: report => { injectionUnscoped ||= report.scope.unscoped; for (const surface of report.scope.surfaces) injectionSurfaces.add(surface); },
       invoke: async (stageRequest: ModelStageRequest): Promise<ProviderResult> => {
         const stage = stageRequest.stage as PromptStage;
         const model = stage === "findings" ? findingsModel : stage === "critic" ? criticRoute.model : scope.model;
@@ -218,9 +220,20 @@ export const analyze = internalAction({
         const grant = issueModelInvocationGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), credentialScopeId: scope.credential.id,
           provider: scope.provider, model, stage, requestHash: createHash("sha256").update(body).digest("hex") }, modelSecret);
         await ctx.runQuery(internal.durableReview.assertActive, args);
-        const response = await fetch(`${brokerUrl}/api/model`, { method: "POST", headers: { authorization: `Bearer ${grant}`, "content-type": "application/json" }, body });
-        const output = await response.json() as { result?: ProviderResult; error?: string; providerStatus?: number };
-        if (!response.ok || !output.result){const reason=typeof output.providerStatus==="number"?`${output.error??"provider_error"}:http_${output.providerStatus}`:output.error??`http_${response.status}`;await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage,provider:scope.provider,model,promptVersion:`${stage}-v1`,schemaVersion:`${stage}-schema-v1`,finishReason:reason.slice(0,100),requestHash:createHash("sha256").update(stageRequest.system).update("\0").update(stageRequest.input).update("\0").update(JSON.stringify(stageRequest.schema)).digest("hex"),attempt:stageRequest.repairOf===undefined?1:2,outcome:"provider_error",inputTokens:0,outputTokens:0,now:Date.now()});throw new Error(output.error ?? `model_stage_${response.status}`)}
+        type ModelReply = { result?: ProviderResult; error?: string; providerStatus?: number; retryAfterSeconds?: number };
+        let response!: Response, output!: ModelReply, reason = "";
+        for (let attempt = 1; attempt <= maxProviderAttempts; attempt += 1) {
+          await ctx.runQuery(internal.durableReview.assertActive, args);
+          response = await fetch(`${brokerUrl}/api/model`, { method: "POST", headers: { authorization: `Bearer ${grant}`, "content-type": "application/json" }, body });
+          const raw = await response.text();
+          try { output = JSON.parse(raw) as ModelReply; } catch { output = { error: `non_json_response:http_${response.status}` }; }
+          if (response.ok && output.result) return output.result;
+          reason = typeof output.providerStatus === "number" ? `${output.error ?? "provider_error"}:http_${output.providerStatus}` : output.error ?? `http_${response.status}`;
+          if (attempt === maxProviderAttempts || !isRetryableProviderReason(reason)) break;
+          await ctx.runMutation(internal.reviewModelData.recordProviderRetry, { ...args, now: Date.now() });
+          await new Promise(resolve => setTimeout(resolve, retryDelayMs(attempt, output.retryAfterSeconds)));
+        }
+        if (!response.ok || !output.result){await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage,provider:scope.provider,model,promptVersion:`${stage}-v1`,schemaVersion:`${stage}-schema-v1`,finishReason:reason.slice(0,100),requestHash:createHash("sha256").update(stageRequest.system).update("\0").update(stageRequest.input).update("\0").update(JSON.stringify(stageRequest.schema)).digest("hex"),attempt:stageRequest.repairOf===undefined?1:2,outcome:"provider_error",inputTokens:0,outputTokens:0,now:Date.now()});throw new Error(providerReasonIsModelUnavailable(reason) ? `model_unavailable:${reason}`.slice(0, 120) : output.error ?? `model_stage_${response.status}`)}
         return output.result;
       }, onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); } }));
     const headEvidence = new Map<string, { record: EvidenceRecord; artifactId: Id<"artifacts"> }>();
@@ -262,7 +275,7 @@ export const analyze = internalAction({
       findings: arbitrated.filter(item => item.resolution !== "rejected").map(item => ({ fingerprintHmac: fingerprint(`${item.id}\0${item.path}\0${item.startLine}\0${item.endLine}`, fingerprintKey), pathHmac: fingerprint(item.path, fingerprintKey),
         category: item.category as "correctness" | "security" | "requirement" | "architecture" | "quality" | "dependency" | "test", severity: item.severity, confidence: item.confidence, blocking: item.blocking,
         evidenceIds: item.evidenceIds.map(id => headEvidence.get(id)!.artifactId), startLine: item.startLine, endLine: item.endLine, ...(item.origin === "scanner" ? { ruleId: item.id.split("-").slice(2).join("-") } : {}),
-        ...(item.criterionId ? { requirementExternalIdHash: fingerprint(item.criterionId, fingerprintKey) } : {}), resolution: item.resolution === "accepted" ? "open" as const : "uncertain" as const, ...(item.reason === "prompt_injection_detected" ? { injectionSuspected: true } : {}) })), ...(injectionUnscoped ? { injectionUnscoped: true } : {}), now: Date.now() });
+        ...(item.criterionId ? { requirementExternalIdHash: fingerprint(item.criterionId, fingerprintKey) } : {}), resolution: item.resolution === "accepted" ? "open" as const : "uncertain" as const, ...(item.reason === "prompt_injection_detected" ? { injectionSuspected: true } : {}) })), ...(injectionUnscoped ? { injectionUnscoped: true } : {}), ...(injectionSurfaces.size ? { injectionSurfaces: [...injectionSurfaces] } : {}), now: Date.now() });
     return { artifactId: String(reserved.artifactId), stages: records.length, inputTokens, outputTokens };
   },
 });

@@ -2,14 +2,26 @@ import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
 import { monthStart, monthlyBudgetExceeded, noLimit } from "./lib/tenantLimits";
-import { findingCategory, findingResolution, modelStage, modelStageOutcome, provider, requirementStatus, severity, sourceType } from "./validators";
+import { findingCategory, findingResolution, injectionSurface, modelStage, modelStageOutcome, provider, requirementStatus, severity, sourceType } from "./validators";
 import type { Id } from "./_generated/dataModel";
 import { approvedProviderModels, conservativeProviderModelCost, conservativeProviderStageCost } from "@buildit/providers";
 import { toMicros, totalCostUsd } from "./lib/usageCost";
 
+// A review may retry a provider a few times per stage, not without bound across the whole run.
+const maxProviderRetriesPerReview = 12;
+
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
 
 export const recordStageRun=internalMutation({args:{...executionArgs,roundNumber:v.optional(v.number()),stage:modelStage,provider,model:v.string(),promptVersion:v.string(),schemaVersion:v.string(),finishReason:v.string(),requestHash:v.string(),requestId:v.optional(v.string()),attempt:v.number(),outcome:modelStageOutcome,inputTokens:v.number(),outputTokens:v.number(),now:v.number()},handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||!/^\w[\w.:/-]{0,199}$/.test(args.model)||!approvedProviderModels[args.provider].has(args.model)||!args.promptVersion||!args.schemaVersion||args.finishReason.length>100||!/^[0-9a-f]{64}$/.test(args.requestHash)||!Number.isInteger(args.attempt)||args.attempt<1||args.attempt>2||![args.inputTokens,args.outputTokens].every(value=>Number.isSafeInteger(value)&&value>=0)||args.provider!==review.provider)throw new ConvexError("model_stage_run_invalid");const prior=(await ctx.db.query("modelStageRuns").withIndex("by_review",q=>q.eq("reviewId",review._id)).collect()).find(item=>item.requestHash===args.requestHash&&item.attempt===args.attempt);if(prior)return;const cost=conservativeProviderModelCost(args.provider,args.model,args.inputTokens,args.outputTokens),consumed=review.budgetConsumed+cost;if(consumed>review.budgetLimit){await ctx.db.patch(review._id,{status:"budget_exhausted",statusReasonCode:"spend_ceiling_reached",budgetCeilingId:"actual-model-usage",nextActionCode:"increase_budget",currentStage:"complete",completedAt:args.now,budgetConsumed:consumed,updatedAt:args.now});throw new ConvexError("budget_exhausted")};await ctx.db.insert("modelStageRuns",{organizationId:args.organizationId,repositoryId:review.repositoryId,reviewId:review._id,...(args.roundNumber===undefined?{}:{roundNumber:args.roundNumber}),stage:args.stage,provider:args.provider,model:args.model,promptVersion:args.promptVersion,schemaVersion:args.schemaVersion,finishReason:args.finishReason,requestHash:args.requestHash,...(args.requestId?{requestId:args.requestId.slice(0,200)}:{}),attempt:args.attempt,outcome:args.outcome,inputTokens:args.inputTokens,outputTokens:args.outputTokens,createdAt:args.now});await ctx.db.insert("usageLedger",{organizationId:args.organizationId,repositoryId:review.repositoryId,reviewId:review._id,kind:"model_tokens",quantity:args.inputTokens+args.outputTokens,unitCost:cost/Math.max(1,args.inputTokens+args.outputTokens),totalCostMicros:toMicros(cost),currency:"provider_billed",occurredAt:args.now});await ctx.db.patch(review._id,{budgetConsumed:consumed,updatedAt:args.now})}});
+
+export const recordProviderRetry=internalMutation({args:{...executionArgs,now:v.number()},handler:async(ctx,args)=>{
+  const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);
+  if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale)throw new ConvexError("provider_retry_invalid");
+  const next=(review.providerRetryCount??0)+1;
+  if(next>maxProviderRetriesPerReview)throw new ConvexError("provider_retry_limit_reached");
+  await ctx.db.patch(review._id,{providerRetryCount:next,updatedAt:args.now});
+  return {providerRetryCount:next};
+}});
 
 export const preflightStageSpend=internalMutation({args:{...executionArgs,provider,model:v.string(),inputBytes:v.number(),maxOutputTokens:v.number(),now:v.number()},handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||args.provider!==review.provider||!approvedProviderModels[args.provider].has(args.model)||!Number.isSafeInteger(args.inputBytes)||args.inputBytes<0||!Number.isSafeInteger(args.maxOutputTokens)||args.maxOutputTokens<1)throw new ConvexError("model_stage_budget_invalid");const upperBound=conservativeProviderStageCost(args.provider,args.model,args.inputBytes,args.maxOutputTokens);const organization=await ctx.db.get(args.organizationId);const monthlySpend=organization&&organization.monthlyBudget>noLimit?totalCostUsd(await ctx.db.query("usageLedger").withIndex("by_org_time",q=>q.eq("organizationId",args.organizationId).gte("occurredAt",monthStart(args.now))).collect()):0;const overMonthly=Boolean(organization)&&monthlyBudgetExceeded(monthlySpend,upperBound,organization!.monthlyBudget);if(!overMonthly&&review.budgetConsumed+upperBound<=review.budgetLimit)return{allowed:true as const,upperBound};const previous=await ctx.db.query("reviewEvents").withIndex("by_review",q=>q.eq("reviewId",review._id)).order("desc").first();await ctx.db.patch(review._id,{status:"budget_exhausted",statusReasonCode:"spend_ceiling_reached",budgetCeilingId:"conservative-stage-preflight",nextActionCode:"increase_budget",currentStage:"complete",completedAt:args.now,updatedAt:args.now});await ctx.db.insert("reviewEvents",{organizationId:review.organizationId,reviewId:review._id,sequence:(previous?.sequence??0)+1,type:"status_changed",stage:"complete",internalCode:"model_stage_budget_preflight",metadata:{},createdAt:args.now});return{allowed:false as const,upperBound}}});
 
@@ -62,7 +74,7 @@ export const reserveOutput = internalMutation({
 export const completeAnalysis = internalMutation({
   args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: v.string(), size: v.number(), credentialId: v.id("providerCredentials"), inputTokens: v.number(), outputTokens: v.number(),
     requirements: v.array(v.object({ externalIdHash: v.string(), sourceType, sourceUrlHash: v.string(), fetchedVersion: v.string(), status: requirementStatus, confidence: v.number() })),
-    findings: v.array(v.object({ fingerprintHmac: v.string(), pathHmac: v.string(), category: findingCategory, severity, confidence: v.number(), blocking: v.boolean(), evidenceIds: v.array(v.id("artifacts")), startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()), requirementExternalIdHash: v.optional(v.string()), resolution: findingResolution, injectionSuspected: v.optional(v.boolean()) })), injectionUnscoped: v.optional(v.boolean()), now: v.number() },
+    findings: v.array(v.object({ fingerprintHmac: v.string(), pathHmac: v.string(), category: findingCategory, severity, confidence: v.number(), blocking: v.boolean(), evidenceIds: v.array(v.id("artifacts")), startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()), requirementExternalIdHash: v.optional(v.string()), resolution: findingResolution, injectionSuspected: v.optional(v.boolean()) })), injectionUnscoped: v.optional(v.boolean()), injectionSurfaces: v.optional(v.array(injectionSurface)), now: v.number() },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), artifact = await ctx.db.get(args.artifactId), credential = await ctx.db.get(args.credentialId);
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
@@ -101,6 +113,10 @@ export const completeAnalysis = internalMutation({
     // An injection signal with no changed file to attribute it to leaves nothing safe to scope,
     // so record it on the review. reviewValidationData refuses a pass/fail verdict on this.
     if (args.injectionUnscoped) await ctx.db.patch(review._id, { promptInjectionUnscopedAt: args.now });
+    // Only a boolean survived, so when this fired four times in production there was no way to
+    // learn which surface caused it. The surfaces are recorded; the matched text never is, because
+    // it is written by whoever opened the pull request.
+    if (args.injectionSurfaces?.length) await ctx.db.patch(review._id, { promptInjectionSurfaces: args.injectionSurfaces });
     // Each model call records its own token use and conservative cost when it
     // completes. Do not add a second aggregate record here.
     await ctx.db.patch(credential._id, { lastUsedAt: args.now });

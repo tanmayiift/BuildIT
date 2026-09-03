@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { composeVerifiedReport, neverMergedSentence } from "@buildit/orchestrator";
 import { assertReportPublicationContract, publicationTitle, reviewDetailsUrl } from "./reviewPublicationWorker";
-import { composeVerifiedReport } from "@buildit/orchestrator";
 
 const head = "a".repeat(40);
 
@@ -65,5 +67,26 @@ describe("the contract holds a real composed report, not a hand-written one", ()
   it("still refuses a report missing the human-merge statement", () => {
     const stripped = report.body.replace("BuildIT did not merge this pull request.", "");
     expect(() => assertReportPublicationContract(stripped, head)).toThrow("report_publication_contract_failed");
+  });
+});
+
+describe("the publication contract checks a shared sentence", () => {
+  const sha = "a".repeat(40);
+
+  it("accepts a body carrying the sentence", () => {
+    expect(() => assertReportPublicationContract(`Head: ${sha}\n${neverMergedSentence}`, sha)).not.toThrow();
+  });
+
+  it("rejects a body missing it", () => {
+    expect(() => assertReportPublicationContract(`Head: ${sha}\nno such line`, sha)).toThrow("report_publication_contract_failed");
+  });
+
+  // The rule that would have caught this: every body the publisher can read must carry it.
+  it("every review_message body in the autofix worker carries the sentence", () => {
+    const source = readFileSync(join(import.meta.dirname, "reviewAutofixWorker.ts"), "utf8");
+    const bodies = source.split("type: \"review_message\"").length - 1;
+    expect(bodies, "no review_message artifacts found - did the worker change?").toBeGreaterThan(0);
+    const occurrences = source.split("neverMergedSentence").length - 1;
+    expect(occurrences, `${bodies} review_message bodies but ${occurrences} use the shared sentence`).toBeGreaterThanOrEqual(bodies);
   });
 });

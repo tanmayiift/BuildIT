@@ -136,9 +136,10 @@ describe("Vercel sandbox runner", () => {
     }
   });
 
-  it("fails closed without a supported Node lockfile", async () => {
+  it("records an empty dependency scan when there is no manifest to scan", async () => {
     const f = fixture();
-    await expect(new VercelSandboxRunner(f.create).run({ runtime: "node24", files: [{ path: "package.json", content: "{}" }], install, checks: [test] })).rejects.toThrow("osv_lockfile_required");
+    const result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files: [{ path: "package.json", content: "{}" }], install, checks: [test] });
+    expect(result.osvReport).toBe('{"results":[]}');
     expect(f.stop).toHaveBeenCalledOnce();
   });
 
@@ -163,5 +164,28 @@ describe("an install failure leaves both revisions the same shape", () => {
     // Still no check actually executed - the rows are a record, not a claim that they ran.
     expect(f.calls.filter(call => Array.isArray(call) && call[0] === "command"
       && (call[1] as { args?: string[] }).args?.[0] === "run")).toHaveLength(0);
+  });
+});
+
+// buildit-review-komi#1 is a Kotlin Multiplatform app. It has no Node lockfile, so the runner threw
+// osv_lockfile_required, the broker mapped that to scanner_unavailable, and the review died as a
+// platform error. That rule meant BuildIT could only review Node repositories - every Go, Rust,
+// Python, Java or Kotlin repository failed the same way, with a message about a scanner outage.
+describe("dependency scanning outside Node", () => {
+  const plans = defaultExecutionPlans("pnpm"), install = plans.install, test = plans.checks[0]!;
+
+  it("reviews a repository that has no dependency manifest at all", async () => {
+    const f = fixture(), runner = new VercelSandboxRunner(f.create);
+    const result = await runner.run({ runtime: "node22", files: [{ path: "src/Main.kt", content: "fun main() {}" }], install, checks: [test] });
+    // Nothing to scan is an empty dependency scan, not a scanner failure.
+    expect(result.osvReport).toBe('{"results":[]}');
+    expect(result.gitleaksReport).toBe("[]");
+  });
+
+  it("scans a lockfile from an ecosystem osv-scanner supports", async () => {
+    const f = fixture(), runner = new VercelSandboxRunner(f.create);
+    await runner.run({ runtime: "node22", files: [{ path: "go.mod", content: "module x" }], install, checks: [test] });
+    const osv = (f.calls as Array<[string, { cmd?: string; args?: string[] }]>).find(call => call[0] === "command" && call[1].cmd === "osv-scanner");
+    expect(String(osv?.[1].args?.join(" "))).toContain("go.mod");
   });
 });
