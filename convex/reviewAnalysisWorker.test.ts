@@ -129,6 +129,24 @@ describe("the context budget holds on a repository large enough to exhaust it", 
     }
   });
 
+  it("fits even when recording the exclusions is itself what overflows", () => {
+    // The reserve alone did not fix production, and this is why: exclusions.paths had the full
+    // ceiling, so recording which files were dropped consumed exactly the room the counters needed,
+    // and increment() - which no pop can undo - then pushed past it. Heavy requirement context
+    // plus hundreds of excluded files is the shape that does it.
+    const requirementSources = Array.from({ length: 63 }, (_, index) => ({
+      id: `req-${index}`, type: "repository_document" as const, status: "resolved", urlHash: `${index}`.padStart(64, "0"), version: "v1", content: "r".repeat(5_000),
+    }));
+    const heavy = { ...pull, body: "b".repeat(20_000), requirementSources, requirementCoverage: "partial" as const };
+    const files = Array.from({ length: 500 }, (_, index) => ({ path: `src/deeply/nested/module-${index}/index.ts`, content: "x".repeat(900), size: 900 }));
+    const result = boundedAnalysisContext([{ pull: heavy, snapshot: { coverage: "full", omitted: [], files } }], 80_000);
+    expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(80_000);
+    // The sample of paths may be trimmed, but the count of what was excluded must survive - that
+    // is the number a reader needs to know the review was partial.
+    expect(result.exclusions.totals.repositoryFiles).toBeGreaterThan(400);
+    expect(result.coverage).toBe("partial");
+  });
+
   it("survives the counters growing a digit after the last file is admitted", () => {
     // increment() writes into the same object the budget measures and is not covered by the
     // pop-on-overflow, so exclusion counters crossing 9 -> 10 -> 100 used to grow the payload with

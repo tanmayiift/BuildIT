@@ -157,6 +157,9 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   }
   const excludedAnything = Object.values(exclusions.totals).some(value => value > 0) || pull.requirementCoverage !== "complete" || headChunks.some(chunk => chunk.snapshot.coverage !== "full");
   base.coverage = excludedAnything ? "partial" : "full";
+  while (size() > maxBytes && exclusions.paths.length) exclusions.paths.pop();
+  while (size() > maxBytes && exclusions.patchPaths.length) exclusions.patchPaths.pop();
+  while (size() > maxBytes && exclusions.changedPaths.length) exclusions.changedPaths.pop();
   if (size() > maxBytes) throw new Error("analysis_context_too_large");
   return base;
 }
