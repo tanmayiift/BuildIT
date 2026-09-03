@@ -20,10 +20,12 @@ async function credential(t: ReturnType<typeof convexTest>, overrides: Record<st
     const organizationId = await ctx.db.insert("organizations", { name: "Ledgerline", slug: "ledgerline", timezone: "UTC",
       region: "eu-west-1", retentionHours: 24, monthlyBudget: 50, concurrencyLimit: 3, planId: "trial",
       fingerprintKeyVersion: 1, createdAt: now });
+    const envelope = (label: string) => Buffer.from(["fixture", label, "not-a-secret"].join("-")).toString("base64url");
     const credentialId = await ctx.db.insert("providerCredentials", { organizationId,
       credentialScopeId: "11111111-1111-1111-1111-111111111111", provider: "anthropic",
-      encryptedCiphertext: "Y2lwaGVydGV4dA", nonce: "bm9uY2U", authTag: "dGFn", aadDigest: "e".repeat(64),
-      wrappedDataKey: "d3JhcHBlZC1kYXRhLWtleQ", kmsKeyId: "kms-key-1", envelopeVersion: 1, keyVersion: 1,
+      encryptedCiphertext: envelope("ciphertext"), nonce: envelope("nonce"), authTag: envelope("tag"),
+      aadDigest: "e".repeat(64),
+      wrappedDataKey: envelope("wrapped-key"), kmsKeyId: "kms-key-1", envelopeVersion: 1, keyVersion: 1,
       maskedSuffix: "9f2c", status: "valid", createdBy: "owner", createdAt: now, lastValidatedAt: now,
       ...overrides });
     return { organizationId, credentialId };
