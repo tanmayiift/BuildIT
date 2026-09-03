@@ -27,5 +27,5 @@ export default query(async (ctx) => {
 
 const raw = execFileSync("pnpm", ["exec", "convex", "run", "--prod", "--inline-query", query], { encoding: "utf8" });
 const payload = JSON.parse(raw.slice(raw.indexOf("[")).match(/"(\{.*\})"/)[1].replace(/\\"/g, '"'));
-writeFileSync("docs/evidence/track-record.json", `${JSON.stringify({ ...payload, generatedAt: new Date().toISOString().slice(0, 10) }, null, 2)}\n`);
+writeFileSync("apps/web/src/app/track-record.json", `${JSON.stringify({ ...payload, generatedAt: new Date().toISOString().slice(0, 10) }, null, 2)}\n`);
 console.log(JSON.stringify(payload));

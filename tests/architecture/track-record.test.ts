@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import record from "../../docs/evidence/track-record.json";
+import record from "../../apps/web/src/app/track-record.json";
 
 // The trust page claimed "nine reviews across two repositories" long after it was a hundred across
 // five. A number typed into prose goes stale the moment the thing it describes moves, and a stale

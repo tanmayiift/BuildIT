@@ -31,7 +31,7 @@ const boundaries = [
   ["A large repository is refused, not half-read", "Above roughly 1,300 files GitHub's rate limits make a complete read unreliable, so BuildIT says so instead of reviewing part of your code and calling it done."],
 ];
 
-import record from "../../../../../docs/evidence/track-record.json";
+import record from "../track-record.json";
 
 export default function Features() {
   return <div className="content trust-page">

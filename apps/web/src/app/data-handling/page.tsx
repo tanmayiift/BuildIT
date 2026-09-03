@@ -1,4 +1,4 @@
-import record from "../../../../../docs/evidence/track-record.json";
+import record from "../track-record.json";
 const facts = [
   ["Public tour versus your workspace", "The public tour is labelled sample data and needs no account. After sign-in, workspace pages request tenant-scoped data from the server; they do not silently replace missing or forbidden data with samples."],
   ["GitHub identity", "GitHub sign-in proves who you are and creates a BuildIT session. It does not grant source-code access. BuildIT stores only the identity fields GitHub returns and rechecks organization membership for protected operations."],
