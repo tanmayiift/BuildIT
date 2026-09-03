@@ -12,7 +12,7 @@ on:
         required: true
         default: web
         type: choice
-        options: [web, broker, both]
+        options: [web, broker, both, all]
 
 permissions:
   contents: read
@@ -24,6 +24,7 @@ concurrency:
 env:
   NEXT_PUBLIC_CONVEX_URL: https://judicious-barracuda-968.convex.cloud
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
   VERCEL_PROJECT_ID: prj_rU8IPaf1laMTTmQEhGun9mRxXmGA
   VERCEL_ORG_ID: team_0C3dsIfWxzBINeWinBvtOLMC
 
@@ -70,6 +71,18 @@ jobs:
       - name: Release the broker, alias it, and probe it
         if: ${{ inputs.target == 'broker' || inputs.target == 'both' }}
         run: pnpm deploy:broker:production
+
+      - name: Refuse a full release without a Convex credential
+        if: ${{ inputs.target == 'all' }}
+        run: test -n "$CONVEX_DEPLOY_KEY" || { echo "CONVEX_DEPLOY_KEY repository secret is not set, so CI cannot deploy the Convex backend. Run 'pnpm deploy:production' locally, or add the secret."; exit 1; }
+      - name: Release all three and prove the broker serves this commit
+        if: ${{ inputs.target == 'all' }}
+        run: pnpm deploy:production
+
+      - name: Say which surfaces this release actually moved
+        run: |
+          echo "target=${{ inputs.target }}"
+          echo "Convex is deployed only by the 'all' target. 'web', 'broker' and 'both' leave the backend untouched."
 
   # The alias is what the GitHub App homepage, post-install redirect, and webhook URL resolve
   # through, so prove the released alias serves the app rather than trusting the deploy step.

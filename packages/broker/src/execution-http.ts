@@ -13,6 +13,13 @@ const descriptorsForHash = (items: Descriptor[]) => items.map(({ readGrant: _, .
 function json(status: number, body: Record<string, unknown>) { return Response.json(body, { status, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } }); }
 function bearer(request: Request) { const value = request.headers.get("authorization") ?? ""; if (!value.startsWith("Bearer ") || value.length > 8_200) throw new Error("authentication_required"); return value.slice(7); }
 function parse(raw: string): Body { let body: Body; try { body = JSON.parse(raw) as Body; } catch { throw new Error("invalid_execution_request"); } if (!body || ![body.organizationId, body.repositoryId, body.reviewId].every(value => typeof value === "string" && value.length) || !/^[0-9a-f]{40}$/.test(body.baseSha) || !/^[0-9a-f]{40}$/.test(body.headSha) || !/@sha256:[0-9a-f]{64}$/.test(body.runnerImageVersion) || !["node22", "node24"].includes(body.runtime) || !Array.isArray(body.artifacts) || !body.artifacts.length || body.artifacts.length > 64 || !Array.isArray(body.checks) || body.checks.length > 4) throw new Error("invalid_execution_request"); return body; }
+function unreachable(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const errno = (error as { code?: unknown }).code;
+  const signals = [error.message, error.name, typeof errno === "string" ? errno : ""].join(" ");
+  return /fetch failed|TimeoutError|AbortError|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang up|network|Failed to fetch/i.test(signals);
+}
+
 export function safeExecutionError(error: unknown) {
   const code = error instanceof Error ? error.message : "execution_failed";
   if (code === "authentication_required") return { status: 401, code };
@@ -25,6 +32,7 @@ export function safeExecutionError(error: unknown) {
   if (code.includes("gitleaks") || code.includes("osv_")) return { status: 503, code: "scanner_unavailable" };
   if (code.includes("Sandbox") || code.includes("sandbox")) return { status: 503, code: "sandbox_unavailable" };
   if (code.includes("execution_image")) return { status: 503, code: "runner_image_unavailable" };
+  if (unreachable(error)) return { status: 503, code: "sandbox_unavailable" };
   return { status: 503, code: "execution_failed" };
 }
 
@@ -34,7 +42,7 @@ export function safeExecutionErrorCategory(error: unknown) {
   const code = error instanceof Error ? error.message : "unknown";
   if (/^(?:authentication_required|execution_grant_(?:invalid|scope_invalid|expired|replayed))$/.test(code)) return "grant";
   if (/^(?:artifact_(?:integrity_failed|revision_mismatch|file_conflict)|base_head_context_incomplete)$/.test(code)) return "artifact";
-  if (/^(?:sandbox_|credential_teardown|osv_|gitleaks_)/.test(code)) return "runner_or_scanner";
+  if (/^(?:sandbox_|credential_teardown|osv_|gitleaks_)/.test(code) || /^Sandbox\b/.test(code) || unreachable(error)) return "runner_or_scanner";
   if (/^(?:invalid_|command_not_allowed|untrusted_command)/.test(code)) return "request_policy";
   if (/^(?:scanner_|execution_environment_invalid|paired_execution_incomplete|package_manager_)/.test(code)) return "evidence";
   return "unexpected";

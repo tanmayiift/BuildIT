@@ -2,7 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "buildCommand": "pnpm --filter @buildit/github build && pnpm --filter @buildit/providers build && pnpm --filter @buildit/security build && pnpm --filter @buildit/runner build && pnpm --filter @buildit/scanners build && pnpm --filter @buildit/telemetry build",
-  "regions": ["dub1"],
+  "regions": [
+    "dub1"
+  ],
   "functions": {
     "api/credentials.ts": {
       "maxDuration": 30
@@ -21,6 +23,9 @@
     },
     "api/execute.ts": {
       "maxDuration": 800
+    },
+    "api/health.ts": {
+      "maxDuration": 10
     }
   }
 }
