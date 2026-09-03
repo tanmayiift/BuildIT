@@ -31,7 +31,7 @@ export const askScope = internalQuery({
     const recent = await ctx.db.query("usageLedger")
       .withIndex("by_org_time", q => q.eq("organizationId", args.organizationId).gte("occurredAt", args.now - askWindowMs))
       .collect();
-    if (recent.filter(item => item.kind === "model_tokens" && item.reviewId === review._id).length >= asksPerWindow) return null;
+    if (recent.filter(item => item.kind === "ask_tokens" && item.reviewId === review._id).length >= asksPerWindow) return null;
 
     const credential = (await ctx.db.query("providerCredentials")
       .withIndex("by_org_status", q => q.eq("organizationId", args.organizationId).eq("status", "valid")).collect())
@@ -47,9 +47,14 @@ export const askScope = internalQuery({
       installationId: installation.installationId, githubRepositoryId: repository.githubRepositoryId,
       headSha: review.headSha, askId: String(review._id),
       provider: review.provider, model: review.model,
-      credential: { id: credential.credentialScopeId, encryptedCiphertext: credential.encryptedCiphertext, nonce: credential.nonce,
-        authTag: credential.authTag, wrappedDataKey: credential.wrappedDataKey, kmsKeyId: credential.kmsKeyId,
-        aadDigest: credential.aadDigest, envelopeVersion: credential.envelopeVersion, keyVersion: credential.keyVersion },
+      credential: { id: credential.credentialScopeId, organizationId: String(credential.organizationId),
+        ...(credential.repositoryId ? { repositoryId: String(credential.repositoryId) } : {}),
+        provider: credential.provider, ciphertext: credential.encryptedCiphertext, nonce: credential.nonce,
+        tag: credential.authTag, wrappedDataKey: credential.wrappedDataKey, kmsKeyId: credential.kmsKeyId,
+        envelopeVersion: credential.envelopeVersion, keyVersion: credential.keyVersion, aadDigest: credential.aadDigest,
+        maskedSuffix: credential.maskedSuffix, availableModels: credential.availableModels ?? [],
+        status: "valid" as const, createdBy: credential.createdBy, createdAt: credential.createdAt,
+        lastValidatedAt: credential.lastValidatedAt },
       ...(report ? { report: { id: report._id, storageKey: report.storageKey, checksum: report.checksum, size: report.size } } : {}),
     };
   },
@@ -66,7 +71,7 @@ export const recordAsk = internalMutation({
     const cost = conservativeProviderModelCost(args.provider, args.model, args.inputTokens, args.outputTokens);
     await ctx.db.insert("usageLedger", {
       organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id,
-      kind: "model_tokens", quantity: args.inputTokens + args.outputTokens,
+      kind: "ask_tokens", quantity: args.inputTokens + args.outputTokens,
       unitCost: cost / Math.max(1, args.inputTokens + args.outputTokens),
       totalCostMicros: toMicros(cost), currency: "provider_billed", occurredAt: args.now,
     });
