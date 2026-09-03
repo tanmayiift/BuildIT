@@ -35,7 +35,7 @@ export const validate = internalAction({
     const artifactsHash = sha256Json(descriptors.map(({ readGrant: _, ...item }) => item)), plansHash = sha256Json({ runnerImageVersion: scope.runnerImageVersion, runtime, install, checks });
     const executionGrant = issueExecutionGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), baseSha: scope.baseSha, headSha: scope.headSha, artifactsHash, plansHash, ttlMs: 120_000 }, executionSecret);
     await ctx.runQuery(internal.durableReview.assertActive, args);
-    const response = await fetch(`${brokerUrl}/api/execute`, { method: "POST", headers: { authorization: `Bearer ${executionGrant}`, "content-type": "application/json" }, body: JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), baseSha: scope.baseSha, headSha: scope.headSha, runnerImageVersion: scope.runnerImageVersion, runtime, artifacts: descriptors, install, checks , signal: AbortSignal.timeout(BROKER_REQUEST_TIMEOUT_MS)}) });
+    const response = await fetch(`${brokerUrl}/api/execute`, { method: "POST", headers: { authorization: `Bearer ${executionGrant}`, "content-type": "application/json" }, body: JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), baseSha: scope.baseSha, headSha: scope.headSha, runnerImageVersion: scope.runnerImageVersion, runtime, artifacts: descriptors, install, checks }), signal: AbortSignal.timeout(BROKER_REQUEST_TIMEOUT_MS) });
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       let code: string | undefined;
