@@ -61,6 +61,11 @@ function findingLines(finding: ReportFinding, index: number) {
   ];
 }
 
+// Every body the publisher can read must carry this exact sentence: assertReportPublicationContract
+// refuses to publish a report without it. It is a promise to the reader, so it is a constant rather
+// than a phrase each report restates in its own words.
+export const neverMergedSentence = "BuildIT did not merge this pull request.";
+
 export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
   const decision = computeReviewDecision({ isStale: input.isStale, environmentAvailable: input.environmentAvailable, coverageComplete: input.coverage === "complete", ...(input.injectionUnscoped ? { injectionUnscoped: true } : {}), checks: input.checks, findings: input.findings });
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
@@ -108,7 +113,7 @@ function checkExcerpt(check: ReviewCheckDecision) {
     "",
     `**Next step** — ${nextStep(decision.nextAction)}`,
     "",
-    "> BuildIT did not merge this pull request. A human owns the merge decision.",
+    `> ${neverMergedSentence} A human owns the merge decision.`,
     ...(input.coverageGap === "requirements"
       ? ["", "> **Intent was not verified.** A requirement source linked from this pull request could not be read — a ticket in another repository, or a tracker with no connected credential. Everything above is about the code and its checks. Whether the change does what was asked is still an open question for a person."]
       : []),

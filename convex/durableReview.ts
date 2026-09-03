@@ -1,7 +1,9 @@
 import { vWorkflowId, type WorkflowId } from "@convex-dev/workflow";
 import { vResultValidator } from "@convex-dev/workpool";
+import { selectProviderModel } from "@buildit/providers";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
+import { fallbackWorthTrying } from "./lib/providerFallback";
 import { classifyPlatformFailure } from "./lib/platformFailureReport";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { durableReviewStages } from "./lib/durableStages";
@@ -298,6 +300,56 @@ export const workflowCompleted = internalMutation({
         metadata: {},
         createdAt: now,
       });
+      const credentials = await ctx.db
+        .query("providerCredentials")
+        .withIndex("by_org_status", q => q.eq("organizationId", review.organizationId).eq("status", "valid"))
+        .collect();
+      const alternatives = [...new Set(credentials
+        .filter(item => item.lastValidatedAt && item.provider !== review.provider
+          && (item.repositoryId === undefined || item.repositoryId === review.repositoryId))
+        .map(item => item.provider))];
+      const fallback = fallbackWorthTrying({ reason: failureReason, alternatives, parentReviewId: review.parentReviewId });
+      const fallbackCredential = fallback ? credentials.find(item => item.provider === fallback) : undefined;
+      const fallbackModel = fallbackCredential
+        ? selectProviderModel(fallbackCredential.provider, fallbackCredential.availableModels)
+        : undefined;
+      if (fallback && fallbackModel) {
+        const { _id: _ignoredId, _creationTime: _ignoredAt, ...carried } = review;
+        const retryId = await ctx.db.insert("reviews", {
+          ...carried,
+          parentReviewId: review._id,
+          provider: fallback as typeof review.provider,
+          model: fallbackModel,
+          status: "queued",
+          statusReasonCode: undefined,
+          statusDetail: undefined,
+          nextActionCode: "none",
+          githubCheckConclusion: undefined,
+          currentStage: "queue",
+          coverageLevel: "limited",
+          coverageGap: undefined,
+          budgetConsumed: 0,
+          providerRetryCount: 0,
+          executionGeneration: 0,
+          workflowId: undefined,
+          leaseOwner: undefined,
+          leaseExpiresAt: undefined,
+          completedAt: undefined,
+          startedAt: undefined,
+          promptInjectionUnscopedAt: undefined,
+          createdAt: now,
+          updatedAt: now,
+        });
+        await ctx.db.insert("reviewEvents", {
+          organizationId: review.organizationId, reviewId: review._id, sequence: (last?.sequence ?? 0) + 2,
+          type: "status_changed", stage: "complete", internalCode: "provider_fallback_started", metadata: {}, createdAt: now,
+        });
+        await ctx.scheduler.runAfter(0, internal.durableReview.start, {
+          organizationId: review.organizationId, reviewId: retryId,
+          expectedHeadSha: review.headSha, expectedGeneration: 0, now,
+        });
+        return;
+      }
       await ctx.scheduler.runAfter(
         0,
         internal.reviewPublicationWorker.publishPlatformFailure,

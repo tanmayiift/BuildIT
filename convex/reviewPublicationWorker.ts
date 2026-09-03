@@ -5,6 +5,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { GitHubAppClient, GitHubRepositoryWriter, sideEffectKey } from "@buildit/github";
+import { neverMergedSentence } from "@buildit/orchestrator";
 import { issueArtifactGrant } from "@buildit/security";
 import { platformFailureReport, type PlatformFailureReason } from "./lib/platformFailureReport";
 
@@ -12,7 +13,7 @@ function required(name: string) { const value = process.env[name]; if (!value) t
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; status: string; reason: string; report: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number } };
 
 export function assertReportPublicationContract(body: string, headSha: string) {
-  if (!body.includes(headSha) || !body.includes("BuildIT did not merge this pull request.")) {
+  if (!body.includes(headSha) || !body.includes(neverMergedSentence)) {
     throw new Error("report_publication_contract_failed");
   }
 }
