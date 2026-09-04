@@ -107,6 +107,63 @@ export function eventPresentation(type: string) {
   return known[type] ?? words(type);
 }
 
+// Every value of the severity, findingCategory and findingResolution unions in convex/validators.ts.
+// A Record over the union makes a missing key a compile error, so a new category cannot silently
+// fall through to technicalLabel below and print the database word at a person.
+export type FindingSeverity = "critical" | "high" | "warning" | "info";
+export type FindingCategory =
+  | "correctness" | "security" | "requirement" | "architecture" | "quality" | "dependency" | "test";
+export type FindingResolution = "open" | "accepted" | "dismissed" | "fixed" | "uncertain";
+
+const severityLabels: Record<FindingSeverity, string> = {
+  critical: "Critical",
+  high: "High",
+  warning: "Worth checking",
+  info: "For information",
+};
+
+const categoryLabels: Record<FindingCategory, string> = {
+  correctness: "Wrong behaviour",
+  security: "Security",
+  requirement: "Unmet requirement",
+  architecture: "Design problem",
+  quality: "Code quality",
+  dependency: "Dependency",
+  test: "Test coverage",
+};
+
+const resolutionLabels: Record<FindingResolution, string> = {
+  open: "Open",
+  accepted: "Confirmed on the second pass",
+  dismissed: "Dismissed by your team",
+  fixed: "Fixed",
+  uncertain: "A person decides this one",
+};
+
+export const findingSeverityLabel = (value: string) => severityLabels[value as FindingSeverity] ?? words(value);
+export const findingCategoryLabel = (value: string) => categoryLabels[value as FindingCategory] ?? words(value);
+export const findingResolutionLabel = (value: string) => resolutionLabels[value as FindingResolution] ?? words(value);
+
+export const lineRange = (startLine: number, endLine: number) =>
+  startLine === endLine ? `line ${startLine}` : `lines ${startLine}–${endLine}`;
+
+// reviews:compareRuns refuses two runs that are not two runs of one pull request, and it refuses
+// by throwing a bare code. Convex wraps that message in a request id and a stack before it reaches
+// the browser, so the code is matched inside the message rather than compared to it - and the
+// message itself is never rendered.
+const comparisonRefusals: Record<string, string> = {
+  not_found_or_forbidden:
+    "These two runs cannot be compared. BuildIT only compares runs of the same pull request, in a repository your account can read. Choose another run of this pull request.",
+};
+
+export function comparisonRefusal(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const known = Object.keys(comparisonRefusals).find(code => message.includes(code));
+  return known
+    ? comparisonRefusals[known]!
+    : "This comparison could not be loaded, so nothing is shown above. Nothing about either review changed. Choose the run again in a moment.";
+}
+
 // A review can run the same named check against more than one immutable worktree.
 // The audit store keeps every execution; the main result groups them so people do
 // not mistake repeated evidence for separate checks.
