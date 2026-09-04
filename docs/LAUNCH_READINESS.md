@@ -123,6 +123,11 @@ but that is a unit test, not a production run against a large codebase.
 than a nicety: the fixture repositories are structurally incapable of exercising the selection
 threshold, and that is exactly where the last defect lived.
 
+That review is prepared and one click away. `tanmayiift/buildit-demo-date-fns` is a snapshot of
+date-fns at **1,912 files** — comfortably above the threshold, and above the file count the old
+stale limit claimed to refuse — with a pull request open against it. It needs only to be added to
+the GitHub App installation.
+
 ---
 
 ## What is genuinely ready
