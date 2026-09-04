@@ -35,7 +35,10 @@ export * from "./vercelSandbox.js";
 // a test whose assertion text happens to contain the phrase is still a real failure.
 const missingScript = [
   /^\s*npm error Missing script:/m,
-  /^\s*ERR_PNPM_NO_SCRIPT\b/m,
+  // pnpm brackets its error codes - `[ERR_PNPM_NO_SCRIPT] Missing script: lint` - which the
+  // unbracketed anchor missed, so a repository that simply has no lint script was told its lint
+  // check Failed. Observed on a real review of date-fns.
+  /^\s*\[?ERR_PNPM_NO_SCRIPT\b/m,
   /^\s*error Command ".*" not found\./m,
   /^\s*Usage Error: Couldn't find a script named/m,
 ];

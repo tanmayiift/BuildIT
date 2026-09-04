@@ -85,6 +85,11 @@ describe("what must stay silent, or the check gets turned off", () => {
   quiet("a token checked against null", "src/auth.js", "if (token === null) return unauthenticated();");
   quiet("a secret flag compared to a boolean", "src/config.js", "if (hasSecret === true) enable();");
   quiet("a token length compared to a number", "src/auth.js", "if (tokenCount !== 0) retry();");
+  // Third false positive from the same rule, on the same upstream file. An empty string is not a
+  // secret either: this asks whether a credential was supplied, not whether it matches.
+  quiet("a credential compared to the empty string", "src/options.js",
+    "hasCredentials = url.username !== '' || url.password !== '';");
+  quiet("a token compared to an empty template literal", "src/auth.js", "if (token === ``) return null;");
   quiet("a parameterised query, which is the correct form", "src/db.js",
     "db.query(\"SELECT * FROM users WHERE id = $1\", [id]);");
   quiet("a template literal that is not SQL", "src/log.js",
