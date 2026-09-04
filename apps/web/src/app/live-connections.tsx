@@ -1,6 +1,6 @@
 "use client";
 
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { ActionLink } from "./action";
 import { useSampleTour } from "./workspace-route-boundary";
@@ -25,6 +25,7 @@ function profileLabel(profile: string | undefined) {
   return profile === "quiet" ? "Only what blocks" : profile === "thorough" ? "Everything cited" : "Blocking and serious";
 }
 
+const claimInstallation = makeFunctionReference<"action", { installationId: number }, { organizationId: string; repositoryCount: number }>("githubInstallations:claim");
 const setReviewPolicy = makeFunctionReference<"mutation", { organizationId: string; repositoryId: string; paused: boolean; autofixMode: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; changelogOnMerge?: boolean; requestId: string }, null>("repositoryConnections:setReviewPolicy");
 
 // The server enforces a 10-minute step-up window on policy, credential, and member changes.
@@ -198,6 +199,35 @@ function ConfigApproval({ repository, canManage, saving, onSave }: {
   </label>;
 }
 
+// GitHub tells BuildIT when the installation's repository list changes, so this is the fallback,
+// not the main path. It exists because the webhook can be switched off in the App's settings, a
+// delivery can be missed, and "I added it and nothing happened" is the worst possible answer for
+// someone who has just granted access. Same action the setup flow uses - no new public surface.
+function RefreshRepositories({ installationId }: { installationId: number }) {
+  const refresh = useAction(claimInstallation);
+  const [state, setState] = useState<"idle" | "working" | "done" | "failed">("idle");
+  const [message, setMessage] = useState("");
+  const run = async () => {
+    setState("working");
+    setMessage("");
+    try {
+      const result = await refresh({ installationId });
+      setState("done");
+      setMessage(`${result.repositoryCount} ${result.repositoryCount === 1 ? "repository" : "repositories"} available to BuildIT.`);
+    } catch {
+      setState("failed");
+      setMessage("Could not read the repository list from GitHub just now. Nothing was changed.");
+    }
+  };
+  return <>
+    <button className="button secondary" type="button" disabled={state === "working"}
+      aria-label="Refresh the repository list from GitHub" onClick={() => void run()}>
+      {state === "working" ? "Refreshing…" : "Refresh list"}
+    </button>
+    {message ? <p className="form-note" role="status">{message}</p> : null}
+  </>;
+}
+
 export function RepositoryConnectionView() {
   const connection = useConnection();
   const sampleTour = useSampleTour();
@@ -228,7 +258,7 @@ export function RepositoryConnectionView() {
     <section className="connection-overview" aria-label="GitHub connection" aria-live="polite">
       <div className="connection-summary"><span className="status success">Connected</span><h2>{connection.repositories.length} {connection.repositories.length === 1 ? "repository" : "repositories"} connected</h2><p>GitHub account <strong>{installation.accountLogin}</strong></p></div>
       <div className="connection-facts"><span><small>Workspace</small><strong>{organization.name}</strong></span><span><small>Installation</small><strong>#{installation.installationId}</strong></span><span><small>Encrypted source</small><strong>Ireland</strong></span><span><small>Isolated tests</small><strong>Paris</strong></span></div>
-      <ConnectionAction connection={connection} />
+      <div className="button-row"><ConnectionAction connection={connection} /><RefreshRepositories installationId={installation.installationId} /></div>
     </section>
     {policyMessage ? <p className="form-result" role="status">{policyMessage}</p> : null}
     <section className="repository-list" aria-label="Connected repositories">{connection.repositories.map(repository => <RepositoryPolicyRow key={repository.id} repository={repository} canManage={canManage} saving={savingRepositoryId === repository.id} onSave={next => save(repository, next)} />)}</section>

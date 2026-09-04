@@ -6,12 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   connection: undefined as unknown,
   updatePolicy: vi.fn(),
+  refreshRepositories: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
   useQuery: (reference: string) => reference === "repositoryConnections:current" ? state.connection : undefined,
   useMutation: () => state.updatePolicy,
+  useAction: () => state.refreshRepositories,
 }));
 vi.mock("convex/server", () => ({ makeFunctionReference: (name: string) => name }));
 vi.mock("./workspace-route-boundary", () => ({ useSampleTour: () => false }));
@@ -117,5 +119,44 @@ describe("approving a repository configuration", () => {
     render(<RepositoryConnectionView />);
     await screen.findByText("eeeeeeeeeeee");
     expect(screen.queryByRole("button", { name: /Approve \.buildit\.yml/ })).toBeNull();
+  });
+});
+
+// GitHub tells BuildIT when the installation's repository list changes, but that webhook can be
+// switched off in the App's settings and a delivery can be missed. Both launch demo repositories
+// were added in GitHub and sat invisible, because nothing on this page ever re-read the list - it
+// only linked out. "I granted access and nothing happened" needs an answer on the page itself.
+describe("refreshing the repository list", () => {
+  beforeEach(() => {
+    state.connection = {
+      state: "connected",
+      organization: { id: "org-acme", name: "Acme workspace", slug: "acme", role: "owner", region: "eu-west-1", retentionHours: 24 },
+      installations: [{ id: "installation-a", installationId: 42, accountLogin: "acme", accountType: "organization", status: "active", updatedAt: 1 }],
+      repositories,
+    };
+    state.updatePolicy.mockReset().mockResolvedValue(null);
+    state.refreshRepositories.mockReset().mockResolvedValue({ organizationId: "org-acme", repositoryCount: 4 });
+  });
+
+  afterEach(cleanup);
+
+  it("asks GitHub for the installation actually on screen", async () => {
+    render(<RepositoryConnectionView />);
+    (await screen.findByRole("button", { name: /Refresh the repository list/ })).click();
+    await waitFor(() => expect(state.refreshRepositories).toHaveBeenCalled());
+    expect((state.refreshRepositories.mock.calls[0]![0] as { installationId: number }).installationId).toBe(42);
+  });
+
+  it("says how many repositories BuildIT can now see", async () => {
+    render(<RepositoryConnectionView />);
+    (await screen.findByRole("button", { name: /Refresh the repository list/ })).click();
+    await screen.findByText("4 repositories available to BuildIT.");
+  });
+
+  it("says plainly that nothing changed when GitHub could not be read", async () => {
+    state.refreshRepositories.mockRejectedValue(new Error("nope"));
+    render(<RepositoryConnectionView />);
+    (await screen.findByRole("button", { name: /Refresh the repository list/ })).click();
+    await screen.findByText(/Nothing was changed/);
   });
 });

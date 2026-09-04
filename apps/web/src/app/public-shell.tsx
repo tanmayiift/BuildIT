@@ -44,6 +44,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
       <nav aria-label="More about BuildIT">
         {links.map(item => <a key={item.href} className="quiet-link" href={item.href}>{item.label}</a>)}
         <a className="quiet-link" href="/reviews?tour=1">Sample review</a>
+        <a className="quiet-link" href="https://github.com/tanmayiift" target="_blank" rel="noreferrer noopener">Built by @tanmayiift</a>
       </nav>
     </footer>
   </div>;

@@ -39,6 +39,12 @@ http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(a
       authorLogin: typeof (pullRequest as { user?: { login?: unknown } }).user?.login === "string" ? (pullRequest as { user: { login: string } }).user.login : "",
       merged: (pullRequest as { merged?: unknown }).merged === true,
       title: typeof (pullRequest as { title?: unknown }).title === "string" ? ((pullRequest as { title: string }).title).slice(0, 300) : undefined });
+  } else if (event === "installation_repositories" && typeof installation?.id === "number") {
+    // Adding a repository in GitHub used to change nothing on BuildIT's side, so a customer could
+    // grant access and watch it be ignored. The action re-lists rather than trusting
+    // repositories_added/removed, so a retried or reordered delivery still converges.
+    await ctx.scheduler.runAfter(0, internal.githubInstallations.syncRepositories, { installationId: installation.id });
+    await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId, disposition: "processed", status: "completed", now: Date.now() });
   } else if (event === "push" && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof pushRef === "string" && typeof pushAfter === "string") {
     await ctx.scheduler.runAfter(0, internal.githubWebhookProcessor.processPushWebhook, { deliveryId, installationId: installation.id, githubRepositoryId: repository.id, ref: pushRef, afterSha: pushAfter });
   } else await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId, disposition: "rejected", status: "completed", now: Date.now() });

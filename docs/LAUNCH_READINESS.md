@@ -97,12 +97,15 @@ the pipeline.
 
 **This one only closes by waiting.**
 
-### 2. Nobody can contact anyone
+### 2. Support is a GitHub profile, deliberately — *decided*
 
-There is no support route in the product — no contact page, no address, no channel. A customer
-whose review fails for a reason the receipt does not explain has nowhere to go.
+There was no support route at all: no contact page, no address, no channel.
 
-**This is a decision, not code.** It needs an address or a channel to point at.
+The answer is not a contact page. An unstaffed support address promises a response nobody is
+rostered to give, and that is a worse lie than saying plainly who builds this. The footer now links
+to the maintainer's GitHub profile, which is where issues and questions can actually land.
+
+This closes as a decision rather than as an absence. Item 3 below is the honest remainder of it.
 
 ### 3. Alerts page one person
 
