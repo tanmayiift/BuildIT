@@ -15,7 +15,8 @@ narrower:
 
 > **What can a stranger who signs up alone actually reach?**
 
-Two shipped features failed that test. Both are now fixed.
+Two shipped features failed that test. Chasing the answer turned up a third problem that was
+breaking reviews outright. All three are now fixed.
 
 ### A repository configuration could never be approved
 
@@ -42,6 +43,32 @@ product found dead UI on the page named "Trusted configuration".
 Fixed: it now states the boundaries that hold for every review, and points at the Repositories page
 for the things a team actually chooses.
 
+### Reviews were dying on most real repositories, and the fixtures were too small to show it
+
+Found by triggering a review on the pull request that fixes the two gaps above. It failed with
+`package_manager_changed`, which reached the author as *"a required platform step failed"*.
+
+Base and head are fetched with different selection rules on purpose — base file contents never
+reach the model, so base is deliberately narrow. But `detectPackageManager` reads **both** path sets
+and refuses the review when they disagree. Head kept `package.json` and the lockfile; base kept
+neither. So on every repository above the 400-file selection threshold whose pull request happened
+not to touch its manifests, head detected a package manager, base detected none, and the review died
+**before a single check ran**.
+
+That is most pull requests on most repositories.
+
+It looked random because the trigger was "the diff did not include `package.json`" — not something
+anyone thinks of as a property of a repository. And it never fired where the evidence was being
+collected: **every fixture repository is under the 400-file threshold**, so the selection rules
+never diverged there.
+
+This is the most important thing in this document, and not only because of the fix. The 23
+consecutive clean reviews cited below were run on repositories too small to exercise the code path
+that breaks on real ones. The track record was measuring the wrong thing.
+
+Fixed: both revisions now select the execution plan inputs through one shared predicate, and a path
+filter cannot suppress them. Reverting the fix reproduces the production error in the new test.
+
 ### A stale limit was turning away repositories that now work
 
 The features page said BuildIT refuses repositories above roughly 1,300 files. That was true before
@@ -62,9 +89,11 @@ now says what is implemented and admits the top end has not been tested.
 were found and fixed — the whole-repo fetch, the stale broker deployment, the config resolution
 that computed problems and dropped them.
 
-23 consecutive reviews is one good day. It is not evidence that a stranger's first review will
-work, and the honest framing for launch is that the failure rate is *believed* fixed and *not yet*
-demonstrated over time.
+23 consecutive reviews is one good day — and, as the section above establishes, one good day on
+repositories small enough to miss the defect that breaks large ones. The honest framing is weaker
+than it looked this morning: the failure rate is *believed* fixed, *not yet* demonstrated over time,
+and the evidence gathered so far came from repositories that could not have exposed the worst bug in
+the pipeline.
 
 **This one only closes by waiting.**
 
@@ -90,8 +119,9 @@ The largest repository BuildIT has reviewed is small. The selective fetch means 
 longer matter, and there is a test asserting it fetches one changed file rather than 2,746 blobs —
 but that is a unit test, not a production run against a large codebase.
 
-**Closes with one real review on a large repository**, which is worth doing before launch rather
-than after.
+**Closes with one real review on a large repository**, which is now clearly a prerequisite rather
+than a nicety: the fixture repositories are structurally incapable of exercising the selection
+threshold, and that is exactly where the last defect lived.
 
 ---
 
@@ -108,7 +138,7 @@ Everything a design partner touches, end to end, and none of it depends on me:
   change.
 - Learning that only ever demotes, never quietens a blocking or scanner finding.
 - History with real cost, duration, verdict and feedback per review.
-- 1,309 tests, plus the security and reliability release gates.
+- 1,316 tests, plus the security and reliability release gates.
 
 ## The recommendation
 
