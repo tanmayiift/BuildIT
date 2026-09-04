@@ -1,9 +1,9 @@
 {
   "repositories": 5,
-  "reviews": 102,
-  "decisive": 62,
+  "reviews": 109,
+  "decisive": 69,
   "platformFailed": 28,
-  "sinceLastPlatformFailure": 16,
+  "sinceLastPlatformFailure": 23,
   "lastPlatformFailureAt": "2026-09-03",
-  "generatedAt": "2026-09-03"
+  "generatedAt": "2026-09-04"
 }
