@@ -16,10 +16,14 @@ describe("observability release assets", () => {
       "Queue and capacity", "Hourly provider cost", "Effective LOC delivered",
       "Accuracy evidence unavailable",
     ]));
-    const datasource = dashboard.templating?.list?.find(item => item.name === "buildit_prometheus");
-    expect(datasource).toMatchObject({ type: "datasource", query: "prometheus" });
-    expect(datasource?.current?.value).toBe("grafanacloud-prom");
-    expect(dashboard.panels.filter(panel => panel.datasource).every(panel => panel.datasource?.uid === "$buildit_prometheus")).toBe(true);
+    // The datasource is pinned on every panel, not selected through a template variable. Grafana's
+    // public dashboards do not resolve template variables, so the shared link rendered "No data" on
+    // all fourteen panels - which reads as a dead product to anyone opening it. The variable bought
+    // nothing anyway: there is one Prometheus datasource and the dashboard only ever used it.
+    expect(dashboard.templating?.list ?? []).toHaveLength(0);
+    expect(dashboard.panels.filter(panel => panel.datasource).every(panel => panel.datasource?.uid === "grafanacloud-prom")).toBe(true);
+    expect(JSON.stringify(dashboard), "a template variable here breaks the public link")
+      .not.toContain("$buildit_prometheus");
     expect(read("observability/grafana/dashboards/buildit-overview.json")).not.toContain('"uid": "buildit-prometheus"');
     const failurePanel = dashboard.panels.find(panel => panel.title === "Service failure ratio") as { description?: string; targets?: Array<{ expr?: string }> } | undefined;
     expect(failurePanel?.description).toContain("Intentional blocked requests");
