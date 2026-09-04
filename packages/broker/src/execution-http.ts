@@ -36,6 +36,18 @@ export function safeExecutionError(error: unknown) {
   return { status: 503, code: "execution_failed" };
 }
 
+// Server-side only, and never returned to a caller. An Error message can carry sandbox, artifact or
+// provider context, so this bounds it hard: the error's type, and a short message with anything
+// token-shaped, URL-shaped or path-shaped removed. Enough to tell a quota refusal from a missing
+// image; not enough to leak what was being executed.
+const secretShaped = /\b(?:[A-Za-z0-9_-]{24,}|https?:\/\/\S+|\/[\w./-]{12,})\b/g;
+export function executionFailureDiagnostic(error: unknown) {
+  if (!(error instanceof Error)) return "non_error_thrown";
+  const name = error.name || "Error";
+  const message = String(error.message ?? "").replace(secretShaped, "[redacted]").replace(/\s+/g, " ").trim();
+  return `${name}: ${message}`.slice(0, 200);
+}
+
 // This is deliberately a closed list. It is safe to emit to operations logs,
 // unlike an Error message which could contain sandbox, artifact, or provider context.
 export function safeExecutionErrorCategory(error: unknown) {
@@ -88,7 +100,13 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     return json(200, { base: bounded(baseResult), head: bounded(headResult), diagnostics:{base:baseDiagnostics,head:headDiagnostics}, scanners: { base: scanner("base", body.baseSha, baseResult), head: scanner("head", body.headSha, headResult) } });
   } catch (error) {
     const mapped = safeExecutionError(error);
-    console.error("buildit_execute_failure", { category: safeExecutionErrorCategory(error), code: mapped.code });
+    // The mapped code is what crosses the API boundary, deliberately: a raw sandbox error can carry
+    // provider and request context. But the operator log was only ever recording the same mapped
+    // code, so `sandbox_unavailable` was indistinguishable from out-of-quota, image-missing, or
+    // genuinely-down - three problems with three different responses and one message between them.
+    // This keeps the raw reason server-side and bounded, which is what makes the class diagnosable.
+    console.error("buildit_execute_failure", { category: safeExecutionErrorCategory(error), code: mapped.code,
+      reason: executionFailureDiagnostic(error) });
     return json(mapped.status, { error: mapped.code });
   }
 }
