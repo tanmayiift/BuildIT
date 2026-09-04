@@ -21,6 +21,8 @@ import type * as dashboardReviews from "../dashboardReviews.js";
 import type * as dataClassification from "../dataClassification.js";
 import type * as durableReview from "../durableReview.js";
 import type * as evalLoop from "../evalLoop.js";
+import type * as findingFeedbackData from "../findingFeedbackData.js";
+import type * as findingFeedbackWorker from "../findingFeedbackWorker.js";
 import type * as findings from "../findings.js";
 import type * as githubInstallations from "../githubInstallations.js";
 import type * as githubInstallationsData from "../githubInstallationsData.js";
@@ -106,6 +108,8 @@ declare const fullApi: ApiFromModules<{
   dataClassification: typeof dataClassification;
   durableReview: typeof durableReview;
   evalLoop: typeof evalLoop;
+  findingFeedbackData: typeof findingFeedbackData;
+  findingFeedbackWorker: typeof findingFeedbackWorker;
   findings: typeof findings;
   githubInstallations: typeof githubInstallations;
   githubInstallationsData: typeof githubInstallationsData;

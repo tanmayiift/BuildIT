@@ -5,7 +5,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { GitHubAppClient, GitHubRepositoryWriter, inlineCommentMarker, reviewCommentMarker, sideEffectKey } from "@buildit/github";
-import { neverMergedSentence, selectInlineFindings } from "@buildit/orchestrator";
+import { demotedByLearning, neverMergedSentence, selectInlineFindings } from "@buildit/orchestrator";
 import { issueArtifactGrant } from "@buildit/security";
 import { platformFailureReport, type PlatformFailureReason } from "./lib/platformFailureReport";
 
@@ -31,7 +31,7 @@ export function reviewDetailsUrl(reviewId: string) {
 // Inline delivery is best-effort by design: the verdict is already published on the check run and
 // the summary comment before this runs, so a GitHub hiccup here must not fail a review that has
 // already decided. It logs and moves on rather than throwing.
-async function publishInlineFindings(scope: Scope, token: string) {
+async function publishInlineFindings(scope: Scope, token: string, feedback: ReadonlyArray<{ ruleKey: string; pathPrefixHmac: string; verdict: "accepted" | "dismissed" }>) {
   if (!scope.analysis) return;
   try {
     const brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""), secret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url");
@@ -42,7 +42,19 @@ async function publishInlineFindings(scope: Scope, token: string) {
     const buffer = Buffer.from(await response.arrayBuffer());
     if (buffer.byteLength !== scope.analysis.size || createHash("sha256").update(buffer).digest("hex") !== scope.analysis.checksum) return;
     const value = JSON.parse(buffer.toString("utf8")) as { arbitrated?: Array<Record<string, unknown>> };
-    const findings = selectInlineFindings((value.arbitrated ?? []).filter(item => typeof item.path === "string" && typeof item.id === "string") as Array<Record<string, unknown> & { severity: string; blocking?: boolean; resolution?: string }>, scope.reviewProfile)
+    // Learning removes before the profile decides what is loud, because it works on the raw shape -
+    // the rule, the path and where the finding came from - which the GitHub-facing form drops.
+    const surviving = (value.arbitrated ?? []).filter(item => typeof item.path === "string" && typeof item.id === "string")
+      .filter(item => !demotedByLearning({
+        ruleKey: String(item.ruleId ?? item.category ?? ""),
+        pathPrefixHmac: String(item.pathHmac ?? ""),
+        severity: String(item.severity ?? "warning") as "info" | "warning" | "high" | "critical",
+        blocking: item.blocking === true,
+        origin: String(item.origin ?? "model") === "scanner" ? "scanner" : "model",
+      }, feedback));
+    const demoted = (value.arbitrated ?? []).length - surviving.length;
+    if (demoted > 0) console.info("buildit_learning_demoted", { demoted });
+    const findings = selectInlineFindings(surviving as Array<Record<string, unknown> & { severity: string; blocking?: boolean; resolution?: string }>, scope.reviewProfile)
 
       .map(item => ({ id: String(item.id), path: String(item.path), startLine: Number(item.startLine), endLine: Number(item.endLine),
         severity: String(item.severity ?? "warning"),
@@ -85,7 +97,7 @@ export const publish = internalAction({
       // line it cites - the thing the headline has always promised and never delivered. Only
       // findings that survived arbitration reach here, so nothing the validator dropped lands on a
       // line, and they are anchored to the pinned commit rather than to whatever HEAD is now.
-      await publishInlineFindings(scope, token);
+      await publishInlineFindings(scope, token, await ctx.runQuery(internal.findingFeedbackData.feedbackForRepository, { repositoryId: scope.repositoryId }));
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, { ...args, sideEffectId: commentEffect, requestHash, externalId: String(comment.id), status: "completed", now: Date.now() });
       return { checkId: String(check.id), commentId: String(comment.id) };
     } finally { await github.revoke(tokenScope); }

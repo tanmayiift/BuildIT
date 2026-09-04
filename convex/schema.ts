@@ -290,6 +290,23 @@ export default defineSchema({
     pausedBy: v.string(), pausedAt: v.number(),
   }).index("by_repository_pr", ["repositoryId", "prNumber"]),
 
+  // What a person did with a finding. Learning reads this to decide what to stop putting on the
+  // diff; the history page reads it to answer whether BuildIT is useful on this repository. One
+  // record, because inferring the same fact twice is how two surfaces come to disagree.
+  //
+  // Keyed on repositoryId, never organizationId: one team's dismissals must not change another
+  // team's reviews, and two repositories in the same organization stay independent. Paths are
+  // hashed, like pathHmac on findings.
+  findingFeedback: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.id("reviews"),
+    findingId: v.optional(v.id("findings")), fingerprintHmac: v.string(),
+    ruleKey: v.string(), pathPrefixHmac: v.string(),
+    verdict: v.union(v.literal("accepted"), v.literal("dismissed")),
+    actorHash: v.string(), occurredAt: v.number(),
+  }).index("by_repository_rule", ["repositoryId", "ruleKey", "pathPrefixHmac"])
+    .index("by_review", ["reviewId"])
+    .index("by_repository_time", ["repositoryId", "occurredAt"]),
+
   webhookDeliveries: defineTable({
     deliveryId: v.string(), event: v.string(), action: v.string(), installationId: v.optional(v.number()),
     signatureValid: v.boolean(), disposition: value.webhookDisposition, status: value.webhookStatus,

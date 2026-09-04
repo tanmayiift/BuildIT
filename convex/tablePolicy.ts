@@ -17,6 +17,7 @@ export const tablePolicies = {
   reviewEvents: { scope: "review", parents: ["organizationId", "reviewId", "publicMessageArtifactId"], data: "artifact_reference_only" },
   modelStageRuns: { scope: "review", parents: ["organizationId", "repositoryId", "reviewId"], data: "metadata" },
   requirements: { scope: "review", parents: ["organizationId", "reviewId", "contentArtifactId"], data: "artifact_reference_only" },
+  findingFeedback: { scope: "review", parents: ["organizationId", "repositoryId", "reviewId", "findingId"], data: "metadata" },
   pullRequestPauses: { scope: "repository", parents: ["organizationId", "repositoryId"], data: "metadata" },
   findings: { scope: "review", parents: ["organizationId", "reviewId", "contentArtifactId", "evidenceIds", "requirementId"], data: "artifact_reference_only" },
   findingSuppressions: { scope: "repository", parents: ["organizationId", "repositoryId"], data: "metadata" },
