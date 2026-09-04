@@ -15,8 +15,13 @@ export default function Overview() {
         <h1 id="landing-title">Autonomous code review that cites its evidence.</h1>
         <p className="landing-promise-line">It fixes what it finds and opens a stacked PR. It never merges. A human owns the merge decision.</p>
         <p>Every finding names the file, the line, and the commit it was checked against.</p>
-        <div className="button-row landing-actions"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
-        <small className="landing-boundary">Sign-in identifies you. Repository access is a separate step. A model key is requested only when AI analysis starts.</small>
+        {/* Scanning pasted code needs no account, and it was reachable only from the top nav - so the
+            first thing the page invited a stranger to do was the one thing requiring OAuth. The
+            action that asks for nothing now leads. Connecting a repository keeps its place beside
+            it; the four-step permission model governs what happens after someone chooses that, and
+            is untouched. */}
+        <div className="button-row landing-actions"><a className="button" href="/sandbox">Scan code now — no account</a><a className="button secondary" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
+        <small className="landing-boundary">Scanning pasted code needs nothing. Sign-in identifies you. Repository access is a separate step. A model key is requested only when AI analysis starts.</small>
       </div>
       <aside className="review-proof" aria-label="What a BuildIT decision contains">
         <div className="proof-context"><span><small>Repository</small><strong>your-org/api</strong></span><span><small>Commit</small><code>exact head SHA</code></span></div>
