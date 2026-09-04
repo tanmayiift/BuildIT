@@ -66,6 +66,10 @@ export default defineSchema({
     // its sha moves on every merge, so approving a commit meant re-approving an unchanged file
     // several times a day - and an approval nobody reads is worse than no approval.
     approvedConfigHash: v.optional(v.string()), approvedConfigBy: v.optional(v.string()),
+    // The configuration the last review actually read and refused, so an admin can approve the
+    // exact version they were told about. Without this the receipt names a hash the product has no
+    // way to act on, and the only route to trusting a config file is a support request.
+    pendingConfigHash: v.optional(v.string()), pendingConfigSeenAt: v.optional(v.number()),
     // Off unless asked: BuildIT opening pull requests nobody wanted is its own kind of noise.
     changelogOnMerge: v.optional(v.boolean()),
     forkPolicy: value.forkPolicy, configRevisionId: v.optional(v.id("configRevisions")),

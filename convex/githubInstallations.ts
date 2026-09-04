@@ -1,6 +1,6 @@
 "use node";
 import { v } from "convex/values";
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { GitHubAppClient } from "@buildit/github";
 
@@ -38,3 +38,56 @@ export const claim=action({args:{installationId:v.number()},handler:async(ctx,ar
 
 import { createSign } from "node:crypto";
 function createAppJwt(appId:string,privateKey:string){const encode=(value:unknown)=>Buffer.from(JSON.stringify(value)).toString("base64url"),now=Math.floor(Date.now()/1000),unsigned=`${encode({alg:"RS256",typ:"JWT"})}.${encode({iat:now-60,exp:now+540,iss:appId})}`,signer=createSign("RSA-SHA256");signer.update(unsigned);return`${unsigned}.${signer.sign(privateKey,"base64url")}`}
+
+// Adding a repository in GitHub used to change nothing here: the App did not subscribe to
+// installation_repositories, and the Repositories page only linked out to GitHub, so the only
+// thing that ever re-read the list was the setup flow. A customer could grant access and watch
+// BuildIT ignore it indefinitely.
+//
+// This re-lists rather than trusting the payload's repositories_added/removed, so a delivery that
+// GitHub retried, reordered or dropped still converges on the truth. It mints a metadata-only
+// token: discovering which repositories exist never needs to read one.
+export const syncRepositories = internalAction({
+  args: { installationId: v.number() },
+  handler: async (ctx, args): Promise<{ synced: boolean; added?: number; total?: number }> => {
+    const appId = process.env.GITHUB_APP_ID, privateKey = process.env.GITHUB_APP_PRIVATE_KEY;
+    if (!appId || !privateKey) throw new Error("github_app_not_configured");
+
+    const tokenResponse = await fetch(`https://api.github.com/app/installations/${args.installationId}/access_tokens`, {
+      method: "POST",
+      headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${createAppJwt(appId, privateKey)}`,
+        "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "BuildIT" },
+      body: JSON.stringify({ permissions: { metadata: "read" } }),
+    });
+    // A suspended or deleted installation is a fact, not an incident: nothing to sync.
+    if (tokenResponse.status === 404 || tokenResponse.status === 403) return { synced: false };
+    if (!tokenResponse.ok) throw new Error(`github_installation_token_${tokenResponse.status}`);
+    const token = (await tokenResponse.json() as { token: string }).token;
+
+    type InstallationRepository = { id: number; owner: { login: string }; name: string;
+      default_branch: string; visibility?: "public" | "private" | "internal"; private?: boolean };
+    const repositories: InstallationRepository[] = [];
+    let total = 0;
+    for (let page = 1; page <= maxInstallationRepositoryPages; page += 1) {
+      const response = await fetch(`https://api.github.com/installation/repositories?per_page=100&page=${page}`, {
+        headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`,
+          "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "BuildIT" } });
+      if (!response.ok) throw new Error(`github_installation_repositories_${response.status}`);
+      const body = await response.json() as { total_count?: number; repositories?: InstallationRepository[] };
+      total = typeof body.total_count === "number" ? body.total_count : total;
+      const batch = body.repositories ?? [];
+      repositories.push(...batch);
+      if (batch.length < 100) break;
+    }
+    // Refuse a partial list rather than disabling repositories that are simply on page 21.
+    if (total !== repositories.length) throw new Error("repository_selection_too_large");
+
+    return await ctx.runMutation(internal.githubInstallationsData.syncInstallationRepositories, {
+      installationId: args.installationId,
+      repositories: repositories.map(repo => ({ githubRepositoryId: repo.id, owner: repo.owner.login,
+        name: repo.name, defaultBranch: repo.default_branch || "main",
+        visibility: repo.visibility ?? (repo.private ? "private" as const : "public" as const) })),
+      now: Date.now(),
+    });
+  },
+});

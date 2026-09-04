@@ -49,8 +49,28 @@ function Integrations() {
 }
 function UnavailableIntegration({ name, description }: { name: string; description: string }) { return <article className="integration-card"><div><span className="integration-glyph">{name.slice(0, 2).toUpperCase()}</span><span className="status neutral">Not available</span></div><h2>{name}</h2><p>{description}</p><span className="muted-copy">No account access requested</span></article>; }
 
-function Policies() { return <div className="content"><Header eyebrow="Trusted configuration" title="Policies" description="These controls come from an approved ref, never from an untrusted pull request." /><section className="settings-list"><Setting title="Human merge boundary" value="Always enforced" detail="BuildIT has no merge authority." /><Setting title="Autofix delivery" value="Stacked PR only" detail="The source PR branch is never modified." /><Setting title="Convergence bounds" value="3 rounds · 6 proposals" detail="First reached limit stops the loop." /><Setting title="Required-check policy" value="Advisory" detail="Platform failures cannot claim evaluation occurred." /><Setting title="Source retention" value="24 hours" detail="Maximum 7 days; deletion remains auditable." /></section></div>; }
-function Setting({ title, value, detail }: { title: string; value: string; detail: string }) { return <article className="setting-row"><div><strong>{title}</strong><p>{detail}</p></div><code>{value}</code><button type="button" disabled>Configure after organization setup</button></article>; }
+// This page used to show five rows with a disabled button reading "Configure after organization
+// setup" - a control that was never going to appear, on settings that are mostly not settings at
+// all. What is on this page are the boundaries BuildIT holds for every repository; the things a
+// team actually chooses are per repository and live on the Repositories page. Saying so is more
+// useful than a button that does nothing.
+function Policies() {
+  return <div className="content">
+    <Header eyebrow="Trusted configuration" title="Policies"
+      description="These hold for every review, on every repository, and no setting relaxes them. What your team chooses per repository is on the Repositories page." />
+    <section className="settings-list">
+      <Setting title="Human merge boundary" value="Always enforced" detail="BuildIT has no merge authority, including over its own autofix and changelog pull requests." />
+      <Setting title="Autofix delivery" value="Stacked PR only" detail="A fix arrives as a separate pull request. The branch under review is never written to." />
+      <Setting title="Configuration source" value="Trusted ref only" detail="A .buildit.yml is read from your default branch and never from a pull request head, and an admin approves each version on the Repositories page." />
+      <Setting title="Convergence bounds" value="3 rounds · 6 proposals" detail="The first limit reached stops the loop, so a review cannot run indefinitely against your key." />
+      <Setting title="Required-check policy" value="Advisory" detail="A platform failure is reported as a platform failure. It can never be presented as a check that evaluated your code." />
+      <Setting title="Source retention" value="24 hours" detail="Seven days maximum. Deletion is confirmed against storage and recorded in the audit log." />
+    </section>
+  </div>;
+}
+function Setting({ title, value, detail }: { title: string; value: string; detail: string }) {
+  return <article className="setting-row"><div><strong>{title}</strong><p>{detail}</p></div><code>{value}</code></article>;
+}
 
 function Members() { return <div className="content"><Header eyebrow="Organization access" title="Members & roles" description="One person can belong to multiple organizations with a separate role in each." /><MembersWorkspaceState /></div>; }
 function Notifications() { return <div className="content"><Header eyebrow="Source-free communication" title="Notifications" description="See where review results appear today and who may receive future email. Customer messages never contain source, diffs, logs, findings, or secrets."/><NotificationPreferences/></div>; }

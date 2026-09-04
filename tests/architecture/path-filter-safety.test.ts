@@ -18,8 +18,10 @@ describe("what a path filter cannot do", () => {
   it("keeps dependency manifests regardless of what the repository excluded", () => {
     const line = worker.split("\n").find(item => item.includes("const headSelect"));
     expect(line).toBeDefined();
-    // The manifest term is disjunctive and comes first, so no filter can reach past it.
-    expect(line).toMatch(/dependencyManifest\.test\(path\)\s*$/);
+    // The plan-input term is disjunctive and comes first, so no filter can reach past it. It
+    // covers the manifests the sandbox scans and package.json, which the execution plan is derived
+    // from - a filter able to hide either would break the review rather than quieten it.
+    expect(line).toMatch(/executionPlanInput\(path\)\s*$/);
     expect(worker).toContain("|| ((changedPaths.has(path) || isRequirementSourcePath(path)) && allowedByRepository(path))");
   });
 

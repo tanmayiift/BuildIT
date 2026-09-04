@@ -20,6 +20,13 @@ const unsafeInstallControl = /(^|\/)(?:\.git|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfi
 export function isUnsafeInstallControlPath(path: string) { return unsafeInstallControl.test(path); }
 export const dependencyManifest = /(^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock(?:b)?|Cargo\.lock|go\.mod|go\.sum|poetry\.lock|Pipfile\.lock|pdm\.lock|uv\.lock|requirements(?:[-.][\w.-]+)?\.txt|Gemfile\.lock|composer\.lock|mix\.lock|pubspec\.lock|conan\.lock|gradle\.lockfile|buildscript-gradle\.lockfile|packages\.lock\.json|renv\.lock|pom\.xml)$/;
 
+// What the execution plan is derived from, and therefore what BOTH revisions must be able to see.
+// detectPackageManager reads these from base and head and refuses the review when the two disagree,
+// so a selection rule that keeps a lockfile on head and drops it on base is not a missing file - it
+// is a hard platform failure with no review and no checks, on every repository above the selection
+// threshold whose pull request happens not to touch its manifests. Which is most of them.
+export const executionPlanInput = (path: string) => dependencyManifest.test(path) || path === "package.json";
+
 // The SDK kills a command with SIGKILL when it passes timeoutMs and still resolves with a plain
 // non-zero exitCode - there is no timeout flag on CommandFinished. So a 30-second kill and a
 // genuine test failure arrive here identical, and every timeout was reported as "failed". That is

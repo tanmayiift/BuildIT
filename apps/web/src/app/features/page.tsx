@@ -36,7 +36,7 @@ const boundaries = [
   ["It never merges", "Every verdict ends with a person deciding. BuildIT has no path to the merge button, by design."],
   ["Access is granted in steps", "Signing in identifies you. Repository access is a separate choice you make in GitHub. A model key is requested only when AI analysis starts."],
   ["Source evidence is deleted", "Checked-out code and command output are encrypted, kept for the retention window you set, and then deleted — with the deletion confirmed against storage, not assumed."],
-  ["A large repository is refused, not half-read", "Above roughly 1,300 files GitHub's rate limits make a complete read unreliable, so BuildIT says so instead of reviewing part of your code and calling it done."],
+  ["A large repository is read selectively, not wholly", "BuildIT fetches the files your pull request changed, your dependency manifests and the documents it cites \u2014 not your entire repository \u2014 so what it asks GitHub for grows with the size of the change, not the size of your codebase. The hard stop left is a repository whose file listing GitHub itself truncates, and BuildIT says so rather than reviewing part of your code and calling it done."],
 ];
 
 import record from "../track-record.json";
@@ -53,7 +53,7 @@ export default function Features() {
     <h2 className="section-title">Where it stops</h2>
     <dl className="trust-list">{boundaries.map(([term, detail]) => <div key={term}><dt>{term}</dt><dd>{detail}</dd></div>)}</dl>
 
-    <div className="next"><strong>The honest limit:</strong> BuildIT has reviewed {record.reviews} pull requests across {record.repositories} repositories, {record.decisive} of which reached a blocking or passing verdict, and {record.sinceLastPlatformFailure} consecutive reviews since the last platform failure on {record.lastPlatformFailureAt}. That is a real record and a small one — the next unfamiliar codebase may still find something it handles badly. It refuses rather than guesses, so you will sometimes get no answer instead of a wrong one.</div>
+    <div className="next"><strong>The honest limit:</strong> BuildIT has reviewed {record.reviews} pull requests across {record.repositories} repositories, {record.decisive} of which reached a blocking or passing verdict, and {record.sinceLastPlatformFailure} consecutive reviews since the last platform failure on {record.lastPlatformFailureAt}. That is a real record and a small one — the next unfamiliar codebase may still find something it handles badly, and the largest repository BuildIT has been measured on is far smaller than the point where GitHub truncates a file listing. It refuses rather than guesses, so you will sometimes get no answer instead of a wrong one.</div>
     <div className="button-row"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
   </div>;
 }

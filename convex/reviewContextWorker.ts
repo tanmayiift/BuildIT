@@ -5,7 +5,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { chunkRepositorySnapshot, compilePathFilters, fetchFileAtCommit, GitHubAppClient, GitHubIssueContextClient, omissionCoverage, type PullRequestContext, PullRequestContextClient, RepositoryContentClient, type RepositorySnapshot, trustedConfiguration } from "@buildit/github";
-import { dependencyManifest } from "@buildit/runner";
+import { executionPlanInput } from "@buildit/runner";
 import { acquireRequirements, describeUnreadableSources, instructionsForPaths, isRequirementSourcePath, parseRepositoryConfig, type RepositoryConfig, repositoryRequirementSources, summariseChange } from "@buildit/orchestrator";
 import { issueArtifactGrant,issueTrackerGrant } from "@buildit/security";
 
@@ -25,7 +25,7 @@ export function sameRepositoryIssueNumber(url: string, repositoryUrl: string) {
 // trustedConfiguration makes that refusal, and it also requires an admin to have approved this
 // exact configuration, because this GitHub App cannot read branch protection.
 async function resolveRepositoryConfig(token: string, scope: { githubRepositoryId: number; trustedRefSha?: string; headSha: string; approvedConfigHash?: string; approvedConfigBy?: string }) {
-  const empty = { config: {} as RepositoryConfig, provenance: "defaults_only" as const, problems: [] as string[] };
+  const empty = { config: {} as RepositoryConfig, provenance: "defaults_only" as const, problems: [] as string[], unapprovedHash: undefined as string | undefined };
   if (!scope.trustedRefSha || !/^[0-9a-f]{40}$/i.test(scope.trustedRefSha)) return empty;
   const file = await fetchFileAtCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
     commitSha: scope.trustedRefSha, path: ".buildit.yml" });
@@ -40,10 +40,11 @@ async function resolveRepositoryConfig(token: string, scope: { githubRepositoryI
   if (!trust.useRepositoryConfig) {
     return { ...empty, problems: [trust.reason === "pr_head_untrusted"
       ? "A .buildit.yml exists but was taken from the pull request head, which BuildIT never trusts."
-      : `A .buildit.yml exists but no admin has approved this version of it (${contentHash.slice(0, 12)}), so BuildIT used its defaults.`] };
+      : `A .buildit.yml exists but no admin has approved this version of it (${contentHash.slice(0, 12)}), so BuildIT used its defaults.`],
+      ...(trust.reason === "pr_head_untrusted" ? {} : { unapprovedHash: contentHash }) };
   }
   const parsed = parseRepositoryConfig(file.content);
-  return { config: parsed.config, provenance: trust.provenance, problems: parsed.problems };
+  return { config: parsed.config, provenance: trust.provenance, problems: parsed.problems, unapprovedHash: undefined };
 }
 
 export const gather = internalAction({
@@ -64,11 +65,20 @@ export const gather = internalAction({
       // contents are filtered out of the model context entirely (reviewAnalysisWorker filters
       // revision !== "base"), so fetching anything beyond the changed files buys a presence check.
       const repositoryConfig = await resolveRepositoryConfig(token, scope);
+      // The receipt names a hash; without this the product has nowhere to act on it.
+      await ctx.runMutation(internal.automaticReviewData.recordPendingConfig, {
+        repositoryId: scope.repositoryId, contentHash: repositoryConfig.unapprovedHash, now: Date.now() });
       const effectivePathFilters = repositoryConfig.config.pathFilters ?? scope.reviewPathFilters ?? [];
       const allowedByRepository = compilePathFilters(effectivePathFilters);
-      const headSelect = { keep: (path: string) => dependencyManifest.test(path)
+      // Both revisions must see everything the execution plan is derived from. Head keeping a
+      // lockfile and package.json that base dropped made detectPackageManager disagree with itself
+      // and fail the review outright - no verdict, no checks - on any repository above the
+      // threshold whose pull request left the manifests alone. A path filter cannot suppress these
+      // either, for the same reason it cannot turn off the vulnerability scan.
+      const headSelect = { keep: (path: string) => executionPlanInput(path)
         || ((changedPaths.has(path) || isRequirementSourcePath(path)) && allowedByRepository(path)), relevantOnlyAbove: 400 };
-      const baseSelect = { keep: (path: string) => changedPaths.has(path) && allowedByRepository(path), relevantOnlyAbove: 400 };
+      const baseSelect = { keep: (path: string) => executionPlanInput(path)
+        || (changedPaths.has(path) && allowedByRepository(path)), relevantOnlyAbove: 400 };
       await ctx.runQuery(internal.durableReview.assertActive, args);
       const [headSnapshot, baseSnapshot]: [RepositorySnapshot, RepositorySnapshot] = await Promise.all([
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,

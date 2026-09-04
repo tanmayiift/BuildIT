@@ -1,6 +1,6 @@
 "use client";
 
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { ActionLink } from "./action";
 import { useSampleTour } from "./workspace-route-boundary";
@@ -10,7 +10,7 @@ type Connection = {
   state: "signed_out" | "no_workspace" | "installation_required" | "installation_unavailable" | "no_repositories_selected" | "connected";
   organization: null | { id: string; name: string; slug: string; role: string; region: "eu-west-1"; retentionHours: number };
   installations: Array<{ id: string; installationId: number; accountLogin: string; accountType: "user" | "organization"; status: "active" | "suspended" | "removed"; updatedAt: number }>;
-  repositories: Array<{ id: string; installationId: string; githubRepositoryId: number; owner: string; name: string; defaultBranch: string; visibility: "public" | "private" | "internal" | "unknown"; autofixMode: "disabled" | "stacked" | "direct_push"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; changelogOnMerge?: boolean; paused: boolean; indexState: string; updatedAt: number }>;
+  repositories: Array<{ id: string; installationId: string; githubRepositoryId: number; owner: string; name: string; defaultBranch: string; visibility: "public" | "private" | "internal" | "unknown"; autofixMode: "disabled" | "stacked" | "direct_push"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; changelogOnMerge?: boolean; paused: boolean; indexState: string; approvedConfigHash?: string; pendingConfigHash?: string; updatedAt: number }>;
 };
 const connectionQuery = makeFunctionReference<"query", Record<string, never>, Connection>("repositoryConnections:current");
 const credentialQuery = makeFunctionReference<"query", { organizationId: string }, Array<{ status: string }>>("integrations:listProviderCredentials");
@@ -25,6 +25,7 @@ function profileLabel(profile: string | undefined) {
   return profile === "quiet" ? "Only what blocks" : profile === "thorough" ? "Everything cited" : "Blocking and serious";
 }
 
+const claimInstallation = makeFunctionReference<"action", { installationId: number }, { organizationId: string; repositoryCount: number }>("githubInstallations:claim");
 const setReviewPolicy = makeFunctionReference<"mutation", { organizationId: string; repositoryId: string; paused: boolean; autofixMode: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; changelogOnMerge?: boolean; requestId: string }, null>("repositoryConnections:setReviewPolicy");
 
 // The server enforces a 10-minute step-up window on policy, credential, and member changes.
@@ -109,7 +110,7 @@ function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
   repository: ConnectedRepository;
   canManage: boolean;
   saving: boolean;
-  onSave: (next: { paused?: boolean; autofixMode?: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; changelogOnMerge?: boolean }) => Promise<void>;
+  onSave: (next: { paused?: boolean; autofixMode?: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; changelogOnMerge?: boolean; approvedConfigHash?: string }) => Promise<void>;
 }) {
   const fullName = `${repository.owner}/${repository.name}`;
   const stacked = repository.autofixMode !== "disabled";
@@ -155,6 +156,7 @@ function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
         </select> : <strong>{profileLabel(repository.reviewProfile)}</strong>}
         <small>The review comment always carries every finding. This is how much of it lands on the diff.</small>
       </label>
+      <ConfigApproval repository={repository} canManage={canManage} saving={saving} onSave={onSave} />
       <div className="repository-review-state">
         <span className={`status ${repository.paused ? "warning" : "success"}`}>{repository.paused ? "Reviews paused" : "Reviews active"}</span>
         {canManage ? <button className="button secondary" type="button" disabled={saving} aria-label={`${repository.paused ? "Resume" : "Pause"} reviews for ${fullName}`} onClick={() => void onSave({ paused: !repository.paused })}>{saving ? "Saving…" : repository.paused ? "Resume" : "Pause"}</button> : null}
@@ -164,6 +166,66 @@ function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
       </div>
     </div>
   </article>;
+}
+
+// A review that finds a .buildit.yml it cannot trust says so in its receipt and names the hash.
+// Until now the product offered no way to act on that: the only trust route the App can use is
+// admin approval (the protected-ref route needs administration:read, which BuildIT does not have),
+// so an unapproved config stayed unapproved forever. This is that missing half - it approves the
+// exact version the review read, never whatever is on the branch now.
+function ConfigApproval({ repository, canManage, saving, onSave }: {
+  repository: ConnectedRepository;
+  canManage: boolean;
+  saving: boolean;
+  onSave: (next: { approvedConfigHash?: string }) => Promise<void>;
+}) {
+  const pending = repository.pendingConfigHash;
+  const approved = repository.approvedConfigHash;
+  if (!pending && !approved) return null;
+  const waiting = Boolean(pending && pending !== approved);
+  return <label className="repository-policy">
+    <span>Repository configuration</span>
+    {waiting
+      ? <strong><code>{pending!.slice(0, 12)}</code> awaiting approval</strong>
+      : <strong><code>{approved!.slice(0, 12)}</code> approved</strong>}
+    {waiting && canManage
+      ? <button className="button secondary" type="button" disabled={saving}
+          aria-label={`Approve .buildit.yml ${pending!.slice(0, 12)} for ${repository.owner}/${repository.name}`}
+          onClick={() => void onSave({ approvedConfigHash: pending! })}>{saving ? "Saving…" : "Approve this version"}</button>
+      : null}
+    <small>{waiting
+      ? "The last review read a .buildit.yml at this version and used BuildIT's defaults instead, because nobody has approved it. Approving applies it to the next review. Editing the file produces a new version to approve."
+      : "Reviews use this repository's own .buildit.yml. A change to the file needs approving again."}</small>
+  </label>;
+}
+
+// GitHub tells BuildIT when the installation's repository list changes, so this is the fallback,
+// not the main path. It exists because the webhook can be switched off in the App's settings, a
+// delivery can be missed, and "I added it and nothing happened" is the worst possible answer for
+// someone who has just granted access. Same action the setup flow uses - no new public surface.
+function RefreshRepositories({ installationId }: { installationId: number }) {
+  const refresh = useAction(claimInstallation);
+  const [state, setState] = useState<"idle" | "working" | "done" | "failed">("idle");
+  const [message, setMessage] = useState("");
+  const run = async () => {
+    setState("working");
+    setMessage("");
+    try {
+      const result = await refresh({ installationId });
+      setState("done");
+      setMessage(`${result.repositoryCount} ${result.repositoryCount === 1 ? "repository" : "repositories"} available to BuildIT.`);
+    } catch {
+      setState("failed");
+      setMessage("Could not read the repository list from GitHub just now. Nothing was changed.");
+    }
+  };
+  return <>
+    <button className="button secondary" type="button" disabled={state === "working"}
+      aria-label="Refresh the repository list from GitHub" onClick={() => void run()}>
+      {state === "working" ? "Refreshing…" : "Refresh list"}
+    </button>
+    {message ? <p className="form-note" role="status">{message}</p> : null}
+  </>;
 }
 
 export function RepositoryConnectionView() {
@@ -176,7 +238,7 @@ export function RepositoryConnectionView() {
   const installation = connection.installations.find(item => item.status === "active")!;
   const organization = connection.organization!;
   const canManage = organization.role === "owner" || organization.role === "admin";
-  const save = async (repository: ConnectedRepository, next: { paused?: boolean; autofixMode?: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; changelogOnMerge?: boolean }) => {
+  const save = async (repository: ConnectedRepository, next: { paused?: boolean; autofixMode?: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; changelogOnMerge?: boolean; approvedConfigHash?: string }) => {
     setPolicyMessage("");
     if (sampleTour) {
       setPolicyMessage(`Sample tour: no policy was changed for ${repository.owner}/${repository.name}. Sign in to manage a real repository.`);
@@ -184,7 +246,7 @@ export function RepositoryConnectionView() {
     }
     setSavingRepositoryId(repository.id);
     try {
-      await updatePolicy({ organizationId: organization.id, repositoryId: repository.id, paused: next.paused ?? repository.paused, autofixMode: next.autofixMode ?? (repository.autofixMode === "disabled" ? "disabled" : "stacked"), ...(next.reviewProfile ? { reviewProfile: next.reviewProfile } : {}), ...(next.reviewTrigger ? { reviewTrigger: next.reviewTrigger } : {}), ...(next.changelogOnMerge === undefined ? {} : { changelogOnMerge: next.changelogOnMerge }), requestId: crypto.randomUUID() });
+      await updatePolicy({ organizationId: organization.id, repositoryId: repository.id, paused: next.paused ?? repository.paused, autofixMode: next.autofixMode ?? (repository.autofixMode === "disabled" ? "disabled" : "stacked"), ...(next.reviewProfile ? { reviewProfile: next.reviewProfile } : {}), ...(next.reviewTrigger ? { reviewTrigger: next.reviewTrigger } : {}), ...(next.changelogOnMerge === undefined ? {} : { changelogOnMerge: next.changelogOnMerge }), ...(next.approvedConfigHash ? { approvedConfigHash: next.approvedConfigHash } : {}), requestId: crypto.randomUUID() });
       setPolicyMessage(`Policy saved for ${repository.owner}/${repository.name}. New reviews will use it.`);
     } catch (reason) {
       setPolicyMessage(policyFailureMessage(reason));
@@ -196,7 +258,7 @@ export function RepositoryConnectionView() {
     <section className="connection-overview" aria-label="GitHub connection" aria-live="polite">
       <div className="connection-summary"><span className="status success">Connected</span><h2>{connection.repositories.length} {connection.repositories.length === 1 ? "repository" : "repositories"} connected</h2><p>GitHub account <strong>{installation.accountLogin}</strong></p></div>
       <div className="connection-facts"><span><small>Workspace</small><strong>{organization.name}</strong></span><span><small>Installation</small><strong>#{installation.installationId}</strong></span><span><small>Encrypted source</small><strong>Ireland</strong></span><span><small>Isolated tests</small><strong>Paris</strong></span></div>
-      <ConnectionAction connection={connection} />
+      <div className="button-row"><ConnectionAction connection={connection} /><RefreshRepositories installationId={installation.installationId} /></div>
     </section>
     {policyMessage ? <p className="form-result" role="status">{policyMessage}</p> : null}
     <section className="repository-list" aria-label="Connected repositories">{connection.repositories.map(repository => <RepositoryPolicyRow key={repository.id} repository={repository} canManage={canManage} saving={savingRepositoryId === repository.id} onSave={next => save(repository, next)} />)}</section>

@@ -10,26 +10,43 @@ import { describe, expect, it } from "vitest";
 // packages/github/test/repository-content.test.ts proves the fetcher honours whatever predicate it
 // is given. That is the wrong half: the bug would have been the caller composing the predicate
 // wrongly, which no unit test of the fetcher can see. This pins the composition.
+//
+// It pinned the composition and still missed the sequel, because it pinned the wrong invariant.
+// This file used to assert that base was "the changed files alone" and treat that as a virtue.
+// Head kept `package.json` and the lockfile; base kept neither; detectPackageManager reads both
+// revisions and refuses when they disagree. Every repository above the threshold whose pull request
+// did not happen to touch its manifests died with `package_manager_changed` before a single check
+// ran, and the author was told "a required platform step failed". It reached production and killed
+// this repository's own pull request #46.
+//
+// So the invariant is not "base is narrow". It is that the two revisions never disagree about the
+// execution plan. convex/lib/executionPlanSelection.test.ts asserts that behaviourally by
+// reconstructing both predicates; this file asserts the worker actually composes them that way.
 const worker = readFileSync(join(import.meta.dirname, "../../convex/reviewContextWorker.ts"), "utf8");
+const selection = (name: "headSelect" | "baseSelect") =>
+  worker.match(new RegExp(`const ${name} = \\{[\\s\\S]*?\\};`))?.[0];
 
 describe("what a large repository still reads", () => {
-  it("keeps dependency manifests in the head selection", () => {
-    const select = worker.match(/const headSelect = \{[\s\S]*?\};/)?.[0];
-    expect(select, "headSelect not found - if the selection moved, move this assertion with it").toBeTruthy();
-    expect(select, "a narrowed selection must still reach the manifests the sandbox scans").toContain("dependencyManifest");
+  it("reaches the execution plan inputs from both revisions", () => {
+    for (const name of ["headSelect", "baseSelect"] as const) {
+      const select = selection(name);
+      expect(select, `${name} not found - if the selection moved, move this assertion with it`).toBeTruthy();
+      expect(select, `${name} must reach the manifests the sandbox scans and the plan is derived from`)
+        .toContain("executionPlanInput(path)");
+    }
   });
 
   it("keeps the changed files and the requirement documents in the head selection", () => {
-    const select = worker.match(/const headSelect = \{[\s\S]*?\};/)?.[0] ?? "";
+    const select = selection("headSelect") ?? "";
     expect(select).toContain("changedPaths.has(path)");
     expect(select).toContain("isRequirementSourcePath(path)");
   });
 
-  // Base contributes no file content to the model - reviewAnalysisWorker filters
-  // revision !== "base" - so it is deliberately the narrowest selection of the three. Pinned so
-  // nobody "fixes" it back to a full fetch and restores 1,373 pointless blob requests.
-  it("keeps the base selection to the changed files alone", () => {
-    const select = worker.match(/const baseSelect = \{[\s\S]*?\};/)?.[0];
+  // Base contributes no file content to the model - reviewAnalysisWorker filters revision !== "base"
+  // - so beyond the plan inputs it stays the narrowest of the three. Pinned so nobody "fixes" it
+  // back to a full fetch and restores 1,373 pointless blob requests.
+  it("does not pull requirement documents into the base selection", () => {
+    const select = selection("baseSelect");
     expect(select).toBeTruthy();
     expect(select).toContain("changedPaths.has(path)");
     expect(select, "base file content never reaches the model").not.toContain("isRequirementSourcePath");
