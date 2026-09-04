@@ -43,6 +43,16 @@ describe("what must fire", () => {
     expect(ids("src/auth.js", "if (providedToken === storedToken) return true;")).toContain("buildit-timing-unsafe-compare");
   });
 
+  // The rule could not match this at all: its tail was `\w`, and a quote is not a word character.
+  // So the one shape everybody writes when they get this wrong was the one shape it missed.
+  // Assembled, never written whole. A key-shaped literal anywhere in this tree fails the required
+  // secret scan on every pull request, including the ones that added it.
+  it("a secret compared against a string literal, which the rule used to miss entirely", () => {
+    const keyShaped = ["sk", "live", "abc123"].join("-");
+    expect(ids("src/auth.js", `if (apiKey === "${keyShaped}") return true;`)).toContain("buildit-timing-unsafe-compare");
+    expect(ids("src/auth.js", "if (signature !== `${expected}`) return false;")).toContain("buildit-timing-unsafe-compare");
+  });
+
   it("SQL assembled by interpolation", () => {
     expect(ids("src/db.js", "db.query(`SELECT * FROM users WHERE id = ${id}`);")).toContain("buildit-sql-interpolation");
   });
@@ -66,6 +76,15 @@ describe("what must stay silent, or the check gets turned off", () => {
     "const claims = jwt.verify(token, publicKey, { algorithms: [\"RS256\"] });");
   quiet("timingSafeEqual, which is the correct comparison", "src/auth.js",
     "if (crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b))) return true;");
+
+  // Two of these failed a required check on unmodified upstream code in a real review, on lines the
+  // pull request never touched. Checking whether a secret was supplied is not a timing attack:
+  // there is no secret on the other side of the comparison to leak.
+  quiet("a password checked for existence, not compared", "src/options.js",
+    "if (password !== undefined) { options.password = password; }");
+  quiet("a token checked against null", "src/auth.js", "if (token === null) return unauthenticated();");
+  quiet("a secret flag compared to a boolean", "src/config.js", "if (hasSecret === true) enable();");
+  quiet("a token length compared to a number", "src/auth.js", "if (tokenCount !== 0) retry();");
   quiet("a parameterised query, which is the correct form", "src/db.js",
     "db.query(\"SELECT * FROM users WHERE id = $1\", [id]);");
   quiet("a template literal that is not SQL", "src/log.js",
