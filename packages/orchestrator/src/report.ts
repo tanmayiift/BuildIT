@@ -157,6 +157,8 @@ function checkExcerpt(check: ReviewCheckDecision) {
     ...(evidenceReceipts.length || claimReceipts.length ? ["", ...evidenceReceipts, ...claimReceipts] : []),
     "",
     "</details>",
+    "",
+    "<sub>Reply `@buildit help` for what you can ask it to do.</sub>",
   ];
   return { decision, body: lines.join("\n"), publishedClaimCount: claims.length };
 }

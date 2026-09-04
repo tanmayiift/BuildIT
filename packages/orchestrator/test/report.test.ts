@@ -70,7 +70,9 @@ describe("verified report", () => {
   it("drops unsupported claims and neutralizes mentions and markup", () => {
     const report = composeVerifiedReport({ ...input(), prNumber: 1, configRevision: "cfg", checks: [{ name: "test", required: true, conclusion: "passed", evidenceComplete: true }], findings: [{ title: "@buildit <script>alert(1)</script>", severity: "info", resolution: "uncertain", blocking: false, evidenceIds: ["ev-1"], path: "<script>bad.ts", startLine: 2, endLine: 2, impact: "@buildit <script>impact</script>", explanation: "@buildit <script>explanation</script>" }], claims: [{ text: "This is bug-free", evidenceIds: ["ev-1"], certainty: "certain" }, { text: "Unsupported", evidenceIds: ["missing"], certainty: "certain" }], costUsd: 0 });
     expect(report.publishedClaimCount).toBe(0);
-    expect(report.body).not.toContain("@buildit");
+    // No live mention anywhere: GitHub does not linkify inside a code span, so the rule is that no
+    // "@" survives outside one. Stronger than checking for this fixture's spelling.
+    expect(report.body.replace(/`[^`]*`/g, "")).not.toContain("@");
     expect(report.body).not.toContain("<script>");
     expect(report.body).not.toContain("bug-free");
   });
