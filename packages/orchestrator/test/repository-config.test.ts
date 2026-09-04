@@ -72,3 +72,25 @@ describe("reading .buildit.yml", () => {
     expect(parseRepositoryConfig(long).problems.join(" ")).toContain("pathInstructions");
   });
 });
+
+describe("saying what happened to the configuration", () => {
+  const base = {
+    repository: "acme/api", prNumber: 1, headSha: "a".repeat(40), baseSha: "b".repeat(40),
+    configRevision: "cfg", coverage: "complete" as const, checks: [], findings: [], claims: [],
+    evidence: [], environmentAvailable: true, isStale: false, costUsd: 0.05, retentionExpiresAt: 0,
+  };
+
+  it("says when a configuration was found and not used", async () => {
+    const { composeVerifiedReport } = await import("../src/report.js");
+    const { body } = composeVerifiedReport({ ...base,
+      configNote: "A .buildit.yml exists but no admin has approved this version of it (abc123), so BuildIT used its defaults." });
+    expect(body).toContain("| Repository configuration |");
+    expect(body).toContain("no admin has approved");
+  });
+
+  it("says nothing at all when there was no configuration", async () => {
+    const { composeVerifiedReport } = await import("../src/report.js");
+    const { body } = composeVerifiedReport(base);
+    expect(body).not.toContain("Repository configuration");
+  });
+});

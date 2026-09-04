@@ -121,11 +121,14 @@ export const gather = internalAction({
           const coverage = coverageGap ? "partial" as const : "full" as const;
           // Computed from the same sources the coverage decision used, so the receipt can name
           // which one could not be read instead of gesturing at the category.
+          const configNote = repositoryConfig.problems.length ? repositoryConfig.problems[0]
+            : repositoryConfig.provenance !== "defaults_only" ? `Applied this repository's own .buildit.yml (${repositoryConfig.provenance.replace(/_/g, " ")}).`
+            : undefined;
           const changeSummary = summariseChange(pullContext.files);
           const unreadableSources = coverageGap === "requirements" ? describeUnreadableSources([...intent.sources, ...repositoryIntent.sources]) : undefined;
           await ctx.runMutation(internal.reviewArtifactData.complete, { organizationId: scope.organizationId, reviewId: scope.reviewId,
             expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
-            artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, coverageGap, unreadableSources, changeSummary, now: Date.now() });
+            artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, coverageGap, unreadableSources, changeSummary, ...(configNote ? { configNote } : {}), now: Date.now() });
           artifactIds.push(String(reserved.artifactId));
         }
       }

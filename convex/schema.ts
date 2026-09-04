@@ -132,6 +132,7 @@ export default defineSchema({
     unreadableSources: v.optional(v.object({ total: v.number(), unreadable: v.number(), summary: v.string(), nextStep: v.string() })),
     // Counted from the diff at context time, where the file list actually is.
     changeSummary: v.optional(v.string()),
+    configNote: v.optional(v.string()),
     currentStage: value.reviewStage,
     promptInjectionUnscopedAt: v.optional(v.number()), promptInjectionSurfaces: v.optional(v.array(value.injectionSurface)),
     blockedReason: v.optional(v.string()), blockedSince: v.optional(v.number()),
