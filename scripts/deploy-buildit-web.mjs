@@ -129,7 +129,19 @@ async function main() {
   const link = resolveDeployLink({ repoRoot });
   const contract = assertBuildITWebDeployContext({ cwd: process.cwd(), repoRoot, link });
   if (process.argv.includes("--dry-run")) {
-    console.log(JSON.stringify({ valid: true, ...contract, deployStarted: false }));
+    const build = spawnSync("npx", ["pnpm@10.15.0", "--filter", "@buildit/web", "build"], {
+      cwd: repoRoot, encoding: "utf8", shell: false,
+      env: { ...process.env, NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL ?? "https://judicious-barracuda-968.convex.cloud" },
+    });
+    if (build.status !== 0) {
+      const detail = `${build.stdout ?? ""}\n${build.stderr ?? ""}`;
+      const named = detail.match(/(?:Module not found: Can't resolve '[^']+'|Type error:[^\n]+|error TS\d+:[^\n]+)/g);
+      const tail = detail.split("\n").map(line => line.trimEnd()).filter(Boolean).slice(-15);
+      console.error("buildit_web_build_failed");
+      console.error((named?.length ? [...new Set(named)] : tail).join("\n"));
+      process.exit(1);
+    }
+    console.log(JSON.stringify({ valid: true, ...contract, built: true, deployStarted: false }));
     return;
   }
 

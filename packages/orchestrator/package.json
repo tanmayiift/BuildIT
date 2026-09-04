@@ -1,1 +1,22 @@
-{"name": "@buildit/orchestrator", "version": "0.1.0", "type": "module", "exports": "./src/index.ts", "scripts": {"build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "lint": "eslint ."}, "dependencies": {"@buildit/contracts": "workspace:*", "@buildit/providers": "workspace:*", "@buildit/runner": "workspace:*", "@buildit/security": "workspace:*"}, "devDependencies": {"typescript": "^5.9.2"}}
+{
+  "name": "@buildit/orchestrator",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@buildit/contracts": "workspace:*",
+    "@buildit/providers": "workspace:*",
+    "@buildit/runner": "workspace:*",
+    "@buildit/security": "workspace:*",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "@types/js-yaml": "^4.0.9"
+  }
+}

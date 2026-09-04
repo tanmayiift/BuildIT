@@ -36,9 +36,14 @@ describe("observability release assets", () => {
       "BuildITArtifactDeletionBacklog", "BuildITWebhookSignatureSpike",
       "BuildITLoopGuardTrip", "BuildITStaleCheck", "BuildITBudgetExhaustionSpike",
     ]) expect(rules).toContain(`alert: ${alert}`);
-    expect((rules.match(/service: buildit/g) ?? [])).toHaveLength(12);
-    expect((rules.match(/runbook_url:/g) ?? [])).toHaveLength(12);
-    expect((rules.match(/action:/g) ?? [])).toHaveLength(12);
+    expect(rules).toContain("alert: BuildITProviderRetryRateHigh");
+    // Every rule carries a runbook and an action. The count follows the rules rather than capping
+    // them: a new alert is fine, a new alert nobody can act on is not.
+    const alertCount = (rules.match(/- alert: /g) ?? []).length;
+    expect(alertCount).toBeGreaterThanOrEqual(12);
+    expect((rules.match(/service: buildit/g) ?? [])).toHaveLength(alertCount);
+    expect((rules.match(/runbook_url:/g) ?? [])).toHaveLength(alertCount);
+    expect((rules.match(/action:/g) ?? [])).toHaveLength(alertCount);
     expect(rules).toContain('buildit_failures_total{buildit_outcome="failed"}');
     expect(rules).toContain('buildit_operations_total{buildit_outcome=~"succeeded|failed"}');
     expect(rules).toContain("or vector(0)");
@@ -136,6 +141,29 @@ describe("an alert an engineer can act on", () => {
   it("still carries no source, repository or customer identity", () => {
     for (const forbidden of [".Labels.repository", ".Labels.pr", "prNumber", "headSha"]) {
       expect(template).not.toContain(forbidden);
+    }
+  });
+});
+
+// An alert on a metric nothing emits can never fire, which is the same defect as one that fires
+// constantly - only quieter, and therefore worse. The first version of the provider alert did
+// exactly that: it filtered buildit_reviews_failed_total, a metric that does not exist.
+describe("every alert watches something that is actually emitted", () => {
+  const rules = read("observability/alerts.yml");
+  const telemetry = read("packages/telemetry/src/index.ts");
+
+  it("uses only counters the telemetry package creates", () => {
+    const emitted = new Set((telemetry.match(/createCounter\("buildit\.([a-z_]+)"/g) ?? [])
+      .map(match => `buildit_${match.replace(/.*buildit\./, "").replace(/".*/, "")}_total`));
+    for (const metric of new Set(rules.match(/buildit_[a-z_]+_total/g) ?? [])) {
+      expect(emitted).toContain(metric);
+    }
+  });
+
+  it("filters on error codes the telemetry package will actually pass through", () => {
+    for (const code of new Set((rules.match(/buildit_error_code=~"([^"]+)"/g) ?? [])
+      .flatMap(match => match.replace(/.*=~"/, "").replace(/"$/, "").split("|")))) {
+      expect(telemetry).toContain(`"${code}"`);
     }
   });
 });

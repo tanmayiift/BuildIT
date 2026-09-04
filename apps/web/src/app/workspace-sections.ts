@@ -4,7 +4,7 @@
 // anonymous visitor instead of the sign-in gate. Nothing leaked, because NotificationPreferences
 // self-gates - but that is the fallback, not the control.
 export const workspaceSections = [
-  "repositories", "metrics", "usage", "integrations", "policies", "members", "notifications", "audit",
+  "repositories", "history", "metrics", "usage", "integrations", "policies", "members", "notifications", "audit",
 ] as const;
 
 export type WorkspaceSection = typeof workspaceSections[number];

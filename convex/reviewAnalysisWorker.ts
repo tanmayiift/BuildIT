@@ -11,7 +11,7 @@ import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact, red
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 type RequirementSourceType = "pull_request" | "github_issue" | "linear" | "jira" | "repository_document" | "test";
-type SnapshotChunk = { artifactId?: Id<"artifacts">; revision?: "base" | "head"; pull?: { title: string; body: string; files: Array<{ path: string; patch?: string; status: string }>; omitted: unknown[]; urlHash: string; requirementCoverage?: "complete" | "partial"; requirementSources?: Array<{ id: string; type: RequirementSourceType; status: string; version: string; urlHash: string; content?: string }>; requirements?: Array<{ id: string; text: string; sourceId: string; line: number; evidenceHash: string; certainty: string }>;requirementConflicts?:Array<{canonical:string;requirementIds:string[];sourceIds:string[]}> }; snapshot: { files: Array<{ path: string; content: string; size: number }>; omitted: unknown[]; coverage: string } };
+type SnapshotChunk = { artifactId?: Id<"artifacts">; revision?: "base" | "head"; pull?: { reviewInstructions?: string[]; title: string; body: string; files: Array<{ path: string; patch?: string; status: string }>; omitted: unknown[]; urlHash: string; requirementCoverage?: "complete" | "partial"; requirementSources?: Array<{ id: string; type: RequirementSourceType; status: string; version: string; urlHash: string; content?: string }>; requirements?: Array<{ id: string; text: string; sourceId: string; line: number; evidenceHash: string; certainty: string }>;requirementConflicts?:Array<{canonical:string;requirementIds:string[];sourceIds:string[]}> }; snapshot: { files: Array<{ path: string; content: string; size: number }>; omitted: unknown[]; coverage: string } };
 type AnalysisScope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; headSha: string; baseSha: string; configRevision: string; provider: ProviderName; model: string;
   credential: { id: string; organizationId: string; repositoryId?: string; provider: ProviderName; ciphertext: string; nonce: string; tag: string; wrappedDataKey: string; kmsKeyId: string; envelopeVersion: 1; keyVersion: number; aadDigest: string; maskedSuffix: string; availableModels: string[]; status: "valid"; createdBy: string; createdAt: number; lastValidatedAt: number };
   credentialDocumentId: Id<"providerCredentials">; artifacts: Array<{ id: Id<"artifacts">; storageKey: string; checksum: string; size: number }>;
@@ -77,7 +77,9 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   const exclusions = { paths: [] as string[], patchPaths: [] as string[], changedPaths: [] as string[], source: [] as OmissionSample[], pull: [] as OmissionSample[],
     totals: {} as Partial<Record<OmissionKind, number>> };
   const base = { pull: { title: "", titleTruncated: false, body: "", bodyTruncated: false, changes, urlHash: pull.urlHash,
-    requirementCoverage: pull.requirementCoverage ?? "partial", requirementSources, requirements, requirementConflicts }, files, exclusions, coverage: "partial" as "full" | "partial" };
+    requirementCoverage: pull.requirementCoverage ?? "partial", requirementSources, requirements, requirementConflicts,
+    // Bounded upstream by instructionsForPaths; repeated here because everything in this object is.
+    reviewInstructions: (pull.reviewInstructions ?? []).slice(0, 20).map(item => redactForModel(String(item).slice(0, 2_000))) }, files, exclusions, coverage: "partial" as "full" | "partial" };
   const size = () => Buffer.byteLength(JSON.stringify(base));
   if (size() > maxBytes) throw new Error("analysis_context_budget_too_small");
   const baseCeiling = Math.max(size(), Math.floor(maxBytes * 0.7));

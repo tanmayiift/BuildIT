@@ -20,10 +20,25 @@ http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(a
   const reserved = await ctx.runMutation(internal.githubWebhookData.reserve, { deliveryId, event, action, installationId: typeof installation?.id === "number" ? installation.id : undefined, disposition, signatureValid: true, now: Date.now() });
   if (reserved.duplicate) return new Response("duplicate", { status: 202 });
   if (disposition !== "processed") return new Response("ignored", { status: 202 });
+  const reviewThread = payload.thread as { comments?: Array<{ body?: unknown }> } | undefined;
+  if (event === "pull_request_review_thread" && ["resolved", "unresolved"].includes(action)
+    && typeof pullRequest?.number === "number" && typeof repository?.id === "number"
+    && typeof sender?.login === "string" && sender.type !== "Bot" && Array.isArray(reviewThread?.comments)) {
+    const first = reviewThread.comments.find(comment => typeof comment?.body === "string");
+    if (first) {
+      await ctx.scheduler.runAfter(0, internal.findingFeedbackWorker.observe, {
+        githubRepositoryId: repository.id, prNumber: pullRequest.number,
+        commentBody: String(first.body).slice(0, 2_000), senderLogin: sender.login,
+        resolved: action === "resolved" });
+    }
+  }
   if (event === "issue_comment" && issue?.pull_request && typeof issue.number === "number" && Number.isInteger(issue.number) && issue.number > 0 && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof sender?.login === "string" && typeof sender.type === "string" && typeof comment?.body === "string") {
     await ctx.scheduler.runAfter(0, internal.githubWebhookProcessor.processWebhook, { deliveryId, installationId: installation.id, githubRepositoryId: repository.id, prNumber: issue.number, senderLogin: sender.login, senderType: sender.type, commentAction: action, command: comment.body.slice(0, 200) });
   } else if (event === "pull_request" && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof pullRequest?.number === "number" && typeof pullRequest.head?.sha === "string") {
-    await ctx.scheduler.runAfter(0, internal.githubWebhookProcessor.processPullRequestWebhook, { deliveryId, installationId: installation.id, githubRepositoryId: repository.id, prNumber: pullRequest.number, headSha: pullRequest.head.sha });
+    await ctx.scheduler.runAfter(0, internal.githubWebhookProcessor.processPullRequestWebhook, { deliveryId, installationId: installation.id, githubRepositoryId: repository.id, prNumber: pullRequest.number, headSha: pullRequest.head.sha, action,
+      authorLogin: typeof (pullRequest as { user?: { login?: unknown } }).user?.login === "string" ? (pullRequest as { user: { login: string } }).user.login : "",
+      merged: (pullRequest as { merged?: unknown }).merged === true,
+      title: typeof (pullRequest as { title?: unknown }).title === "string" ? ((pullRequest as { title: string }).title).slice(0, 300) : undefined });
   } else if (event === "push" && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof pushRef === "string" && typeof pushAfter === "string") {
     await ctx.scheduler.runAfter(0, internal.githubWebhookProcessor.processPushWebhook, { deliveryId, installationId: installation.id, githubRepositoryId: repository.id, ref: pushRef, afterSha: pushAfter });
   } else await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId, disposition: "rejected", status: "completed", now: Date.now() });

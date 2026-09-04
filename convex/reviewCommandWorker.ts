@@ -24,11 +24,17 @@ const helpBody = [
 
 export const respond = internalAction({
   args: { organizationId: v.id("organizations"), repositoryId: v.id("repositories"), prNumber: v.number(),
-    actor: v.string() },
+    kind: v.union(v.literal("help"), v.literal("pause"), v.literal("resume")), actor: v.string() },
   handler: async (ctx, args): Promise<{ posted: boolean }> => {
     const scope = await ctx.runQuery(internal.reviewCommandData.commandScope, {
       organizationId: args.organizationId, repositoryId: args.repositoryId });
     if (!scope) return { posted: false };
+
+    if (args.kind !== "help") {
+      await ctx.runMutation(internal.automaticReviewData.setPause, { organizationId: args.organizationId,
+        repositoryId: args.repositoryId, prNumber: args.prNumber, paused: args.kind === "pause",
+        actor: args.actor, now: Date.now() });
+    }
 
     const github = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
     const tokenScope = { installationId: scope.installationId, repositoryId: scope.githubRepositoryId, stage: "review" as const };
@@ -38,7 +44,10 @@ export const respond = internalAction({
       // Keyed by kind, so asking for help twice edits one comment rather than leaving a trail -
       // the same reason the review comment is keyed on the pull request.
       await writer.upsertIssueComment({ prNumber: args.prNumber,
-        marker: `buildit-review:help-pr-${args.prNumber}`, body: helpBody });
+        marker: `buildit-review:${args.kind}-pr-${args.prNumber}`,
+        body: args.kind === "help" ? helpBody
+          : args.kind === "pause" ? "**Automatic reviews paused on this pull request.** Pushes will not start one here; other pull requests are unaffected. Comment `@buildit resume` to start again, or `@buildit review` to run one now without resuming."
+          : "**Automatic reviews resumed on this pull request.** The next push will be reviewed." });
       return { posted: true };
     } finally { await github.revoke(tokenScope); }
   },

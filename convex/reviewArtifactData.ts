@@ -14,7 +14,7 @@ export const contextScope = internalQuery({
     // Scoped at the index. by_status is global, so this read every tenant's encrypted tracker
     // tokens into memory before filtering them out in JavaScript.
     const trackers=(await ctx.db.query("trackerConnections").withIndex("by_org_provider",q=>q.eq("organizationId",args.organizationId)).collect()).filter(item=>item.status==="active"&&(!item.repositoryId||item.repositoryId===repository._id)&&(!item.expiresAt||item.expiresAt>Date.now()));
-    return { organizationId: args.organizationId, repositoryId: repository._id, reviewId: review._id, reviewPathFilters: repository.reviewPathFilters,
+    return { organizationId: args.organizationId, repositoryId: repository._id, reviewId: review._id, reviewPathFilters: repository.reviewPathFilters, trustedRefSha: review.trustedRefSha, approvedConfigHash: repository.approvedConfigHash, approvedConfigBy: repository.approvedConfigBy,
       installationId: installation.installationId, githubRepositoryId: repository.githubRepositoryId,
       prNumber: review.prNumber, headSha: review.headSha, baseSha: review.baseSha,
       executionGeneration: review.executionGeneration, expiresAt: review.expiresAt,trackers:trackers.map(item=>({documentId:item._id,id:item.credentialScopeId,organizationId:String(item.organizationId),...(item.repositoryId?{repositoryId:String(item.repositoryId)}:{}),provider:item.provider,workspaceId:item.workspaceId,ciphertext:item.encryptedAccessToken,nonce:item.nonce,tag:item.authTag,wrappedDataKey:item.wrappedDataKey,kmsKeyId:item.kmsKeyId,envelopeVersion:item.envelopeVersion,keyVersion:item.keyVersion,aadDigest:item.aadDigest,status:"active" as const,createdBy:item.createdBy,createdAt:item.createdAt})) };
@@ -47,7 +47,7 @@ export const reserve = internalMutation({
 export const complete = internalMutation({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number(),
     artifactId: v.id("artifacts"), checksum: v.string(), size: v.number(),
-    coverage: v.union(v.literal("full"), v.literal("partial")), coverageGap: v.optional(coverageGap), unreadableSources: v.optional(v.object({ total: v.number(), unreadable: v.number(), summary: v.string(), nextStep: v.string() })), changeSummary: v.optional(v.string()), now: v.number() },
+    coverage: v.union(v.literal("full"), v.literal("partial")), coverageGap: v.optional(coverageGap), unreadableSources: v.optional(v.object({ total: v.number(), unreadable: v.number(), summary: v.string(), nextStep: v.string() })), changeSummary: v.optional(v.string()), configNote: v.optional(v.string()), now: v.number() },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), artifact = await ctx.db.get(args.artifactId);
     // This was the one completion mutation with no fence: it patched the review back to
@@ -61,7 +61,7 @@ export const complete = internalMutation({
     if (artifact.redactionStatus === "redacted") return artifact._id;
     if (artifact.redactionStatus !== "pending") throw new ConvexError("artifact_completion_mismatch");
     await ctx.db.patch(artifact._id, { redactionStatus: "redacted" });
-    await ctx.db.patch(review._id, { status: "gathering_context", currentStage: "context", coverageLevel: args.coverage, coverageGap: args.coverageGap, unreadableSources: args.unreadableSources, changeSummary: args.changeSummary, updatedAt: args.now });
+    await ctx.db.patch(review._id, { status: "gathering_context", currentStage: "context", coverageLevel: args.coverage, coverageGap: args.coverageGap, unreadableSources: args.unreadableSources, changeSummary: args.changeSummary, configNote: args.configNote, updatedAt: args.now });
     return artifact._id;
   },
 });

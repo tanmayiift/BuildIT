@@ -34,6 +34,12 @@ export function assertBuildITBrokerDeployContext({ cwd, repoRoot, link }) {
 
 function vercel(args, cwd, env) {
   const result = spawnSync("vercel", args, { cwd, encoding: "utf8", shell: false, env });
+  // "Not authorized" happened mid-run on a real deploy and left the broker a commit behind while
+  // convex and web moved on - the drift that costs an hour to notice. One retry, because a
+  // token that is genuinely wrong fails the same way twice.
+  if (result.status !== 0 && /not authoriz/i.test(`${result.stdout ?? ""}${result.stderr ?? ""}`)) {
+    return spawnSync("vercel", args, { cwd, encoding: "utf8", shell: false, env });
+  }
   if (result.error) throw result.error;
   if (result.status !== 0) {
     process.stderr.write(`${result.stderr ?? ""}\n`);

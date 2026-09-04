@@ -73,7 +73,7 @@ export type InjectionSurface="code"|"narrative"|"checks"|"unknown";
 export type InjectionScope={unscoped:boolean;paths:ReadonlySet<string>;surfaces:ReadonlySet<InjectionSurface>};
 const filePathSignal=/^\$\.files\[(\d+)\]/;
 const changePathSignal=/^\$(?:\[\d+\])?\.pull\.changes\[(\d+)\]/;
-const narrativeSignal=/^\$(?:\[\d+\])?\.pull\.(?:title|body|requirementSources|requirements|requirementConflicts)\b/;
+const narrativeSignal=/^\$(?:\[\d+\])?\.pull\.(?:title|body|requirementSources|requirements|requirementConflicts|reviewInstructions)\b/;
 const checkSignal=/^\$(?:\[\d+\])?\.validation\b/;
 
 // A signal found inside one changed file taints that file. A signal in the pull request body,

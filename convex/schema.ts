@@ -59,6 +59,15 @@ export default defineSchema({
     // Paths this team would never review - a vendored directory, a generated client - on top of
     // the defaults BuildIT already skips. Glob, not regex, deliberately.
     reviewPathFilters: v.optional(v.array(v.string())),
+    // Automatic review spends the customer's own model key, so it is off until a repository asks
+    // for it - including the ones already connected.
+    reviewTrigger: v.optional(v.union(v.literal("manual"), v.literal("automatic"))),
+    // An admin approves the configuration, not the commit: the trusted ref is the base branch and
+    // its sha moves on every merge, so approving a commit meant re-approving an unchanged file
+    // several times a day - and an approval nobody reads is worse than no approval.
+    approvedConfigHash: v.optional(v.string()), approvedConfigBy: v.optional(v.string()),
+    // Off unless asked: BuildIT opening pull requests nobody wanted is its own kind of noise.
+    changelogOnMerge: v.optional(v.boolean()),
     forkPolicy: value.forkPolicy, configRevisionId: v.optional(v.id("configRevisions")),
     indexState: value.indexState, concurrencyLimit: v.number(), ...timestampFields,
   }).index("by_github_id", ["githubRepositoryId"])
@@ -123,6 +132,7 @@ export default defineSchema({
     unreadableSources: v.optional(v.object({ total: v.number(), unreadable: v.number(), summary: v.string(), nextStep: v.string() })),
     // Counted from the diff at context time, where the file list actually is.
     changeSummary: v.optional(v.string()),
+    configNote: v.optional(v.string()),
     currentStage: value.reviewStage,
     promptInjectionUnscopedAt: v.optional(v.number()), promptInjectionSurfaces: v.optional(v.array(value.injectionSurface)),
     blockedReason: v.optional(v.string()), blockedSince: v.optional(v.number()),
@@ -137,6 +147,7 @@ export default defineSchema({
     .index("by_status", ["status", "updatedAt"])
     .index("by_repo_pr_head_mode", ["repositoryId", "prNumber", "headSha", "mode"])
     .index("by_expiry", ["expiresAt"])
+    .index("by_org_created", ["organizationId", "createdAt"])
     .index("by_queue", ["organizationId", "status", "createdAt"])
     .index("by_blocked_expiry", ["status", "blockedExpiresAt"]),
 
@@ -275,6 +286,30 @@ export default defineSchema({
     createdAt: v.number(), updatedAt: v.number(),
   }).index("by_review", ["reviewId"])
     .index("by_candidate", ["candidateCommitSha"]),
+
+  // A pause has to outlive the next push, which is the whole point of it, so it cannot live on a
+  // review row - a review is per commit. It is a fact about one pull request.
+  pullRequestPauses: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"), prNumber: v.number(),
+    pausedBy: v.string(), pausedAt: v.number(),
+  }).index("by_repository_pr", ["repositoryId", "prNumber"]),
+
+  // What a person did with a finding. Learning reads this to decide what to stop putting on the
+  // diff; the history page reads it to answer whether BuildIT is useful on this repository. One
+  // record, because inferring the same fact twice is how two surfaces come to disagree.
+  //
+  // Keyed on repositoryId, never organizationId: one team's dismissals must not change another
+  // team's reviews, and two repositories in the same organization stay independent. Paths are
+  // hashed, like pathHmac on findings.
+  findingFeedback: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.id("reviews"),
+    findingId: v.optional(v.id("findings")), fingerprintHmac: v.string(),
+    ruleKey: v.string(), pathPrefixHmac: v.string(),
+    verdict: v.union(v.literal("accepted"), v.literal("dismissed")),
+    actorHash: v.string(), occurredAt: v.number(),
+  }).index("by_repository_rule", ["repositoryId", "ruleKey", "pathPrefixHmac"])
+    .index("by_review", ["reviewId"])
+    .index("by_repository_time", ["repositoryId", "occurredAt"]),
 
   webhookDeliveries: defineTable({
     deliveryId: v.string(), event: v.string(), action: v.string(), installationId: v.optional(v.number()),

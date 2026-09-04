@@ -4,9 +4,9 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { chunkRepositorySnapshot, compilePathFilters, GitHubAppClient, GitHubIssueContextClient, omissionCoverage, type PullRequestContext, PullRequestContextClient, RepositoryContentClient, type RepositorySnapshot } from "@buildit/github";
+import { chunkRepositorySnapshot, compilePathFilters, fetchFileAtCommit, GitHubAppClient, GitHubIssueContextClient, omissionCoverage, type PullRequestContext, PullRequestContextClient, RepositoryContentClient, type RepositorySnapshot, trustedConfiguration } from "@buildit/github";
 import { dependencyManifest } from "@buildit/runner";
-import { acquireRequirements, describeUnreadableSources, isRequirementSourcePath, repositoryRequirementSources, summariseChange } from "@buildit/orchestrator";
+import { acquireRequirements, describeUnreadableSources, instructionsForPaths, isRequirementSourcePath, parseRepositoryConfig, type RepositoryConfig, repositoryRequirementSources, summariseChange } from "@buildit/orchestrator";
 import { issueArtifactGrant,issueTrackerGrant } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
@@ -17,6 +17,33 @@ export function sameRepositoryIssueNumber(url: string, repositoryUrl: string) {
     const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), match = link.pathname.match(new RegExp(`^${escaped}/issues/(\\d+)$`)), number = match ? Number(match[1]) : 0;
     return Number.isSafeInteger(number) && number > 0 ? number : undefined;
   } catch { return undefined; }
+}
+
+
+// Read .buildit.yml from the trusted ref - the base branch - never from the pull request head.
+// Without that, anyone opening a pull request could rewrite the rules of the review running on it.
+// trustedConfiguration makes that refusal, and it also requires an admin to have approved this
+// exact configuration, because this GitHub App cannot read branch protection.
+async function resolveRepositoryConfig(token: string, scope: { githubRepositoryId: number; trustedRefSha?: string; headSha: string; approvedConfigHash?: string; approvedConfigBy?: string }) {
+  const empty = { config: {} as RepositoryConfig, provenance: "defaults_only" as const, problems: [] as string[] };
+  if (!scope.trustedRefSha || !/^[0-9a-f]{40}$/i.test(scope.trustedRefSha)) return empty;
+  const file = await fetchFileAtCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
+    commitSha: scope.trustedRefSha, path: ".buildit.yml" });
+  if (!file.present) return empty;
+
+  const contentHash = createHash("sha256").update(file.content).digest("hex");
+  const trust = trustedConfiguration({
+    defaultBranch: "main", headSha: scope.headSha, trustedSha: scope.trustedRefSha, contentHash,
+    protection: { branchProtected: false, rulesetProtected: false, allowsUntrustedDirectWrites: true },
+    ...(scope.approvedConfigHash ? { approval: { actorRole: "admin" as const, approvedContentHash: scope.approvedConfigHash } } : {}),
+  });
+  if (!trust.useRepositoryConfig) {
+    return { ...empty, problems: [trust.reason === "pr_head_untrusted"
+      ? "A .buildit.yml exists but was taken from the pull request head, which BuildIT never trusts."
+      : `A .buildit.yml exists but no admin has approved this version of it (${contentHash.slice(0, 12)}), so BuildIT used its defaults.`] };
+  }
+  const parsed = parseRepositoryConfig(file.content);
+  return { config: parsed.config, provenance: trust.provenance, problems: parsed.problems };
 }
 
 export const gather = internalAction({
@@ -36,7 +63,9 @@ export const gather = internalAction({
       // Head keeps the documents, because requirements are read from them. Base does not: its file
       // contents are filtered out of the model context entirely (reviewAnalysisWorker filters
       // revision !== "base"), so fetching anything beyond the changed files buys a presence check.
-      const allowedByRepository = compilePathFilters(scope.reviewPathFilters ?? []);
+      const repositoryConfig = await resolveRepositoryConfig(token, scope);
+      const effectivePathFilters = repositoryConfig.config.pathFilters ?? scope.reviewPathFilters ?? [];
+      const allowedByRepository = compilePathFilters(effectivePathFilters);
       const headSelect = { keep: (path: string) => dependencyManifest.test(path)
         || ((changedPaths.has(path) || isRequirementSourcePath(path)) && allowedByRepository(path)), relevantOnlyAbove: 400 };
       const baseSelect = { keep: (path: string) => changedPaths.has(path) && allowedByRepository(path), relevantOnlyAbove: 400 };
@@ -61,7 +90,8 @@ export const gather = internalAction({
         urlHash: createHash("sha256").update(pullContext.htmlUrl).digest("hex"), requirementCoverage: intentCoverage,
         requirementSources: intent.sources.map(source => ({ id: source.id, type: source.type, status: source.status, version: source.version, urlHash: createHash("sha256").update(source.url).digest("hex"),
           ...(source.type === "pull_request" || source.content === undefined ? {} : { content: source.content }) })),
-        requirements: intent.requirements,requirementConflicts:intent.conflicts };
+        requirements: intent.requirements,requirementConflicts:intent.conflicts,
+        reviewInstructions: instructionsForPaths(repositoryConfig.config.pathInstructions, pullContext.files.map(file => file.path)) };
       const pullBytes = Buffer.byteLength(JSON.stringify(pull));
       if (pullBytes > 2_500_000) throw new Error("pull_request_context_too_large");
       const artifactIds: string[] = [],
@@ -91,11 +121,14 @@ export const gather = internalAction({
           const coverage = coverageGap ? "partial" as const : "full" as const;
           // Computed from the same sources the coverage decision used, so the receipt can name
           // which one could not be read instead of gesturing at the category.
+          const configNote = repositoryConfig.problems.length ? repositoryConfig.problems[0]
+            : repositoryConfig.provenance !== "defaults_only" ? `Applied this repository's own .buildit.yml (${repositoryConfig.provenance.replace(/_/g, " ")}).`
+            : undefined;
           const changeSummary = summariseChange(pullContext.files);
           const unreadableSources = coverageGap === "requirements" ? describeUnreadableSources([...intent.sources, ...repositoryIntent.sources]) : undefined;
           await ctx.runMutation(internal.reviewArtifactData.complete, { organizationId: scope.organizationId, reviewId: scope.reviewId,
             expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
-            artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, coverageGap, unreadableSources, changeSummary, now: Date.now() });
+            artifactId: reserved.artifactId, checksum, size: body.byteLength, coverage, coverageGap, unreadableSources, changeSummary, ...(configNote ? { configNote } : {}), now: Date.now() });
           artifactIds.push(String(reserved.artifactId));
         }
       }

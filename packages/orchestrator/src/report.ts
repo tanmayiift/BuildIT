@@ -66,7 +66,7 @@ function findingLines(finding: ReportFinding, index: number) {
 // than a phrase each report restates in its own words.
 export const neverMergedSentence = "BuildIT did not merge this pull request.";
 
-export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; unreadableSources?: { total: number; unreadable: number; summary: string; nextStep: string }; changeSummary?: string; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
+export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; unreadableSources?: { total: number; unreadable: number; summary: string; nextStep: string }; changeSummary?: string; configNote?: string; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
   const decision = computeReviewDecision({ isStale: input.isStale, environmentAvailable: input.environmentAvailable, coverageComplete: input.coverage === "complete", ...(input.injectionUnscoped ? { injectionUnscoped: true } : {}), checks: input.checks, findings: input.findings });
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
@@ -150,6 +150,7 @@ function checkExcerpt(check: ReviewCheckDecision) {
     `| Base commit | \`${code(input.baseSha)}\` |`,
     `| Trusted configuration | \`${code(input.configRevision)}\` |`,
     `| Code under review | ${input.coverage === "complete" ? "Read in full" : "Partially read"} |`,
+    ...(input.configNote ? [`| Repository configuration | ${safe(input.configNote)} |`] : []),
     `| Requirement sources | ${input.coverageGap !== "requirements" ? "All read" : input.unreadableSources ? `${input.unreadableSources.unreadable} of ${input.unreadableSources.total} unreadable — ${input.unreadableSources.summary}` : "One or more unreadable"} |`,
     `| Model cost | $${input.costUsd.toFixed(4)} |`,
     `| Source evidence deleted after | ${istDate(input.retentionExpiresAt)} |`,

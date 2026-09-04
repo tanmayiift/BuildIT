@@ -51,3 +51,16 @@ Confirm the stale run made no write. The user may start a new review only after 
 ## BuildITBudgetExhaustionSpike
 
 Check model routing, context size, and actual stage usage. Do not raise ceilings automatically. A user must approve each new per-review ceiling.
+
+## BuildITProviderRetryRateHigh
+
+No review has failed. Retries are absorbing provider errors, which is what they are for, and this
+fires only so a rising rate is visible before it stops being absorbed. Check the provider's status
+page and the error codes in the broker logs. Escalate only if BuildITProviderFailure follows.
+
+## Alert rule drift
+
+`observability/alerts.yml` is the source of these rules. The deployed Grafana instance was
+configured through its UI and does not match the file - an emailed provider failure carried the
+alert name as its summary rather than the file's text. Reconcile Grafana to this file; until then
+the notification template does not depend on the summary being useful.

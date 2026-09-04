@@ -54,6 +54,8 @@ export const parentConsistencyPolicies = {
   requirements: "organization_review_optional_artifact",
   findings: "organization_review_artifacts_requirement",
   findingSuppressions: "organization_repository",
+  pullRequestPauses: "organization_repository",
+  findingFeedback: "organization_repository_review",
   checkRuns: "organization_review_optional_round_artifact",
   baseResults: "organization_repository_config_optional_artifact",
   autofixAttempts: "organization_review_optional_artifact",

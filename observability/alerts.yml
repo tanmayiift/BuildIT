@@ -42,13 +42,21 @@ groups:
           action: "Check worker capacity and provider limits; stop new intake if wait time continues to grow."
           runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditqueuedepthhigh"
       - alert: BuildITProviderFailure
-        expr: sum(increase(buildit_failures_total{buildit_operation="model.invoke"}[10m])) > 2
-        for: 5m
+        expr: sum(increase(buildit_failures_total{buildit_operation="review.delivery", buildit_error_code=~"provider_error|rate_limited"}[15m])) > 0
+        for: 0m
         labels: {severity: ticket, service: buildit}
         annotations:
-          summary: "BuildIT model calls are repeatedly failing"
+          summary: "A review ended without a verdict because a provider would not answer"
           action: "Check provider status and bounded retry counts; disable the failing provider route if errors continue."
           runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditproviderfailure"
+      - alert: BuildITProviderRetryRateHigh
+        expr: sum(increase(buildit_failures_total{buildit_operation="model.invoke"}[30m])) > 20
+        for: 10m
+        labels: {severity: info, service: buildit}
+        annotations:
+          summary: "BuildIT is retrying provider calls more than usual"
+          action: "No review has failed yet. Check provider status pages and error codes before the retries stop absorbing it."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditproviderretryratehigh"
       - alert: BuildITRunnerFailure
         expr: sum(increase(buildit_failures_total{buildit_operation=~"sandbox.execute|sandbox.cleanup"}[10m])) > 0
         for: 0m
