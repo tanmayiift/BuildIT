@@ -57,7 +57,16 @@ describe("observability release assets", () => {
     expect(rules).toContain('buildit_failures_total{buildit_outcome="failed"}');
     expect(rules).toContain('buildit_operations_total{buildit_outcome=~"succeeded|failed"}');
     expect(rules).toContain("or vector(0)");
-    expect(rules).toContain("max(absent_over_time(buildit_operations_total[15m]) or vector(0)) > 0.5");
+    // Liveness watches the snapshot gauge the cron emits every five minutes, never the operations
+    // counter: that counter only moves when somebody reviews a pull request, so it went silent on
+    // any quiet evening and paged 32 times over three days for an idle product.
+    expect(rules).toContain("max(absent_over_time(buildit_snapshot[15m]) or vector(0)) > 0.5");
+    // A ratio alert without a volume floor is not a rate. One failure and no successes gave 1.0,
+    // and at this volume a ten-minute window is often a single operation.
+    expect(rules, "the failure-rate alert must require enough operations for a percentage to mean anything")
+      .toContain('(sum(increase(buildit_operations_total{buildit_outcome=~"succeeded|failed"}[10m])) or vector(0)) >= 20');
+    expect(rules, "liveness must not depend on user-driven activity")
+      .not.toContain("absent_over_time(buildit_operations_total");
     expect(rules).toContain('buildit_failures_total{buildit_operation="webhook.verify"}');
   });
 

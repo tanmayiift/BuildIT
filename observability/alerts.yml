@@ -1,8 +1,13 @@
 groups:
   - name: buildit-release
     rules:
+      # The trailing volume floor is what makes this a *rate*. Without it, one failed operation with
+      # no successes in the window gives a ratio of 1.0 and pages someone - and at BuildIT's volume
+      # a ten-minute window is routinely one operation or none, so every isolated failure was a
+      # page. Twenty operations is the point below which a percentage is arithmetic rather than
+      # evidence; below it, the individual boundary alerts already fire on their own.
       - alert: BuildITHighFailureRate
-        expr: (sum(rate(buildit_failures_total{buildit_outcome="failed"}[10m])) or vector(0)) / clamp_min((sum(rate(buildit_operations_total{buildit_outcome=~"succeeded|failed"}[10m])) or vector(0)), 0.001) > 0.05
+        expr: (sum(rate(buildit_failures_total{buildit_outcome="failed"}[10m])) or vector(0)) / clamp_min((sum(rate(buildit_operations_total{buildit_outcome=~"succeeded|failed"}[10m])) or vector(0)), 0.001) > 0.05 and (sum(increase(buildit_operations_total{buildit_outcome=~"succeeded|failed"}[10m])) or vector(0)) >= 20
         for: 10m
         labels: {severity: page, service: buildit}
         annotations:
@@ -17,13 +22,20 @@ groups:
           summary: "BuildIT operation p95 is above two minutes"
           action: "Compare provider, runner, and queue latency; reduce intake if the slow boundary is saturated."
           runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditp95latencyhigh"
+      # Watches the snapshot gauge, not the operations counter. buildit_operations_total only moves
+      # when somebody reviews a pull request, so fifteen minutes of silence is a quiet Tuesday, not
+      # an outage - and this alert flapped Firing/Recovered 32 times over three days telling the
+      # on-call that nobody had pushed code. buildit_snapshot is emitted every five minutes by the
+      # telemetrySnapshotWorker cron regardless of user activity, so its absence means the cron or
+      # the collector is genuinely down, which is what the alert was always meant to catch. Fifteen
+      # minutes is three missed snapshots.
       - alert: BuildITTelemetrySilent
-        expr: max(absent_over_time(buildit_operations_total[15m]) or vector(0)) > 0.5
+        expr: max(absent_over_time(buildit_snapshot[15m]) or vector(0)) > 0.5
         for: 5m
         labels: {severity: ticket, service: buildit}
         annotations:
-          summary: "No BuildIT operation telemetry has arrived"
-          action: "Check the web and broker health endpoints, collector delivery, and the most recent deployment."
+          summary: "No BuildIT telemetry has arrived for three snapshot intervals"
+          action: "Check the Convex cron ran, then the collector delivery path and the most recent deployment. An idle product is not this alert - the snapshot emits whether or not anyone is reviewing."
           runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#buildittelemetrysilent"
       - alert: BuildITCriticalBoundaryFailure
         expr: sum(increase(buildit_failures_total{buildit_operation=~"artifact.delete|sandbox.cleanup|webhook.verify|autofix.loop_guard|review.stale_check"}[5m])) > 0
