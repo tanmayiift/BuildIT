@@ -40,3 +40,18 @@ export const setPause = internalMutation({
     return { paused: true };
   },
 });
+
+// Automatic review spends a customer's key, so support needs to be able to turn it off for one
+// repository without waiting for an owner to log in - a key exhausted at 3am is not a ticket that
+// waits. Internal only: the owner-facing path is repositoryConnections.setReviewPolicy, which
+// checks the caller's role.
+export const setReviewTrigger = internalMutation({
+  args: { githubRepositoryId: v.number(), trigger: v.union(v.literal("manual"), v.literal("automatic")) },
+  handler: async (ctx, args) => {
+    const repository = await ctx.db.query("repositories")
+      .withIndex("by_github_id", q => q.eq("githubRepositoryId", args.githubRepositoryId)).first();
+    if (!repository) return { updated: false as const };
+    await ctx.db.patch(repository._id, { reviewTrigger: args.trigger, updatedAt: Date.now() });
+    return { updated: true as const, repository: `${repository.owner}/${repository.name}`, trigger: args.trigger };
+  },
+});

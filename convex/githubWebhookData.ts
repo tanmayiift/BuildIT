@@ -182,6 +182,7 @@ export const recordPinnedSnapshot = internalMutation({
 export const materializeReview = internalMutation({
   args: {
     deliveryId: v.string(),
+    trigger: v.optional(v.union(v.literal("github_comment"), v.literal("automatic"))),
     organizationId: v.id("organizations"),
     repositoryId: v.id("repositories"),
     baseRef: v.string(),
@@ -316,7 +317,7 @@ export const materializeReview = internalMutation({
       diagnosticRunCount: 0,
       providerRetryCount: 0,
       commandRetryCount: 0,
-      trigger: "github_comment",
+      trigger: args.trigger ?? "github_comment",
       triggerVerb: delivery.triggerVerb,
       triggerActor: args.triggerActor,
       triggerActorPermission: args.actorPermission,

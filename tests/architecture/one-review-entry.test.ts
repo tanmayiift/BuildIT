@@ -40,3 +40,19 @@ describe("one way to start a review", () => {
     }
   });
 });
+
+// The first automatic review in production recorded itself as trigger "github_comment" - saying a
+// person asked for it when nobody had. It only surfaced by reading the row rather than checking
+// that a review appeared. The history view is built on this field, so a wrong value there is a
+// wrong answer to "how do reviews start here".
+describe("a review says how it was started", () => {
+  it("carries a trigger source from its caller rather than assuming one", () => {
+    expect(code).toContain("trigger: input.trigger");
+    expect(code).not.toContain('trigger: "github_comment",\n          organizationId');
+  });
+
+  it("labels the two entry points differently", () => {
+    expect(code).toContain('trigger: "automatic"');
+    expect(code).toContain('trigger: "github_comment"');
+  });
+});

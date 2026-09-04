@@ -25,6 +25,7 @@ type StartReviewInput = {
   triggerActorLogin: string;
   permission: "read" | "triage" | "write" | "maintain" | "admin";
   mode: "review" | "autofix";
+  trigger: "github_comment" | "automatic";
   provider?: "anthropic" | "openai" | "gemini";
   budgetLimit?: 1 | 2 | 3 | 5;
   client: GitHubAppClient;
@@ -104,6 +105,7 @@ async function startReviewForPullRequest(ctx: ActionCtx, input: StartReviewInput
       internal.githubWebhookData.materializeReview,
       {
         deliveryId: input.deliveryId,
+        trigger: input.trigger,
         organizationId: input.scope.organizationId,
         repositoryId: input.scope.repositoryId,
         baseRef: snapshot.baseRef,
@@ -276,7 +278,7 @@ export const processWebhook = internalAction({
         deliveryId: args.deliveryId, installationId: args.installationId,
         githubRepositoryId: args.githubRepositoryId, prNumber: args.prNumber,
         triggerActorLogin: args.senderLogin, permission, client, scope,
-        mode: decision.kind === "autofix" ? "autofix" : "review",
+        mode: decision.kind === "autofix" ? "autofix" : "review", trigger: "github_comment",
         ...(decision.provider ? { provider: decision.provider } : {}),
         ...(decision.budgetLimit ? { budgetLimit: decision.budgetLimit } : {}),
       });
@@ -318,7 +320,7 @@ async function startAutomaticReview(ctx: ActionCtx, args: { deliveryId: string; 
   await startReviewForPullRequest(ctx, {
     deliveryId: args.deliveryId, installationId: args.installationId,
     githubRepositoryId: args.githubRepositoryId, prNumber: args.prNumber,
-    triggerActorLogin: args.authorLogin, permission: "write", mode: "review",
+    triggerActorLogin: args.authorLogin, permission: "write", mode: "review", trigger: "automatic",
     client: new GitHubAppClient({ appId, privateKey }), scope,
   });
 }
