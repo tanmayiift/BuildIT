@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventPresentation, nextActionPresentation, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks } from "./review-presentation";
+import { dismissalReasonLabel, dismissalRefusal, eventPresentation, nextActionPresentation, pairFindingDetails, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, suppressionScopeLabel } from "./review-presentation";
 
 describe("review presentation", () => {
   it("explains cancellation without implying a code failure", () => {
@@ -47,5 +47,49 @@ describe("review presentation", () => {
     expect(pullRequestHref("tanmayiift", "buildit-public-fixture", 2)).toBe("https://github.com/tanmayiift/buildit-public-fixture/pull/2");
     expect(pullRequestHref("", "repository", 2)).toBeUndefined();
     expect(pullRequestHref("owner", "repository", 0)).toBeUndefined();
+  });
+
+  it("offers the dismissal choices as prose rather than the database words", () => {
+    expect(suppressionScopeLabel("pull_request")).toBe("This pull request");
+    expect(suppressionScopeLabel("repository")).toBe("Anywhere in this repository");
+    expect(dismissalReasonLabel("wrong_lines")).toBe("The cited lines are not where this happens");
+    // An enum value this file has never heard of is still capitalised prose, never a raw code.
+    expect(suppressionScopeLabel("branch_only")).toBe("Branch only");
+    expect(dismissalReasonLabel("someone_elses_problem")).toBe("Someone elses problem");
+  });
+
+  it("turns each dismissal refusal into a sentence that says nothing was recorded", () => {
+    const refused = dismissalRefusal(new Error("[Request ID: 8f2] Server Error\nUncaught ConvexError: not_found_or_forbidden"));
+    expect(refused).toContain("developer access to this repository");
+    expect(refused).toContain("Nothing was recorded.");
+    // A ConvexError puts the code in .data, and a transport failure has only a message.
+    expect(dismissalRefusal({ data: "finding_dismissal_reason_invalid" })).toContain("Choose one of the reasons offered");
+    expect(dismissalRefusal(new Error("Failed to fetch"))).toContain("nothing about the review changed");
+    for (const code of ["not_found_or_forbidden", "finding_fingerprint_invalid", "Server Error"]) {
+      expect(refused + dismissalRefusal(new Error("Failed to fetch"))).not.toContain(code);
+    }
+  });
+
+  // The rows carry a keyed HMAC of the path and the prose carries the path itself, so nothing joins
+  // them but the fields both copy unchanged from the same arbitrated finding. Prose attached to the
+  // wrong finding would name the wrong file to the person deciding whether to merge, so an
+  // ambiguous key has to be refused rather than guessed.
+  it("pairs decrypted prose to the row it belongs to, and refuses to guess", () => {
+    const row = (id: string, over: Record<string, unknown> = {}) =>
+      ({ id, category: "correctness", severity: "high", blocking: false, startLine: 12, endLine: 20, ...over });
+    const prose = (id: string, over: Record<string, unknown> = {}) =>
+      ({ id, path: "src/refund.ts", category: "correctness", severity: "high", blocking: false, startLine: 12, endLine: 20, ...over });
+
+    const paired = pairFindingDetails([row("finding-a"), row("finding-b", { startLine: 40, endLine: 44 })],
+      [prose("arbitrated-a"), prose("arbitrated-b", { path: "src/other.ts", startLine: 40, endLine: 44 })]);
+    expect([...paired].map(([id, detail]) => [id, detail.path]))
+      .toEqual([["finding-a", "src/refund.ts"], ["finding-b", "src/other.ts"]]);
+
+    // The same kind of defect on the same lines of two different files: neither row may borrow the
+    // other's file name, so neither is paired at all.
+    expect(pairFindingDetails([row("finding-a"), row("finding-b")],
+      [prose("arbitrated-a"), prose("arbitrated-b", { path: "src/other.ts" })]).size).toBe(0);
+    expect(pairFindingDetails([row("finding-a")], []).size).toBe(0);
+    expect(pairFindingDetails([row("finding-a", { severity: "warning" })], [prose("arbitrated-a")]).size).toBe(0);
   });
 });

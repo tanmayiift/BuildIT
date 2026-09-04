@@ -1,8 +1,9 @@
 "use client";
-import { useAction, useConvexAuth, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Component, useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
-import { comparisonRefusal, eventPresentation, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
+import { comparisonRefusal, dismissalReasonLabel, dismissalReasons, dismissalRefusal, eventPresentation, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
+import type { DismissalReason, SuppressionScope } from "./review-presentation";
 type Evidence = {
   review: {
     id: string;
@@ -37,6 +38,7 @@ type Evidence = {
     severity: string;
     confidence: number;
     blocking: boolean;
+    fingerprintHmac: string;
     pathFingerprint: string;
     startLine: number;
     endLine: number;
@@ -127,6 +129,14 @@ const evidenceQuery = makeFunctionReference<
     { status: "cancelled" | "already_finished" }
   >("dashboardReviews:cancel"),
   findingDetailsAction = makeFunctionReference<"action", { reviewId: string }, FindingDetail[]>("reviewEvidenceActions:getFindingDetails"),
+  // findingSuppressions has existed since the first schema and nothing in the product ever wrote to
+  // it, so a person who read a finding and knew it was wrong had no way to say so and the next
+  // review started as cold as this one. This is the only caller.
+  dismissFinding = makeFunctionReference<
+    "mutation",
+    { reviewId: string; fingerprintHmac: string; scope: SuppressionScope; reasonCode: DismissalReason; requestId: string },
+    { id: string; scope: string }
+  >("findings:dismiss"),
   // Three runs over identical code once gave the correct finding, then nothing, then an unrelated
   // one - and there was no way to see that in the product at all. These make one run comparable to
   // another run of the same pull request.
@@ -197,6 +207,10 @@ export function LiveReviewDetail({ id }: { id: string }) {
     nextAction = nextActionPresentation(review.nextActionCode, review.isStale),
     pullRequestUrl = pullRequestHref(repository.owner, repository.name, review.prNumber),
     checkSummaries = summarizeChecks(evidence.checks),
+    // The decrypted prose, joined to the rows it belongs to. The rows are the list: only a row
+    // carries the fingerprint findings:dismiss identifies a finding by, and the resolution a
+    // dismissal changes, so a findings panel built from the prose alone could show neither.
+    findingProse = pairFindingDetails(evidence.findings, findingDetails ?? []),
     hasEvidence = evidence.requirements.length + evidence.findings.length + evidence.checks.length > 0;
   // Left is the older run, so "lost" reads as a defect the earlier run reported and this one did
   // not - the direction a person actually asks the question in. A run with nothing earlier to
@@ -300,35 +314,16 @@ export function LiveReviewDetail({ id }: { id: string }) {
         eyebrow="Decision support"
         title="Issues to fix"
         detail={`${evidence.findings.length} supported by evidence`}
-        foot="Finding prose is read from the encrypted report only after BuildIT rechecks your repository membership."
+        foot="Finding prose is read from the encrypted report only after BuildIT rechecks your repository membership. Dismissing a finding records your team's judgement for the next review; it never silences one that blocks merge, a Critical finding, or a scanner result."
       >
-        {findingDetails?.length ? (
-          findingDetails.map(item => <article className="finding-summary" key={item.id}>
-            <div className="finding-summary-head"><span className={`status ${tone(item.severity)}`}>{findingSeverityLabel(item.severity)}</span><div><h3>{item.title}</h3><code>{item.path} · {lineRange(item.startLine, item.endLine)}</code></div><span className={`finding-resolution ${item.blocking ? "blocking" : ""}`}>{item.blocking ? "Blocks merge" : findingResolutionLabel(item.resolution)}</span></div>
-            <div className="finding-summary-body"><div><small>Why it matters</small><p>{item.impact}</p></div><div><small>What to inspect and correct</small><p>{item.explanation}</p></div></div>
-          </article>)
-        ) : findingDetailError ? (
-          <div className="finding-detail-state"><strong>Plain-language details could not be loaded</strong><p>No source was shown. Open the pull request for the published evidence, or refresh after checking your workspace access.</p></div>
+        {findingDetailError ? (
+          <div className="finding-detail-state"><strong>Plain-language details could not be loaded</strong><p>No source was shown. The exact findings are listed below. Open the pull request for the published evidence, or refresh after checking your workspace access.</p></div>
         ) : findingDetails === null ? (
-          <div className="finding-detail-state"><strong>Loading the encrypted finding summary…</strong><p>BuildIT is rechecking repository access before decrypting the report.</p></div>
-        ) : evidence.findings.length ? (
-          evidence.findings.map((item) => (
-            <div className="evidence-row" key={item.id}>
-              <span className={`status ${tone(item.severity)}`}>
-                {findingSeverityLabel(item.severity)}
-              </span>
-              <strong>
-                {findingCategoryLabel(item.category)}
-                {item.ruleId ? ` · ${item.ruleId}` : ""}
-              </strong>
-              <span>{item.blocking ? "Blocking" : findingResolutionLabel(item.resolution)}</span>
-              <code>
-                path {item.pathFingerprint} · L{item.startLine}–{item.endLine} ·{" "}
-                {item.evidenceCount} proof
-              </code>
-            </div>
-          ))
+          <div className="finding-detail-state"><strong>Loading the encrypted finding summary…</strong><p>BuildIT is rechecking repository access before decrypting the report. The exact findings are listed below meanwhile.</p></div>
         ) : null}
+        {evidence.findings.map(item => (
+          <Finding key={item.id} reviewId={id} finding={item} detail={findingProse.get(item.id)} />
+        ))}
       </Section> : null}
       {evidence.checks.length ? <Section
         eyebrow="Verification"
@@ -517,6 +512,79 @@ function Section({
         {foot}
       </footer>
     </section>
+  );
+}
+function Finding({ reviewId, finding, detail }: { reviewId: string; finding: Evidence["findings"][number]; detail?: FindingDetail | undefined }) {
+  const title = detail?.title ?? `${findingCategoryLabel(finding.category)} · ${lineRange(finding.startLine, finding.endLine)}`,
+    where = detail
+      ? `${detail.path} · ${lineRange(finding.startLine, finding.endLine)}`
+      : `path ${finding.pathFingerprint} · ${lineRange(finding.startLine, finding.endLine)}`;
+  return (
+    <article className="finding-summary" aria-label={`Finding: ${title}`}>
+      <div className="finding-summary-head">
+        <span className={`status ${tone(finding.severity)}`}>{findingSeverityLabel(finding.severity)}</span>
+        <div>
+          <h3>{title}</h3>
+          <code>{where}{finding.ruleId ? ` · ${finding.ruleId}` : ""} · {finding.evidenceCount} proof</code>
+        </div>
+        <span className={`finding-resolution ${finding.blocking ? "blocking" : ""}`}>{finding.blocking ? "Blocks merge" : findingResolutionLabel(finding.resolution)}</span>
+      </div>
+      {detail ? <div className="finding-summary-body"><div><small>Why it matters</small><p>{detail.impact}</p></div><div><small>What to inspect and correct</small><p>{detail.explanation}</p></div></div> : null}
+      <FindingDismissal reviewId={reviewId} finding={finding} />
+    </article>
+  );
+}
+// The correction a reader could never make. What it may claim is bounded by what
+// packages/orchestrator/src/learning.ts will do, and that function is demote-only: it refuses to
+// quieten a finding that blocks merge, a Critical one, or anything a scanner produced, whatever a
+// team dismisses. So this says what dismissal records, and says out loud where it will change
+// nothing - a control that overpromised here would be worse than the missing control was.
+function FindingDismissal({ reviewId, finding }: { reviewId: string; finding: Evidence["findings"][number] }) {
+  const dismiss = useMutation(dismissFinding),
+    [scope, setScope] = useState<SuppressionScope>("pull_request"),
+    [reasonCode, setReasonCode] = useState<DismissalReason>("not_a_defect"),
+    [working, setWorking] = useState(false),
+    [refusal, setRefusal] = useState(""),
+    [recorded, setRecorded] = useState(false);
+  // A scanner result is the one BuildIT stores a ruleId for; the model never gets one.
+  const neverSilenced = finding.blocking || finding.severity === "critical" || Boolean(finding.ruleId),
+    keepsAppearing = " It is still reported after this: BuildIT never silences a finding that blocks merge, a Critical finding, or a scanner result.";
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setWorking(true);
+    setRefusal("");
+    try {
+      await dismiss({ reviewId, fingerprintHmac: finding.fingerprintHmac, scope, reasonCode, requestId: crypto.randomUUID() });
+      setRecorded(true);
+    } catch (error) {
+      setRefusal(dismissalRefusal(error));
+    } finally {
+      setWorking(false);
+    }
+  }
+  if (recorded || finding.resolution === "dismissed")
+    return <p className="finding-dismissed" role="status">Dismissed by your team. The next review of this repository is told a person judged this finding wrong.{neverSilenced ? keepsAppearing : ""}</p>;
+  return (
+    <details className="finding-dismiss">
+      <summary>This finding is wrong</summary>
+      <form onSubmit={submit}>
+        <label className="field" htmlFor={`dismiss-scope-${finding.id}`}>
+          <span>How far this applies</span>
+          <select id={`dismiss-scope-${finding.id}`} value={scope} disabled={working} onChange={event => setScope(event.target.value as SuppressionScope)}>
+            {suppressionScopes.map(value => <option key={value} value={value}>{suppressionScopeLabel(value)}</option>)}
+          </select>
+        </label>
+        <label className="field" htmlFor={`dismiss-reason-${finding.id}`}>
+          <span>Why it is wrong</span>
+          <select id={`dismiss-reason-${finding.id}`} value={reasonCode} disabled={working} onChange={event => setReasonCode(event.target.value as DismissalReason)}>
+            {dismissalReasons.map(value => <option key={value} value={value}>{dismissalReasonLabel(value)}</option>)}
+          </select>
+        </label>
+        <button className="button secondary" type="submit" disabled={working}>{working ? "Recording…" : "Dismiss this finding"}</button>
+        <p className="form-note">Your decision and its scope are recorded, and this finding's fingerprint joins what the next review of this repository is told. Nothing here changes the pull request, the checks that ran, or the merge decision.{neverSilenced ? keepsAppearing : ""}</p>
+        {refusal ? <p className="form-result error" role="alert">{refusal}</p> : null}
+      </form>
+    </details>
   );
 }
 // BuildIT reviews the same pull request again after every push. Three runs over identical code

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // reviews:runHistory and reviews:compareRuns were built, authorized, declared customer-facing and
@@ -14,6 +14,8 @@ const state = vi.hoisted(() => ({
   comparisonError: null as Error | null,
   queries: [] as Array<{ reference: string; args: unknown }>,
   action: vi.fn(),
+  mutations: [] as string[],
+  mutation: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
@@ -31,6 +33,7 @@ vi.mock("convex/react", () => ({
     return undefined;
   },
   useAction: () => state.action,
+  useMutation: (reference: string) => { state.mutations.push(reference); return state.mutation; },
 }));
 vi.mock("convex/server", () => ({ makeFunctionReference: (name: string) => name }));
 
@@ -159,5 +162,113 @@ describe("comparing two runs of one pull request", () => {
     await screen.findByLabelText("Compare against");
     expect(screen.getByText("Compare this run with another")).not.toBeNull();
     expect(state.queries.some(call => call.reference === "reviews:compareRuns")).toBe(false);
+  });
+});
+
+// findings:dismiss is the only writer of findingSuppressions, which repositoryMemory reads into
+// the next review's prompt, and no screen ever called it - so a person who read a finding and knew
+// it was wrong had no way to say so, and the false-positive half of the evaluation loop had never
+// received a candidate. The rows in reviews:getEvidence are what carry the fingerprint the mutation
+// identifies a finding by; the exact row shape is held here, because a field invented in this file
+// would render for nobody.
+const findingRow = (over: Record<string, unknown> = {}) => ({
+  id: "finding-a", category: "correctness", severity: "high", confidence: 0.9, blocking: false,
+  fingerprintHmac: "a".repeat(64), pathFingerprint: "0123456789ab", startLine: 12, endLine: 20,
+  evidenceCount: 2, resolution: "open", ...over,
+});
+// The exact reviewEvidenceActions:getFindingDetails shape - decrypted prose, joined to the row above
+// on what both copy from the same arbitrated finding.
+const findingProse = (over: Record<string, unknown> = {}) => ({
+  id: "arbitrated-a", title: "Refund total ignores the currency", category: "correctness", severity: "high",
+  confidence: 0.9, path: "src/billing/refund.ts", startLine: 12, endLine: 20,
+  impact: "A refund raised in euros is paid at the pound amount.",
+  explanation: "Compare the currency before summing the lines.", resolution: "accepted", blocking: false, ...over,
+});
+
+describe("dismissing a finding a person knows is wrong", () => {
+  beforeEach(() => {
+    state.evidence = { ...evidence, findings: [findingRow()] };
+    state.runs = [run("run-current", 1_700_000_100_000)];
+    state.queries.length = 0;
+    state.mutations.length = 0;
+    state.action.mockReset().mockResolvedValue([findingProse()]);
+    state.mutation.mockReset().mockResolvedValue({ id: "finding-a", scope: "path" });
+  });
+
+  afterEach(cleanup);
+
+  it("sends findings:dismiss the fingerprint of the finding on screen, with the chosen scope and reason", async () => {
+    render(<LiveReviewDetail id="run-current" />);
+    const finding = await screen.findByRole("article", { name: "Finding: Refund total ignores the currency" });
+    fireEvent.change(within(finding).getByLabelText("How far this applies"), { target: { value: "path" } });
+    fireEvent.change(within(finding).getByLabelText("Why it is wrong"), { target: { value: "wrong_lines" } });
+    fireEvent.click(within(finding).getByRole("button", { name: "Dismiss this finding" }));
+
+    await waitFor(() => expect(state.mutation).toHaveBeenCalled());
+    expect(state.mutations).toContain("findings:dismiss");
+    expect(state.mutation.mock.calls[0]![0]).toEqual({
+      reviewId: "run-current",
+      fingerprintHmac: "a".repeat(64),
+      scope: "path",
+      reasonCode: "wrong_lines",
+      requestId: expect.any(String),
+    });
+    // The dismissal is only worth making if the person is told it landed.
+    expect((await screen.findByRole("status")).textContent).toContain("Dismissed by your team");
+  });
+
+  it("says in a sentence when the dismissal is refused, and never shows the code", async () => {
+    state.mutation.mockRejectedValue(new Error("[Request ID: 8f2] Server Error\nUncaught ConvexError: not_found_or_forbidden"));
+    render(<LiveReviewDetail id="run-current" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Dismiss this finding" }));
+
+    const refusal = await screen.findByRole("alert");
+    expect(refusal.textContent).toContain("needs developer access to this repository");
+    expect(refusal.textContent).toContain("Nothing was recorded.");
+    expect(document.body.textContent).not.toContain("not_found_or_forbidden");
+    expect(document.body.textContent).not.toContain("Server Error");
+  });
+
+  // packages/orchestrator/src/learning.ts is demote-only and refuses these three whatever a team
+  // dismisses, so the control must not read as a mute button on any of them.
+  it("says plainly which findings keep being reported however often they are dismissed", async () => {
+    state.evidence = { ...evidence, findings: [
+      findingRow({ id: "finding-blocking", blocking: true, startLine: 3, endLine: 3 }),
+      findingRow({ id: "finding-critical", severity: "critical", startLine: 4, endLine: 4 }),
+      findingRow({ id: "finding-scanner", category: "security", ruleId: "generic-api-key", startLine: 5, endLine: 5 }),
+      findingRow({ id: "finding-plain", severity: "warning", category: "quality", startLine: 6, endLine: 6 }),
+    ] };
+    state.action.mockResolvedValue([]);
+    render(<LiveReviewDetail id="run-current" />);
+    await screen.findByText("Issues to fix");
+
+    const kept = "It is still reported after this: BuildIT never silences a finding that blocks merge, a Critical finding, or a scanner result.";
+    for (const name of ["Wrong behaviour · line 3", "Wrong behaviour · line 4", "Security · line 5"]) {
+      expect(within(screen.getByRole("article", { name: `Finding: ${name}` })).getByText(new RegExp(kept.slice(0, 40)))).not.toBeNull();
+    }
+    const plain = within(screen.getByRole("article", { name: "Finding: Code quality · line 6" }));
+    expect(plain.queryByText(new RegExp(kept.slice(0, 40)))).toBeNull();
+    expect(plain.getByText(/Nothing here changes the pull request/)).not.toBeNull();
+  });
+
+  it("offers no form for a finding the team has already dismissed, and says what that did", async () => {
+    state.evidence = { ...evidence, findings: [findingRow({ resolution: "dismissed" })] };
+    render(<LiveReviewDetail id="run-current" />);
+    const finding = await screen.findByRole("article", { name: "Finding: Refund total ignores the currency" });
+    expect(within(finding).queryByRole("button", { name: "Dismiss this finding" })).toBeNull();
+    expect(within(finding).getByRole("status").textContent).toContain("The next review of this repository is told a person judged this finding wrong");
+  });
+
+  // The prose and the row are joined on what both copy unchanged from the same arbitrated finding.
+  // A row the prose cannot be matched to still gets its control - what it must never get is another
+  // finding's file name beside it.
+  it("keeps the control on every finding, prose or not, and never borrows the wrong file", async () => {
+    state.evidence = { ...evidence, findings: [findingRow(), findingRow({ id: "finding-b", severity: "warning", startLine: 44, endLine: 44 })] };
+    render(<LiveReviewDetail id="run-current" />);
+    await screen.findByRole("article", { name: "Finding: Refund total ignores the currency" });
+    const unmatched = screen.getByRole("article", { name: "Finding: Wrong behaviour · line 44" });
+    expect(unmatched.textContent).toContain("path 0123456789ab · line 44");
+    expect(unmatched.textContent).not.toContain("src/billing/refund.ts");
+    expect(within(unmatched).getByRole("button", { name: "Dismiss this finding" })).not.toBeNull();
   });
 });

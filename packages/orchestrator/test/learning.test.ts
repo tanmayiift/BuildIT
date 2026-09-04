@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { demotedByLearning } from "../src/learning.js";
+import { demotedByLearning, dismissalsBeforeDemotion } from "../src/learning.js";
 
 // A learning loop that can quiet a real defect is worse than no learning loop, so this one may do
 // exactly one thing: stop putting a shape of finding on the diff. It never stops finding it, never
@@ -53,5 +53,21 @@ describe("what repeated dismissals may change", () => {
 
   it("takes an empty history in its stride", () => {
     expect(demotedByLearning(finding(), [])).toBe(false);
+  });
+
+  // The three refusals above are examples, and the review page now carries a dismiss control that
+  // states them to a person as a promise: dismissing never silences a finding that blocks merge, a
+  // Critical finding, or a scanner result. An example can still be true while a fourth shape starts
+  // being demoted, so this pins the complete set instead - every severity against every origin,
+  // blocking and advisory, at a dismissal count far past the threshold. Adding a demotable shape
+  // now fails here, which is where the promise on that page can be checked.
+  it("demotes model findings that are advisory and not critical, and nothing else at any count", () => {
+    const demotable: string[] = [];
+    for (const severity of ["info", "warning", "high", "critical"] as const)
+      for (const blocking of [false, true])
+        for (const origin of ["model", "scanner"] as const)
+          if (demotedByLearning(finding({ severity, blocking, origin }), dismissals(dismissalsBeforeDemotion * 10)))
+            demotable.push(`${severity} ${blocking ? "blocking" : "advisory"} ${origin}`);
+    expect(demotable).toEqual(["info advisory model", "warning advisory model", "high advisory model"]);
   });
 });

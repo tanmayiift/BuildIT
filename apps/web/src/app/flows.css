@@ -207,3 +207,17 @@
 /* The proposed change is a diff, so the added line is marked the way a diff marks it. */
 .finding-diff code { color: var(--ink-2); }
 .finding-delivery { margin: 0; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+/* Dismissing a finding. Folded away by default: the page is read to decide a merge, and the
+   correction is the rarer act - but it is on every finding, because the one a person knows is
+   wrong is not predictable. The note under the button is not decoration; it is the boundary
+   packages/orchestrator/src/learning.ts actually enforces. */
+.finding-dismiss { margin: 12px 0 0 38px; }
+.finding-dismiss > summary { display: inline-flex; align-items: center; min-height: 44px; width: max-content; color: var(--navy); font-size: 11px; font-weight: 800; cursor: pointer; }
+.finding-dismiss form { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(200px, 1.2fr) max-content; align-items: end; gap: 12px; max-width: 760px; padding: 12px 14px; background: var(--workbench); border: 1px solid var(--line); border-radius: 7px; }
+.finding-dismiss .field { margin: 0; }
+.finding-dismiss select { min-height: 44px; background: var(--surface); }
+.finding-dismiss .button { min-height: 44px; }
+.finding-dismiss .form-note, .finding-dismiss .form-result { grid-column: 1 / -1; margin: 0; }
+.finding-dismissed { margin: 12px 0 0 38px; max-width: 68ch; color: var(--muted); font-size: 12px; line-height: 1.55; }
+@media(max-width:700px){ .finding-dismiss, .finding-dismissed { margin-left: 0; } .finding-dismiss form { grid-template-columns: 1fr; } }

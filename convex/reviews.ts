@@ -69,8 +69,14 @@ export const getEvidence = query({
       repository: { owner: access.repository.owner, name: access.repository.name },
       requirements: requirements.map(item => ({ id: item._id, sourceType: item.sourceType, status: item.status, confidence: item.confidence,
         hasSource: Boolean(item.contentArtifactId), fetchedAt: item.fetchedAt })),
+      // fingerprintHmac is the only handle a person has on a single finding: findings:dismiss
+      // identifies what is being dismissed by it, and nothing else this query returns can. It is a
+      // keyed HMAC of the finding's identity - dataClassification.ts classifies it hashed_metadata -
+      // so it names a finding without carrying a path, a line of code, or anything reversible, and
+      // it is already scoped to this review by the same repository check as every field beside it.
       findings: findings.map(item => ({ id: item._id, category: item.category, severity: item.severity, confidence: item.confidence,
-        blocking: item.blocking, pathFingerprint: item.pathHmac.slice(0, 12), startLine: item.startLine, endLine: item.endLine,
+        blocking: item.blocking, fingerprintHmac: item.fingerprintHmac, pathFingerprint: item.pathHmac.slice(0, 12),
+        startLine: item.startLine, endLine: item.endLine,
         evidenceCount: item.evidenceIds.length, resolution: item.resolution, ruleId: item.ruleId })),
       checks: checks.map(item => ({ id: item._id, kind: item.kind, required: item.required, status: item.status,
         conclusion: item.conclusion, commitSha: item.commitSha, exitCode: item.exitCode, durationMs: item.durationMs,

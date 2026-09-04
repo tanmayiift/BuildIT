@@ -164,6 +164,93 @@ export function comparisonRefusal(error: unknown): string {
     : "This comparison could not be loaded, so nothing is shown above. Nothing about either review changed. Choose the run again in a moment.";
 }
 
+// Every value of the suppressionScope union in convex/validators.ts, in the order a person narrows
+// a decision. The Record makes a missing key a compile error, so a new scope cannot reach a select
+// as the database word. The labels say how far the decision is recorded as applying: BuildIT reads
+// suppressions back per repository today, so none of them promises a narrower silence than that.
+export type SuppressionScope = "commit" | "pull_request" | "path" | "repository";
+export const suppressionScopes: readonly SuppressionScope[] = ["commit", "pull_request", "path", "repository"];
+const suppressionScopeLabels: Record<SuppressionScope, string> = {
+  commit: "This commit only",
+  pull_request: "This pull request",
+  path: "This file",
+  repository: "Anywhere in this repository",
+};
+export const suppressionScopeLabel = (value: string) => suppressionScopeLabels[value as SuppressionScope] ?? words(value);
+
+// findings:dismiss stores this on the suppression and hands it to the evaluation loop as the
+// reason a finding was judged a false positive, so it is a code that a curator can count - not a
+// free-text box. A box would also be the one place on this page where a person could paste a path
+// or a line of code into a field the database classifies as metadata.
+export type DismissalReason =
+  | "not_a_defect" | "intended_behaviour" | "wrong_lines" | "already_handled" | "out_of_scope";
+export const dismissalReasons: readonly DismissalReason[] = [
+  "not_a_defect", "intended_behaviour", "wrong_lines", "already_handled", "out_of_scope",
+];
+const dismissalReasonLabels: Record<DismissalReason, string> = {
+  not_a_defect: "This is not a defect",
+  intended_behaviour: "The behaviour is deliberate here",
+  wrong_lines: "The cited lines are not where this happens",
+  already_handled: "Already handled somewhere else",
+  out_of_scope: "Not something this repository treats as a problem",
+};
+export const dismissalReasonLabel = (value: string) => dismissalReasonLabels[value as DismissalReason] ?? words(value);
+
+// findings:dismiss refuses with a bare code, wrapped by Convex in a request id and a stack before
+// it reaches the browser. The code is matched inside the message rather than compared to it, and
+// the message itself is never rendered. Each sentence ends by saying nothing was recorded, because
+// after a refusal the question a person has is whether they half-dismissed something.
+const dismissalRefusals: Record<string, string> = {
+  not_found_or_forbidden:
+    "This finding was not dismissed. Dismissing changes what a later review shows, so it needs developer access to this repository, and the finding has to belong to the review on screen. Nothing was recorded.",
+  finding_fingerprint_invalid:
+    "This finding was not dismissed, because the reference this page holds for it is not one BuildIT recognises. Reload the review and try again. Nothing was recorded.",
+  finding_dismissal_reason_invalid:
+    "This finding was not dismissed, because BuildIT could not record the reason given. Choose one of the reasons offered and try again. Nothing was recorded.",
+};
+
+export function dismissalRefusal(error: unknown): string {
+  // A ConvexError carries its code in .data and repeats it in .message; a transport failure has
+  // only a message. Both are searched so neither shape falls through to the generic sentence.
+  const source = error as { data?: unknown; message?: unknown } | null;
+  const text = [typeof source?.data === "string" ? source.data : "",
+    typeof source?.message === "string" ? source.message : String(error ?? "")].join(" ");
+  const known = Object.keys(dismissalRefusals).find(code => text.includes(code));
+  return known
+    ? dismissalRefusals[known]!
+    : "This finding was not dismissed and nothing about the review changed. Check your connection and try again in a moment.";
+}
+
+// The plain-language details come from the encrypted analysis artifact and the rows come from the
+// database, and nothing joins them: the row keeps a keyed HMAC of the path, which a browser cannot
+// compute from the path the artifact carries. What both sides copy from the same arbitrated finding
+// without changing it is its category, severity, blocking flag and line range, so that is the join.
+// Where one key describes more than one finding on either side - two files can hold the same kind
+// of defect on the same lines - the pairing is refused rather than guessed, because prose attached
+// to the wrong finding would name the wrong file to the person deciding whether to merge.
+export type FindingKeyParts = { category: string; severity: string; blocking: boolean; startLine: number; endLine: number };
+const findingKey = (item: FindingKeyParts) =>
+  [item.category, item.severity, item.blocking, item.startLine, item.endLine].join(" ");
+
+export function pairFindingDetails<Detail extends FindingKeyParts>(
+  rows: ReadonlyArray<FindingKeyParts & { id: string }>,
+  details: readonly Detail[],
+): Map<string, Detail> {
+  const count = (items: ReadonlyArray<FindingKeyParts>) => {
+    const seen = new Map<string, number>();
+    for (const item of items) seen.set(findingKey(item), (seen.get(findingKey(item)) ?? 0) + 1);
+    return seen;
+  };
+  const rowCounts = count(rows), detailCounts = count(details);
+  const detailByKey = new Map(details.map(detail => [findingKey(detail), detail]));
+  const paired = new Map<string, Detail>();
+  for (const row of rows) {
+    const key = findingKey(row), detail = detailByKey.get(key);
+    if (detail && rowCounts.get(key) === 1 && detailCounts.get(key) === 1) paired.set(row.id, detail);
+  }
+  return paired;
+}
+
 // A review can run the same named check against more than one immutable worktree.
 // The audit store keeps every execution; the main result groups them so people do
 // not mistake repeated evidence for separate checks.

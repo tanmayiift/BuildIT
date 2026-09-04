@@ -31,7 +31,6 @@ import { publicFunctionPolicies } from "../../convex/publicFunctionPolicy";
 const deliberatelyUnreferenced: Record<string, string> = {
   "artifacts:getMetadata": "no screen shows an artifact's size, redaction status or expiry - the review page renders evidence only.",
   "audit:verifyChain": "the audit log is listed but never verified, so a customer cannot tell a sound hash chain from a tampered one.",
-  "findings:dismiss": "the learning loop is dead - a reviewer can read a finding but has no control to suppress it, so nothing teaches the next review.",
   "integrations:listTrackerConnections": "the broker can create a Jira or Linear connection, but no admin screen lists what is connected.",
   "integrations:revokeTrackerConnection": "and having never seen the connection, an admin cannot revoke it - a leaked tracker token has no customer-facing kill switch.",
   "memberships:accept": "invited teammates cannot join; no accept screen exists, so every invitation is a dead end.",

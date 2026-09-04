@@ -314,6 +314,45 @@ describe("the eval set learns from production", () => {
     await expect(t.query(internal.evalLoop.pendingCandidates, { limit: 10 })).resolves.toHaveLength(0);
   });
 
+  // Both halves of this were already tested and the join between them was not: dismiss wrote a
+  // suppression, and repositoryMemory read one a test had inserted by hand. Nothing in the product
+  // ever called dismiss, so in production that row was never written and dismissedFingerprints was
+  // an empty array on every review BuildIT has ever run. This is the whole path, end to end: a
+  // person says a finding is wrong, and the next review of that repository is told.
+  it("puts a dismissed fingerprint into the memory the next review reads", async () => {
+    const t = makeTest();
+    const { userId, organizationId } = await seedWorkspace(t);
+    const { reviewId, print } = await seedFinding(t, organizationId, userId);
+    const repositoryId = await t.run(async ctx => (await ctx.db.get(reviewId))!.repositoryId);
+    await expect(t.query(internal.repositoryMemory.forRepository, { repositoryId }))
+      .resolves.toMatchObject({ dismissedFingerprints: [] });
+
+    await t.withIdentity({ subject: `${userId}|session` }).mutation(api.findings.dismiss, {
+      reviewId, fingerprintHmac: print, scope: "path", reasonCode: "wrong_lines", requestId: "dismiss-finding-000003",
+    });
+
+    expect(await t.run(ctx => ctx.db.query("findingSuppressions").collect())).toMatchObject([
+      { repositoryId, fingerprintHmac: print, scope: "path", reasonCode: "wrong_lines", hmacKeyVersion: 1, dismissedBy: userId },
+    ]);
+    const memory = await t.query(internal.repositoryMemory.forRepository, { repositoryId });
+    expect(memory.dismissedFingerprints).toEqual([print]);
+    // What the reader sees, on the review they were reading.
+    expect(await t.run(ctx => ctx.db.query("findings").collect())).toMatchObject([{ resolution: "dismissed" }]);
+  });
+
+  it("remembers one dismissal when the same finding is dismissed twice", async () => {
+    const t = makeTest();
+    const { userId, organizationId } = await seedWorkspace(t);
+    const { reviewId, print } = await seedFinding(t, organizationId, userId);
+    const repositoryId = await t.run(async ctx => (await ctx.db.get(reviewId))!.repositoryId);
+    const signedIn = t.withIdentity({ subject: `${userId}|session` });
+    for (const requestId of ["dismiss-finding-000004", "dismiss-finding-000005"]) {
+      await signedIn.mutation(api.findings.dismiss, { reviewId, fingerprintHmac: print, scope: "repository", reasonCode: "not_a_defect", requestId });
+    }
+    await expect(t.query(internal.repositoryMemory.forRepository, { repositoryId }))
+      .resolves.toMatchObject({ dismissedFingerprints: [print] });
+  });
+
   it("refuses a dismissal from someone who may only read", async () => {
     const t = makeTest();
     const { userId, organizationId } = await seedWorkspace(t);
