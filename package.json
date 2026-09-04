@@ -20,7 +20,7 @@
     "deploy:web:check": "node scripts/deploy-buildit-web.mjs --dry-run",
     "deploy:web:production": "node scripts/deploy-buildit-web.mjs",
     "security:tracked-files": "node scripts/check-tracked-files.mjs",
-    "security:release": "vitest run convex/tenantIsolation.test.ts packages/security packages/broker packages/runner tests/architecture && pnpm audit --prod --audit-level high",
+    "security:release": "vitest run convex/tenantIsolation.test.ts packages/security packages/broker packages/runner tests/architecture && node scripts/audit-dependencies.mjs",
     "reliability:release": "vitest run tests/reliability packages/providers packages/orchestrator packages/runner convex/reviewAutofixWorker.test.ts tests/architecture/durable-workflow.test.ts tests/architecture/autofix-cancellation-boundary.test.ts",
     "smoke:aws-boundary": "node scripts/verify-aws-boundary.mjs",
     "smoke:cli": "pnpm --filter @buildit/cli build && node scripts/verify-cli-journeys.mjs",
