@@ -143,7 +143,7 @@ export const execute = reviewWorkflowManager.define({
           await step.runAction(internal.reviewPublicationWorker.publish, { organizationId: args.organizationId, reviewId: args.reviewId, expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration });
           await step.runAction(internal.telemetryWorker.emit,{operation:"review.delivery",stage:"delivery",outcome:"succeeded"});
         } catch (error) {
-          await step.runAction(internal.telemetryWorker.emit,{operation:"review.delivery",stage:"delivery",outcome:"failed"});
+          await step.runAction(internal.telemetryWorker.emit,{operation:"review.delivery",stage:"delivery",outcome:"failed",errorCode:/rate_limited/.test(String(error))?"rate_limited":/provider|model_unavailable|http_4|http_5/.test(String(error))?"provider_error":/sandbox|runner|execution/.test(String(error))?"runner_error":"UnknownError"});
           throw error;
         }
       }
