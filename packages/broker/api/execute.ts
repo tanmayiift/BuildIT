@@ -11,6 +11,11 @@ function sandboxCredentials(request: Request): SandboxCredentials {
   try {
     const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8")) as { owner_id?: unknown; project_id?: unknown };
     if (typeof payload.owner_id !== "string" || typeof payload.project_id !== "string" || !payload.owner_id || !payload.project_id) throw new Error("invalid_claims");
+    // Which account the sandbox is actually billed to. The provider refused with "Hobby plan usage
+    // limit exceeded" while the team owning this project is on a paid Pro plan, and there was no
+    // way to tell whether the OIDC token was resolving to the team or to a personal account. These
+    // are account and project identifiers, not secrets, and they are the whole diagnosis.
+    console.log("buildit_sandbox_scope", { owner: payload.owner_id, project: payload.project_id, issuer: typeof (payload as { iss?: unknown }).iss === "string" ? (payload as { iss: string }).iss : "unknown" });
     return { token, teamId: payload.owner_id, projectId: payload.project_id };
   } catch {
     throw new Error("sandbox_oidc_unavailable");
