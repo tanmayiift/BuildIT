@@ -69,3 +69,22 @@ export const setApprovedConfigHash = internalMutation({
     return { updated: true as const, repository: `${repository.owner}/${repository.name}`, approved: args.contentHash ?? null };
   },
 });
+
+// A review that read a .buildit.yml and could not trust it records the hash here, so the dashboard
+// can offer an admin the exact version the receipt named. Nothing about trust is decided here: this
+// is a note of what was seen, and approving it stays an explicit admin action with recent auth.
+export const recordPendingConfig = internalMutation({
+  args: { repositoryId: v.id("repositories"), contentHash: v.optional(v.string()), now: v.number() },
+  handler: async (ctx, args) => {
+    const repository = await ctx.db.get(args.repositoryId);
+    if (!repository) return;
+    if (args.contentHash === undefined) {
+      if (repository.pendingConfigHash === undefined) return;
+      await ctx.db.patch(args.repositoryId, { pendingConfigHash: undefined, pendingConfigSeenAt: undefined });
+      return;
+    }
+    if (!/^[0-9a-f]{64}$/.test(args.contentHash)) return;
+    if (repository.pendingConfigHash === args.contentHash) return;
+    await ctx.db.patch(args.repositoryId, { pendingConfigHash: args.contentHash, pendingConfigSeenAt: args.now });
+  },
+});

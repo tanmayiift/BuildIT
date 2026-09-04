@@ -25,7 +25,7 @@ export function sameRepositoryIssueNumber(url: string, repositoryUrl: string) {
 // trustedConfiguration makes that refusal, and it also requires an admin to have approved this
 // exact configuration, because this GitHub App cannot read branch protection.
 async function resolveRepositoryConfig(token: string, scope: { githubRepositoryId: number; trustedRefSha?: string; headSha: string; approvedConfigHash?: string; approvedConfigBy?: string }) {
-  const empty = { config: {} as RepositoryConfig, provenance: "defaults_only" as const, problems: [] as string[] };
+  const empty = { config: {} as RepositoryConfig, provenance: "defaults_only" as const, problems: [] as string[], unapprovedHash: undefined as string | undefined };
   if (!scope.trustedRefSha || !/^[0-9a-f]{40}$/i.test(scope.trustedRefSha)) return empty;
   const file = await fetchFileAtCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
     commitSha: scope.trustedRefSha, path: ".buildit.yml" });
@@ -40,10 +40,11 @@ async function resolveRepositoryConfig(token: string, scope: { githubRepositoryI
   if (!trust.useRepositoryConfig) {
     return { ...empty, problems: [trust.reason === "pr_head_untrusted"
       ? "A .buildit.yml exists but was taken from the pull request head, which BuildIT never trusts."
-      : `A .buildit.yml exists but no admin has approved this version of it (${contentHash.slice(0, 12)}), so BuildIT used its defaults.`] };
+      : `A .buildit.yml exists but no admin has approved this version of it (${contentHash.slice(0, 12)}), so BuildIT used its defaults.`],
+      ...(trust.reason === "pr_head_untrusted" ? {} : { unapprovedHash: contentHash }) };
   }
   const parsed = parseRepositoryConfig(file.content);
-  return { config: parsed.config, provenance: trust.provenance, problems: parsed.problems };
+  return { config: parsed.config, provenance: trust.provenance, problems: parsed.problems, unapprovedHash: undefined };
 }
 
 export const gather = internalAction({
@@ -64,6 +65,9 @@ export const gather = internalAction({
       // contents are filtered out of the model context entirely (reviewAnalysisWorker filters
       // revision !== "base"), so fetching anything beyond the changed files buys a presence check.
       const repositoryConfig = await resolveRepositoryConfig(token, scope);
+      // The receipt names a hash; without this the product has nowhere to act on it.
+      await ctx.runMutation(internal.automaticReviewData.recordPendingConfig, {
+        repositoryId: scope.repositoryId, contentHash: repositoryConfig.unapprovedHash, now: Date.now() });
       const effectivePathFilters = repositoryConfig.config.pathFilters ?? scope.reviewPathFilters ?? [];
       const allowedByRepository = compilePathFilters(effectivePathFilters);
       const headSelect = { keep: (path: string) => dependencyManifest.test(path)

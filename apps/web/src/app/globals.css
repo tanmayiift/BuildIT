@@ -232,7 +232,7 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .integration-card h2 { margin: 18px 0 5px; }
 .integration-card p { min-height: 42px; color: var(--muted); font-size: 12px; }
 .integration-card a { color: var(--navy); font-size: 12px; font-weight: 800; }
-.setting-row { min-height: 74px; display: grid; grid-template-columns: minmax(280px,1fr) 220px 220px; align-items: center; gap: 18px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.setting-row { min-height: 74px; display: grid; grid-template-columns: minmax(280px,1fr) 220px; align-items: center; gap: 18px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .setting-row:last-child { border-bottom: 0; }
 .setting-row p { margin: 3px 0 0; color: var(--muted); font-size: 11px; }
 .setting-row code { font-size: 11px; }
