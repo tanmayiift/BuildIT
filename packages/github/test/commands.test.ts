@@ -49,3 +49,26 @@ describe("the commands that already worked", () => {
     expect(authorizeTrigger({ ...base, body: "@buildit ask why?" })).toMatchObject({ accepted: true, kind: "ask", question: "why?" });
   });
 });
+
+// Resolving a review thread is the natural signal, and it needs a webhook subscription this App
+// does not have yet. A comment command works with issue_comment, which it does have, so learning
+// has a signal that works today rather than one waiting on a settings change.
+describe("dismissing a finding by number", () => {
+  it("takes write, because it changes what future reviews put on the diff", () => {
+    expect(authorizeTrigger({ ...base, permission: "triage", body: "@buildit dismiss 1" }))
+      .toMatchObject({ accepted: false, reason: "permission" });
+    expect(authorizeTrigger({ ...base, permission: "write", body: "@buildit dismiss 1" }))
+      .toMatchObject({ accepted: true, kind: "dismiss", findingIndex: 1 });
+  });
+
+  it("refuses anything that is not a finding number", () => {
+    for (const body of ["@buildit dismiss", "@buildit dismiss all", "@buildit dismiss 0", "@buildit dismiss -1"]) {
+      expect(authorizeTrigger({ ...base, permission: "write", body })).toMatchObject({ accepted: false });
+    }
+  });
+
+  it("leaves the other commands alone", () => {
+    expect(authorizeTrigger({ ...base, body: "@buildit review" })).toMatchObject({ accepted: true, kind: "review" });
+    expect(authorizeTrigger({ ...base, body: "@buildit ask why?" })).toMatchObject({ accepted: true, kind: "ask" });
+  });
+});

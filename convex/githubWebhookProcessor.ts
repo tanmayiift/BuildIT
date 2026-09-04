@@ -220,6 +220,12 @@ export const processWebhook = internalAction({
         });
         return;
       }
+      if (decision.kind === "dismiss") {
+        await ctx.scheduler.runAfter(0, internal.findingFeedbackWorker.dismissByIndex, {
+          githubRepositoryId: args.githubRepositoryId, prNumber: args.prNumber,
+          findingIndex: decision.findingIndex, senderLogin: args.senderLogin });
+        return;
+      }
       if (decision.kind === "help" || decision.kind === "pause" || decision.kind === "resume") {
         await ctx.scheduler.runAfter(0, internal.reviewCommandWorker.respond, {
           organizationId: scope.organizationId,

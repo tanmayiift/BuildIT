@@ -56,3 +56,37 @@ export const repositoryByGithubId = internalQuery({
     return repository && repository.enabled ? { repositoryId: repository._id } : null;
   },
 });
+
+// Numbered the way the summary comment numbers them: visible findings, worst first, which is the
+// order a reader sees. A number that does not exist records nothing rather than guessing.
+export const recordByIndex = internalMutation({
+  args: { repositoryId: v.id("repositories"), prNumber: v.number(), findingIndex: v.number(),
+    actorHash: v.string(), now: v.number() },
+  handler: async (ctx, args) => {
+    const repository = await ctx.db.get(args.repositoryId);
+    if (!repository) return { recorded: false as const };
+    const review = (await ctx.db.query("reviews")
+      .withIndex("by_repo_pr_head_mode", q => q.eq("repositoryId", args.repositoryId).eq("prNumber", args.prNumber))
+      .order("desc").take(10)).find(item => item.completedAt);
+    if (!review) return { recorded: false as const };
+
+    const severityOrder = { critical: 0, high: 1, warning: 2, info: 3 } as const;
+    const visible = (await ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).collect())
+      .filter(item => item.resolution !== "dismissed")
+      .sort((left, right) => (severityOrder[left.severity] ?? 9) - (severityOrder[right.severity] ?? 9));
+    const finding = visible[args.findingIndex - 1];
+    if (!finding) return { recorded: false as const };
+
+    const existing = (await ctx.db.query("findingFeedback").withIndex("by_review", q => q.eq("reviewId", review._id)).collect())
+      .find(item => item.findingId === finding._id && item.actorHash === args.actorHash);
+    if (existing) { await ctx.db.patch(existing._id, { verdict: "dismissed", occurredAt: args.now }); return { recorded: true as const }; }
+
+    await ctx.db.insert("findingFeedback", {
+      organizationId: repository.organizationId, repositoryId: args.repositoryId, reviewId: review._id,
+      findingId: finding._id, fingerprintHmac: finding.fingerprintHmac,
+      ruleKey: finding.ruleId ?? finding.category, pathPrefixHmac: finding.pathHmac,
+      verdict: "dismissed", actorHash: args.actorHash, occurredAt: args.now,
+    });
+    return { recorded: true as const };
+  },
+});

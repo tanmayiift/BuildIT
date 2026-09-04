@@ -33,3 +33,18 @@ export const observe = internalAction({
     return { recorded: result.recorded };
   },
 });
+
+// The summary comment numbers its findings, so "dismiss 2" names the second one a reader can see.
+// This is the signal that works with the webhook events the App already receives; resolving a
+// review thread is the better one and needs pull_request_review_thread enabled.
+export const dismissByIndex = internalAction({
+  args: { githubRepositoryId: v.number(), prNumber: v.number(), findingIndex: v.number(), senderLogin: v.string() },
+  handler: async (ctx, args): Promise<{ recorded: boolean }> => {
+    const repository = await ctx.runQuery(internal.findingFeedbackData.repositoryByGithubId, { githubRepositoryId: args.githubRepositoryId });
+    if (!repository) return { recorded: false };
+    const result = await ctx.runMutation(internal.findingFeedbackData.recordByIndex, {
+      repositoryId: repository.repositoryId, prNumber: args.prNumber, findingIndex: args.findingIndex,
+      actorHash: createHash("sha256").update(args.senderLogin.toLowerCase()).digest("hex"), now: Date.now() });
+    return { recorded: result.recorded };
+  },
+});
