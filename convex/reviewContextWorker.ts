@@ -5,7 +5,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { chunkRepositorySnapshot, compilePathFilters, fetchFileAtCommit, GitHubAppClient, GitHubIssueContextClient, omissionCoverage, type PullRequestContext, PullRequestContextClient, RepositoryContentClient, type RepositorySnapshot, trustedConfiguration } from "@buildit/github";
-import { dependencyManifest } from "@buildit/runner";
+import { executionPlanInput } from "@buildit/runner";
 import { acquireRequirements, describeUnreadableSources, instructionsForPaths, isRequirementSourcePath, parseRepositoryConfig, type RepositoryConfig, repositoryRequirementSources, summariseChange } from "@buildit/orchestrator";
 import { issueArtifactGrant,issueTrackerGrant } from "@buildit/security";
 
@@ -70,9 +70,15 @@ export const gather = internalAction({
         repositoryId: scope.repositoryId, contentHash: repositoryConfig.unapprovedHash, now: Date.now() });
       const effectivePathFilters = repositoryConfig.config.pathFilters ?? scope.reviewPathFilters ?? [];
       const allowedByRepository = compilePathFilters(effectivePathFilters);
-      const headSelect = { keep: (path: string) => dependencyManifest.test(path)
+      // Both revisions must see everything the execution plan is derived from. Head keeping a
+      // lockfile and package.json that base dropped made detectPackageManager disagree with itself
+      // and fail the review outright - no verdict, no checks - on any repository above the
+      // threshold whose pull request left the manifests alone. A path filter cannot suppress these
+      // either, for the same reason it cannot turn off the vulnerability scan.
+      const headSelect = { keep: (path: string) => executionPlanInput(path)
         || ((changedPaths.has(path) || isRequirementSourcePath(path)) && allowedByRepository(path)), relevantOnlyAbove: 400 };
-      const baseSelect = { keep: (path: string) => changedPaths.has(path) && allowedByRepository(path), relevantOnlyAbove: 400 };
+      const baseSelect = { keep: (path: string) => executionPlanInput(path)
+        || (changedPaths.has(path) && allowedByRepository(path)), relevantOnlyAbove: 400 };
       await ctx.runQuery(internal.durableReview.assertActive, args);
       const [headSnapshot, baseSnapshot]: [RepositorySnapshot, RepositorySnapshot] = await Promise.all([
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
