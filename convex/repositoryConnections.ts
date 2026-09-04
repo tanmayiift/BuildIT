@@ -34,7 +34,16 @@ export const setReviewPolicy = mutation({
   args: { organizationId: v.id("organizations"), repositoryId: v.id("repositories"), paused: v.boolean(), autofixMode: v.union(v.literal("disabled"), v.literal("stacked")), reviewProfile: v.optional(v.union(v.literal("quiet"), v.literal("balanced"), v.literal("thorough"))), reviewPathFilters: v.optional(v.array(v.string())), reviewTrigger: v.optional(v.union(v.literal("manual"), v.literal("automatic"))), approvedConfigHash: v.optional(v.string()), changelogOnMerge: v.optional(v.boolean()), requestId: v.string() },
   handler: async (ctx, args) => {
     const now = Date.now(), actor = await requireOrganizationRole(ctx, args.organizationId, "admin");
-    await requireRecentGitHubLogin(ctx, actor.userId, now);
+    // Re-authentication is for decisions that are hard to take back, not for every dropdown. Pausing
+    // a repository, choosing when reviews run, or how loud they are, are all reversible in one click
+    // and already require an admin. Demanding a fresh GitHub login for them meant an admin who had
+    // been reading the page for ten minutes was bounced through OAuth to flip a select, and then had
+    // to find their place again - friction that taught people not to touch their settings.
+    //
+    // Approving a .buildit.yml keeps the stronger gate. It is the one field here that changes what
+    // BuildIT *believes* rather than what it does: it decides which configuration a review trusts,
+    // and it is the only route to trusting one at all.
+    if (args.approvedConfigHash !== undefined) await requireRecentGitHubLogin(ctx, actor.userId, now);
     const repository = await ctx.db.get(args.repositoryId);
     if (!repository || repository.organizationId !== args.organizationId || !repository.enabled) throw new ConvexError("not_found_or_forbidden");
     await ctx.db.patch(repository._id, { pausedAt: args.paused ? now : undefined, autofixMode: args.autofixMode, ...(args.reviewProfile ? { reviewProfile: args.reviewProfile } : {}), ...(args.reviewPathFilters ? { reviewPathFilters: args.reviewPathFilters } : {}), ...(args.reviewTrigger ? { reviewTrigger: args.reviewTrigger } : {}), ...(args.approvedConfigHash === undefined ? {} : { approvedConfigHash: args.approvedConfigHash, approvedConfigBy: actor.userId }), ...(args.changelogOnMerge === undefined ? {} : { changelogOnMerge: args.changelogOnMerge }), updatedAt: now });
