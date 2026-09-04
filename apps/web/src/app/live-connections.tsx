@@ -10,7 +10,7 @@ type Connection = {
   state: "signed_out" | "no_workspace" | "installation_required" | "installation_unavailable" | "no_repositories_selected" | "connected";
   organization: null | { id: string; name: string; slug: string; role: string; region: "eu-west-1"; retentionHours: number };
   installations: Array<{ id: string; installationId: number; accountLogin: string; accountType: "user" | "organization"; status: "active" | "suspended" | "removed"; updatedAt: number }>;
-  repositories: Array<{ id: string; installationId: string; githubRepositoryId: number; owner: string; name: string; defaultBranch: string; visibility: "public" | "private" | "internal" | "unknown"; autofixMode: "disabled" | "stacked" | "direct_push"; reviewProfile?: "quiet" | "balanced" | "thorough"; paused: boolean; indexState: string; updatedAt: number }>;
+  repositories: Array<{ id: string; installationId: string; githubRepositoryId: number; owner: string; name: string; defaultBranch: string; visibility: "public" | "private" | "internal" | "unknown"; autofixMode: "disabled" | "stacked" | "direct_push"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; paused: boolean; indexState: string; updatedAt: number }>;
 };
 const connectionQuery = makeFunctionReference<"query", Record<string, never>, Connection>("repositoryConnections:current");
 const credentialQuery = makeFunctionReference<"query", { organizationId: string }, Array<{ status: string }>>("integrations:listProviderCredentials");
@@ -25,7 +25,7 @@ function profileLabel(profile: string | undefined) {
   return profile === "quiet" ? "Only what blocks" : profile === "thorough" ? "Everything cited" : "Blocking and serious";
 }
 
-const setReviewPolicy = makeFunctionReference<"mutation", { organizationId: string; repositoryId: string; paused: boolean; autofixMode: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough"; requestId: string }, null>("repositoryConnections:setReviewPolicy");
+const setReviewPolicy = makeFunctionReference<"mutation", { organizationId: string; repositoryId: string; paused: boolean; autofixMode: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; requestId: string }, null>("repositoryConnections:setReviewPolicy");
 
 // The server enforces a 10-minute step-up window on policy, credential, and member changes.
 // Without naming that cause the control simply appears to stop working.
@@ -109,7 +109,7 @@ function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
   repository: ConnectedRepository;
   canManage: boolean;
   saving: boolean;
-  onSave: (next: { paused?: boolean; autofixMode?: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough" }) => Promise<void>;
+  onSave: (next: { paused?: boolean; autofixMode?: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic" }) => Promise<void>;
 }) {
   const fullName = `${repository.owner}/${repository.name}`;
   const stacked = repository.autofixMode !== "disabled";
@@ -129,6 +129,14 @@ function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
           <option value="stacked">Separate fix PR</option>
         </select> : <strong>{stacked ? "Separate fix PR" : "Suggestions only"}</strong>}
         <small>{stacked ? "Fixes open as a separate pull request" : "BuildIT reports changes without writing code"}</small>
+      </label>
+      <label className="repository-policy">
+        <span>When to review</span>
+        {canManage ? <select className="repository-policy-select" aria-label={`Review trigger for ${fullName}`} value={repository.reviewTrigger ?? "manual"} disabled={saving} onChange={event => void onSave({ reviewTrigger: event.target.value as "manual" | "automatic" })}>
+          <option value="manual">Only when asked</option>
+          <option value="automatic">Automatically on every push</option>
+        </select> : <strong>{repository.reviewTrigger === "automatic" ? "Automatically on every push" : "Only when asked"}</strong>}
+        <small>{repository.reviewTrigger === "automatic" ? "Reviews start on open and on pushes, spending your model key. `@buildit pause` stops one pull request." : "Nothing runs until someone comments `@buildit review`, so nothing spends your key unasked."}</small>
       </label>
       <label className="repository-policy">
         <span>Inline comments</span>
@@ -160,7 +168,7 @@ export function RepositoryConnectionView() {
   const installation = connection.installations.find(item => item.status === "active")!;
   const organization = connection.organization!;
   const canManage = organization.role === "owner" || organization.role === "admin";
-  const save = async (repository: ConnectedRepository, next: { paused?: boolean; autofixMode?: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough" }) => {
+  const save = async (repository: ConnectedRepository, next: { paused?: boolean; autofixMode?: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic" }) => {
     setPolicyMessage("");
     if (sampleTour) {
       setPolicyMessage(`Sample tour: no policy was changed for ${repository.owner}/${repository.name}. Sign in to manage a real repository.`);
@@ -168,7 +176,7 @@ export function RepositoryConnectionView() {
     }
     setSavingRepositoryId(repository.id);
     try {
-      await updatePolicy({ organizationId: organization.id, repositoryId: repository.id, paused: next.paused ?? repository.paused, autofixMode: next.autofixMode ?? (repository.autofixMode === "disabled" ? "disabled" : "stacked"), ...(next.reviewProfile ? { reviewProfile: next.reviewProfile } : {}), requestId: crypto.randomUUID() });
+      await updatePolicy({ organizationId: organization.id, repositoryId: repository.id, paused: next.paused ?? repository.paused, autofixMode: next.autofixMode ?? (repository.autofixMode === "disabled" ? "disabled" : "stacked"), ...(next.reviewProfile ? { reviewProfile: next.reviewProfile } : {}), ...(next.reviewTrigger ? { reviewTrigger: next.reviewTrigger } : {}), requestId: crypto.randomUUID() });
       setPolicyMessage(`Policy saved for ${repository.owner}/${repository.name}. New reviews will use it.`);
     } catch (reason) {
       setPolicyMessage(policyFailureMessage(reason));

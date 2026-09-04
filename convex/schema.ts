@@ -59,6 +59,9 @@ export default defineSchema({
     // Paths this team would never review - a vendored directory, a generated client - on top of
     // the defaults BuildIT already skips. Glob, not regex, deliberately.
     reviewPathFilters: v.optional(v.array(v.string())),
+    // Automatic review spends the customer's own model key, so it is off until a repository asks
+    // for it - including the ones already connected.
+    reviewTrigger: v.optional(v.union(v.literal("manual"), v.literal("automatic"))),
     forkPolicy: value.forkPolicy, configRevisionId: v.optional(v.id("configRevisions")),
     indexState: value.indexState, concurrencyLimit: v.number(), ...timestampFields,
   }).index("by_github_id", ["githubRepositoryId"])
@@ -275,6 +278,13 @@ export default defineSchema({
     createdAt: v.number(), updatedAt: v.number(),
   }).index("by_review", ["reviewId"])
     .index("by_candidate", ["candidateCommitSha"]),
+
+  // A pause has to outlive the next push, which is the whole point of it, so it cannot live on a
+  // review row - a review is per commit. It is a fact about one pull request.
+  pullRequestPauses: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"), prNumber: v.number(),
+    pausedBy: v.string(), pausedAt: v.number(),
+  }).index("by_repository_pr", ["repositoryId", "prNumber"]),
 
   webhookDeliveries: defineTable({
     deliveryId: v.string(), event: v.string(), action: v.string(), installationId: v.optional(v.number()),

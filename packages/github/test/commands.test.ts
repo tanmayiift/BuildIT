@@ -22,9 +22,24 @@ describe("discovering what BuildIT can do", () => {
   });
 });
 
-// pause and resume are deliberately absent. They suppress automatic reviews, and BuildIT has none:
-// materializeReview is only ever reached from the comment path. A command that claims to stop
-// something that never starts is decoration, so it waits for the thing it would act on.
+describe("pausing automatic reviews on one pull request", () => {
+  it("takes write permission, because it changes what happens on the next push", () => {
+    expect(authorizeTrigger({ ...base, permission: "triage", body: "@buildit pause" }))
+      .toMatchObject({ accepted: false, reason: "permission" });
+    expect(authorizeTrigger({ ...base, permission: "write", body: "@buildit pause" }))
+      .toMatchObject({ accepted: true, kind: "pause" });
+  });
+
+  it("resumes at the same permission that paused it", () => {
+    expect(authorizeTrigger({ ...base, permission: "write", body: "@buildit resume" }))
+      .toMatchObject({ accepted: true, kind: "resume" });
+  });
+
+  it("takes no flags, so a typo is refused rather than half-understood", () => {
+    expect(authorizeTrigger({ ...base, permission: "write", body: "@buildit pause stacked" }))
+      .toMatchObject({ accepted: false });
+  });
+});
 
 describe("the commands that already worked", () => {
   it("are unchanged", () => {

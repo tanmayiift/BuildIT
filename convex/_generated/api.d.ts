@@ -14,6 +14,7 @@ import type * as artifactCleanupWorker from "../artifactCleanupWorker.js";
 import type * as artifacts from "../artifacts.js";
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
+import type * as automaticReviewData from "../automaticReviewData.js";
 import type * as crons from "../crons.js";
 import type * as dashboardReviewData from "../dashboardReviewData.js";
 import type * as dashboardReviews from "../dashboardReviews.js";
@@ -98,6 +99,7 @@ declare const fullApi: ApiFromModules<{
   artifacts: typeof artifacts;
   audit: typeof audit;
   auth: typeof auth;
+  automaticReviewData: typeof automaticReviewData;
   crons: typeof crons;
   dashboardReviewData: typeof dashboardReviewData;
   dashboardReviews: typeof dashboardReviews;
