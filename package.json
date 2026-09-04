@@ -31,7 +31,9 @@
     "deploy:production": "node scripts/deploy-buildit-production.mjs",
     "lint:fix": "eslint . --fix",
     "eval:detection": "tsx packages/evaluations/src/detectionCli.ts",
-    "evidence:track-record": "node scripts/track-record.mjs"
+    "evidence:track-record": "node scripts/track-record.mjs",
+    "alerts:check": "node scripts/provision-buildit-grafana-alerts.mjs --dry-run",
+    "alerts:provision": "node scripts/provision-buildit-grafana-alerts.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.10.2",

@@ -82,6 +82,10 @@ jobs:
         run: pnpm security:release
       - name: Reliability release gate
         run: pnpm reliability:release
+      # Validates every alert rule has a severity, an action and a runbook section that exists.
+      # The rules file drifted from the deployed stack for weeks because nothing checked it.
+      - name: Alert rules
+        run: pnpm alerts:check
       - name: Evaluation gate
         run: pnpm eval
       - name: CLI journey smoke
