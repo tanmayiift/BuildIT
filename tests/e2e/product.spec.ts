@@ -149,10 +149,21 @@ test("navigation exposes all promised product areas", async ({ page }) => {
 
 test("preview never impersonates a signed-in customer", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("Preview", { exact: true })).toBeVisible();
+  // The landing page no longer carries the "Preview" chip. That banner spoke about sample evidence
+  // and an isolated workspace on a page that shows neither, styled as a warning above the hero, and
+  // it was the first thing a stranger saw. What it was guarding is unchanged and asserted below and
+  // on the tour: the marketing page shows no fabricated customer, and the sample tour still labels
+  // itself a sample - which is the promise FIXES.md actually fences.
   await expect(page.getByText("For lean B2B software teams", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Inspect a sample review" })).toHaveAttribute("href", "/reviews?tour=1");
   await expect(page.getByText("Rohan Bhatia")).toHaveCount(0);
+
+  // The half that FIXES.md actually fences: sample data is always labelled a sample. Removing the
+  // banner from the marketing shell must not have reached the tour, so follow the link and check.
+  await page.getByRole("link", { name: "Inspect a sample review" }).click();
+  await page.waitForURL(/\/reviews\?tour=1/);
+  await expect(page.getByText(/sample/i).first()).toBeVisible();
+  await page.goto("/");
   await page.getByRole("link", { name: "Sign in", exact: true }).first().click();
   await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
   await expect(page.getByText(/does not give BuildIT access to a repository/i)).toBeVisible();

@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { AccountStatus } from "./account-status";
 import { BrandGlyph } from "./brand-glyph";
-import { ConnectionBanner } from "./live-connections";
 
 // BuildIT had no landing page. AppShell rendered the workspace sidebar on every route and
 // "Overview" was href "/", so a stranger arriving at the product met a Workspace kicker, a
@@ -23,11 +22,19 @@ const links = [
 ];
 
 export function PublicShell({ children }: { children: ReactNode }) {
-  // The preview banner stays. The three-bands-before-the-headline problem was the workspace header,
-  // not this: the banner is the one that tells a reader the evidence on the page is sample data and
-  // not their repository, which is a guarantee rather than chrome.
+  // The preview banner is gone from here, and only from here. Its copy - "Sample evidence is
+  // clearly marked. Connect GitHub to replace setup examples with your isolated workspace." - is
+  // about the sample review tour, and there are no samples on a marketing route: the landing page,
+  // pricing and features show product copy, and /sandbox scans the reader's own pasted code. So a
+  // stranger's first 44px of BuildIT was an amber warning bar about data the page did not contain,
+  // sitting above the headline and reading as "something is wrong".
+  //
+  // The labelling guarantee it carries is not weakened, because it never lived here. The tour is
+  // /reviews?tour=1, /reviews is not in public-routes.ts, so AppShell renders it through the
+  // workspace branch - which still mounts ConnectionBanner - and WorkspaceRouteBoundary stamps its
+  // own "Sample tour - no live workspace data" note on top. public-shell.component.test.tsx pins
+  // both halves so this cannot be undone by deleting the banner from the other shell too.
   return <div className="public-shell">
-    <ConnectionBanner />
     <header className="public-top">
       <a className="public-brand" href="/">
         <span className="brand-glyph" aria-hidden="true"><BrandGlyph /></span>

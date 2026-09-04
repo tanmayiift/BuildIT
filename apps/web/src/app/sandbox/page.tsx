@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { scanErrorCode, scanErrorMessage, type ScanErrorCode } from "./scan-error-state";
 
 // The only surface a visitor could reach without GitHub sign-in was a tour over invented data, so
 // nobody could try BuildIT on code they actually cared about. This is a third state - not the
@@ -21,7 +22,7 @@ export default function Sandbox() {
   const [path, setPath] = useState("src/example.ts"),
     [content, setContent] = useState(""),
     [result, setResult] = useState<Result | null>(null),
-    [error, setError] = useState(""),
+    [error, setError] = useState<ScanErrorCode | "">(""),
     [running, setRunning] = useState(false);
 
   async function scan() {
@@ -32,7 +33,7 @@ export default function Sandbox() {
         body: JSON.stringify({ files: [{ path, content }] }),
       });
       const body = await response.json() as Result & { error?: string };
-      if (!response.ok) { setError(body.error ?? `request_failed_${response.status}`); return; }
+      if (!response.ok) { setError(scanErrorCode(body.error)); return; }
       setResult(body);
     } catch { setError("network_unavailable"); } finally { setRunning(false); }
   }
@@ -62,7 +63,9 @@ export default function Sandbox() {
     </div>
 
     <div aria-live="polite">
-      {error ? <p className="scan-error">The check did not run: <code>{error}</code></p> : null}
+      {/* The code itself never reaches the page. This is the hero call to action for someone with
+          no account, and "file_too_long" told them nothing they could act on. */}
+      {error ? <p className="scan-error">{scanErrorMessage(error)}</p> : null}
       {result ? <section className="scan-result">
         <h2>{result.findings.length + result.secrets.length === 0
           ? "These rules found nothing"

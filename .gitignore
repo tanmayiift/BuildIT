@@ -16,3 +16,6 @@ docs/plan-BuildIT.md
 .agents/
 docs/release/deployment.md
 .claude/launch.json
+
+# Created by the pinned Playwright container when snapshots are regenerated on Linux.
+.pnpm-store/
