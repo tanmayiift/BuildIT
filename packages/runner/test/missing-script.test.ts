@@ -13,6 +13,10 @@ describe("a check whose script does not exist", () => {
   const cases = [
     ["npm", 'npm error Missing script: "typecheck"\nnpm error\nnpm error To see a list of scripts, run:\n npm error   npm run'],
     ["pnpm", 'ERR_PNPM_NO_SCRIPT  Missing script: typecheck'],
+    // The wording pnpm actually emits, brackets and all. The unbracketed anchor missed it, so a
+    // real review of date-fns reported "lint Failed" for a repository that simply has no lint
+    // script - which is a configuration fact, not a defect in anyone's pull request.
+    ["pnpm bracketed", '[ERR_PNPM_NO_SCRIPT] Missing script: lint\n\nCommand "lint" not found.'],
     ["yarn", 'error Command "typecheck" not found.'],
     ["yarn berry", 'Usage Error: Couldn\'t find a script named "typecheck".'],
   ] as const;
