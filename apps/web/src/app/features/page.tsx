@@ -41,6 +41,8 @@ const boundaries = [
 
 import record from "../track-record.json";
 
+export const metadata = { title: "Features · BuildIT" };
+
 export default function Features() {
   return <div className="content trust-page">
     <p className="eyebrow">What BuildIT does</p>

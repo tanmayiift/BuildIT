@@ -19,6 +19,16 @@ export const metadata = {
   title,
   description,
   applicationName: "BuildIT",
+  // The tab was blank because of the proxy, not the metadata: app/icon.svg does build a route, but
+  // route-map.ts did not know /icon.svg, so the Edge proxy answered 404 - the same drift that once
+  // 404ed the social card. /favicon.ico missed the proxy entirely via the matcher and fell through
+  // to [section], which cannot set a 404 after the Suspense shell is flushed, so it answered 200
+  // with HTML. Both files now ship from apps/web/public and are listed in publicAssets. Declaring
+  // icons here also suppresses the file-convention link, so only paths the proxy allows are emitted.
+  icons: {
+    icon: [{ url: "/favicon.ico", sizes: "16x16 32x32 48x48", type: "image/x-icon" }, { url: "/icon.svg", sizes: "any", type: "image/svg+xml" }],
+    shortcut: "/favicon.ico",
+  },
   openGraph: {
     type: "website", siteName: "BuildIT", url: site, title, description,
     images: [{ url: "/social-card.png", width: 2400, height: 1260, alt: "BuildIT — proof before the merge" }],

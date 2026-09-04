@@ -12,6 +12,8 @@ const facts = [
   ["Current release status", `All five previous release blockers now have dated evidence (2026-09-03): a complete real-model review on third-party code with all seven checks passing, native scanner timing from real sandbox processes, one human-inspected stacked pull request merged by a person, cross-tenant browser isolation proved with a second account, and key rotation — revoking a provider credential destroys the stored envelope rather than flagging the row, so an old key is unusable and not merely filtered out. Retention deletion also ran in production for the first time that day: artifacts were deleted and each removal confirmed by reading the key back from storage. What is still thin is the track record: ${record.reviews} pull requests across ${record.repositories} repositories, ${record.sinceLastPlatformFailure} consecutive since the last platform failure on ${record.lastPlatformFailureAt}. Enough to show the known failures are fixed; not enough to claim reliability on a codebase unlike those.`],
 ];
 
+export const metadata = { title: "Data & privacy · BuildIT" };
+
 export default function DataHandling() {
   return <div className="content trust-page">
     <p className="eyebrow">Trust boundary</p>

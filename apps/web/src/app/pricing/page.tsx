@@ -8,6 +8,8 @@ const plan = [
   ["What changes later", "Paid plans are coming. Repositories connected now keep free reviews through that change — you will be told before anything is charged, not after."],
 ];
 
+export const metadata = { title: "Pricing · BuildIT" };
+
 export default function Pricing() {
   return <div className="content trust-page">
     <p className="eyebrow">Pricing and limits</p>

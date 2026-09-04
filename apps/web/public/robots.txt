@@ -1,0 +1,19 @@
+# Public pages are indexable. Workspace routes are not: every one of them is behind sign-in and
+# renders tenant-scoped data, so an indexed URL is a dead link for a crawler and a leak of the
+# account surface for everyone else.
+User-agent: *
+Allow: /
+Disallow: /account
+Disallow: /audit
+Disallow: /history
+Disallow: /integrations
+Disallow: /members
+Disallow: /metrics
+Disallow: /notifications
+Disallow: /policies
+Disallow: /repositories
+Disallow: /reviews
+Disallow: /setup
+Disallow: /usage
+
+Sitemap: https://buildit-agentic-review.vercel.app/sitemap.xml

@@ -3,4 +3,4 @@
 // 404 from production while the meta tag pointed at it. Listing them rather than matching on a file
 // extension keeps an unshipped /anything.png a genuine 404; a test asserts this list is exactly the
 // directory contents, because the drift is what broke it.
-export const publicAssets = ["/social-card.png", "/mark.svg"] as const;
+export const publicAssets = ["/social-card.png", "/mark.svg", "/icon.svg", "/favicon.ico", "/robots.txt", "/sitemap.xml"] as const;
