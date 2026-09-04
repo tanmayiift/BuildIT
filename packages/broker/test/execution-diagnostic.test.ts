@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { executionFailureDiagnostic, safeExecutionError } from "../src/execution-http.js";
+import { capacityExhausted, executionFailureDiagnostic, safeExecutionError, safeExecutionErrorCategory } from "../src/execution-http.js";
 
 // `sandbox_unavailable` is the right answer to give a caller - a raw sandbox error can carry
 // provider and request context. But the operator log recorded only that same mapped code, so
@@ -69,5 +69,38 @@ describe("what still crosses the API boundary", () => {
     expect(mapped).toEqual({ status: 503, code: "sandbox_unavailable" });
     expect(JSON.stringify(mapped)).not.toContain("acme");
     expect(JSON.stringify(mapped)).not.toContain("quota");
+  });
+});
+
+// The real message, from the real failure: the sandbox provider answers 402 when the plan's usage
+// is spent. It matched none of the category patterns and fell through to "unexpected" - the same
+// bucket as a genuine crash - so the one failure an operator can actually fix by upgrading a plan
+// looked exactly like the ones they cannot.
+describe("a spent plan is a bill, not an incident", () => {
+  const real = "Status code 402 is not ok: Pro trial plan usage limit exceeded. Limit will be reset on 2026-10-01T00:00:00.000Z";
+
+  it("is categorised as capacity, not unexpected", () => {
+    expect(safeExecutionErrorCategory(new Error(real))).toBe("capacity");
+  });
+
+  it("recognises the shapes providers actually use", () => {
+    for (const message of [real, "Status code 402", "monthly quota exceeded", "Plan limit reached for team"]) {
+      expect(capacityExhausted(message), message).toBe(true);
+    }
+  });
+
+  it("does not swallow a real crash", () => {
+    for (const message of ["sandbox_start_failed", "ECONNRESET", "Sandbox died"]) {
+      expect(capacityExhausted(message), message).toBe(false);
+    }
+    expect(safeExecutionErrorCategory(new Error("sandbox_start_failed"))).toBe("runner_or_scanner");
+  });
+
+  it("still tells the caller only that the environment was unavailable", () => {
+    expect(safeExecutionError(new Error(real))).toEqual({ status: 503, code: "sandbox_unavailable" });
+  });
+
+  it("keeps the reset date in the operator log, which is the actionable part", () => {
+    expect(executionFailureDiagnostic(new Error(real))).toContain("2026-10-01");
   });
 });

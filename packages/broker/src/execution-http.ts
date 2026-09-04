@@ -10,7 +10,7 @@ type Runner = Pick<VercelSandboxRunner, "run">;
 export function pinnedSandboxImage(value: string | undefined) { if (!value || !/^(?:[a-z0-9][a-z0-9.\-]*(?::\d+)?\/)?[a-z0-9][a-z0-9._\-\/]*@sha256:[0-9a-f]{64}$/.test(value)) throw new Error("sandbox_image_unavailable"); return value; }
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const descriptorsForHash = (items: Descriptor[]) => items.map(({ readGrant: _, ...item }) => item);
-function json(status: number, body: Record<string, unknown>) { return Response.json(body, { status, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } }); }
+function json(status: number, body: Record<string, unknown>, extraHeaders: Record<string, string> = {}) { return Response.json(body, { status, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff", ...extraHeaders } }); }
 function bearer(request: Request) { const value = request.headers.get("authorization") ?? ""; if (!value.startsWith("Bearer ") || value.length > 8_200) throw new Error("authentication_required"); return value.slice(7); }
 function parse(raw: string): Body { let body: Body; try { body = JSON.parse(raw) as Body; } catch { throw new Error("invalid_execution_request"); } if (!body || ![body.organizationId, body.repositoryId, body.reviewId].every(value => typeof value === "string" && value.length) || !/^[0-9a-f]{40}$/.test(body.baseSha) || !/^[0-9a-f]{40}$/.test(body.headSha) || !/@sha256:[0-9a-f]{64}$/.test(body.runnerImageVersion) || !["node22", "node24"].includes(body.runtime) || !Array.isArray(body.artifacts) || !body.artifacts.length || body.artifacts.length > 64 || !Array.isArray(body.checks) || body.checks.length > 4) throw new Error("invalid_execution_request"); return body; }
 function unreachable(error: unknown) {
@@ -18,6 +18,13 @@ function unreachable(error: unknown) {
   const errno = (error as { code?: unknown }).code;
   const signals = [error.message, error.name, typeof errno === "string" ? errno : ""].join(" ");
   return /fetch failed|TimeoutError|AbortError|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang up|network|Failed to fetch/i.test(signals);
+}
+
+// The sandbox provider signals an exhausted plan as a 402 with a usage-limit message. It is worth
+// naming separately from "the sandbox is down": one is fixed by upgrading a plan or waiting for a
+// reset date, the other by paging someone.
+export function capacityExhausted(message: string) {
+  return /\b402\b/.test(message) || /usage limit exceeded|quota exceeded|plan limit/i.test(message);
 }
 
 export function safeExecutionError(error: unknown) {
@@ -30,6 +37,11 @@ export function safeExecutionError(error: unknown) {
   // failures can include provider request context and must stay server-side.
   if (code.includes("credential_teardown") || code.includes("sandbox_")) return { status: 503, code: "runner_safety_failed" };
   if (code.includes("gitleaks") || code.includes("osv_")) return { status: 503, code: "scanner_unavailable" };
+  // An exhausted plan reached this only because the provider happened to mention "Sandbox" later in
+  // a long message; a shorter one would have fallen through to the generic execution_failed. The
+  // caller-facing answer is the same either way - the environment was unavailable - but it should
+  // be decided, not incidental.
+  if (capacityExhausted(code)) return { status: 503, code: "sandbox_unavailable" };
   if (code.includes("Sandbox") || code.includes("sandbox")) return { status: 503, code: "sandbox_unavailable" };
   if (code.includes("execution_image")) return { status: 503, code: "runner_image_unavailable" };
   if (unreachable(error)) return { status: 503, code: "sandbox_unavailable" };
@@ -54,6 +66,11 @@ export function safeExecutionErrorCategory(error: unknown) {
   const code = error instanceof Error ? error.message : "unknown";
   if (/^(?:authentication_required|execution_grant_(?:invalid|scope_invalid|expired|replayed))$/.test(code)) return "grant";
   if (/^(?:artifact_(?:integrity_failed|revision_mismatch|file_conflict)|base_head_context_incomplete)$/.test(code)) return "artifact";
+  // A plan limit is not an incident, it is a bill. It reported as "unexpected" - the same category
+  // as a genuine crash - so the one failure an operator can actually fix looked exactly like the
+  // ones they cannot. Observed as `Status code 402 ... usage limit exceeded`, which matched none of
+  // the patterns below and fell through to unexpected.
+  if (capacityExhausted(code)) return "capacity";
   if (/^(?:sandbox_|credential_teardown|osv_|gitleaks_)/.test(code) || /^Sandbox\b/.test(code) || unreachable(error)) return "runner_or_scanner";
   if (/^(?:invalid_|command_not_allowed|untrusted_command)/.test(code)) return "request_policy";
   if (/^(?:scanner_|execution_environment_invalid|paired_execution_incomplete|package_manager_)/.test(code)) return "evidence";
@@ -107,6 +124,9 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     // This keeps the raw reason server-side and bounded, which is what makes the class diagnosable.
     console.error("buildit_execute_failure", { category: safeExecutionErrorCategory(error), code: mapped.code,
       reason: executionFailureDiagnostic(error) });
-    return json(mapped.status, { error: mapped.code });
+    // The body is unchanged. The header only tells BuildIT's own telemetry which 503 this was, so a
+    // spent plan raises a ticket instead of paging someone about an outage they cannot fix.
+    return json(mapped.status, { error: mapped.code },
+      capacityExhausted(error instanceof Error ? error.message : "") ? { "x-buildit-error-code": "capacity_exhausted" } : {});
   }
 }

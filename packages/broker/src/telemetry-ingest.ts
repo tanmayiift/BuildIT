@@ -8,7 +8,7 @@ const outcomes = new Set<TelemetryOutcome>(["started", "succeeded", "failed", "c
 const providers = new Set(["anthropic", "openai", "gemini"]);
 const modes = new Set(["review", "autofix"]);
 const visibilities = new Set(["public", "private"]);
-const errorCodes = new Set(["UnknownError", "cancelled", "stale_head", "budget_exhausted", "loop_guard", "provider_error", "runner_error", "upstream_unavailable", "configuration_missing", "timeout", "rate_limited"]);
+const errorCodes = new Set(["UnknownError", "cancelled", "stale_head", "budget_exhausted", "loop_guard", "provider_error", "runner_error", "upstream_unavailable", "configuration_missing", "timeout", "rate_limited", "capacity_exhausted"]);
 
 export type TelemetryIngestEvent = (SafeAttributes & { operation: OperationName; outcome: TelemetryOutcome }) | { measurement: MeasurementName; value: number };
 

@@ -58,13 +58,24 @@ groups:
           action: "No review has failed yet. Check provider status pages and error codes before the retries stop absorbing it."
           runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditproviderretryratehigh"
       - alert: BuildITRunnerFailure
-        expr: sum(increase(buildit_failures_total{buildit_operation=~"sandbox.execute|sandbox.cleanup"}[10m])) > 0
+        expr: sum(increase(buildit_failures_total{buildit_operation=~"sandbox.execute|sandbox.cleanup", buildit_error_code!="capacity_exhausted"}[10m])) > 0
         for: 0m
         labels: {severity: page, service: buildit}
         annotations:
           summary: "BuildIT runner execution or cleanup failed"
           action: "Disable untrusted execution, confirm every sandbox stopped, and inspect runner capacity before resuming."
           runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditrunnerfailure"
+      # A spent sandbox plan is a bill, not an outage. It used to page on the rule above and would
+      # have kept paging every ten minutes until the plan reset - which is how people learn to
+      # ignore alerts. Nobody can fix it at 3am; it needs an upgrade during working hours.
+      - alert: BuildITRunnerCapacityExhausted
+        expr: sum(increase(buildit_failures_total{buildit_operation="sandbox.execute", buildit_error_code="capacity_exhausted"}[30m])) > 0
+        for: 0m
+        labels: {severity: ticket, service: buildit}
+        annotations:
+          summary: "BuildIT cannot run checks: the sandbox plan's usage is spent"
+          action: "Upgrade the Vercel sandbox plan or wait for the reset date. Reviews will return inconclusive until then, which is correct - they are not claiming to have checked anything."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditrunnercapacityexhausted"
       - alert: BuildITArtifactDeletionBacklog
         expr: max(buildit_snapshot{buildit_measurement="expired_artifact_backlog"}) > 0
         for: 20m
