@@ -12,7 +12,8 @@ function required(name: string) { const value = process.env[name]; if (!value) t
 type ArtifactRef = { id: Id<"artifacts">; storageKey: string; checksum: string; size: number };
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; unreadableSources?: { total: number; unreadable: number; summary: string; nextStep: string }; changeSummary?: string; configNote?: string; injectionSurfaces?: Array<"code" | "narrative" | "checks" | "unknown">; injectionUnscoped: boolean; environmentAvailable: boolean; isStale: boolean; expiresAt: number; costUsd: number; analysis: ArtifactRef; validation: ArtifactRef; completedArtifactId?: Id<"artifacts"> };
 type RunResult = { planId: string; required: boolean; conclusion: ReviewCheckDecision["conclusion"] };
-type Validation = { version?: number; manager?: "npm" | "pnpm" | "yarn" | "none"; pinned?: { headSha?: string; baseSha?: string }; output?: { head?: { results?: RunResult[]; outputs?: Array<{ planId: string; text?: string; truncated?: boolean; evidenceTruncated?: boolean }> }; scanners?: { head?: { scanner?: string; complete?: boolean; commitSha?: string; runs?: Array<{ scanner?: string; scannerVersion?: string }>; findings?: Array<{ scanner?: string; severity?: string }> } } } };
+type Validation = { version?: number; manager?: "npm" | "pnpm" | "yarn" | "none"; pinned?: { headSha?: string; baseSha?: string }; output?: { head?: { results?: RunResult[]; outputs?: Array<{ planId: string; text?: string; truncated?: boolean; evidenceTruncated?: boolean }> }; base?: { results?: RunResult[] }; scanners?: { head?: ScannerRunSummary; base?: ScannerRunSummary } } };
+type ScannerRunSummary = { scanner?: string; complete?: boolean; commitSha?: string; runs?: Array<{ scanner?: string; scannerVersion?: string }>; findings?: Array<{ scanner?: string; severity?: string }> };
 type Finding = { title: string; severity: "critical" | "high" | "warning" | "info"; resolution: "accepted" | "rejected" | "uncertain"; blocking: boolean; evidenceIds: string[]; path?: string; startLine?: number; endLine?: number; impact?: string; explanation?: string };
 type Analysis = { version?: number; pinned?: { headSha?: string; baseSha?: string }; arbitrated?: Finding[] };
 
@@ -28,7 +29,13 @@ async function download(scope: Scope, artifact: ArtifactRef, brokerUrl: string, 
 export function reportChecks(validation: Validation, headSha: string): ReviewCheckDecision[] {
   if (validation.version !== 1 || validation.pinned?.headSha !== headSha || !validation.output?.head) throw new Error("report_validation_pinning_failed");
   const outputs = new Map((validation.output.head.outputs ?? []).map(item => [item.planId, item]));
-  const checks = (validation.output.head.results ?? []).map(item => { const output = outputs.get(item.planId); return { name: item.planId, required: item.required, conclusion: item.conclusion, ...(["failed", "timed_out"].includes(item.conclusion) && typeof output?.text === "string" && output.text.trim() ? { excerpt: redact(output.text) } : {}), evidenceComplete: Boolean(output && typeof output.text === "string" && !output.truncated && !output.evidenceTruncated) }; });
+  // BuildIT runs every check on the base commit too, for exactly this: a failure that was already
+  // there is not this pull request's fault. The comparison was computed by pairExecutionEvidence
+  // and never reached the report, so a repository with a long-broken lint had every pull request
+  // blocked for it, with nothing in the findings to explain the failing check.
+  const baseFailed = new Set((validation.output.base?.results ?? [])
+    .filter(item => ["failed", "timed_out"].includes(item.conclusion)).map(item => item.planId));
+  const checks = (validation.output.head.results ?? []).map(item => { const output = outputs.get(item.planId); return { name: item.planId, required: item.required, conclusion: item.conclusion, ...(["failed", "timed_out"].includes(item.conclusion) && typeof output?.text === "string" && output.text.trim() ? { excerpt: redact(output.text) } : {}), evidenceComplete: Boolean(output && typeof output.text === "string" && !output.truncated && !output.evidenceTruncated), ...(baseFailed.has(item.planId) ? { preExisting: true } : {}) }; });
   const scanner = validation.output.scanners?.head;
   if (scanner) {
     const names: Record<string, string> = { builditRules: "buildit-rules", gitleaks: "gitleaks", osvScanner: "osv-scanner" };
@@ -37,7 +44,13 @@ export function reportChecks(validation: Validation, headSha: string): ReviewChe
       const id = run.scanner, name = id ? names[id] : undefined;
       if (!id || !name || seen.has(id)) throw new Error("report_scanner_inventory_invalid");
       seen.add(id);
-      checks.push({ name, required: true, conclusion: scanner.findings?.some(item => (!item.scanner || item.scanner === id) && item.severity === "critical") ? "failed" : "passed", evidenceComplete: scanner.complete === true && scanner.commitSha === headSha });
+      const critical = (run: ScannerRunSummary | undefined) =>
+        Boolean(run?.findings?.some(item => (!item.scanner || item.scanner === id) && item.severity === "critical"));
+      checks.push({ name, required: true, conclusion: critical(scanner) ? "failed" : "passed",
+        evidenceComplete: scanner.complete === true && scanner.commitSha === headSha,
+        // A scanner result the base commit produced identically is the repository's existing state,
+        // not something this pull request introduced.
+        ...(critical(scanner) && critical(validation.output.scanners?.base) ? { preExisting: true } : {}) });
     }
   }
   return checks;

@@ -58,3 +58,56 @@ describe("review report evidence", () => {
     expect(() => reportChecks({ version: 1, pinned: { headSha: "b".repeat(40) }, output: { head: { results: [], outputs: [] } } }, headSha)).toThrow("report_validation_pinning_failed");
   });
 });
+
+// The comparison existed and the report never read it. got had `test` and `buildit-rules` failing
+// on both commits - a missing CA bundle, and a benchmark that disables TLS - and every pull request
+// was blocked for both, with no finding to point at.
+describe("a failure the base commit already had", () => {
+  const headSha = "a".repeat(40);
+
+  it("is marked pre-existing when the same check failed on base", () => {
+    const checks = reportChecks({ version: 1, pinned: { headSha }, output: {
+      head: { results: [{ planId: "test", required: true, conclusion: "failed" }],
+        outputs: [{ planId: "test", text: "boom" }] },
+      base: { results: [{ planId: "test", required: true, conclusion: "failed" }] },
+    } } as never, headSha);
+
+    expect(checks.find(check => check.name === "test")).toMatchObject({ conclusion: "failed", preExisting: true });
+  });
+
+  it("is not marked when the base commit passed it", () => {
+    const checks = reportChecks({ version: 1, pinned: { headSha }, output: {
+      head: { results: [{ planId: "test", required: true, conclusion: "failed" }],
+        outputs: [{ planId: "test", text: "boom" }] },
+      base: { results: [{ planId: "test", required: true, conclusion: "passed" }] },
+    } } as never, headSha);
+
+    expect(checks.find(check => check.name === "test")?.preExisting).toBeUndefined();
+  });
+
+  it("marks a scanner result the base produced identically", () => {
+    const scanners = (severity: string) => ({ scanner: "builditRules", complete: true, commitSha: headSha,
+      runs: [{ scanner: "builditRules", scannerVersion: "1" }], findings: [{ scanner: "builditRules", severity }] });
+    const checks = reportChecks({ version: 1, pinned: { headSha }, output: {
+      head: { results: [], outputs: [] },
+      scanners: { head: { ...scanners("critical") }, base: { ...scanners("critical") } },
+    } } as never, headSha);
+
+    expect(checks.find(check => check.name === "buildit-rules")).toMatchObject({ conclusion: "failed", preExisting: true });
+  });
+
+  it("does not mark a scanner result this change introduced", () => {
+    const checks = reportChecks({ version: 1, pinned: { headSha }, output: {
+      head: { results: [], outputs: [] },
+      scanners: {
+        head: { scanner: "builditRules", complete: true, commitSha: headSha,
+          runs: [{ scanner: "builditRules", scannerVersion: "1" }], findings: [{ scanner: "builditRules", severity: "critical" }] },
+        base: { scanner: "builditRules", complete: true, commitSha: "b".repeat(40),
+          runs: [{ scanner: "builditRules", scannerVersion: "1" }], findings: [] },
+      },
+    } } as never, headSha);
+
+    expect(checks.find(check => check.name === "buildit-rules")).toMatchObject({ conclusion: "failed" });
+    expect(checks.find(check => check.name === "buildit-rules")?.preExisting).toBeUndefined();
+  });
+});
