@@ -55,3 +55,17 @@ export const setReviewTrigger = internalMutation({
     return { updated: true as const, repository: `${repository.owner}/${repository.name}`, trigger: args.trigger };
   },
 });
+
+// Support path for the same reason setReviewTrigger has one: approving or revoking a repository's
+// configuration should not wait for an owner to log in. The owner-facing path is
+// repositoryConnections.setReviewPolicy, which checks the caller's role.
+export const setApprovedConfigHash = internalMutation({
+  args: { githubRepositoryId: v.number(), contentHash: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const repository = await ctx.db.query("repositories")
+      .withIndex("by_github_id", q => q.eq("githubRepositoryId", args.githubRepositoryId)).first();
+    if (!repository) return { updated: false as const };
+    await ctx.db.patch(repository._id, { approvedConfigHash: args.contentHash, approvedConfigBy: "operations", updatedAt: Date.now() });
+    return { updated: true as const, repository: `${repository.owner}/${repository.name}`, approved: args.contentHash ?? null };
+  },
+});
