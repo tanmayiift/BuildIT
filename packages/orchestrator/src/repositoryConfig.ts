@@ -79,3 +79,49 @@ export function parseRepositoryConfig(source: string) {
 
   return { valid: problems.length === 0, config, problems };
 }
+
+// Which instructions a review actually carries. Only those whose paths the change touched: an
+// instruction about SQL has nothing to say about a change that touched no SQL, and carrying all of
+// them would spend the prompt budget on advice about files nobody edited.
+//
+// This text is controlled by the repository, so it reaches the prompt as a narrative surface -
+// the same class as a pull request description - and is bounded here before it gets there. An
+// instruction may steer attention and nothing else: the evidence gate runs after the model has
+// spoken and never reads this, and scanners never see a prompt at all.
+const maxInstructionBudget = 4_000;
+
+export function instructionsForPaths(
+  instructions: ReadonlyArray<{ path: string; instructions: string }> | undefined,
+  changedPaths: ReadonlyArray<string>,
+) {
+  if (!instructions?.length || !changedPaths.length) return [];
+  const selected: string[] = [];
+  let budget = maxInstructionBudget;
+  for (const entry of instructions) {
+    if (selected.includes(entry.instructions)) continue;
+    const matcher = globMatcher(entry.path);
+    if (!changedPaths.some(path => matcher.test(path))) continue;
+    if (entry.instructions.length > budget) break;
+    selected.push(entry.instructions);
+    budget -= entry.instructions.length;
+  }
+  return selected;
+}
+
+// The same small dialect the path filters use, and literal metacharacters for the same reason.
+function globMatcher(glob: string) {
+  let source = "";
+  for (let index = 0; index < glob.length; index += 1) {
+    const character = glob[index]!;
+    if (character === "*") {
+      if (glob[index + 1] === "*") {
+        source += glob[index + 2] === "/" ? "(?:.*/)?" : ".*";
+        index += glob[index + 2] === "/" ? 2 : 1;
+      } else { source += "[^/]*"; }
+      continue;
+    }
+    if (character === "?") { source += "[^/]"; continue; }
+    source += character.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+  return new RegExp(`^${source}$`);
+}

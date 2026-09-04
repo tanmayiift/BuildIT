@@ -62,6 +62,10 @@ export default defineSchema({
     // Automatic review spends the customer's own model key, so it is off until a repository asks
     // for it - including the ones already connected.
     reviewTrigger: v.optional(v.union(v.literal("manual"), v.literal("automatic"))),
+    // An admin approves the configuration, not the commit: the trusted ref is the base branch and
+    // its sha moves on every merge, so approving a commit meant re-approving an unchanged file
+    // several times a day - and an approval nobody reads is worse than no approval.
+    approvedConfigHash: v.optional(v.string()), approvedConfigBy: v.optional(v.string()),
     forkPolicy: value.forkPolicy, configRevisionId: v.optional(v.id("configRevisions")),
     indexState: value.indexState, concurrencyLimit: v.number(), ...timestampFields,
   }).index("by_github_id", ["githubRepositoryId"])

@@ -190,3 +190,23 @@ export function compilePathFilters(patterns: ReadonlyArray<string>) {
     return kept;
   };
 }
+
+// One file at one commit. The repository's own configuration is read from the trusted ref, never
+// from the pull request head, so it cannot be fetched alongside the head snapshot - and pulling a
+// whole second snapshot to read one small file would cost far more than it saves.
+export async function fetchFileAtCommit(input: { installationToken: string; repositoryId: number; commitSha: string; path: string; maxBytes?: number; http?: GitHubHttp }) {
+  if (!/^[0-9a-f]{40}$/i.test(input.commitSha)) throw new Error("invalid_commit_sha");
+  if (!safePath(input.path)) throw new Error("invalid_repository_path");
+  const request = githubRequester(input.http ?? fetch);
+  const authHeaders = { ...headers, Authorization: `Bearer ${input.installationToken}` };
+  const response = await request(`https://api.github.com/repositories/${input.repositoryId}/contents/${encodeURI(input.path)}?ref=${input.commitSha}`, { headers: authHeaders });
+  // A repository with no configuration is the common case, not an error.
+  if (response.status === 404) return { present: false as const };
+  if (!response.ok) return { present: false as const };
+  const body = await response.json() as { content?: unknown; encoding?: unknown; size?: unknown };
+  if (typeof body.content !== "string" || body.encoding !== "base64") return { present: false as const };
+  if (typeof body.size === "number" && body.size > (input.maxBytes ?? 64_000)) return { present: false as const, tooLarge: true as const };
+  const bytes = Buffer.from(body.content.replace(/\s/g, ""), "base64");
+  if (bytes.length > (input.maxBytes ?? 64_000) || bytes.includes(0)) return { present: false as const };
+  return { present: true as const, content: bytes.toString("utf8") };
+}
