@@ -71,6 +71,25 @@ describe("connected repository workspace", () => {
     expect(css).toMatch(/\.repository-actions[^}]*min-height:44px/);
     expect(css).toMatch(/@media\(max-width:760px\)[\s\S]*\.repository-row\{grid-template-columns:1fr/);
     expect(css).toMatch(/\.repository-row:focus-within[^}]*var\(--navy-soft\)/);
+    // The refresh result is a quiet note under a button, not a coloured .form-result banner.
+    expect(css).toMatch(/\.form-note\{[^}]*var\(--muted\)/);
+    // .repository-row declares 280+570 columns + 24 gap + 2x18 padding = 910px, but inside
+    // .content the inner width is only viewport-316 (252px sidebar + 2x32 padding). So the row
+    // must collapse below 1226px, and the breakpoint carries ~15px of scrollbar headroom on top:
+    // 1261-316-15 = 930 >= 910. At the old 1100 the connections page scrolled sideways from
+    // 1101 to 1225 - do not lower it back.
+    expect(css).toMatch(/@media\(max-width:1260px\)\{[^@]*\.repository-row\{grid-template-columns:1fr/);
+    // "button danger" matches no rule in either stylesheet, so a destructive control wearing it
+    // renders as the primary call to action - solid navy, leftmost, indistinguishable from the
+    // action you meant to take. Both files that own a destructive control are checked, because the
+    // first version of this guard read only one of them and "Cancel review" kept the defect.
+    for (const owner of ["apps/web/src/app/live-connections.tsx",
+      "apps/web/src/app/reviews/[id]/live-review-detail.tsx"]) {
+      expect(readFileSync(owner, "utf8"), `${owner} uses a class that matches no rule`)
+        .not.toContain("button danger");
+    }
+    expect(css + readFileSync("apps/web/src/app/globals.css", "utf8"), "the class destructive controls do use must exist")
+      .toMatch(/\.button\.destructive/);
   });
 });
 
@@ -150,7 +169,8 @@ describe("refreshing the repository list", () => {
   it("says how many repositories BuildIT can now see", async () => {
     render(<RepositoryConnectionView />);
     (await screen.findByRole("button", { name: /Refresh the repository list/ })).click();
-    await screen.findByText("4 repositories available to BuildIT.");
+    const result = await screen.findByText("4 repositories available to BuildIT.");
+    expect(result.className).toContain("form-note");
   });
 
   it("says plainly that nothing changed when GitHub could not be read", async () => {

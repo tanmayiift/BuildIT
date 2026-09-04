@@ -55,11 +55,14 @@ export function LiveHistory() {
   const judged = totals.accepted + totals.dismissed;
 
   return <>
-    <section className="metric-grid" aria-label="Review totals for the last 30 days">
-      <div className="metric-card"><small>Reviews</small><strong>{totals.reviews}</strong><span>{totals.automatic} started automatically</span></div>
-      <div className="metric-card"><small>Reached a verdict</small><strong>{totals.decisive}</strong><span>{totals.inconclusive} inconclusive, {totals.platformFailed} did not finish</span></div>
-      <div className="metric-card"><small>Model cost</small><strong>{money(totals.costUsd)}</strong><span>billed to your own provider key</span></div>
-      <div className="metric-card"><small>Findings judged</small><strong>{judged ? `${Math.round((totals.accepted / judged) * 100)}%` : "—"}</strong><span>{judged ? `${totals.accepted} accepted, ${totals.dismissed} dismissed` : "no feedback yet"}</span></div>
+    {/* .metric styles its children by element - span is the label, strong the figure, small the
+        detail - so the order here matches live-metrics-usage.tsx rather than inventing a second
+        metric system with no responsive rules of its own. */}
+    <section className="metric-line" aria-label="Review totals for the last 30 days">
+      <div className="metric"><span>Reviews</span><strong>{totals.reviews}</strong><small>{totals.automatic} started automatically</small></div>
+      <div className="metric"><span>Reached a verdict</span><strong>{totals.decisive}</strong><small>{totals.inconclusive} inconclusive, {totals.platformFailed} did not finish</small></div>
+      <div className="metric"><span>Model cost</span><strong>{money(totals.costUsd)}</strong><small>billed to your own provider key</small></div>
+      <div className="metric"><span>Findings judged</span><strong>{judged ? `${Math.round((totals.accepted / judged) * 100)}%` : "—"}</strong><small>{judged ? `${totals.accepted} accepted, ${totals.dismissed} dismissed` : "no feedback yet"}</small></div>
     </section>
 
     <section className="evidence-section">

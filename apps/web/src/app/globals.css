@@ -72,6 +72,9 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .quiet-link { min-height: 44px; display: inline-flex; align-items: center; font-size: 12px; }
 .setup-state { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; color: var(--ink-2); background: var(--workbench); border: 1px solid var(--line); border-radius: 5px; font-size: 11px; font-weight: 700; }
 .setup-dot { width: 7px; height: 7px; background: var(--warning); border-radius: 50%; }
+/* Signed out is the normal resting state of the account panel, not an alarm, so this dot is the
+   neutral line token rather than --warning. */
+.preview-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; background: var(--line-strong); border-radius: 50%; vertical-align: middle; }
 .mobile-nav { display: none; }
 .content { width: min(1440px, 100%); margin: 0 auto; padding: 32px; }
 .landing { display: grid; gap: 40px; }
@@ -166,7 +169,7 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .status.danger, .status.fail { color: var(--danger); background: var(--danger-bg); border-color: #efb7b2; }
 .status.warning, .status.warn { color: var(--warning); background: var(--warning-bg); border-color: #e8c77f; }
 .status.success, .status.pass { color: var(--success); background: var(--success-bg); border-color: #b5dcc2; }
-.status.running { color: var(--info); background: var(--info-bg); border-color: #bfd3ec; }
+.status.running, .status.info { color: var(--info); background: var(--info-bg); border-color: #bfd3ec; }
 .status.neutral { color: var(--ink-2); background: var(--workbench); border-color: var(--line); }
 .count { min-width: 24px; padding: 2px 7px; color: var(--muted); background: var(--workbench); border: 1px solid var(--line); border-radius: 999px; font: 600 11px "JetBrains Mono Variable", monospace; text-align: center; }
 .search-field input { width: 260px; min-height: 44px; padding: 0 12px; background: var(--workbench); border: 1px solid var(--line); border-radius: 6px; outline: 0; }

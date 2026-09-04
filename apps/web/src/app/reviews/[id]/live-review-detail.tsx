@@ -1,8 +1,8 @@
 "use client";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { Component, useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
-import { eventPresentation, nextActionPresentation, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
+import { comparisonRefusal, eventPresentation, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
 type Evidence = {
   review: {
     id: string;
@@ -157,18 +157,11 @@ export function LiveReviewDetail({ id }: { id: string }) {
     [cancelError, setCancelError] = useState(""),
     [findingDetails, setFindingDetails] = useState<FindingDetail[] | null>(null),
     [findingDetailError, setFindingDetailError] = useState(false),
-    [comparedTo, setComparedTo] = useState(""),
     evidence = useQuery(
       evidenceQuery,
       isAuthenticated ? { reviewId: id } : "skip",
     ),
-    runs = useQuery(runHistoryQuery, isAuthenticated ? { reviewId: id } : "skip"),
-    // Left is the older run, so "lost" reads as a defect the earlier run reported and this one did
-    // not - the direction a person actually asks the question in.
-    comparison = useQuery(
-      compareRunsQuery,
-      isAuthenticated && comparedTo ? { leftReviewId: comparedTo, rightReviewId: id } : "skip",
-    );
+    runs = useQuery(runHistoryQuery, isAuthenticated ? { reviewId: id } : "skip");
   const findingCount = evidence?.findings.length ?? 0;
   useEffect(() => {
     if (!isAuthenticated || findingCount === 0) { setFindingDetails(null); setFindingDetailError(false); return; }
@@ -205,6 +198,11 @@ export function LiveReviewDetail({ id }: { id: string }) {
     pullRequestUrl = pullRequestHref(repository.owner, repository.name, review.prNumber),
     checkSummaries = summarizeChecks(evidence.checks),
     hasEvidence = evidence.requirements.length + evidence.findings.length + evidence.checks.length > 0;
+  // Left is the older run, so "lost" reads as a defect the earlier run reported and this one did
+  // not - the direction a person actually asks the question in. A run with nothing earlier to
+  // compare against gets no section at all, rather than a menu with nothing in it.
+  const startedAt = runs?.find(run => run.id === id)?.createdAt ?? Infinity,
+    earlierRuns = (runs ?? []).filter(run => run.createdAt < startedAt);
   // Mirrors terminalStatuses in convex/lib/lifecycle.ts and packages/contracts/src/review.ts.
   // tests/architecture/review-status-contract.test.ts fails if these drift apart.
   const canCancel = !terminalReviewStatuses.includes(review.status) && review.status !== "cancelling";
@@ -242,7 +240,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
         </div>
         <div className="verdict-actions">
           {canCancel ? (
-            <button className="button danger" type="button" disabled={cancelling} onClick={cancelReview}>
+            <button className="button destructive" type="button" disabled={cancelling} onClick={cancelReview}>
               {cancelling ? "Cancelling…" : "Cancel review"}
             </button>
           ) : null}
@@ -306,7 +304,7 @@ export function LiveReviewDetail({ id }: { id: string }) {
       >
         {findingDetails?.length ? (
           findingDetails.map(item => <article className="finding-summary" key={item.id}>
-            <div className="finding-summary-head"><span className={`status ${tone(item.severity)}`}>{label(item.severity)}</span><div><h3>{item.title}</h3><code>{item.path} · {item.startLine === item.endLine ? `line ${item.startLine}` : `lines ${item.startLine}–${item.endLine}`}</code></div><span className={`finding-resolution ${item.blocking ? "blocking" : ""}`}>{item.blocking ? "Blocks merge" : label(item.resolution)}</span></div>
+            <div className="finding-summary-head"><span className={`status ${tone(item.severity)}`}>{findingSeverityLabel(item.severity)}</span><div><h3>{item.title}</h3><code>{item.path} · {lineRange(item.startLine, item.endLine)}</code></div><span className={`finding-resolution ${item.blocking ? "blocking" : ""}`}>{item.blocking ? "Blocks merge" : findingResolutionLabel(item.resolution)}</span></div>
             <div className="finding-summary-body"><div><small>Why it matters</small><p>{item.impact}</p></div><div><small>What to inspect and correct</small><p>{item.explanation}</p></div></div>
           </article>)
         ) : findingDetailError ? (
@@ -317,13 +315,13 @@ export function LiveReviewDetail({ id }: { id: string }) {
           evidence.findings.map((item) => (
             <div className="evidence-row" key={item.id}>
               <span className={`status ${tone(item.severity)}`}>
-                {label(item.severity)}
+                {findingSeverityLabel(item.severity)}
               </span>
               <strong>
-                {label(item.category)}
+                {findingCategoryLabel(item.category)}
                 {item.ruleId ? ` · ${item.ruleId}` : ""}
               </strong>
-              <span>{item.blocking ? "Blocking" : label(item.resolution)}</span>
+              <span>{item.blocking ? "Blocking" : findingResolutionLabel(item.resolution)}</span>
               <code>
                 path {item.pathFingerprint} · L{item.startLine}–{item.endLine} ·{" "}
                 {item.evidenceCount} proof
@@ -423,77 +421,8 @@ export function LiveReviewDetail({ id }: { id: string }) {
           </div>
         </Section>
       ) : null}
-      {runs && runs.length > 1 ? (
-        <Section
-          eyebrow="Run diff"
-          title="Compare this run with another"
-          detail={`${runs.length} runs of pull request #${evidence.review.prNumber}`}
-          foot="Findings are matched on their fingerprint, so the same defect is a fact rather than two titles that read alike."
-        >
-          <label className="run-select">
-            <span>Compare against</span>
-            <select value={comparedTo} onChange={event => setComparedTo(event.target.value)}>
-              <option value="">Select an earlier run…</option>
-              {runs.filter(run => run.createdAt < (runs.find(item => item.id === id)?.createdAt ?? Infinity)).map(run => (
-                <option key={run.id} value={run.id}>
-                  {new Date(run.createdAt).toLocaleString()} · {run.headSha.slice(0, 7)} · {statusPresentation(run.status, false, run.statusReasonCode).label} · ${run.costUsd.toFixed(4)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div aria-live="polite">
-          {comparison ? (
-            <>
-              <dl className="run-diff-summary">
-                <div><dt>Verdict</dt><dd>{comparison.statusChanged ? `${statusPresentation(comparison.left.status, false).label} → ${statusPresentation(comparison.right.status, false).label}` : "Unchanged"}</dd></div>
-                <div><dt>Cost</dt><dd>{comparison.costDeltaUsd >= 0 ? "+" : "−"}${Math.abs(comparison.costDeltaUsd).toFixed(4)}</dd></div>
-                <div><dt>Prompt</dt><dd>{comparison.left.promptVersion === comparison.right.promptVersion ? comparison.right.promptVersion : `${comparison.left.promptVersion} → ${comparison.right.promptVersion}`}</dd></div>
-                <div><dt>Model</dt><dd>{comparison.left.model === comparison.right.model ? comparison.right.model : `${comparison.left.model} → ${comparison.right.model}`}</dd></div>
-              </dl>
-              <div className="run-diff-findings">
-                {/* Lost is the column that matters: a defect the earlier run reported and this one
-                    did not is either fixed in the diff or a regression in the reviewer. */}
-                <div data-side="lost">
-                  <h3>Lost · {comparison.onlyInLeft.length}</h3>
-                  <p>Reported by the earlier run only.</p>
-                  {comparison.onlyInLeft.length ? (
-                    <ul>{comparison.onlyInLeft.map((finding, index) => (
-                      <li key={`lost-${index}`}><span data-tone={tone(finding.severity)}>{label(finding.severity)}</span> {label(finding.category)} · lines {finding.startLine}–{finding.endLine}</li>
-                    ))}</ul>
-                  ) : null}
-                </div>
-                <div data-side="kept"><h3>In both · {comparison.inBoth}</h3><p>Reported by each run.</p></div>
-                <div data-side="new">
-                  <h3>New · {comparison.onlyInRight.length}</h3>
-                  <p>Reported by this run only.</p>
-                  {comparison.onlyInRight.length ? (
-                    <ul>{comparison.onlyInRight.map((finding, index) => (
-                      <li key={`new-${index}`}><span data-tone={tone(finding.severity)}>{label(finding.severity)}</span> {label(finding.category)} · lines {finding.startLine}–{finding.endLine}</li>
-                    ))}</ul>
-                  ) : null}
-                </div>
-              </div>
-              <div className="stage-table-scroll" tabIndex={0} role="region" aria-label="Stage details, scrolls horizontally">
-                <table className="stage-table">
-                  <thead><tr><th scope="col">Stage</th><th scope="col">Earlier</th><th scope="col">This run</th></tr></thead>
-                  <tbody>
-                    {comparison.stages.map(row => (
-                      <tr key={row.stage}>
-                        <th scope="row">{stagePresentation(row.stage)}</th>
-                        {[row.left, row.right].map((side, index) => (
-                          <td key={index} className="stage-figure">
-                            {side.ran ? `${side.tokens.toLocaleString()} tokens · ${side.attempts} call${side.attempts === 1 ? "" : "s"}${side.repaired ? " · repaired" : ""}` : "Not run"}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : comparedTo ? <p className="run-diff-empty">Loading the comparison…</p> : null}
-          </div>
-        </Section>
+      {earlierRuns.length ? (
+        <RunDiff reviewId={id} prNumber={review.prNumber} runCount={(runs ?? []).length} earlierRuns={earlierRuns} />
       ) : null}
       <Section
         eyebrow="History"
@@ -589,6 +518,118 @@ function Section({
       </footer>
     </section>
   );
+}
+// BuildIT reviews the same pull request again after every push. Three runs over identical code
+// once gave the correct finding, then nothing, then an unrelated one, and the product had no way
+// to show that. This is the only screen where one run can be read against another.
+function RunDiff({ reviewId, prNumber, runCount, earlierRuns }: { reviewId: string; prNumber: number; runCount: number; earlierRuns: RunSummary[] }) {
+  const [comparedTo, setComparedTo] = useState("");
+  return (
+    <Section
+      eyebrow="Run diff"
+      title="Compare this run with another"
+      detail={`${runCount} runs of pull request #${prNumber}`}
+      foot="Findings are matched on their fingerprint, so the same defect is a fact rather than two titles that read alike."
+    >
+      <label className="run-select">
+        <span>Compare against</span>
+        <select value={comparedTo} onChange={event => setComparedTo(event.target.value)}>
+          <option value="">Select an earlier run…</option>
+          {earlierRuns.map(run => (
+            <option key={run.id} value={run.id}>
+              {new Date(run.createdAt).toLocaleString()} · {run.headSha.slice(0, 7)} · {statusPresentation(run.status, false, run.statusReasonCode).label} · ${run.costUsd.toFixed(4)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div aria-live="polite">
+        {comparedTo ? (
+          // Keyed on the selection so a refusal on one pair does not outlive the choice that caused it.
+          <ComparisonBoundary key={comparedTo}>
+            <Comparison leftReviewId={comparedTo} rightReviewId={reviewId} />
+          </ComparisonBoundary>
+        ) : null}
+      </div>
+    </Section>
+  );
+}
+function Comparison({ leftReviewId, rightReviewId }: { leftReviewId: string; rightReviewId: string }) {
+  const comparison = useQuery(compareRunsQuery, { leftReviewId, rightReviewId });
+  if (!comparison) return <p className="run-diff-empty">Loading the comparison…</p>;
+  const { left, right } = comparison,
+    change = (earlier: string, later: string) => (earlier === later ? later : `${earlier} → ${later}`);
+  return (
+    <>
+      <dl className="run-diff-summary">
+        <div><dt>Verdict</dt><dd>{comparison.statusChanged ? `${statusPresentation(left.status, false).label} → ${statusPresentation(right.status, false).label}` : "Unchanged"}</dd></div>
+        {/* Two runs of one pull request often pin the same commit: that is the case where a
+            difference below is the reviewer changing its mind, not the code changing. */}
+        <div><dt>Commit</dt><dd>{change(left.headSha.slice(0, 7), right.headSha.slice(0, 7))}</dd></div>
+        <div><dt>Cost</dt><dd>{comparison.costDeltaUsd >= 0 ? "+" : "−"}${Math.abs(comparison.costDeltaUsd).toFixed(4)}</dd></div>
+        <div><dt>Prompt</dt><dd>{change(left.promptVersion, right.promptVersion)}</dd></div>
+        <div><dt>Model</dt><dd>{change(left.model, right.model)}</dd></div>
+      </dl>
+      <div className="run-diff-findings">
+        {/* Lost is the column that matters: a defect the earlier run reported and this one
+            did not is either fixed in the diff or a regression in the reviewer. */}
+        <div data-side="lost">
+          <h3>Lost · {comparison.onlyInLeft.length}</h3>
+          <p>Reported by the earlier run only.</p>
+          <FindingList findings={comparison.onlyInLeft} side="lost" />
+        </div>
+        <div data-side="kept"><h3>In both · {comparison.inBoth}</h3><p>Reported by each run.</p></div>
+        <div data-side="new">
+          <h3>New · {comparison.onlyInRight.length}</h3>
+          <p>Reported by this run only.</p>
+          <FindingList findings={comparison.onlyInRight} side="new" />
+        </div>
+      </div>
+      <div className="stage-table-scroll" tabIndex={0} role="region" aria-label="Stage comparison, scrolls horizontally">
+        <table className="stage-table">
+          <thead><tr><th scope="col">Stage</th><th scope="col">Earlier</th><th scope="col">This run</th></tr></thead>
+          <tbody>
+            {comparison.stages.map(row => (
+              <tr key={row.stage}>
+                <th scope="row">{stagePresentation(row.stage)}</th>
+                {[row.left, row.right].map((side, index) => (
+                  <td key={index} className="stage-figure">
+                    {side.ran ? `${side.tokens.toLocaleString()} tokens · ${side.attempts} call${side.attempts === 1 ? "" : "s"}${side.repaired ? " · repaired" : ""}` : "Not run"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+function FindingList({ findings, side }: { findings: FindingShape[]; side: string }) {
+  if (!findings.length) return null;
+  return (
+    <ul>
+      {findings.map((finding, index) => (
+        <li key={`${side}-${index}`}>
+          <span data-tone={tone(finding.severity)}>{findingSeverityLabel(finding.severity)}</span>{" "}
+          {findingCategoryLabel(finding.category)} · {lineRange(finding.startLine, finding.endLine)}
+          {finding.blocking ? " · blocks merge" : ""}
+          {finding.resolution === "open" ? "" : ` · ${findingResolutionLabel(finding.resolution)}`}
+        </li>
+      ))}
+    </ul>
+  );
+}
+// A refused comparison arrives as an error thrown out of useQuery during render, which would
+// otherwise take the whole review page down with it. It is one sentence in this section instead,
+// and the code the server threw never reaches a person.
+class ComparisonBoundary extends Component<{ children: React.ReactNode }, { message: string }> {
+  state: { message: string } = { message: "" };
+  static getDerivedStateFromError(error: unknown) {
+    return { message: comparisonRefusal(error) };
+  }
+  render() {
+    return this.state.message ? <p className="run-diff-empty">{this.state.message}</p> : this.props.children;
+  }
 }
 function ReviewJourney({ currentStage, status, events }: { currentStage: string; status: string; events: Evidence["events"] }) {
   const steps = [
