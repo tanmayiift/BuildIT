@@ -69,3 +69,18 @@ describe("what a finding cites", () => {
     expect(body).toContain("no cited evidence");
   });
 });
+
+// The review comment is where a reader is, and it never mentioned that commands exist. `@buildit
+// help` was built and documented only on a page nobody opens while looking at a pull request -
+// which is the same mistake the help command was written to fix, one level up.
+describe("finding out what BuildIT can do", () => {
+  it("points at help from the comment a reader is already looking at", () => {
+    const { body } = composeVerifiedReport({ ...base, checks: [], findings: [] });
+    expect(body).toContain("@buildit help");
+  });
+
+  it("keeps it out of the way, below the receipt", () => {
+    const { body } = composeVerifiedReport({ ...base, checks: [], findings: [] });
+    expect(body.indexOf("@buildit help")).toBeGreaterThan(body.indexOf("</details>"));
+  });
+});
