@@ -46,6 +46,10 @@ export const publicFunctionPolicies = {
   "organizations:selectActive": { authorization: "active_organization_viewer", response: "metadata" },
   "organizations:clearActive": { authorization: "authenticated_user", response: "none" },
   "permissionReceipts:current": { authorization: "active_organization_viewer", response: "personal_identity" },
+  // The only unauthenticated entry in this table. It answers with counts, sums and status
+  // literals and nothing else - no organization, repository, actor or finding is identifiable
+  // from what it returns - which is why it can be "public_webhook" and still be "metadata".
+  "publicProof:summary": { authorization: "public_webhook", response: "metadata" },
   "repositoryConnections:current": { authorization: "authenticated_user", response: "metadata" },
   "repositoryConnections:setReviewPolicy": { authorization: "active_organization_admin_recent_auth", response: "none" },
   "runtimeReadiness:current": { authorization: "authenticated_user", response: "metadata" },

@@ -50,6 +50,10 @@ export function PublicShell({ children }: { children: ReactNode }) {
       <p>BuildIT reviews pull requests and cites the file, line and commit behind every finding. It never merges.</p>
       <nav aria-label="More about BuildIT">
         {links.map(item => <a key={item.href} className="quiet-link" href={item.href}>{item.label}</a>)}
+        {/* Deliberately in the footer and not in `links`. The top nav is what a stranger needs to
+            understand the product; the operating numbers are what they check afterwards, and
+            putting a live metrics page beside "Pricing" reads as a boast rather than a receipt. */}
+        <a className="quiet-link" href="/proof">Live numbers</a>
         <a className="quiet-link" href="/reviews?tour=1">Sample review</a>
         <a className="quiet-link" href="https://github.com/tanmayiift" target="_blank" rel="noreferrer noopener">Built by @tanmayiift</a>
       </nav>

@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- The six routes in apps/web/src/app/public-routes.ts: the pages a stranger can reach without
+<!-- The routes in apps/web/src/app/public-routes.ts: the pages a stranger can reach without
      signing in. Every other route is workspace-only and is disallowed in robots.txt. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://buildit-agentic-review.vercel.app/</loc></url>
   <url><loc>https://buildit-agentic-review.vercel.app/features</loc></url>
   <url><loc>https://buildit-agentic-review.vercel.app/pricing</loc></url>
+  <url><loc>https://buildit-agentic-review.vercel.app/proof</loc></url>
   <url><loc>https://buildit-agentic-review.vercel.app/sandbox</loc></url>
   <url><loc>https://buildit-agentic-review.vercel.app/data-handling</loc></url>
   <url><loc>https://buildit-agentic-review.vercel.app/sign-in</loc></url>
