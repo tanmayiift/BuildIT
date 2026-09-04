@@ -71,9 +71,16 @@ export function composeVerifiedReport(input: { repository: string; prNumber: num
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
   const blockingFindings = visibleFindings.filter(finding => finding.resolution === "accepted" && finding.blocking).length;
-  const failedRequiredChecks = input.checks.filter(check => check.required && check.conclusion === "failed" && check.evidenceComplete).length;
+  // A check that fails identically on the base commit is the repository's existing state. Counting
+  // it here told authors their pull request broke something it never touched, with no finding to
+  // point at, which is the most corrosive thing a review can say.
+  const failedRequiredChecks = input.checks.filter(check => check.required && check.conclusion === "failed" && check.evidenceComplete && !check.preExisting).length;
+  const preExistingFailures = input.checks.filter(check => check.conclusion === "failed" && check.preExisting);
   const requiredChecks = input.checks.filter(check => check.required);
   const failedAdvisory = input.checks.filter(check => !check.required && check.conclusion === "failed");
+  const preExistingNote = preExistingFailures.length
+    ? ` ${preExistingFailures.length === 1 ? "One check was" : `${preExistingFailures.length} checks were`} already failing on \`${code(input.baseSha.slice(0, 12))}\` before this pull request: ${preExistingFailures.map(check => `\`${code(check.name)}\``).join(", ")}. Not attributed to this change.`
+    : "";
   const advisoryNote = failedAdvisory.length
     ? ` ${failedAdvisory.length === 1 ? "One advisory check did not pass" : `${failedAdvisory.length} advisory checks did not pass`}: ${failedAdvisory.map(check => `\`${code(check.name)}\``).join(", ")}. Advisory checks do not block a merge.`
     : "";
@@ -98,7 +105,7 @@ function checkExcerpt(check: ReviewCheckDecision) {
 }
 
   const checkRows = input.checks.length
-    ? input.checks.map(check => `| ${safe(check.name)} | ${check.required ? "Required" : "Advisory"} | ${check.conclusion === "failed" ? `**${conclusion(check.conclusion)}**` : conclusion(check.conclusion)}${check.evidenceComplete ? "" : " · evidence incomplete"} |`)
+    ? input.checks.map(check => `| ${safe(check.name)} | ${check.required ? "Required" : "Advisory"} | ${check.conclusion === "failed" ? (check.preExisting ? `${conclusion(check.conclusion)} · already failing on base` : `**${conclusion(check.conclusion)}**`) : conclusion(check.conclusion)}${check.evidenceComplete ? "" : " · evidence incomplete"} |`)
     : ["| No checks configured | — | Not run |"];
   const failedChecks = input.checks.filter(check => check.conclusion === "failed" || check.conclusion === "timed_out");
   // not_configured deliberately excluded: there is no output, only the package manager saying so.
@@ -116,7 +123,7 @@ function checkExcerpt(check: ReviewCheckDecision) {
     `**Repository** \`${code(input.repository)}\`  ·  **Pull request** #${input.prNumber}  ·  **Commit** \`${code(input.headSha.slice(0, 12))}\``,
     ...(input.changeSummary ? ["", input.changeSummary] : []),
     "",
-    `${summary}.${advisoryNote}`,
+    `${summary}.${preExistingNote}${advisoryNote}`,
     "",
     `**Next step** — ${nextStep(decision.nextAction)}`,
     "",
