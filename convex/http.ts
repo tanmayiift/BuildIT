@@ -20,21 +20,16 @@ http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(a
   const reserved = await ctx.runMutation(internal.githubWebhookData.reserve, { deliveryId, event, action, installationId: typeof installation?.id === "number" ? installation.id : undefined, disposition, signatureValid: true, now: Date.now() });
   if (reserved.duplicate) return new Response("duplicate", { status: 202 });
   if (disposition !== "processed") return new Response("ignored", { status: 202 });
-  const reviewComment = payload.comment as { body?: unknown; id?: unknown } | undefined;
-  if (event === "pull_request_review_comment" && ["resolved", "created", "edited"].includes(action)
-    && typeof reviewComment?.body === "string" && typeof pullRequest?.number === "number"
-    && typeof repository?.id === "number" && typeof sender?.login === "string" && sender.type !== "Bot") {
-    await ctx.scheduler.runAfter(0, internal.findingFeedbackWorker.observe, {
-      githubRepositoryId: repository.id, prNumber: pullRequest.number,
-      commentBody: reviewComment.body.slice(0, 2_000), senderLogin: sender.login, resolved: action === "resolved" });
-  } else if (event === "reaction" && typeof repository?.id === "number" && typeof sender?.login === "string" && sender.type !== "Bot") {
-    const reaction = payload.reaction as { content?: unknown } | undefined;
-    const subject = payload.comment as { body?: unknown } | undefined;
-    if (typeof reaction?.content === "string" && typeof subject?.body === "string" && typeof issue?.number === "number") {
+  const reviewThread = payload.thread as { comments?: Array<{ body?: unknown }> } | undefined;
+  if (event === "pull_request_review_thread" && ["resolved", "unresolved"].includes(action)
+    && typeof pullRequest?.number === "number" && typeof repository?.id === "number"
+    && typeof sender?.login === "string" && sender.type !== "Bot" && Array.isArray(reviewThread?.comments)) {
+    const first = reviewThread.comments.find(comment => typeof comment?.body === "string");
+    if (first) {
       await ctx.scheduler.runAfter(0, internal.findingFeedbackWorker.observe, {
-        githubRepositoryId: repository.id, prNumber: issue.number,
-        commentBody: subject.body.slice(0, 2_000), senderLogin: sender.login,
-        thumbsDown: reaction.content === "-1", thumbsUp: reaction.content === "+1" });
+        githubRepositoryId: repository.id, prNumber: pullRequest.number,
+        commentBody: String(first.body).slice(0, 2_000), senderLogin: sender.login,
+        resolved: action === "resolved" });
     }
   }
   if (event === "issue_comment" && issue?.pull_request && typeof issue.number === "number" && Number.isInteger(issue.number) && issue.number > 0 && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof sender?.login === "string" && typeof sender.type === "string" && typeof comment?.body === "string") {

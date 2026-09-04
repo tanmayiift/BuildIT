@@ -11,16 +11,17 @@ const markerPattern = /<!--\s*buildit-review:inline-pr-\d+:([A-Za-z0-9_-]{1,64})
 
 export const observe = internalAction({
   args: { githubRepositoryId: v.number(), prNumber: v.number(), commentBody: v.string(), senderLogin: v.string(),
-    resolved: v.optional(v.boolean()), thumbsDown: v.optional(v.boolean()), thumbsUp: v.optional(v.boolean()) },
+    resolved: v.optional(v.boolean()) },
   handler: async (ctx, args): Promise<{ recorded: boolean }> => {
     const marker = markerPattern.exec(args.commentBody);
     // Not one of BuildIT's inline comments, so there is nothing to attribute.
     if (!marker) return { recorded: false };
 
-    // Resolving a thread and a thumbs-down both say "not this one". A thumbs-up says the opposite,
-    // and is the only thing that records an acceptance without a merged fix.
-    const verdict = args.thumbsUp ? "accepted" as const
-      : args.resolved || args.thumbsDown ? "dismissed" as const : undefined;
+    // Resolving the thread says "not this one"; reopening it takes that back. Reactions are not
+    // a signal because GitHub emits no webhook for them - the first version of this listened for a
+    // "reaction" event that can never arrive.
+    const verdict = args.resolved === true ? "dismissed" as const
+      : args.resolved === false ? "accepted" as const : undefined;
     if (!verdict) return { recorded: false };
 
     const repository = await ctx.runQuery(internal.findingFeedbackData.repositoryByGithubId, { githubRepositoryId: args.githubRepositoryId });
