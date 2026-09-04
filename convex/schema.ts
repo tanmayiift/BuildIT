@@ -66,6 +66,8 @@ export default defineSchema({
     // its sha moves on every merge, so approving a commit meant re-approving an unchanged file
     // several times a day - and an approval nobody reads is worse than no approval.
     approvedConfigHash: v.optional(v.string()), approvedConfigBy: v.optional(v.string()),
+    // Off unless asked: BuildIT opening pull requests nobody wanted is its own kind of noise.
+    changelogOnMerge: v.optional(v.boolean()),
     forkPolicy: value.forkPolicy, configRevisionId: v.optional(v.id("configRevisions")),
     indexState: value.indexState, concurrencyLimit: v.number(), ...timestampFields,
   }).index("by_github_id", ["githubRepositoryId"])
@@ -144,6 +146,7 @@ export default defineSchema({
     .index("by_status", ["status", "updatedAt"])
     .index("by_repo_pr_head_mode", ["repositoryId", "prNumber", "headSha", "mode"])
     .index("by_expiry", ["expiresAt"])
+    .index("by_org_created", ["organizationId", "createdAt"])
     .index("by_queue", ["organizationId", "status", "createdAt"])
     .index("by_blocked_expiry", ["status", "blockedExpiresAt"]),
 

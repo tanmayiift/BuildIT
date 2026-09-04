@@ -14,6 +14,7 @@ const work = [
   { label: "Overview", href: "/", mark: "OV" },
   { label: "Review queue", href: "/reviews", mark: "RQ" },
   { label: "Repositories", href: "/repositories", mark: "RE" },
+  { label: "History", href: "/history", mark: "HI" },
   { label: "Metrics", href: "/metrics", mark: "ME" },
 ];
 const operations = [

@@ -42,7 +42,8 @@ http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(a
   } else if (event === "pull_request" && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof pullRequest?.number === "number" && typeof pullRequest.head?.sha === "string") {
     await ctx.scheduler.runAfter(0, internal.githubWebhookProcessor.processPullRequestWebhook, { deliveryId, installationId: installation.id, githubRepositoryId: repository.id, prNumber: pullRequest.number, headSha: pullRequest.head.sha, action,
       authorLogin: typeof (pullRequest as { user?: { login?: unknown } }).user?.login === "string" ? (pullRequest as { user: { login: string } }).user.login : "",
-      merged: (pullRequest as { merged?: unknown }).merged === true });
+      merged: (pullRequest as { merged?: unknown }).merged === true,
+      title: typeof (pullRequest as { title?: unknown }).title === "string" ? ((pullRequest as { title: string }).title).slice(0, 300) : undefined });
   } else if (event === "push" && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof pushRef === "string" && typeof pushAfter === "string") {
     await ctx.scheduler.runAfter(0, internal.githubWebhookProcessor.processPushWebhook, { deliveryId, installationId: installation.id, githubRepositoryId: repository.id, ref: pushRef, afterSha: pushAfter });
   } else await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId, disposition: "rejected", status: "completed", now: Date.now() });

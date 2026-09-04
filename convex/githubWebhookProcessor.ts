@@ -335,6 +335,7 @@ export const processPullRequestWebhook = internalAction({
     action: v.optional(v.string()),
     authorLogin: v.optional(v.string()),
     merged: v.optional(v.boolean()),
+    title: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ staleCount: number } | undefined> => {
     try {
@@ -351,6 +352,11 @@ export const processPullRequestWebhook = internalAction({
       // Reconciling first is what makes this a debounce rather than a queue: the previous review
       // for an older head is marked stale above, so eligibility sees only a review that covers the
       // head that just arrived.
+      if (args.action === "closed" && args.merged) {
+        await ctx.scheduler.runAfter(0, internal.changelogWorker.record, {
+          githubRepositoryId: args.githubRepositoryId, prNumber: args.prNumber,
+          title: args.title ?? `Pull request #${args.prNumber}`, mergedAt: Date.now() });
+      }
       if (["opened", "reopened", "synchronize"].includes(args.action ?? "") && args.authorLogin) {
         await startAutomaticReview(ctx, args as { deliveryId: string; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; authorLogin: string });
       }

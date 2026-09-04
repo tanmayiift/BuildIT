@@ -38,6 +38,7 @@ export const publicFunctionPolicies = {
   "memberships:changeRole": { authorization: "active_organization_admin_recent_auth", response: "none" },
   "memberships:remove": { authorization: "active_organization_admin_recent_auth", response: "none" },
   "metrics:summarize": { authorization: "active_organization_viewer", response: "metadata" },
+  "reviewHistory:summary": { authorization: "active_organization_viewer", response: "metadata" },
   "notifications:preferences": { authorization: "active_organization_viewer", response: "metadata" },
   "notifications:updatePreferences": { authorization: "active_organization_viewer", response: "none" },
   "organizations:listMine": { authorization: "authenticated_user", response: "metadata" },
