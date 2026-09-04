@@ -219,14 +219,20 @@ export const analyze = internalAction({
         const spend = await ctx.runMutation(internal.reviewModelData.preflightStageSpend,{...args,provider:scope.provider,model,inputBytes:Buffer.byteLength(request.system)+Buffer.byteLength(request.input)+Buffer.byteLength(JSON.stringify(request.schema)),maxOutputTokens:request.maxOutputTokens,now:Date.now()});
         if (!spend.allowed) throw new Error("budget_preflight_exceeded");
         const body = JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), stage, credential: scope.credential, request });
-        const grant = issueModelInvocationGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), credentialScopeId: scope.credential.id,
+        // Minted per attempt, never once for the loop. A grant is single-use by design - the broker
+        // consumes its grantId - so re-sending the same token on a retry is indistinguishable from a
+        // replay, and the broker was right to refuse it. Minting once meant the provider retry path
+        // could never succeed: every review that hit a rate limit or a transient 5xx died with
+        // model_grant_replayed instead of retrying, which is where "random platform errors" came
+        // from. The grant still binds the same requestHash, so nothing about its scope widens.
+        const mintGrant = () => issueModelInvocationGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), credentialScopeId: scope.credential.id,
           provider: scope.provider, model, stage, requestHash: createHash("sha256").update(body).digest("hex") }, modelSecret);
         await ctx.runQuery(internal.durableReview.assertActive, args);
         type ModelReply = { result?: ProviderResult; error?: string; providerStatus?: number; retryAfterSeconds?: number };
         let response!: Response, output!: ModelReply, reason = "";
         for (let attempt = 1; attempt <= maxProviderAttempts; attempt += 1) {
           await ctx.runQuery(internal.durableReview.assertActive, args);
-          response = await fetch(`${brokerUrl}/api/model`, { method: "POST", headers: { authorization: `Bearer ${grant}`, "content-type": "application/json" }, body });
+          response = await fetch(`${brokerUrl}/api/model`, { method: "POST", headers: { authorization: `Bearer ${mintGrant()}`, "content-type": "application/json" }, body });
           const raw = await response.text();
           try { output = JSON.parse(raw) as ModelReply; } catch { output = { error: `non_json_response:http_${response.status}` }; }
           if (response.ok && output.result) return output.result;
