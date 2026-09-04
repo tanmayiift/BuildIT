@@ -32,6 +32,19 @@ Check the provider's public status and BuildIT's bounded retry counter. Disable 
 
 Disable untrusted execution. Confirm every sandbox has a terminal teardown receipt. Restore execution only after a new isolated smoke run passes with outbound network blocked.
 
+## BuildITRunnerCapacityExhausted
+
+The sandbox provider is refusing new sandboxes because the plan's usage is spent, not because
+anything is broken. The broker logs the provider's own message, including the reset date, under
+`buildit_execute_failure` with `category: capacity`.
+
+Upgrade the plan, or wait for the reset. Nothing needs disabling and nothing is unsafe. Reviews
+return inconclusive while this lasts, which is the correct behaviour: they are refusing to claim
+they checked anything, and no verdict rests on unexecuted checks.
+
+This is deliberately a ticket and not a page. It cannot be fixed at 3am and it would otherwise
+re-fire every ten minutes until the reset date.
+
 ## BuildITArtifactDeletionBacklog
 
 Pause new artifact creation, run the deletion reconciler, and verify the global backlog returns to zero. Escalate any object that passes its retention deadline.

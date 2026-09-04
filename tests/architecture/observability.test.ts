@@ -43,6 +43,16 @@ describe("observability release assets", () => {
     expect(alertCount).toBeGreaterThanOrEqual(12);
     expect((rules.match(/service: buildit/g) ?? [])).toHaveLength(alertCount);
     expect((rules.match(/runbook_url:/g) ?? [])).toHaveLength(alertCount);
+    // A runbook link that resolves to nothing is worse than none: it reads as an answer at the
+    // moment somebody most needs one. The count was checked; the destination never was, and a new
+    // alert shipped pointing at a section that did not exist.
+    const runbook = readFileSync(new URL("docs/operations/alert-runbooks.md", root), "utf8");
+    const anchors = new Set((runbook.match(/^## (.+)$/gm) ?? []).map(heading =>
+      heading.replace(/^## /, "").toLowerCase().replace(/[^a-z0-9]/g, "")));
+    for (const link of rules.match(/runbook_url: "[^"]+"/g) ?? []) {
+      const anchor = link.split("#")[1]?.replace(/"$/, "") ?? "";
+      expect(anchors, `no section in alert-runbooks.md for #${anchor}`).toContain(anchor);
+    }
     expect((rules.match(/action:/g) ?? [])).toHaveLength(alertCount);
     expect(rules).toContain('buildit_failures_total{buildit_outcome="failed"}');
     expect(rules).toContain('buildit_operations_total{buildit_outcome=~"succeeded|failed"}');
