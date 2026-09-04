@@ -14,7 +14,16 @@ export type SandboxLike = {
 export type SandboxCredentials = { token: string; teamId: string; projectId: string };
 export type SandboxFactory = (input: { runtime?: "node22" | "node24"; image?: string; timeout: number; resources: { vcpus: number }; networkPolicy: "deny-all"; env: Record<string, string>; region: string; persistent: false } & Partial<SandboxCredentials>) => Promise<SandboxLike>;
 
-const registryDomains = ["registry.npmjs.org", "registry.yarnpkg.com"];
+// The only hosts install may reach, and the reason the sandbox is otherwise deny-all: a postinstall
+// script that can talk to anything is a way out of the boundary. Registries only, never a general
+// allowance.
+//
+// npm.jsr.io joined the list after a real review of date-fns ended inconclusive: it depends on a
+// JSR-published package, install could not resolve it, and every required check went Not Run. A
+// dependency registry a mainstream repository genuinely needs is exactly what this list is for -
+// the alternative was telling that repository we could not review it, which is not a security
+// posture, just a smaller product.
+const registryDomains = ["registry.npmjs.org", "registry.yarnpkg.com", "npm.jsr.io"];
 const sensitive = /(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|GITHUB_|VERCEL_|CONVEX_|ANTHROPIC_|OPENAI_|GEMINI_|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)/i;
 const unsafeInstallControl = /(^|\/)(?:\.git|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfile\.cjs|pnpmfile\.cjs|\.pnp\.(?:cjs|js)|\.yarn\/plugins|\.gitleaks\.toml|\.gitleaksignore|\.?osv-scanner\.(?:toml|json))(\/|$)/i;
 export function isUnsafeInstallControlPath(path: string) { return unsafeInstallControl.test(path); }

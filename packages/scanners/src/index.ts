@@ -103,7 +103,13 @@ const authoredRules = [
   { id: "buildit-jwt-unverified", pattern: /\bjwt\s*\.\s*decode\s*\(/g,
     summary: "JWT read without verifying its signature", severity: "critical" as const, scope: "script" as const },
   // CWE-208. Comparing a secret with === leaks its prefix through timing.
-  { id: "buildit-timing-unsafe-compare", pattern: /\b(?:\w*(?:password|passwd|secret|token|apiKey|api_key|signature|hmac|digest)\w*)\s*(?:===|!==|==|!=)\s*\w/gi,
+  // The right-hand side decides whether this is a timing risk at all. `password !== undefined` is an
+  // existence check that leaks nothing, and it fired twice on unmodified upstream code in a real
+  // review, failing a required check on lines the pull request never touched. Excluding the
+  // non-secret literals also fixed the opposite error: the old `\w` tail could not match
+  // `token === "literal"` at all, because a quote is not a word character - so the rule was
+  // reporting the safe case and missing the dangerous one.
+  { id: "buildit-timing-unsafe-compare", pattern: /\b(?:\w*(?:password|passwd|secret|token|apiKey|api_key|signature|hmac|digest)\w*)\s*(?:===|!==|==|!=)\s*(?:["'`]|(?!(?:undefined|null|true|false|NaN)\b|\d)[A-Za-z_$])/gi,
     summary: "Secret compared without a constant-time comparison", severity: "warning" as const, scope: "script" as const },
   // CWE-89. Only interpolation inside something that reads as SQL, so a template literal in a log
   // line does not match.

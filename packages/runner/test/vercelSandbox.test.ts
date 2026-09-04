@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { defaultExecutionPlans } from "../src/index";
 import { VercelSandboxRunner, type SandboxFactory, type SandboxLike } from "../src/vercelSandbox";
@@ -29,12 +30,26 @@ describe("Vercel sandbox runner", () => {
     expect(result.gitleaksReport).toBe("[]");
     expect(result.osvReport).toBe('{"results":[]}');
     expect(result.outputs).toEqual([{ planId: "install", text: "ok", truncated: false }, { planId: "test", text: "ok", truncated: false }]);
-    expect(f.calls).toContainEqual(["network", { allow: ["registry.npmjs.org", "registry.yarnpkg.com"] }]);
+    expect(f.calls).toContainEqual(["network", { allow: ["registry.npmjs.org", "registry.yarnpkg.com", "npm.jsr.io"] }]);
     expect(f.calls).toContainEqual(["network", "deny-all"]);
     expect(f.calls).toContainEqual(["command", { cmd: "pnpm", args: ["install", "--frozen-lockfile", "--ignore-scripts"], cwd: "/vercel/sandbox/repo", timeoutMs: 150_000 }]);
     expect(f.calls).toContainEqual(["command", { cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", "--lockfile", "/vercel/sandbox/repo/pnpm-lock.yaml"], cwd: "/vercel/sandbox/repo", timeoutMs: 50_000 }]);
     expect(f.create.mock.calls[0]![0]).toMatchObject({ timeout: 580_000, networkPolicy: "deny-all", env: { CI: "true" }, region: "cdg1", persistent: false });
     expect(f.stop).toHaveBeenCalledOnce();
+  });
+
+  // The list grows when a mainstream repository genuinely needs a registry, and never otherwise.
+  // Install is the one moment the sandbox is not deny-all, so anything on this list is a host a
+  // postinstall script can also reach.
+  it("opens the network to package registries and nothing else", () => {
+    const source = readFileSync(new URL("../src/vercelSandbox.ts", import.meta.url), "utf8");
+    const listed = source.match(/const registryDomains = \[([^\]]*)\]/)?.[1] ?? "";
+    const policy = { allow: [...listed.matchAll(/"([^"]+)"/g)].map(match => match[1]!) };
+    expect(policy.allow.length).toBeGreaterThan(0);
+    for (const host of policy.allow) {
+      expect(host, `${host} is not a package registry`).toMatch(/^(?:registry\.|npm\.)[a-z0-9.-]+$/);
+    }
+    expect(policy.allow).not.toContain("*");
   });
 
   it("reports a command killed at its ceiling as a timeout, not as a failure", async () => {
