@@ -22,6 +22,13 @@ if (base.protocol !== "https:" || base.hostname !== expectedHost || base.usernam
 
 const source = await readFile(new URL("../observability/alerts.yml", import.meta.url), "utf8");
 
+// The uid the hosted stack actually serves, and the one all 14 dashboard panels already render
+// through. Two other spellings were in the repository - buildit-prometheus for the local
+// docker-compose datasource, and a longer grafanacloud-peacefulbumblebee2324-prom that was this
+// script's default - and none had ever been falsified, because nothing was ever pushed. Attaching
+// rules to a datasource that does not exist fails silently: they simply never fire.
+const datasourceUid = "grafanacloud-prom";
+
 // Read as text rather than through a YAML parser. js-yaml is a workspace dependency, not a root
 // one, and pulling it up here would touch the lockfile - which the dependency audit gate then has
 // to re-clear - for a file this regular. tests/architecture/observability.test.ts reads it the same
@@ -64,6 +71,51 @@ if (process.argv.includes("--dry-run")) {
   process.exit(0);
 }
 
+// --verify is the half that was missing, and its absence is the whole story of this file. CI ran
+// --dry-run on every push, the file passed, and nobody was pushing it anywhere: the deployed rules
+// were still the ones hand-built in the UI months earlier. Three of them - telemetry silence
+// watching a counter that only moves when somebody reviews a pull request, runner failure paging on
+// a spent sandbox plan, failure rate with no volume floor - sent 54 emails in a single night while
+// the corrected versions sat in this repository, validated and green.
+//
+// Validation that cannot see the running system is a spell-check. This reads the rules back and
+// refuses to pass when they differ from the file, including when no token is configured at all -
+// because "we could not check" and "it matches" are not the same answer, and only one of them
+// deserves a green build.
+if (process.argv.includes("--verify")) {
+  const token = process.env.BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN;
+  if (!token) {
+    console.error("buildit_grafana_alerts_unverified: BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN is not set, so the deployed rules could not be read.");
+    console.error("  Set it and run `pnpm alerts:provision` once; this gate stays red until the stack matches observability/alerts.yml.");
+    process.exit(1);
+  }
+  const response = await fetch(new URL("/api/convert/prometheus/config/v1/rules/buildit", base), {
+    headers: { authorization: `Bearer ${token}`, accept: "application/yaml" },
+  });
+  if (!response.ok) throw new Error(`buildit_grafana_alerts_read_failed:${response.status}:${(await response.text()).slice(0, 300)}`);
+  const deployed = await response.text();
+  // Compare the rule inventory and each expression, not the whole document: Grafana echoes back its
+  // own field ordering and adds defaults, so a byte diff would be red forever and teach everyone to
+  // ignore it. What must not drift is which alerts exist and what each one actually fires on.
+  const shape = text => new Map([...text.split(/^ {6}- alert: /m).slice(1)]
+    .map(block => [block.split("\n")[0].trim(), (block.match(/^\s*expr:\s*(.+)$/m)?.[1] ?? "").trim()]));
+  const want = shape(source), have = shape(deployed);
+  const drift = [];
+  for (const [name, expr] of want) {
+    if (!have.has(name)) drift.push(`missing from the stack: ${name}`);
+    else if (have.get(name) !== expr) drift.push(`expression differs: ${name}`);
+  }
+  for (const name of have.keys()) if (!want.has(name)) drift.push(`on the stack but not in the file: ${name}`);
+  if (drift.length) {
+    console.error(`buildit_grafana_alerts_drifted rules=${want.size} deployed=${have.size}`);
+    for (const line of drift) console.error(`  ${line}`);
+    console.error("  Run `pnpm alerts:provision` to make the stack match observability/alerts.yml.");
+    process.exit(1);
+  }
+  console.log(`buildit_grafana_alerts_match rules=${want.size}`);
+  process.exit(0);
+}
+
 const secret = process.env.BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN;
 if (!secret) throw new Error("buildit_grafana_service_account_required");
 
@@ -77,7 +129,7 @@ const response = await fetch(endpoint, {
     authorization: `Bearer ${secret}`,
     "content-type": "application/yaml",
     "x-disable-provenance": "true",
-    "x-grafana-alerting-datasource-uid": process.env.BUILDIT_GRAFANA_DATASOURCE_UID ?? "grafanacloud-peacefulbumblebee2324-prom",
+    "x-grafana-alerting-datasource-uid": process.env.BUILDIT_GRAFANA_DATASOURCE_UID ?? datasourceUid,
   },
   // The file goes up verbatim. Re-encoding the rules here would be a second description of them,
   // free to drift from the one prometheus.yml already loads.

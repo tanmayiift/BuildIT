@@ -73,7 +73,17 @@ page and the error codes in the broker logs. Escalate only if BuildITProviderFai
 
 ## Alert rule drift
 
-`observability/alerts.yml` is the source of these rules. The deployed Grafana instance was
-configured through its UI and does not match the file - an emailed provider failure carried the
-alert name as its summary rather than the file's text. Reconcile Grafana to this file; until then
-the notification template does not depend on the summary being useful.
+`observability/alerts.yml` is the source of these rules, and `pnpm alerts:provision` is what makes
+the stack run them. For a long time nothing did: the deployed instance was configured through the
+UI and had never matched the file, so every alert fix committed here was inert. Three of the stale
+rules - telemetry silence watching a counter that only moves when somebody reviews a pull request,
+runner failure paging on a spent sandbox plan, failure rate with no volume floor - sent 54 emails in
+a single night while their corrected versions sat in this repository, validated and green on every
+push.
+
+CI now runs `pnpm alerts:verify` as its last step, which reads the deployed rules back and fails
+when they differ from the file. It also fails when `BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN` is
+unset, because "we could not check" is not "it matches".
+
+To reconcile: set that token in the repository secrets and in your shell, run
+`pnpm alerts:provision` once, and the gate goes green.

@@ -33,11 +33,17 @@ const deliberatelyUnreferenced: Record<string, string> = {
   "audit:verifyChain": "the audit log is listed but never verified, so a customer cannot tell a sound hash chain from a tampered one.",
   "integrations:listTrackerConnections": "the broker can create a Jira or Linear connection, but no admin screen lists what is connected.",
   "integrations:revokeTrackerConnection": "and having never seen the connection, an admin cannot revoke it - a leaked tracker token has no customer-facing kill switch.",
-  "memberships:accept": "invited teammates cannot join; no accept screen exists, so every invitation is a dead end.",
   "memberships:invite": "superseded by memberships:inviteByGitHubLogin, which the members panel calls - this by-userId variant has no caller left.",
   "organizations:clearActive": "the workspace switcher can select a workspace but never clear one, so there is no way back to having none active.",
   "organizations:updateCapacity": "no budget or concurrency control exists in the interface, so every organization is stuck on the limits it was seeded with.",
   "reviews:get": "the review page reads reviews:getEvidence, which returns the review as well - this narrower query has no caller.",
+};
+
+// Flags that are off by construction, and what each one takes out of the product with it. Being
+// listed here is not approval - it is the record that would have made the dead notification
+// controls visible the day they shipped instead of during an audit weeks later.
+const permanentlyOffCapabilities: Record<string, string> = {
+  "notifications:customerEmailDeliveryAvailable": "no customer review email is sent, and it gates the email on/off button, the digest-mode select and the whole per-repository muting list out of the interface, so notifications:updatePreferences cannot be called by anyone.",
 };
 
 const convexDir = join(import.meta.dirname, "../../convex");
@@ -90,6 +96,35 @@ describe("every function BuildIT declares customer-facing", () => {
     const unreachable = Object.keys(publicFunctionPolicies)
       .filter(name => !reachable(name) && !(name in deliberatelyUnreferenced)).sort();
     expect(unreachable, "built, authorized and declared customer-facing, and nothing calls it - wire it into apps/web/src, or add it to deliberatelyUnreferenced with the sentence saying what is missing")
+      .toEqual([]);
+  });
+
+  // This test's idea of "reachable" is "the name appears in apps/web/src", and a constant-false
+  // capability flag satisfies it. `notifications:updatePreferences` passes cleanly: its
+  // makeFunctionReference literal is right there at the top of notification-preferences.tsx, and
+  // all three of its call sites - the on/off button, the digest select, the per-repository muting
+  // list - sit inside `saved.deliveryAvailable ? … : null`, where deliveryAvailable is
+  // `const customerEmailDeliveryAvailable = false;` at convex/notifications.ts:8, never reassigned.
+  // Nobody has ever been able to press any of them.
+  //
+  // A general "is this JSX branch dead" check is not something a regex can do honestly. What it can
+  // do is refuse to let a permanently-off capability flag sit in a public query's response without
+  // anyone having written down that it is off - which is the thing that made the controls
+  // unreachable, and the thing that will silently do it again.
+  it("does not let a hardcoded capability flag disappear into a public response", () => {
+    const declared = new Set(Object.keys(publicFunctionPolicies).map(name => name.split(":")[0]!));
+    const offByConstruction: string[] = [];
+    for (const file of readdirSync(convexDir).filter(name => name.endsWith(".ts") && !name.endsWith(".test.ts"))) {
+      if (!declared.has(basename(file, ".ts"))) continue;
+      const source = readFileSync(join(convexDir, file), "utf8");
+      for (const match of source.matchAll(/const\s+([A-Za-z0-9_]+)\s*=\s*false\s*;/g)) {
+        const name = match[1]!;
+        // Reassigned somewhere means it is a real switch, not a constant.
+        if (new RegExp(`\\b${name}\\s*=[^=]`, "g").test(source.replace(match[0], ""))) continue;
+        if (!(`${basename(file, ".ts")}:${name}` in permanentlyOffCapabilities)) offByConstruction.push(`${basename(file, ".ts")}:${name}`);
+      }
+    }
+    expect(offByConstruction.sort(), "a capability that is false by construction gates real controls out of the interface - record it in permanentlyOffCapabilities with what it disables")
       .toEqual([]);
   });
 

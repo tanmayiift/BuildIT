@@ -83,10 +83,21 @@ jobs:
       - name: Reliability release gate
         run: pnpm reliability:release
       # Validates every alert rule has a severity, an action and a runbook section that exists.
-      # The rules file drifted from the deployed stack for weeks because nothing checked it.
       - name: Alert rules
         run: pnpm alerts:check
       - name: Evaluation gate
         run: pnpm eval
       - name: CLI journey smoke
         run: pnpm smoke:cli
+      # Checks the stack is actually running the rules the file describes. alerts:check passed on
+      # every push for weeks while the deployed rules were the ones hand-built in the UI months
+      # earlier - three of which sent 54 emails in one night, with their corrected versions sitting
+      # in this repository, validated and green. A gate that reads only the file cannot tell you
+      # the file is being ignored.
+      #
+      # It fails when no token is configured, deliberately. "We could not check" is not "it
+      # matches", and going green on the first is how the drift lasted as long as it did.
+      - name: Alert rules match the deployed stack
+        env:
+          BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+        run: pnpm alerts:verify

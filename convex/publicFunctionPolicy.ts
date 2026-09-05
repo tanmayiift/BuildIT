@@ -34,6 +34,7 @@ export const publicFunctionPolicies = {
   "memberships:list": { authorization: "active_organization_viewer", response: "metadata" },
   "memberships:invite": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
   "memberships:inviteByGitHubLogin": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
+  "memberships:listInvitations": { authorization: "authenticated_user", response: "metadata" },
   "memberships:accept": { authorization: "invited_user", response: "metadata" },
   "memberships:changeRole": { authorization: "active_organization_admin_recent_auth", response: "none" },
   "memberships:remove": { authorization: "active_organization_admin_recent_auth", response: "none" },

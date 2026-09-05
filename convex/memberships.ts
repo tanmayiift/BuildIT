@@ -76,6 +76,31 @@ export const inviteByGitHubLogin = mutation({
   },
 });
 
+// An admin could send an invitation and nobody could ever open it. `accept` was written,
+// authorized, policy-declared and unit-tested; organizations:listMine filters to status "active",
+// so an invited user signed in and saw no trace of the invitation anywhere in the product, and
+// customer email delivery is switched off, so nothing told them either. Every invitation BuildIT
+// has ever sent was a dead end while the admin's screen said it had worked.
+//
+// Deliberately not gated on organization membership: an invited user is by definition not yet a
+// member of the organization they need to read here, which is the shape that made this invisible
+// to the reachability guard as well - the mutation had a caller in tests and none in the product.
+export const listInvitations = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const invitations = await ctx.db.query("memberships")
+      .withIndex("by_user_status", q => q.eq("userId", userId).eq("status", "invited")).collect();
+    const rows = await Promise.all(invitations.map(async membership => {
+      const organization = await ctx.db.get(membership.organizationId);
+      return organization && !organization.deletedAt
+        ? { organizationId: organization._id, name: organization.name, slug: organization.slug, role: membership.role, invitedAt: membership.createdAt ?? membership.updatedAt }
+        : null;
+    }));
+    return rows.filter((row): row is NonNullable<typeof row> => row !== null);
+  },
+});
+
 export const accept = mutation({
   args: { organizationId: v.id("organizations"), requestId: v.string() },
   handler: async (ctx, args) => {
