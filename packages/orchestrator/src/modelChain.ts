@@ -48,7 +48,7 @@ function strictDefinition(stage: PromptStage): StageDefinition {
   const schema = stageSchemas[stage];
   return {
     stage,
-    promptVersion: `${stage}-v1`,
+    promptVersion: stage === "findings" ? "findings-v2" : `${stage}-v1`,
     schemaVersion: `${stage}-schema-v1`,
     maxInputBytes: 250_000,
     validate(value) {
