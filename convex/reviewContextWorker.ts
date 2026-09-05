@@ -77,8 +77,17 @@ export const gather = internalAction({
       // either, for the same reason it cannot turn off the vulnerability scan.
       const headSelect = { keep: (path: string) => executionPlanInput(path)
         || ((changedPaths.has(path) || isRequirementSourcePath(path)) && allowedByRepository(path)), relevantOnlyAbove: 400 };
-      const baseSelect = { keep: (path: string) => executionPlanInput(path)
-        || (changedPaths.has(path) && allowedByRepository(path)), relevantOnlyAbove: 400 };
+      // Base selects the same paths as head, and that symmetry is the point.
+      //
+      // The scanners run over whatever each revision fetched, and every "did this change introduce
+      // it" comparison - the package manager, a check result, a gitleaks hit - is only valid if
+      // both sides looked at the same files. They did not: head also took requirement sources, so
+      // gitleaks read zod's string.test.ts on head, never saw it on base, and three JWT fixtures
+      // that had been there for years were reported as Critical and Blocking against a pull request
+      // that never opened the file. The same asymmetry had already broken package-manager detection
+      // once. Base file contents are still filtered out of the model context, so this costs fetches
+      // and nothing else - and being wrong about who introduced a secret costs more.
+      const baseSelect = { keep: (path: string) => headSelect.keep(path), relevantOnlyAbove: 400 };
       await ctx.runQuery(internal.durableReview.assertActive, args);
       const [headSnapshot, baseSnapshot]: [RepositorySnapshot, RepositorySnapshot] = await Promise.all([
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,

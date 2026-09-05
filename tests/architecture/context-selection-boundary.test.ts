@@ -27,13 +27,16 @@ const selection = (name: "headSelect" | "baseSelect") =>
   worker.match(new RegExp(`const ${name} = \\{[\\s\\S]*?\\};`))?.[0];
 
 describe("what a large repository still reads", () => {
-  it("reaches the execution plan inputs from both revisions", () => {
-    for (const name of ["headSelect", "baseSelect"] as const) {
-      const select = selection(name);
-      expect(select, `${name} not found - if the selection moved, move this assertion with it`).toBeTruthy();
-      expect(select, `${name} must reach the manifests the sandbox scans and the plan is derived from`)
-        .toContain("executionPlanInput(path)");
-    }
+  it("selects the same paths on both revisions", () => {
+    const head = selection("headSelect");
+    const base = selection("baseSelect");
+    expect(head, "headSelect not found - if the selection moved, move this assertion with it").toBeTruthy();
+    expect(base, "baseSelect not found - if the selection moved, move this assertion with it").toBeTruthy();
+    expect(head, "head must reach the manifests the sandbox scans and the plan is derived from")
+      .toContain("executionPlanInput(path)");
+    // Base defers to head rather than restating the rule, because two copies of it drift and every
+    // drift so far has produced the same bug in a new place.
+    expect(base, "base must select exactly what head selects").toContain("headSelect.keep(path)");
   });
 
   it("keeps the changed files and the requirement documents in the head selection", () => {
@@ -42,14 +45,16 @@ describe("what a large repository still reads", () => {
     expect(select).toContain("isRequirementSourcePath(path)");
   });
 
-  // Base contributes no file content to the model - reviewAnalysisWorker filters revision !== "base"
-  // - so beyond the plan inputs it stays the narrowest of the three. Pinned so nobody "fixes" it
-  // back to a full fetch and restores 1,373 pointless blob requests.
-  it("does not pull requirement documents into the base selection", () => {
-    const select = selection("baseSelect");
-    expect(select).toBeTruthy();
-    expect(select).toContain("changedPaths.has(path)");
-    expect(select, "base file content never reaches the model").not.toContain("isRequirementSourcePath");
+  // The old invariant here was that base stayed the narrowest selection of the three, and it read
+  // as thrift. It was the bug. The scanners run over whatever each revision fetched, so every
+  // "did this change introduce it" comparison silently compared different file sets: it broke
+  // package-manager detection first, and then reported three of zod's own long-standing test
+  // fixtures as secrets introduced by a pull request that never opened the file.
+  it("keeps base and head from drifting apart again", () => {
+    const base = selection("baseSelect") ?? "";
+    expect(base, "base must not restate head's rule - it must reuse it").not.toContain("isRequirementSourcePath");
+    expect(base, "base must not narrow itself back to the changed files alone")
+      .not.toMatch(/changedPaths\.has\(path\) && allowedByRepository\(path\)\), relevantOnlyAbove/);
   });
 
   it("only narrows above a threshold, so small repositories keep full context", () => {
