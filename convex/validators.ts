@@ -117,6 +117,7 @@ export const statusReasonCode = v.union(
   v.literal("user_cancelled"), v.literal("blocked_expired"),
   v.literal("spend_ceiling_reached"), v.literal("concurrency_limit_reached"), v.literal("superseded_by_new_commit"), v.literal("provider_rate_limited"), v.literal("platform_error"),
   v.literal("delivery_complete"),
+  v.literal("stale_commit"), v.literal("prompt_injection_unscoped"), v.literal("incomplete_coverage"),
 );
 export const nextActionCode = v.union(
   v.literal("none"), v.literal("inspect_findings"), v.literal("request_autofix"),

@@ -298,7 +298,13 @@ export const analyze = internalAction({
     const upload = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${writeGrant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body: outputBody });
     if (!upload.ok) throw new Error(`analysis_artifact_upload_${upload.status}`);
     const inputTokens = usage.reduce((sum, item) => sum + item.inputTokens, 0), outputTokens = usage.reduce((sum, item) => sum + item.outputTokens, 0);
-    await ctx.runMutation(internal.reviewModelData.completeAnalysis, { ...args, artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, credentialId: scope.credentialDocumentId, inputTokens, outputTokens,
+    // A file the pull request changed that did not fit the model's window was skipped whole, and
+    // nothing downstream ever learned. Two ways it can happen: the file's content lost the budget
+    // race (exclusions.paths), or the changed-file entry itself did not fit (exclusions.changedPaths).
+    const changedPathSet = new Set(untrusted.pull.changes.map(change => change.path));
+    const analysisDroppedChangedFile = untrusted.exclusions.changedPaths.length > 0
+      || untrusted.exclusions.paths.some(path => changedPathSet.has(path));
+    await ctx.runMutation(internal.reviewModelData.completeAnalysis, { ...args, ...(analysisDroppedChangedFile ? { analysisDroppedChangedFile: true } : {}), artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, credentialId: scope.credentialDocumentId, inputTokens, outputTokens,
       requirements: requirements.map(item => { const source = provenanceByRequirementId.get(item.id)!; return { externalIdHash: fingerprint(item.id, fingerprintKey), status: item.status, confidence: item.confidence,
         sourceType: source.type, sourceUrlHash: source.urlHash, fetchedVersion: source.version }; }),
       findings: arbitrated.filter(item => item.resolution !== "rejected").map(item => ({ fingerprintHmac: fingerprint(`${item.id}\0${item.path}\0${item.startLine}\0${item.endLine}`, fingerprintKey), pathHmac: fingerprint(item.path, fingerprintKey),

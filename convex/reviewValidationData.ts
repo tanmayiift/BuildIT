@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { checkConclusion, checkKind } from "./validators";
 import { blocksVerdict } from "./lib/coverageGate";
+import { computeReviewDecision } from "@buildit/contracts";
 import { assertReviewParent } from "./lib/parentConsistency";
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
@@ -116,24 +117,57 @@ export const finalizeDecision = internalMutation({
     // decision to uncertain, which made blocking false, which landed the review on checks_passed
     // with a green check. The verdict has to fail closed: an unscoped signal means BuildIT does
     // not know whether it reviewed the code or the attacker's instructions.
+    const escalatedFinding = findings.some(item => (item.uncertainPasses ?? 0) >= uncertainEscalationLimit && item.resolution === "uncertain");
     if (review.promptInjectionUnscopedAt) incompleteReason = "injection_unscoped";
-    else if (findings.some(item => (item.uncertainPasses ?? 0) >= uncertainEscalationLimit && item.resolution === "uncertain")) incompleteReason = "uncertain_escalated";
+    else if (escalatedFinding) incompleteReason = "uncertain_escalated";
     else if (blocksVerdict(review.coverageLevel, review.coverageGap)) incompleteReason = "coverage_partial";
     else if (!checks.some(item => item.required)) incompleteReason = "no_required_check";
-    let failed = false;
-    for (const check of checks.filter(item => item.required)) {
+    // Evidence completeness is this function's job - it is the only side that can see the artifact
+    // rows - so it is decided here, per check, and then handed over.
+    const decisionChecks = [];
+    for (const check of checks) {
       const artifact = check.artifactId ? await ctx.db.get(check.artifactId) : null;
-      const evidenceMissing = !artifact || artifact.organizationId !== args.organizationId || artifact.reviewId !== review._id || artifact.redactionStatus !== "redacted" || Boolean(artifact.deletedAt) || !check.credentialTeardownProved || !check.sandboxStopped;
-      if (evidenceMissing) incompleteReason ??= "evidence_missing";
-      else if (!["passed", "failed"].includes(check.conclusion)) incompleteReason ??= "conclusion_unusable";
-      if (check.conclusion === "failed" && !preExisting.has(check.nameHash)) failed = true;
+      // outputTruncated is written on every row by pairExecutionEvidence and, until now, read by
+      // nothing. The report has always treated a truncated output as missing evidence - a check
+      // whose stdout passes 250,000 bytes, which any large test suite does routinely. This function
+      // never looked, so one review could land on checks_passed with a green check while its own
+      // comment said complete evidence was not available.
+      const evidenceComplete = Boolean(artifact) && artifact!.organizationId === args.organizationId && artifact!.reviewId === review._id
+        && artifact!.redactionStatus === "redacted" && !artifact!.deletedAt
+        && Boolean(check.credentialTeardownProved) && Boolean(check.sandboxStopped) && check.outputTruncated !== true;
+      if (check.required) {
+        if (!evidenceComplete) incompleteReason ??= "evidence_missing";
+        else if (!["passed", "failed"].includes(check.conclusion)) incompleteReason ??= "conclusion_unusable";
+      }
+      // name only feeds computeReviewDecision's missingChecks list, which this caller does not use;
+      // the hash is the only identifier a checkRuns row carries.
+      decisionChecks.push({ name: check.nameHash, required: check.required, conclusion: check.conclusion,
+        evidenceComplete, ...(preExisting.has(check.nameHash) ? { preExisting: true } : {}) });
     }
-    const incomplete = incompleteReason !== undefined;
-    const blocking = findings.some(item => item.resolution === "open" && item.blocking);
-    const status = incomplete ? "inconclusive" as const : failed || blocking ? "changes_requested" as const : "checks_passed" as const;
-    const escalated = incompleteReason === "uncertain_escalated";
-    const statusReasonCode = escalated ? "human_review_required" as const : incomplete ? "required_check_missing" as const : failed ? "required_check_failed" as const : blocking ? "blocking_findings" as const : "checks_complete" as const;
-    const nextActionCode = escalated ? "inspect_findings" as const : incomplete ? "retry_review" as const : failed || blocking ? "inspect_findings" as const : "none" as const;
+    // One derivation, at last. This function used to restate the entire ladder - injection,
+    // escalation, coverage, missing, failed, blocking - in its own vocabulary while
+    // computeReviewDecision restated it in another, and the two disagreed on three ordinary
+    // inputs: a flaky rerun, a truncated output, and a finding the critic could not resolve twice.
+    // Each disagreement published a GitHub check run that contradicted the comment printed beside
+    // it. Teaching one side a rule the other already knew is what produced this, twice; the fix is
+    // to have one function decide and this one supply the evidence it decides on.
+    //
+    // Stored resolution "open" is what arbitration writes for an accepted finding, which is the
+    // vocabulary computeReviewDecision expects.
+    const decision = computeReviewDecision({
+      isStale: review.isStale,
+      environmentAvailable: true,
+      coverageComplete: !blocksVerdict(review.coverageLevel, review.coverageGap),
+      ...(review.promptInjectionUnscopedAt ? { injectionUnscoped: true } : {}),
+      ...(escalatedFinding ? { uncertainEscalated: true } : {}),
+      checks: decisionChecks,
+      findings: findings.map(item => ({ resolution: item.resolution === "open" ? "accepted" as const : "rejected" as const, blocking: item.blocking })),
+    });
+    const status = decision.status;
+    const statusReasonCode = decision.reason;
+    const nextActionCode = decision.nextAction;
+    const incomplete = status === "inconclusive";
+    if (incomplete) incompleteReason ??= "conclusion_unusable";
     const githubCheckConclusion = status === "checks_passed" ? "success" as const : status === "changes_requested" ? "failure" as const : "neutral" as const;
     await ctx.db.patch(review._id, { status, statusReasonCode, nextActionCode, githubCheckConclusion, currentStage: "complete", completedAt: args.now, updatedAt: args.now });
     await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", publicMessageArtifactId: report._id, internalCode: `decision_${statusReasonCode}`, metadata: { count: findings.length, ...(incompleteReason ? { reasonCode: incompleteReason } : {}) }, createdAt: args.now });

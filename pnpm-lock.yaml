@@ -11,6 +11,9 @@ importers:
       '@auth/core':
         specifier: ^0.41.3
         version: 0.41.3
+      '@buildit/contracts':
+        specifier: workspace:*
+        version: link:packages/contracts
       '@buildit/github':
         specifier: workspace:*
         version: link:packages/github

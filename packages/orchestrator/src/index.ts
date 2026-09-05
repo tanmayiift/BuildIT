@@ -1,3 +1,4 @@
+export { computeReviewDecision, type ReviewCheckDecision } from "@buildit/contracts";
 import type {CheckResult} from "@buildit/runner";import {finalStatus} from "@buildit/runner";
 export * from "./promptChain.js";
 export * from "./reviewPlan.js";
@@ -24,10 +25,8 @@ export function verifiedCheckEvidence(evidence:EvidenceRecord){return evidence.s
 // the comparison was being computed and then thrown away, so a repository with a long-broken lint
 // or a benchmark that disables TLS had every pull request blocked for it, with nothing in the
 // report to explain why. Observed on sindresorhus/got: two required checks failed, no findings.
-export type ReviewCheckDecision={name:string;required:boolean;conclusion:"passed"|"failed"|"not_run"|"not_configured"|"timed_out"|"truncated"|"flaky";evidenceComplete:boolean;preExisting?:boolean;excerpt?:string};
 // Kept consistent with reviewValidationData.finalizeDecision: these are two decision functions
 // over the same facts, and this one writes the pull request comment.
-export function computeReviewDecision(input:{isStale:boolean;environmentAvailable:boolean;coverageComplete?:boolean;injectionUnscoped?:boolean;checks:ReviewCheckDecision[];findings:Array<{resolution:"accepted"|"rejected"|"uncertain";blocking:boolean}>}){const required=input.checks.filter(check=>check.required),missing=required.filter(check=>!["passed","failed"].includes(check.conclusion)||!check.evidenceComplete),failed=required.filter(check=>check.conclusion==="failed"&&check.evidenceComplete&&!check.preExisting),blocking=input.findings.filter(finding=>finding.resolution==="accepted"&&finding.blocking);if(input.isStale)return{status:"inconclusive" as const,reason:"stale_commit" as const,nextAction:"start_new_review" as const};if(!input.environmentAvailable)return{status:"inconclusive" as const,reason:"environment_unavailable" as const,nextAction:"retry_review" as const};if(input.injectionUnscoped)return{status:"inconclusive" as const,reason:"prompt_injection_unscoped" as const,nextAction:"human_merge" as const};if(input.coverageComplete===false)return{status:"inconclusive" as const,reason:"incomplete_coverage" as const,nextAction:"retry_review" as const};if(missing.length)return{status:"inconclusive" as const,reason:"required_check_missing" as const,nextAction:"retry_review" as const,missingChecks:missing.map(check=>check.name)};if(failed.length||blocking.length)return{status:"changes_requested" as const,reason:failed.length?"required_check_failed" as const:"blocking_findings" as const,nextAction:"inspect_findings" as const};return{status:"checks_passed" as const,reason:"checks_complete" as const,nextAction:"none" as const}}
 export { instructionsForPaths, parseRepositoryConfig, type RepositoryConfig } from "./repositoryConfig.js";
 export { demotedByLearning, dismissalsBeforeDemotion } from "./learning.js";
 export { changelogEntry, insertChangelogEntry } from "./changelog.js";

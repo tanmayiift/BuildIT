@@ -62,7 +62,7 @@ const nextActions: Record<NextActionCode, NextAction> = {
   restore_installation: { title: "Restore GitHub access", detail: "The GitHub App installation is suspended or removed, so BuildIT cannot read this repository.", href: "/repositories", hrefLabel: "Check repository access" },
   grant_permission: { title: "Grant the missing permission", detail: "BuildIT is missing a repository permission it needs for this action.", href: "/repositories", hrefLabel: "Review GitHub access" },
   increase_budget: { title: "Increase the review budget", detail: "No further model call was made. Choose a higher ceiling, then start a new review." },
-  human_merge: { title: "Inspect the proposed fix", detail: "The fix is a separate pull request. Review it and merge only if you agree. BuildIT will never merge it for you." },
+  human_merge: { title: "Read it yourself before merging", detail: "BuildIT will not merge this and will not vouch for it. Check the change - and, if a fix was proposed, the separate pull request carrying it - and merge only if you agree." },
   start_new_review: { title: "Run a new review", detail: "This run ended without a decision." },
 };
 

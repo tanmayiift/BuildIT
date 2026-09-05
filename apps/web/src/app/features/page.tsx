@@ -49,10 +49,10 @@ export default function Features() {
     <h1 className="title">Every claim it makes, it can show you</h1>
     <p className="lede">BuildIT reviews one pull request against pinned commits, runs your real checks in a sandbox, and cites the file, line and commit behind every finding. A person still owns the merge.</p>
 
-    <h2 className="section-title">What it does</h2>
+    <h2>What it does</h2>
     <dl className="trust-list">{capabilities.map(([term, detail]) => <div key={term}><dt>{term}</dt><dd>{detail}</dd></div>)}</dl>
 
-    <h2 className="section-title">Where it stops</h2>
+    <h2>Where it stops</h2>
     <dl className="trust-list">{boundaries.map(([term, detail]) => <div key={term}><dt>{term}</dt><dd>{detail}</dd></div>)}</dl>
 
     <div className="next"><strong>The honest limit:</strong> BuildIT has reviewed {record.reviews} pull requests across {record.repositories} repositories, {record.decisive} of which reached a blocking or passing verdict, and {record.sinceLastPlatformFailure} consecutive reviews since the last platform failure on {record.lastPlatformFailureAt}. That is a real record and a small one — the next unfamiliar codebase may still find something it handles badly, and the largest repository BuildIT has been measured on is far smaller than the point where GitHub truncates a file listing. It refuses rather than guesses, so you will sometimes get no answer instead of a wrong one.</div>

@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { blockingFindingCount } from "./lib/blockingFindings";
 import { query } from "./_generated/server";
 import { requireOrganizationRole, requireRepositoryRole } from "./lib/authz";
 import { totalCostUsd } from "./lib/usageCost";
@@ -47,7 +48,7 @@ export const summary = query({
         // "why was this inconclusive" is the question a reader actually has.
         incompleteReason: review.coverageGap ?? null,
         trigger: review.trigger,
-        blocking: findings.filter(item => item.blocking && item.resolution !== "dismissed").length,
+        blocking: blockingFindingCount(findings),
         findings: findings.filter(item => item.resolution !== "dismissed").length,
         accepted: feedback.filter(item => item.verdict === "accepted").length,
         dismissed: feedback.filter(item => item.verdict === "dismissed").length,

@@ -25,7 +25,13 @@ export default async function Section({ params }: { params: Promise<{ section: s
   if (section === "policies") return <Policies />;
   if (section === "members") return <Members />;
   if (section === "notifications") return <Notifications />;
-  return <Audit />;
+  if (section === "audit") return <Audit />;
+  // "history" is the ninth section and has no branch here - the static /history route shadows this
+  // dynamic segment, so it renders correctly and the gap is invisible. It was `return <Audit />`,
+  // which meant any section without a branch silently served the audit log under that section's
+  // own title. The next section added to workspaceSections would have shipped mislabelled rather
+  // than obviously missing, which is the harder bug to notice.
+  notFound();
 }
 
 function Header({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) {

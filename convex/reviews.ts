@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { blockingFindingCount } from "./lib/blockingFindings";
 import { query } from "./_generated/server";
 import { requireOrganizationRole, requireRepositoryRole } from "./lib/authz";
 import { totalCostUsd } from "./lib/usageCost";
@@ -124,7 +125,7 @@ export const runHistory = query({
         inputTokens: stages.reduce((sum, item) => sum + item.inputTokens, 0),
         outputTokens: stages.reduce((sum, item) => sum + item.outputTokens, 0),
         costUsd: totalCostUsd(ledger),
-        blockingFindings: findings.filter(item => item.blocking && item.resolution === "open").length,
+        blockingFindings: blockingFindingCount(findings),
         totalFindings: findings.length,
         isCurrent: run._id === review._id,
       };

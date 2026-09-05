@@ -330,7 +330,6 @@ export function LiveReviewDetail({ id }: { id: string }) {
         title="Checks run"
         detail={`${checkSummaries.filter((item) => item.required).length} required · ${evidence.checks.length} executions`}
         foot="Repeated executions are grouped here. Every individual run remains in the encrypted audit record."
-        validation
       >
         {checkSummaries.length ? (
           checkSummaries.map((item) => (
@@ -487,14 +486,12 @@ function Section({
   detail,
   children,
   foot,
-  validation = false,
 }: {
   eyebrow: string;
   title: string;
   detail: string;
   children: React.ReactNode;
   foot: string;
-  validation?: boolean;
 }) {
   return (
     <section className="evidence-section">
@@ -505,7 +502,7 @@ function Section({
         </div>
         <span>{detail}</span>
       </div>
-      <div className={validation ? "validation-table" : "evidence-table"}>
+      <div>
         {children}
       </div>
       <footer className="evidence-foot">

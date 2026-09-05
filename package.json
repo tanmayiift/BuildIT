@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "@auth/core": "^0.41.3",
+    "@buildit/contracts": "workspace:*",
     "@buildit/github": "workspace:*",
     "@buildit/operations": "workspace:*",
     "@buildit/orchestrator": "workspace:*",

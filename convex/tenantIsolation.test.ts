@@ -3644,7 +3644,7 @@ describe("a review with an unattributable injection signal fails closed", () => 
     const reportArtifactId = await greenReview(t, tenant, now);
     await t.run(ctx => ctx.db.patch(tenant.reviewId, { promptInjectionUnscopedAt: now - 1 }));
     await expect(t.mutation(internal.reviewValidationData.finalizeDecision, { organizationId: tenant.organizationId, reviewId: tenant.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0, reportArtifactId, now }))
-      .resolves.toMatchObject({ status: "inconclusive", statusReasonCode: "required_check_missing", nextActionCode: "retry_review" });
+      .resolves.toMatchObject({ status: "inconclusive", statusReasonCode: "prompt_injection_unscoped", nextActionCode: "human_merge" });
     // Never a success conclusion on GitHub, and the cause has to survive into the event.
     expect(await t.run(ctx => ctx.db.get(tenant.reviewId))).toMatchObject({ githubCheckConclusion: "neutral" });
     const event = await t.run(ctx => ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", tenant.reviewId)).filter(q => q.eq(q.field("sequence"), 5)).unique());

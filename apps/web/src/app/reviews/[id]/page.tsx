@@ -28,7 +28,7 @@ export default async function Review({ params, searchParams }: { params: Promise
   const chosen = state ? stateFrom(state) : row?.state ?? "changes";
   const current = sample[chosen], verdict = statusPresentation(current.status, false), next = nextActionPresentation(current.action, false), hasReviewEvidence = current.evidence !== "empty";
   const repo = row?.repo ?? "nexus/api", commit = row?.commit ?? "a3f91c2", baseCommit = row?.baseCommit ?? "7b2e004";
-  return <div className="content review-detail review-tour">
+  return <div className="content review-detail">
     <div className="crumbs"><a href="/reviews?tour=1">Review queue</a><span>›</span><strong>{repo} #{id}</strong><span className="sample-badge">Example</span></div>
     <section className="verdict-card"><div className="verdict-message"><span className={`verdict-symbol ${verdict.tone}`} aria-hidden="true">{verdict.symbol}</span><div><span className={`status ${verdict.tone}`}>{verdict.label}</span><h1>{verdict.title}</h1><p>{row?.cause?.detail ?? current.detail}</p></div></div><div className="verdict-actions"><a className="button secondary" href="/reviews?tour=1">{hasReviewEvidence ? "Back to queue" : "Open review queue"}</a></div></section>
     <section className={`tour-scope${hasReviewEvidence ? "" : " minimal"}`} aria-label="Pinned review context"><span><small>Repository</small><strong>{repo}</strong></span><span><small>Pull request</small><strong>#{id}</strong></span><span><small>Exact commit</small><code>{commit}</code></span>{hasReviewEvidence ? <span><small>Review coverage</small><strong>Full</strong></span> : null}</section>

@@ -85,7 +85,7 @@ export const reserveOutput = internalMutation({
 });
 
 export const completeAnalysis = internalMutation({
-  args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: v.string(), size: v.number(), credentialId: v.id("providerCredentials"), inputTokens: v.number(), outputTokens: v.number(),
+  args: { ...executionArgs, analysisDroppedChangedFile: v.optional(v.boolean()), artifactId: v.id("artifacts"), checksum: v.string(), size: v.number(), credentialId: v.id("providerCredentials"), inputTokens: v.number(), outputTokens: v.number(),
     requirements: v.array(v.object({ externalIdHash: v.string(), sourceType, sourceUrlHash: v.string(), fetchedVersion: v.string(), status: requirementStatus, confidence: v.number() })),
     findings: v.array(v.object({ fingerprintHmac: v.string(), pathHmac: v.string(), category: findingCategory, severity, confidence: v.number(), blocking: v.boolean(), evidenceIds: v.array(v.id("artifacts")), startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()), requirementExternalIdHash: v.optional(v.string()), resolution: findingResolution, injectionSuspected: v.optional(v.boolean()) })), injectionUnscoped: v.optional(v.boolean()), injectionSurfaces: v.optional(v.array(injectionSurface)), now: v.number() },
   handler: async (ctx, args) => {
@@ -94,6 +94,16 @@ export const completeAnalysis = internalMutation({
     if (!artifact || artifact.organizationId !== args.organizationId || artifact.repositoryId !== review.repositoryId || artifact.reviewId !== review._id || artifact.type !== "prompt_trace" || artifact.checksum !== args.checksum || artifact.size !== args.size) throw new ConvexError("analysis_artifact_mismatch");
     if (!credential || credential.status !== "valid" || credential.organizationId !== args.organizationId || (credential.repositoryId && credential.repositoryId !== review.repositoryId)) throw new ConvexError("provider_credential_invalid");
     if (artifact.redactionStatus === "redacted") return artifact._id;
+    // boundedAnalysisContext decides, per review, whether everything fit in the model's 80KB
+    // window - and when a changed file does not fit it is skipped whole rather than truncated. That
+    // verdict reached the analysis artifact and stopped there. review.coverageLevel is written back
+    // at the context stage from what the *fetch* returned, and the report reads that, so a review
+    // that never showed the model a file the pull request changed could still print "complete
+    // evidence" and land on checks_passed.
+    //
+    // Recorded as a changed_files gap because that is exactly what it is, and blocksVerdict already
+    // knows a changed_files gap must withhold the verdict rather than merely annotate it.
+    if (args.analysisDroppedChangedFile) await ctx.db.patch(review._id, { coverageLevel: "partial" as const, coverageGap: "changed_files" as const });
     if (artifact.redactionStatus === "pending") await ctx.db.patch(artifact._id, { redactionStatus: "redacted" });
     else throw new ConvexError("analysis_artifact_mismatch");
     const quantity = args.inputTokens + args.outputTokens;

@@ -44,7 +44,24 @@ export const validate = internalAction({
     }
     const output = await response.json() as ExecutionResponse & { error?: string };
     const environment = { configRevision: String(scope.configRevisionId), runnerImage: scope.runnerImageVersion, runtime, manager: manager ?? "none" as const, architecture: "linux-x64", networkPolicy: "deny-all-v1", toolVersions: [{ name: "node", version: "24" }, { name: "package-manager", version: manager ?? "none" }], install, checks }, paired = pairExecutionEvidence(output, scope.baseSha, scope.headSha, environment), summaries = paired.summaries.map(item => ({ ...item, nameHash: createHash("sha256").update(item.planId).digest("hex") }));
-    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { baseSha: scope.baseSha, headSha: scope.headSha, configRevisionId: String(scope.configRevisionId), runnerImageVersion: scope.runnerImageVersion }, manager: manager ?? "none", executionFingerprint: paired.executionFingerprint, output }));
+    // pairExecutionEvidence reclassifies a check that failed and then passed on rerun as "flaky",
+    // and that reclassification only ever reached the checkRuns table. reportChecks reads the raw
+    // broker results back out of this artifact, so it still saw "failed" - and a single review
+    // could publish a neutral check run titled "Review needs attention" whose own body opened with
+    // "## Changes need review". That is the pre-existing-failure contradiction again, on a
+    // different input, because the fix then was to teach one of the two derivations a rule rather
+    // than to stop deriving it twice.
+    //
+    // The artifact keeps the broker's shape - reportChecks needs `outputs` and `scanners` from it -
+    // and only the conclusions are replaced, taken from the same paired evidence checkRuns is built
+    // from. One reconciliation, both readers.
+    const pairedConclusions = new Map(paired.summaries.map(item => [`${item.revision}:${item.planId}`, item.conclusion]));
+    const withPairedConclusions = (revision: "base" | "head", side: typeof output.head) => ({
+      ...side,
+      results: side.results.map(item => ({ ...item, conclusion: pairedConclusions.get(`${revision}:${item.planId}`) ?? item.conclusion })),
+    });
+    const reconciledOutput = { ...output, base: withPairedConclusions("base", output.base), head: withPairedConclusions("head", output.head) };
+    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { baseSha: scope.baseSha, headSha: scope.headSha, configRevisionId: String(scope.configRevisionId), runnerImageVersion: scope.runnerImageVersion }, manager: manager ?? "none", executionFingerprint: paired.executionFingerprint, output: reconciledOutput }));
     if (outputBody.byteLength > 4_000_000) throw new Error("validation_output_too_large");
     const checksum = createHash("sha256").update(outputBody).digest("hex"), now = Date.now();
     const reserved: { artifactId: Id<"artifacts">; storageKey: string } = await ctx.runMutation(internal.reviewValidationData.reserveOutput, { ...args, checksum, size: outputBody.byteLength, now });
