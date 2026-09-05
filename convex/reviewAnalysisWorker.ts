@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { arbitrateFindings, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, validateFindingCandidates } from "@buildit/orchestrator";
+import { runEscalationCritic, arbitrateFindings, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, validateFindingCandidates } from "@buildit/orchestrator";
 import { approvedProviderModels, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact, redactForModel } from "@buildit/security";
 
@@ -226,25 +226,12 @@ export const analyze = internalAction({
     let injectionUnscoped = false;
     const injectionSurfaces = new Set<"code" | "narrative" | "checks" | "unknown">();
     const analysisStartedAt = Date.now();
-    const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
-      onInjection: report => { injectionUnscoped ||= report.scope.unscoped; for (const surface of report.scope.surfaces) injectionSurfaces.add(surface); },
-      // planReview runs on every review and its output was discarded on every review - the chain
-      // recomputed it internally and nothing ever saw which stages were chosen, how many findings
-      // specialists were spawned, or why a stage was skipped. Recording it is what makes the routing
-      // a decision somebody can inspect rather than a claim in a README.
-      onPlan: async plan => { await ctx.runMutation(internal.runStateData.record, {
-        ...args, stage: "analysis" as const,
-        plannedStages: [...plan.stages],
-        findingsSpecialists: plan.findingsSpecialists,
-        skippedStages: plan.skipped.map(item => ({ stage: item.stage, because: item.because })),
-        memoryDismissed: memory.dismissedFingerprints.length,
-        memoryRecurring: memory.recurringFingerprints.length,
-        memoryReviewsSeen: memory.reviewsSeen,
-        now: Date.now(),
-      }); },
-      invoke: async (stageRequest: ModelStageRequest): Promise<ProviderResult> => {
+    // Named rather than inlined so the escalation critic can go through exactly this path: the
+    // budget preflight, the single-use grant minted per attempt, and the bounded provider retry
+    // are all properties a second opinion needs just as much as a first.
+    const invokeStage = async (stageRequest: ModelStageRequest, modelOverride?: string): Promise<ProviderResult> => {
         const stage = stageRequest.stage as PromptStage;
-        const model = stage === "findings" ? findingsModel : stage === "critic" ? criticRoute.model : scope.model;
+        const model = modelOverride ?? (stage === "findings" ? findingsModel : stage === "critic" ? criticRoute.model : scope.model);
         const request = { model, system: stageRequest.system, input: stageRequest.input, schemaName: stageRequest.schemaName, schema: stageRequest.schema, maxOutputTokens: stageRequest.maxOutputTokens };
         const spend = await ctx.runMutation(internal.reviewModelData.preflightStageSpend,{...args,provider:scope.provider,model,inputBytes:Buffer.byteLength(request.system)+Buffer.byteLength(request.input)+Buffer.byteLength(JSON.stringify(request.schema)),maxOutputTokens:request.maxOutputTokens,now:Date.now()});
         if (!spend.allowed) throw new Error("budget_preflight_exceeded");
@@ -273,7 +260,25 @@ export const analyze = internalAction({
         }
         if (!response.ok || !output.result){await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage,provider:scope.provider,model,promptVersion:`${stage}-v1`,schemaVersion:`${stage}-schema-v1`,finishReason:reason.slice(0,100),requestHash:createHash("sha256").update(stageRequest.system).update("\0").update(stageRequest.input).update("\0").update(JSON.stringify(stageRequest.schema)).digest("hex"),attempt:stageRequest.repairOf===undefined?1:2,outcome:"provider_error",inputTokens:0,outputTokens:0,now:Date.now()});throw new Error(providerReasonIsModelUnavailable(reason) ? `model_unavailable:${reason}`.slice(0, 120) : output.error ?? `model_stage_${response.status}`)}
         return output.result;
-      }, onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,durationMs:item.durationMs,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); } }));
+    };
+    const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
+      onInjection: report => { injectionUnscoped ||= report.scope.unscoped; for (const surface of report.scope.surfaces) injectionSurfaces.add(surface); },
+      // planReview runs on every review and its output was discarded on every review - the chain
+      // recomputed it internally and nothing ever saw which stages were chosen, how many findings
+      // specialists were spawned, or why a stage was skipped. Recording it is what makes the routing
+      // a decision somebody can inspect rather than a claim in a README.
+      onPlan: async plan => { await ctx.runMutation(internal.runStateData.record, {
+        ...args, stage: "analysis" as const,
+        plannedStages: [...plan.stages],
+        findingsSpecialists: plan.findingsSpecialists,
+        skippedStages: plan.skipped.map(item => ({ stage: item.stage, because: item.because })),
+        memoryDismissed: memory.dismissedFingerprints.length,
+        memoryRecurring: memory.recurringFingerprints.length,
+        memoryReviewsSeen: memory.reviewsSeen,
+        now: Date.now(),
+      }); },
+      invoke: (stageRequest: ModelStageRequest): Promise<ProviderResult> => invokeStage(stageRequest),
+      onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,durationMs:item.durationMs,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); } }));
     const headEvidence = new Map<string, { record: EvidenceRecord; artifactId: Id<"artifacts"> }>();
     for (const chunk of chunks.filter(item => item.revision === "head")) for (const file of chunk.snapshot.files) {
       if (!chunk.artifactId) throw new Error("context_artifact_reference_missing");
@@ -302,7 +307,61 @@ export const analyze = internalAction({
       return [{ id: `scanner-${index}-${item.ruleId}`, title: item.summary ?? item.ruleId, category: "security", severity: item.severity, confidence: 1, path: item.path, startLine: item.startLine!, endLine: item.endLine!, evidenceIds: [evidence.record.id], impact: item.summary ?? "Deterministic scanner finding", explanation: `${item.ruleId} was detected by the pinned BuildIT scanner.`, origin: "scanner" as const }];
     });
     const candidates = validateFindingCandidates({ findings: [...modelFindings, ...scannerFindings], criteriaIds, allowedPaths: new Set([...headEvidence.values()].flatMap(item => item.record.path ? [item.record.path] : [])), evidence: [...headEvidence.values()].map(item => item.record), pinnedCommit: scope.headSha });
-    const arbitration = ((stage("arbitration").findings ?? []) as ArbitrationDecision[]), arbitrated = dedupeSameDefect(reconcileArbitration(arbitrateFindings(candidates, critic), arbitration)), fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
+    const arbitration = ((stage("arbitration").findings ?? []) as ArbitrationDecision[]);
+    const firstPass = dedupeSameDefect(reconcileArbitration(arbitrateFindings(candidates, critic), arbitration));
+
+    // The escalation ladder. A finding the critic could not resolve used to end right here:
+    // labelled uncertain, verdict recorded as "human review required", nothing re-run.
+    // shouldEscalateToHuman has been in reviewPlan.ts since it was written with no caller outside a
+    // test. A label is not a recovery path, and that is why the routing read as fixed.
+    //
+    // Rung one is a second opinion from a different model on the same evidence, bounded to exactly
+    // one attempt by construction - there is no loop and no retry parameter - and taken only when
+    // there genuinely is a different model to ask. If the sibling is unavailable the ladder stops
+    // rather than pretending a second look happened.
+    const escalation = await (async (): Promise<{ findings: typeof firstPass; decisions: Array<{ kind: string; reason: string; detail?: string }> }> => {
+      const unresolved = firstPass.filter(item => item.resolution === "uncertain");
+      if (!unresolved.length) return { findings: firstPass, decisions: [] };
+      if (!criticRoute.independent || criticRoute.model === scope.model) {
+        return { findings: firstPass, decisions: [{ kind: "human_escalation", reason: "no independent second model was available to ask, so a person decides", detail: `${unresolved.length} uncertain` }] };
+      }
+      try {
+        const escalationRecords = await runEscalationCritic({
+          pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision },
+          untrusted,
+          // The stages that produced the findings under dispute, so this renders the prompt a
+          // first-pass critic would see rather than a novel one whose output means something else.
+          priorStages: records.filter(item => ["requirements", "review_plan", "findings"].includes(item.stage)),
+          onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,durationMs:item.durationMs,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); },
+          invoke: (stageRequest: ModelStageRequest): Promise<ProviderResult> => invokeStage(stageRequest, criticRoute.model),
+        });
+        const secondOpinion = ((escalationRecords.find(item => item.stage === "critic")?.value?.decisions ?? []) as CriticDecision[]);
+        // Re-arbitrated over both opinions. arbitrateFindings already resolves a finding against its
+        // critic; handing it the second pass alongside the first is that same operation with more
+        // evidence, not a new rule invented for escalation.
+        const escalated = dedupeSameDefect(reconcileArbitration(arbitrateFindings(candidates, [...critic, ...secondOpinion]), arbitration));
+        // A second opinion may resolve an uncertainty. It may never weaken a finding that was
+        // already accepted: escalation exists to break a tie, not to argue a verdict down, and a
+        // model asked twice must not become a route to a quieter answer.
+        const weakened = escalated.some(item => firstPass.find(candidate => candidate.id === item.id)?.resolution === "accepted" && item.resolution !== "accepted");
+        if (weakened) return { findings: firstPass, decisions: [{ kind: "critic_escalation_discarded", reason: "the second critic would have weakened an already accepted finding, so its opinion was not applied" }] };
+        const stillUnresolved = escalated.filter(item => item.resolution === "uncertain").length;
+        return { findings: escalated, decisions: [
+          { kind: "critic_escalation", reason: `${unresolved.length} ${unresolved.length === 1 ? "finding was" : "findings were"} unresolved after the first critic`,
+            detail: `second opinion from ${criticRoute.model}: ${unresolved.length - stillUnresolved} resolved, ${stillUnresolved} still uncertain` },
+          ...(stillUnresolved ? [{ kind: "human_escalation", reason: "two independent critics could not resolve it, so a person decides", detail: `${stillUnresolved} still uncertain` }] : []),
+        ] };
+      } catch (error) {
+        // A failed second opinion must not cost the first verdict. The finding stays exactly as
+        // uncertain as it already was, and the run records that the ladder was attempted - so
+        // "nobody asked twice" stays distinguishable from "we asked and could not reach the model".
+        return { findings: firstPass, decisions: [{ kind: "critic_escalation_failed", reason: "the second critic could not be reached", detail: String((error as Error)?.message ?? "unknown").slice(0, 120) }] };
+      }
+    })();
+    const arbitrated = escalation.findings;
+    if (escalation.decisions.length) await ctx.runMutation(internal.runStateData.record, { ...args, stage: "analysis" as const, decisions: escalation.decisions, now: Date.now() });
+
+    const fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
     if (fingerprintKey.byteLength < 32) throw new Error("finding_fingerprint_secret_invalid");
     const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, coverage: untrusted.coverage, validation: untrusted.validation, records, arbitrated }));
     if (outputBody.byteLength > 4_000_000) throw new Error("analysis_output_too_large");

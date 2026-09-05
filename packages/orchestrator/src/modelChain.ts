@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { validateSchemaValue, type JsonSchema, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { redactForModel } from "@buildit/security";
 import { partitionFiles, planReview, type ReviewPlan } from "./reviewPlan.js";
-import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type InjectionScope, type InjectionSignal, type PromptStage, type StageDefinition } from "./promptChain.js";
+import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type InjectionScope, type InjectionSignal, type PromptStage, type StageDefinition, type ValidatedStage } from "./promptChain.js";
 
 const string = { type: "string" } as const;
 const stringArray = { type: "array", items: string } as const;
@@ -110,6 +110,57 @@ export async function runModelReviewChain(input: {
         requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas[request.stage])).digest("hex"),
         ...(result.requestId ? { requestId: result.requestId } : {}),
       };attempts.set(request.stage,[...(attempts.get(request.stage)??[]),usage]);
+      return result.value;
+    },
+  });
+}
+
+// The second rung of the escalation ladder. shouldEscalateToHuman has been in this file since it
+// was written and had no caller outside a test: a finding the critic could not resolve was labelled
+// uncertain, the verdict recorded "human review required", and nothing was re-run. That is a label,
+// not a recovery path, and it is why the routing read as fixed.
+//
+// This re-runs one critic pass on a different model over only the unresolved findings. It is the
+// cheapest genuine second opinion available - a different model, the same evidence, the same schema
+// - and it is bounded to exactly one attempt by construction: it takes no retry parameter and the
+// caller records that it ran, so a third pass has nowhere to come from.
+//
+// If it is still uncertain afterwards, that IS the human's decision, and now it is one reached after
+// a second opinion rather than after a first.
+export async function runEscalationCritic(input: {
+  invoke: ModelStageInvoker;
+  pinned: { headSha: string; baseSha: string; configRevision: string };
+  untrusted: Record<string, unknown>;
+  // The stages that produced the findings under dispute, so the escalation critic renders the same
+  // prompt shape a first-pass critic would - not a novel one whose output means something subtly
+  // different.
+  priorStages: readonly ValidatedStage[];
+  onUsage?: (usage: StageUsage) => Promise<void> | void;
+}) {
+  const attempts: Array<Omit<StageUsage, "promptVersion" | "schemaVersion" | "attempt" | "outcome">> = [];
+  return runPromptChain({
+    definitions: [strictDefinition("critic")],
+    expectedStages: ["critic"],
+    pinned: input.pinned,
+    untrusted: input.untrusted,
+    priorStages: input.priorStages,
+    maxSchemaRepairs: 1,
+    onAttempt: async attempt => {
+      const usage = attempts.shift();
+      if (!usage) throw new Error("model_stage_usage_missing");
+      await input.onUsage?.({ ...usage, promptVersion: attempt.promptVersion, schemaVersion: attempt.schemaVersion, attempt: attempt.attempt, outcome: attempt.outcome });
+    },
+    executor: async request => {
+      const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);
+      const startedAt = Date.now();
+      const result = await input.invoke({ ...request, input: providerInput, schemaName: "buildit_critic_v1", schema: stageSchemas.critic, maxOutputTokens: 4_000 });
+      attempts.push({
+        stage: "critic", provider: result.provider, model: result.model, finishReason: result.finishReason,
+        inputTokens: result.inputTokens, outputTokens: result.outputTokens,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        requestFingerprint: createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas.critic)).digest("hex"),
+        ...(result.requestId ? { requestId: result.requestId } : {}),
+      });
       return result.value;
     },
   });

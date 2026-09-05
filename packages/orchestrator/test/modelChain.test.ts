@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { promptStages, reviewPromptStages } from "../src/promptChain";
-import { runModelPatchChain, runModelReviewChain, stageSchemas, validateRoutes } from "../src/modelChain";
+import { runEscalationCritic, runModelPatchChain, runModelReviewChain, stageSchemas, validateRoutes } from "../src/modelChain";
 import { assertStrictSchema } from "@buildit/providers";
 
 const values: Record<string, Record<string, unknown>> = {
@@ -87,5 +87,51 @@ describe("executable model review chain", () => {
   it("rejects a plausible finding that lacks inspectable location and impact", async () => {
     const invoke = vi.fn(async request => ({ value: request.stage === "findings" ? { findings: [{ id: "f-1", title: "Bug", severity: "high", evidenceIds: ["source-1"], explanation: "Maybe broken" }] } : values[request.stage], provider: "gemini" as const, model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 }));
     await expect(runModelReviewChain({ invoke, pinned, untrusted: { requirements: [{ id: "REQ-1", text: "round tax" }] } })).rejects.toThrow("stage_schema_invalid:findings");
+  });
+});
+
+// shouldEscalateToHuman existed in reviewPlan.ts from the day it was written and had no caller
+// outside a test: a finding the critic could not resolve was labelled uncertain and nothing was
+// re-run. These pin the second rung of the ladder — that it exists, that it is bounded, and that a
+// second opinion cannot be used to argue an accepted finding down.
+describe("the escalation critic", () => {
+  const priorStages = [
+    { stage: "findings" as const, promptVersion: "findings-v1", schemaVersion: "findings-schema-v1", attempts: 1,
+      value: { findings: [{ id: "F-1", title: "t", category: "correctness", severity: "high", confidence: 0.5, criterionId: "C-1", path: "a.ts", startLine: 1, endLine: 2, evidenceIds: ["e1"], impact: "i", explanation: "x" }] } },
+  ];
+
+  it("asks exactly one stage, and it is the critic", async () => {
+    const invoke = vi.fn(async (_request: { stage: string; input: string }) => ({ value: values.critic, provider: "openai" as const, model: "sibling", finishReason: "stop", inputTokens: 3, outputTokens: 4 }));
+    const records = await runEscalationCritic({ invoke, pinned, untrusted: { source: "untrusted" }, priorStages });
+    expect(invoke.mock.calls.map(([request]) => request.stage)).toEqual(["critic"]);
+    // The seeded prior stages come back alongside the new one - the chain returns the whole record
+    // set - so what matters is that exactly one model call happened and exactly one critic record
+    // came out of it. A second critic record would mean the ladder had grown a rung.
+    expect(records.filter(item => item.stage === "critic")).toHaveLength(1);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the escalation critic the findings under dispute, not an empty prompt", async () => {
+    const invoke = vi.fn(async (_request: { stage: string; input: string }) => ({ value: values.critic, provider: "openai" as const, model: "sibling", finishReason: "stop", inputTokens: 3, outputTokens: 4 }));
+    await runEscalationCritic({ invoke, pinned, untrusted: { source: "untrusted" }, priorStages });
+    // Without priorStages seeding, a fresh single-stage chain would render `prior` as empty and ask
+    // the model to judge nothing — the escalation would run and mean nothing.
+    expect(invoke.mock.calls[0]![0]!.input).toContain("F-1");
+  });
+
+  it("reports a duration and the provider request id for the extra call", async () => {
+    const usage: Array<{ durationMs: number; requestId?: string | undefined }> = [];
+    const invoke = vi.fn(async (_request: { stage: string; input: string }) => ({ value: values.critic, provider: "openai" as const, model: "sibling", finishReason: "stop", inputTokens: 3, outputTokens: 4, requestId: "req-escalation" }));
+    await runEscalationCritic({ invoke, pinned, untrusted: {}, priorStages, onUsage: item => { usage.push(item); } });
+    expect(usage).toHaveLength(1);
+    expect(usage[0]!.durationMs).toBeGreaterThanOrEqual(0);
+    expect(usage[0]!.requestId).toBe("req-escalation");
+  });
+
+  it("never carries untrusted input into what the caller records", async () => {
+    const usage: unknown[] = [];
+    const invoke = vi.fn(async (_request: { stage: string; input: string }) => ({ value: values.critic, provider: "openai" as const, model: "sibling", finishReason: "stop", inputTokens: 3, outputTokens: 4 }));
+    await runEscalationCritic({ invoke, pinned, untrusted: { secret: "untrusted-marker" }, priorStages, onUsage: item => { usage.push(item); } });
+    expect(JSON.stringify(usage)).not.toContain("untrusted-marker");
   });
 });

@@ -157,10 +157,10 @@ export function mergeStageValues(values:Array<Record<string,unknown>>):Record<st
  return merged;
 }
 
-export async function runPromptChain(input:{definitions:StageDefinition[];expectedStages?:readonly PromptStage[];executor:StageExecutor;partition?:(stage:PromptStage)=>Array<Record<string,unknown>>|undefined;onAttempt?:(attempt:StageAttempt)=>Promise<void>|void;onInjection?:(report:{signals:InjectionSignal[];scope:InjectionScope})=>Promise<void>|void;pinned:{headSha:string;baseSha:string;configRevision:string};untrusted:Record<string,unknown>;maxSchemaRepairs?:number}){
+export async function runPromptChain(input:{definitions:StageDefinition[];expectedStages?:readonly PromptStage[];executor:StageExecutor;partition?:(stage:PromptStage)=>Array<Record<string,unknown>>|undefined;onAttempt?:(attempt:StageAttempt)=>Promise<void>|void;onInjection?:(report:{signals:InjectionSignal[];scope:InjectionScope})=>Promise<void>|void;pinned:{headSha:string;baseSha:string;configRevision:string};untrusted:Record<string,unknown>;maxSchemaRepairs?:number;priorStages?:readonly ValidatedStage[]}){
  const expected=input.expectedStages??promptStages;
  if(input.definitions.length!==expected.length||input.definitions.some((definition,index)=>definition.stage!==expected[index]))throw new Error("invalid_prompt_chain_definition");
- const records:ValidatedStage[]=[];
+ const records:ValidatedStage[]=[...(input.priorStages??[])];
  const injectionSignals=detectInjectionSignals(input.untrusted);
  // The caller decides what an unscoped signal means for the verdict. Discarding this was how a
  // review with an injected pull request body still landed on a green check.
