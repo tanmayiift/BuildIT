@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { describeProofBackend, proofBackend } from "./convex-backend";
 
 // The judge's sentence was "the setup route is live, but there is no interaction proof". Every
 // other spec here checks a page in isolation - one route, one assertion set - so nothing in the
@@ -167,10 +168,40 @@ test("a stranger with no account can scan code, understand every setup step, and
   // Which backend answers is decided by NEXT_PUBLIC_CONVEX_URL at build time. CI, the release
   // workflow and the deploy script all point at the production deployment, which serves
   // `publicProof:summary`; the Ireland *development* deployment does not have that function
-  // deployed at all, so a local build reading a stale .env.local renders the error boundary this
-  // block ends by forbidding. That failure is the environment being wrong, not the page.
+  // deployed at all, so a local build reading apps/web/.env.local renders the error boundary this
+  // block ends by forbidding. That failure is the environment being wrong, not the page - and a
+  // suite that reports it as a product defect is lying in the other direction.
+  //
+  // So ask the configured deployment first. `not-deployed` is the one answer that is unambiguously
+  // environmental: Convex says "Could not find public function" for a function it has never been
+  // given, and says something else entirely for a query that is deployed and broken. Only that
+  // answer skips. Unreachable, a genuine query error, or numbers that never render against a
+  // deployment which DID answer all still fail here, at full strength.
+  //
+  // Skipped, not passed: the journey below did not happen, and calling it green would claim
+  // evidence nobody collected. tests/e2e/convex-backend.ts prints why, to stderr, on every run.
+  //
+  // And never against a deployed target. release.yml runs this journey with BUILDIT_E2E_BASE_URL
+  // pointed at the released alias, where the build was made elsewhere and NEXT_PUBLIC_CONVEX_URL in
+  // this shell states our intent rather than that build's backend. Excusing a deployed page on the
+  // strength of a local variable is exactly the hole this whole mechanism exists to close.
+  const deployedTarget = Boolean(process.env.BUILDIT_E2E_BASE_URL);
+  const backend = await proofBackend();
+  if (!deployedTarget && (backend.state === "not-deployed" || backend.state === "unconfigured")) {
+    const explanation = describeProofBackend(backend);
+    console.warn(`\n${explanation}\n`);
+    testInfo.annotations.push({ type: "environment", description: explanation });
+    test.skip(true, `NEXT_PUBLIC_CONVEX_URL points at a deployment that does not serve publicProof:summary. ${explanation}`);
+  }
+  // Named so a figure that never arrives from a deployment that answered - an empty database
+  // rendering "No reviews recorded in this deployment" - does not read as the same defect.
+  const backendNote = deployedTarget
+    ? `This ran against ${process.env.BUILDIT_E2E_BASE_URL}, whose own build chose its backend; the local NEXT_PUBLIC_CONVEX_URL does not describe it.`
+    : backend.state === "serving"
+      ? `${backend.url} (via ${backend.source}) answered publicProof:summary with ${backend.reviews} reviews.`
+      : describeProofBackend(backend);
   const reviewed = page.locator(".metric").filter({ hasText: "Pull requests reviewed" });
-  await expect(reviewed, "/proof rendered no live figure. Check which backend this build reads: NEXT_PUBLIC_CONVEX_URL must point at a deployment that serves publicProof:summary, which the Ireland development deployment does not.").toBeVisible({ timeout: 20_000 });
+  await expect(reviewed, `/proof rendered no live figure. ${backendNote}`).toBeVisible({ timeout: 20_000 });
   await expect(reviewed.locator("strong")).toHaveText(/^[\d,]+$/);
   const failures = page.locator(".metric").filter({ hasText: "Platform failures" });
   // The unflattering number is on the same screen as the flattering one. That is the claim.

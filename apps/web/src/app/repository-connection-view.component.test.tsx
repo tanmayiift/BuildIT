@@ -180,3 +180,66 @@ describe("refreshing the repository list", () => {
     await screen.findByText(/Nothing was changed/);
   });
 });
+
+// At fifteen repositories this page was mostly prose the reader had already read: four helper
+// paragraphs per card, two of them identical on every card in every state, and no way to find one
+// repository among them.
+describe("a repository list long enough to be hard to read", () => {
+  const many = Array.from({ length: 15 }, (_, index) => ({
+    id: `repo-${index}`, installationId: "installation-a", githubRepositoryId: 100 + index,
+    owner: "acme", name: `service-${index}`, defaultBranch: "main", visibility: "public" as const,
+    autofixMode: "stacked" as const, paused: false, reviewProfile: "balanced" as const,
+    reviewTrigger: "manual" as const, changelogOnMerge: false, enabled: true,
+  }));
+
+  beforeEach(() => {
+    state.connection = {
+      state: "connected",
+      organization: { id: "org-acme", name: "Acme workspace", slug: "acme", role: "owner", region: "eu-west-1", retentionHours: 24 },
+      installations: [{ id: "installation-a", installationId: 42, accountLogin: "acme", accountType: "organization", status: "active", updatedAt: 1 }],
+      repositories: many,
+    };
+    state.updatePolicy.mockReset().mockResolvedValue(null);
+  });
+  afterEach(cleanup);
+
+  it("explains the settings once rather than once per repository", () => {
+    render(<RepositoryConnectionView />);
+    // These two sentences never varied with any repository's state, so fifteen copies of each was
+    // thirty paragraphs pushing the repository names off the screen.
+    expect(screen.getAllByText(/It never merges that either/)).toHaveLength(1);
+    expect(screen.getAllByText(/how much of it also lands on the diff/)).toHaveLength(1);
+  });
+
+  it("keeps the explanation that changes with the setting on the card, where the setting is", () => {
+    render(<RepositoryConnectionView />);
+    // This one does vary - it tells you what your current choice does - so it stays per row.
+    expect(screen.getAllByText("Fixes open as a separate pull request").length).toBe(many.length);
+  });
+
+  it("offers a filter, and narrows the list to what was typed", async () => {
+    const { default: userEventModule } = await import("@testing-library/user-event");
+    const user = userEventModule.setup();
+    render(<RepositoryConnectionView />);
+    const field = screen.getByLabelText("Find a repository");
+    await user.type(field, "service-11");
+    await waitFor(() => expect(screen.getByRole("region", { name: "Connected repositories" }).textContent).toContain("service-11"));
+    expect(screen.getByRole("region", { name: "Connected repositories" }).textContent).not.toContain("service-12");
+    expect(screen.getByRole("status").textContent).toContain("1 of 15");
+  });
+
+  it("says so rather than showing an empty page when nothing matches", async () => {
+    const { default: userEventModule } = await import("@testing-library/user-event");
+    const user = userEventModule.setup();
+    render(<RepositoryConnectionView />);
+    await user.type(screen.getByLabelText("Find a repository"), "nothing-here");
+    await waitFor(() => expect(screen.getByText(/No connected repository matches/)).not.toBeNull());
+  });
+
+  it("shows no filter when the whole list already fits", () => {
+    state.connection = { ...(state.connection as Record<string, unknown>), repositories: many.slice(0, 3) };
+    render(<RepositoryConnectionView />);
+    // A search box over three rows is chrome, not help.
+    expect(screen.queryByLabelText("Find a repository")).toBeNull();
+  });
+});

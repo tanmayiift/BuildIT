@@ -221,3 +221,14 @@
 .finding-dismiss .form-note, .finding-dismiss .form-result { grid-column: 1 / -1; margin: 0; }
 .finding-dismissed { margin: 12px 0 0 38px; max-width: 68ch; color: var(--muted); font-size: 12px; line-height: 1.55; }
 @media(max-width:700px){ .finding-dismiss, .finding-dismissed { margin-left: 0; } .finding-dismiss form { grid-template-columns: 1fr; } }
+.repository-legend{border:1px solid var(--line);border-radius:8px;margin-bottom:14px;padding:0 14px}
+.repository-legend summary{cursor:pointer;font-size:12px;font-weight:800;letter-spacing:.02em;padding:11px 0;min-height:44px;display:flex;align-items:center}
+.repository-legend dl{display:grid;gap:4px 14px;grid-template-columns:max-content minmax(0,1fr);margin:0 0 13px}
+.repository-legend dt{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding-top:2px}
+.repository-legend dd{font-size:12px;margin:0}
+.repository-filter{display:grid;gap:4px;margin-bottom:13px;max-width:340px}
+.repository-filter label{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.repository-filter input{min-height:44px;padding:0 11px;border:1px solid var(--line-strong);border-radius:6px;font:inherit;font-size:13px;background:var(--workbench);color:var(--ink)}
+.repository-filter p{font-size:11px;margin:0}
+.repository-identity .status{margin-top:5px}
+@media(max-width:620px){.repository-legend dl{grid-template-columns:1fr}.repository-legend dd{margin-bottom:7px}.repository-filter{max-width:none}}

@@ -130,6 +130,7 @@ function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
       <div>
         <h2>{fullName}</h2>
         <p>{visibilityLabel(repository.visibility)} <span aria-hidden="true">·</span> Default branch <code>{repository.defaultBranch}</code></p>
+        <span className={`status ${repository.paused ? "warning" : "success"}`}>{repository.paused ? "Reviews paused" : "Reviews active"}</span>
       </div>
     </div>
     <div className="repository-control-group">
@@ -155,7 +156,6 @@ function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
           <option value="off">Do not open one</option>
           <option value="on">Open a changelog pull request</option>
         </select> : <strong>{repository.changelogOnMerge ? "Open a changelog pull request" : "Do not open one"}</strong>}
-        <small>When a pull request merges, BuildIT opens a separate pull request adding one CHANGELOG line. It never merges that either.</small>
       </label>
       <label className="repository-policy">
         <span>Inline comments</span>
@@ -164,11 +164,9 @@ function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
           <option value="balanced">Blocking and serious</option>
           <option value="thorough">Everything cited</option>
         </select> : <strong>{profileLabel(repository.reviewProfile)}</strong>}
-        <small>The review comment always carries every finding. This is how much of it lands on the diff.</small>
       </label>
       <ConfigApproval repository={repository} canManage={canManage} saving={saving} onSave={onSave} />
       <div className="repository-review-state">
-        <span className={`status ${repository.paused ? "warning" : "success"}`}>{repository.paused ? "Reviews paused" : "Reviews active"}</span>
         {canManage ? <button className="button secondary" type="button" disabled={saving} aria-label={`${repository.paused ? "Resume" : "Pause"} reviews for ${fullName}`} onClick={() => void onSave({ paused: !repository.paused })}>{saving ? "Saving…" : repository.paused ? "Resume" : "Pause"}</button> : null}
       </div>
       <div className="repository-actions">
@@ -271,7 +269,53 @@ export function RepositoryConnectionView() {
       <div className="button-row"><ConnectionAction connection={connection} /><RefreshRepositories installationId={installation.installationId} /></div>
     </section>
     {policyMessage ? <p className="form-result" role="status">{policyMessage}</p> : null}
-    <section className="repository-list" aria-label="Connected repositories">{connection.repositories.map(repository => <RepositoryPolicyRow key={repository.id} repository={repository} canManage={canManage} saving={savingRepositoryId === repository.id} onSave={next => save(repository, next)} />)}</section>
+    <RepositoryList repositories={connection.repositories} canManage={canManage} savingRepositoryId={savingRepositoryId} onSave={save} />
+  </>;
+}
+
+// Fifteen repositories is where this page stopped working. Every card repeated the same four
+// explanations, so the page was mostly prose the reader had already read, and finding one
+// repository meant scrolling past all of it. The settings are explained once here; the list gets a
+// filter as soon as there are more repositories than fit on a screen.
+function RepositoryList({ repositories, canManage, savingRepositoryId, onSave }: {
+  repositories: ConnectedRepository[];
+  canManage: boolean;
+  savingRepositoryId: string | null;
+  onSave: (repository: ConnectedRepository, next: { paused?: boolean; autofixMode?: "disabled" | "stacked"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; changelogOnMerge?: boolean; approvedConfigHash?: string }) => Promise<void>;
+}) {
+  const [filter, setFilter] = useState("");
+  // Below this a filter is more chrome than help: the whole list is already on screen.
+  const filterable = repositories.length > 6;
+  const needle = filter.trim().toLowerCase();
+  const shown = filterable && needle
+    ? repositories.filter(item => `${item.owner}/${item.name}`.toLowerCase().includes(needle))
+    : repositories;
+  return <>
+    <details className="repository-legend">
+      <summary>What these four settings do</summary>
+      <dl>
+        <dt>Autofix delivery</dt>
+        <dd>Whether BuildIT writes code. A separate fix pull request is never merged by BuildIT; suggestions only means it reports the change without writing it.</dd>
+        <dt>When to review</dt>
+        <dd>Automatic reviews start on open and on every push and spend your model key. Manual runs nothing until someone comments <code>@buildit review</code>.</dd>
+        <dt>Changelog on merge</dt>
+        <dd>When a pull request merges, BuildIT opens a separate pull request adding one CHANGELOG line. It never merges that either.</dd>
+        <dt>Inline comments</dt>
+        <dd>The review comment always carries every finding. This decides how much of it also lands on the diff.</dd>
+      </dl>
+    </details>
+    {filterable ? <div className="repository-filter">
+      <label htmlFor="repository-filter">Find a repository</label>
+      <input id="repository-filter" type="search" autoComplete="off" placeholder="Filter by name" value={filter} onChange={event => setFilter(event.target.value)} />
+      <p className="muted-copy" role="status">
+        {needle ? `${shown.length} of ${repositories.length} ${repositories.length === 1 ? "repository" : "repositories"}` : `${repositories.length} repositories`}
+      </p>
+    </div> : null}
+    <section className="repository-list" aria-label="Connected repositories">
+      {shown.length
+        ? shown.map(repository => <RepositoryPolicyRow key={repository.id} repository={repository} canManage={canManage} saving={savingRepositoryId === repository.id} onSave={next => onSave(repository, next)} />)
+        : <p className="muted-copy">No connected repository matches &ldquo;{filter.trim()}&rdquo;.</p>}
+    </section>
   </>;
 }
 

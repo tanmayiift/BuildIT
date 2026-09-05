@@ -109,11 +109,17 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     const diagnosticsFor=(initial:Awaited<ReturnType<Runner["run"]>>)=>Object.fromEntries(initial.results.map(item=>{const existing=initial.diagnostics?.[item.planId];if(existing?.length)return[item.planId,existing];const found=initial.outputs.find(output=>output.planId===item.planId),passed=item.conclusion==="passed";const fallback:DiagnosticRun={conclusion:passed?"passed":"failed",...(passed?{}:{failureFingerprint:hash(found?.text??"")})};return[item.planId,[fallback]]}));
     const [baseDiagnostics,headDiagnostics]=[diagnosticsFor(baseResult),diagnosticsFor(headResult)];
     const bounded = (result: Awaited<ReturnType<Runner["run"]>>) => ({ credentialTeardownProved: result.credentialTeardownProved, stopped: result.stopped, results: result.results, outputs: result.outputs.map(output => ({ ...output, evidenceTruncated: output.text.length > 250_000, text: output.text.slice(0, 250_000) })) });
-    const scanner = (revision: "base" | "head", commitSha: string, result: Awaited<ReturnType<Runner["run"]>>) => combineScannerRuns(commitSha, [
-      scanBuildITRules([...files[revision]].map(([path, content]) => ({ path, content })), commitSha),
-      parseGitleaks(result.gitleaksReport, commitSha, scannerInventory.gitleaks),
-      parseOsv(result.osvReport, commitSha, scannerInventory.osvScanner),
-    ]);
+    const scanner = (revision: "base" | "head", commitSha: string, result: Awaited<ReturnType<Runner["run"]>>) => ({
+      ...combineScannerRuns(commitSha, [
+        scanBuildITRules([...files[revision]].map(([path, content]) => ({ path, content })), commitSha),
+        parseGitleaks(result.gitleaksReport, commitSha, scannerInventory.gitleaks),
+        parseOsv(result.osvReport, commitSha, scannerInventory.osvScanner),
+      ]),
+      // Carried, not dropped. A scanner that could not read this ecosystem's manifests produced an
+      // empty findings list, and without this the review would present that emptiness as a clean
+      // dependency scan - which is the one thing it must not claim.
+      ...(result.unavailableScanners?.length ? { unavailableScanners: result.unavailableScanners } : {}),
+    });
     return json(200, { base: bounded(baseResult), head: bounded(headResult), diagnostics:{base:baseDiagnostics,head:headDiagnostics}, scanners: { base: scanner("base", body.baseSha, baseResult), head: scanner("head", body.headSha, headResult) } });
   } catch (error) {
     const mapped = safeExecutionError(error);

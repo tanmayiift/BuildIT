@@ -111,3 +111,43 @@ describe("a failure the base commit already had", () => {
     expect(checks.find(check => check.name === "buildit-rules")?.preExisting).toBeUndefined();
   });
 });
+
+// osv-scanner cannot resolve a Maven pom.xml or a Python pyproject.toml offline, and the sandbox
+// has no network at scan time by design. That used to throw, the broker mapped it to
+// scanner_unavailable, and the whole review died as a platform failure - it cost two of the first
+// six real repositories reviewed, one Python and one Java, with the sandbox working, the
+// repository's own tests run, and the code read.
+describe("a scanner that could not read this repository", () => {
+  const summary = (extra: Record<string, unknown>) => ({ version: 1 as const, pinned: { headSha }, output: { head: {
+    results: [{ planId: "test", required: true, conclusion: "passed" as const }],
+    outputs: [{ planId: "test", text: "ok", truncated: false, evidenceTruncated: false }],
+  }, scanners: { head: { complete: true, commitSha: headSha, runs: [
+    { scanner: "builditRules", scannerVersion: "1.0.0" },
+    { scanner: "gitleaks", scannerVersion: "8.28.0" },
+    { scanner: "osvScanner", scannerVersion: "2.2.3" },
+  ], findings: [], ...extra } } } });
+
+  it("reports it as not configured and advisory, never as a passing check", () => {
+    const checks = reportChecks(summary({ unavailableScanners: ["osvScanner"] }), headSha);
+    const osv = checks.find(item => item.name === "osv-scanner")!;
+    // Passed would claim BuildIT looked at the dependencies and found nothing.
+    expect(osv.conclusion).toBe("not_configured");
+    // Required-and-failed would blame the author for an ecosystem BuildIT cannot scan.
+    expect(osv.required).toBe(false);
+  });
+
+  it("leaves every other scanner required and unaffected", () => {
+    const checks = reportChecks(summary({ unavailableScanners: ["osvScanner"] }), headSha);
+    for (const name of ["gitleaks", "buildit-rules"]) {
+      const check = checks.find(item => item.name === name)!;
+      expect(check.required, name).toBe(true);
+      expect(check.conclusion, name).toBe("passed");
+    }
+  });
+
+  it("keeps a scanner that did run required, so this cannot become a way to quieten one", () => {
+    const checks = reportChecks(summary({}), headSha);
+    expect(checks.find(item => item.name === "osv-scanner")!.required).toBe(true);
+    expect(checks.find(item => item.name === "osv-scanner")!.conclusion).toBe("passed");
+  });
+});

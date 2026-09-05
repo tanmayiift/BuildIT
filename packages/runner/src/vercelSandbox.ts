@@ -117,12 +117,27 @@ export class VercelSandboxRunner {
       // package sources. That is a complete empty dependency scan, not a scanner
       // outage. Every other non-result remains a hard failure.
       const noPackageSources = !lockfiles.length || (osv.exitCode === 128 && /No package sources found/.test(osvOutput.text));
-      if (![0, 1].includes(osv.exitCode) && !noPackageSources) throw new Error("osv_execution_failed");
-      const osvReport = noPackageSources ? Buffer.from('{"results":[]}') : await sandbox.readFileToBuffer({ path: "/tmp/buildit-osv.json" });
+      // osv-scanner cannot resolve every ecosystem's manifest offline - a Maven pom.xml or a
+      // Python pyproject.toml needs a resolver it is deliberately not allowed to reach, because
+      // this sandbox has no network at scan time. That is a capability BuildIT does not have for
+      // this repository, not an outage and not a clean scan.
+      //
+      // It used to be neither: any unexpected exit code threw, the broker mapped it to
+      // scanner_unavailable, and the whole review died as a platform failure. Two of the first six
+      // real repositories reviewed - one Python, one Java - were lost that way, with the sandbox
+      // working, the repository's own tests run, and the code read. A dependency scanner that does
+      // not speak an ecosystem must not be able to void a code review.
+      //
+      // Reported as unavailable rather than empty: '{"results":[]}' would claim BuildIT looked at
+      // the dependencies and found nothing, which is the one thing it must not say here.
+      const unscannable = ![0, 1].includes(osv.exitCode) && !noPackageSources
+        && /unsupported|failed to (?:extract|parse|open)|no extractors|could not determine/i.test(osvOutput.text);
+      if (![0, 1].includes(osv.exitCode) && !noPackageSources && !unscannable) throw new Error("osv_execution_failed");
+      const osvReport = noPackageSources || unscannable ? Buffer.from('{"results":[]}') : await sandbox.readFileToBuffer({ path: "/tmp/buildit-osv.json" });
       if (!osvReport || osvReport.byteLength > 4_000_000) throw new Error("osv_report_invalid");
 
       const installPlan = input.install;
-      if (!installPlan) return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), stopped: true };
+      if (!installPlan) return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: osvOutput.text.slice(0, 300) } : {}), stopped: true };
 
       await sandbox.updateNetworkPolicy({ allow: registryDomains });
       const installResult = await sandbox.runCommand({ cmd: installPlan.executable, args: installPlan.args, cwd: "/vercel/sandbox/repo", timeoutMs: installPlan.timeoutMs });
@@ -133,7 +148,7 @@ export class VercelSandboxRunner {
       diagnostics.install = [{ conclusion: installResult.exitCode === 0 && !installOutput.truncated ? "passed" : "failed", ...(installResult.exitCode === 0 && !installOutput.truncated ? {} : { failureFingerprint: createHash("sha256").update(installOutput.text).digest("hex") }) }];
       if (installResult.exitCode !== 0 || installOutput.truncated) {
         for (const plan of input.checks) results.push({ ...plan, conclusion: "not_run" as const, durationMs: 0, failureClass: "environment" as const });
-        return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), stopped: true };
+        return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: osvOutput.text.slice(0, 300) } : {}), stopped: true };
       }
 
       await sandbox.updateNetworkPolicy("deny-all");
@@ -154,7 +169,7 @@ export class VercelSandboxRunner {
         }
         diagnostics[plan.planId] = runs;
       }
-      return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), stopped: true };
+      return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: osvOutput.text.slice(0, 300) } : {}), stopped: true };
     } finally {
       await sandbox.stop();
     }

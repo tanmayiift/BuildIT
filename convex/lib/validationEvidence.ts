@@ -6,6 +6,10 @@ export type ContextArtifact = { id: string; storageKey: string; checksum: string
 export type ExecutionResult = { credentialTeardownProved: boolean; stopped: boolean; results: CheckResult[]; outputs: Array<{ planId: string; text: string; truncated: boolean; evidenceTruncated: boolean }> };
 export type ScannerSummary = { scanner: string; scannerVersion: string; commitSha: string; complete: true;
   runs?: Array<{ scanner: string; scannerVersion: string }>;
+  // Scanners that ran but could not read this repository. Their findings list is empty because they
+  // saw nothing, not because there was nothing to see, and the report says so rather than showing
+  // a passing check.
+  unavailableScanners?: string[];
   findings: Array<{ scanner?: string; severity: "critical" | "warning" | "info" }> };
 export type ExecutionResponse = { base: ExecutionResult; head: ExecutionResult; diagnostics?:{base:Record<string,DiagnosticRun[]>;head:Record<string,DiagnosticRun[]>}; scanners: { base: ScannerSummary; head: ScannerSummary } };
 export type ExecutionEnvironment={configRevision:string;runnerImage:string;runtime:"node22"|"node24";manager:PackageManager|"none";architecture:string;networkPolicy:string;toolVersions:Array<{name:string;version:string}>;install?:CommandPlan;checks:CommandPlan[]};
@@ -40,7 +44,9 @@ export function summarizeExecution(output: ExecutionResponse, baseSha: string, h
     const runs = run.runs?.length ? run.runs : [{ scanner: run.scanner, scannerVersion: run.scannerVersion }];
     return runs.map(item => ({ revision, commitSha, ...proof, planId: item.scanner === "gitleaks" ? "gitleaks" : item.scanner === "osvScanner" ? "osv-scanner" : "buildit-rules",
       kind: item.scanner === "gitleaks" ? "secret_scan" as const : item.scanner === "osvScanner" ? "dependency_audit" as const : "static_analysis" as const,
-      required: true, conclusion: run.findings.some(finding => (!finding.scanner || finding.scanner === item.scanner) && finding.severity === "critical") ? "failed" as const : "passed" as const,
+      required: !(run.unavailableScanners ?? []).includes(item.scanner ?? ""),
+      conclusion: (run.unavailableScanners ?? []).includes(item.scanner ?? "") ? "not_run" as const
+        : run.findings.some(finding => (!finding.scanner || finding.scanner === item.scanner) && finding.severity === "critical") ? "failed" as const : "passed" as const,
       durationMs: 0, commandFingerprint: sha256Json({ scanner: item.scanner, version: item.scannerVersion }) }));
   };
   return [...summarize("base", baseSha, output.base), ...scanner("base", baseSha, output.scanners.base), ...summarize("head", headSha, output.head), ...scanner("head", headSha, output.scanners.head)];
