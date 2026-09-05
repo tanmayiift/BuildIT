@@ -97,7 +97,16 @@ export const finalizeDecision = internalMutation({
     if (!report || report.organizationId !== args.organizationId || report.repositoryId !== review.repositoryId || report.reviewId !== review._id || report.type !== "review_message" || report.redactionStatus !== "redacted" || report.deletedAt || !report.storageKey.endsWith("/report.md")) throw new ConvexError("report_artifact_mismatch");
     if (["checks_passed", "changes_requested", "inconclusive"].includes(review.status) && review.statusReasonCode && review.completedAt) return { status: review.status, statusReasonCode: review.statusReasonCode, nextActionCode: review.nextActionCode };
     if (review.status !== "validating" || review.currentStage !== "analysis") throw new ConvexError("review_not_ready_for_decision");
-    const checks = (await ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect()).filter(item => item.commitSha === review.headSha);
+    const runs = await ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
+    const checks = runs.filter(item => item.commitSha === review.headSha);
+    // The report refuses to blame a pull request for a check that fails identically on the base
+    // commit, and says so in the comment. This decision did not, so the two contradicted each other
+    // in public: zod#1 posted "Ready for human review" with a red "Changes need review" check run
+    // sitting next to it, one second apart, from the same review. Two derivations of one verdict is
+    // the defect; this applies reportChecks' rule against the same key, so there is nothing to drift.
+    const preExisting = new Set(runs
+      .filter(item => item.commitSha === review.baseSha && ["failed", "timed_out"].includes(item.conclusion))
+      .map(item => item.nameHash));
     const findings = await ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).collect();
     // Record which condition made the evidence incomplete. Without this the review ends as a
     // flat "required check missing" and the real cause — partial context, a missing artifact,
@@ -117,7 +126,7 @@ export const finalizeDecision = internalMutation({
       const evidenceMissing = !artifact || artifact.organizationId !== args.organizationId || artifact.reviewId !== review._id || artifact.redactionStatus !== "redacted" || Boolean(artifact.deletedAt) || !check.credentialTeardownProved || !check.sandboxStopped;
       if (evidenceMissing) incompleteReason ??= "evidence_missing";
       else if (!["passed", "failed"].includes(check.conclusion)) incompleteReason ??= "conclusion_unusable";
-      if (check.conclusion === "failed") failed = true;
+      if (check.conclusion === "failed" && !preExisting.has(check.nameHash)) failed = true;
     }
     const incomplete = incompleteReason !== undefined;
     const blocking = findings.some(item => item.resolution === "open" && item.blocking);

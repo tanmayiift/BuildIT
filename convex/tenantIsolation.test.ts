@@ -4119,3 +4119,41 @@ describe("a failure after the decision is not swallowed", () => {
     expect(events.map(event => event.internalCode)).not.toContain("workflow_failed_after_decision");
   });
 });
+
+// The comment and the check run beside it disagreed about the same review. zod#1 posted "Ready for
+// human review" - gitleaks had been failing on that repository long before the pull request and the
+// report said so - while the GitHub check run one second later went red with "Changes need review".
+// Two derivations of one verdict: the report excluded checks that fail identically on base,
+// finalizeDecision counted every failed required check. A reviewer who trusts the red badge stops
+// reading, and the pull request is blamed for a repository's existing state.
+describe("a check already failing on base does not turn the verdict red", () => {
+  const pairedReview = async (t: ReturnType<typeof convexTest>, tenant: Awaited<ReturnType<typeof seedTenant>>, now: number, baseConclusion: "passed" | "failed") =>
+    t.run(async ctx => {
+      await ctx.db.patch(tenant.reviewId, { coverageLevel: "full", status: "validating", currentStage: "analysis" });
+      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "preexisting/validation.json", encrypted: true, checksum: "a".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "preexisting/report.md", encrypted: true, checksum: "d".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      // Same nameHash on both revisions, because nameHash is sha256(planId) and the two rows are
+      // the same check run twice. That shared key is what lets the decision pair them.
+      const row = (commitSha: string, conclusion: "passed" | "failed") => ({ organizationId: tenant.organizationId, reviewId: tenant.reviewId, kind: "secret_scan" as const, nameHash: "b".repeat(64), required: true, status: "completed" as const, conclusion, commandFingerprint: "c".repeat(64), commitSha, exitCode: conclusion === "failed" ? 1 : 0, durationMs: 1, artifactId, credentialTeardownProved: true, sandboxStopped: true, startedAt: now - 1, completedAt: now });
+      await ctx.db.insert("checkRuns", row("b".repeat(40), baseConclusion));
+      await ctx.db.insert("checkRuns", row("a".repeat(40), "failed"));
+      return reportArtifactId;
+    });
+
+  it("passes when the same required check failed on base too", async () => {
+    const t = convexTest(schema, modules), tenant = await seedTenant(t, "preexisting-failure", "alice"), now = Date.now();
+    const reportArtifactId = await pairedReview(t, tenant, now, "failed");
+    await expect(t.mutation(internal.reviewValidationData.finalizeDecision, { organizationId: tenant.organizationId, reviewId: tenant.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0, reportArtifactId, now }))
+      .resolves.toMatchObject({ status: "checks_passed", statusReasonCode: "checks_complete" });
+    // The badge a reviewer sees has to agree with the sentence the comment opens with.
+    expect(await t.run(ctx => ctx.db.get(tenant.reviewId))).toMatchObject({ githubCheckConclusion: "success" });
+  });
+
+  it("still fails when the pull request is what broke the check", async () => {
+    const t = convexTest(schema, modules), tenant = await seedTenant(t, "introduced-failure", "alice"), now = Date.now();
+    const reportArtifactId = await pairedReview(t, tenant, now, "passed");
+    await expect(t.mutation(internal.reviewValidationData.finalizeDecision, { organizationId: tenant.organizationId, reviewId: tenant.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0, reportArtifactId, now }))
+      .resolves.toMatchObject({ status: "changes_requested", statusReasonCode: "required_check_failed" });
+    expect(await t.run(ctx => ctx.db.get(tenant.reviewId))).toMatchObject({ githubCheckConclusion: "failure" });
+  });
+});
