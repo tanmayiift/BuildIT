@@ -15,6 +15,16 @@ type Connection = {
 const connectionQuery = makeFunctionReference<"query", Record<string, never>, Connection>("repositoryConnections:current");
 const credentialQuery = makeFunctionReference<"query", { organizationId: string }, Array<{ status: string }>>("integrations:listProviderCredentials");
 const receiptQuery = makeFunctionReference<"query", Record<string, never>, null | {identity:{login:string;lastAuthenticatedAt?:number};organization:{name:string;role:string;region:"eu-west-1";retentionHours:number};installations:Array<{installationId:number;accountLogin:string;accountType:"user"|"organization";status:string;permissions:{metadata:"read";contents:"read"|"write";pullRequests:"write";issues:"read";checks:"read"|"write"};lastSynchronizedAt:number}>;repositories:Array<{id:string;owner:string;name:string;visibility:string;autofixMode:string}>;credentials:Array<{id:string;provider:string;repositoryId?:string;maskedSuffix:string;lastValidatedAt?:number;lastUsedAt?:number}>;boundaries:{sourceRegion:"eu-west-1";maximumSourceRetentionHours:number;mergeAuthority:false;workflowWrite:false;repositoryAdministration:false}}>("permissionReceipts:current");
+// The broker can create a Jira or Linear connection - packages/broker/src/convex-gateway.ts calls
+// integrations:storeEncryptedTrackerConnection - so rows can exist in trackerConnections. Both the
+// query that lists them and the mutation that revokes them were written, authorized and tested, and
+// neither had a caller. The only tracker UI was two cards reading "Not available / No account
+// access requested", so an admin whose workspace held a live tracker token was told on screen that
+// no such access existed, and had no way to revoke it. That is a credential with no kill switch,
+// and the first sign of it would have been a leak.
+type TrackerConnection = { id: string; provider: string; workspaceId: string | null; scopes: string[]; status: string; maskedSuffix: string | null; lastUsedAt: number | null; createdAt: number };
+const trackerConnectionsQuery = makeFunctionReference<"query", { organizationId: string }, TrackerConnection[]>("integrations:listTrackerConnections");
+const revokeTracker = makeFunctionReference<"mutation", { organizationId: string; connectionId: string; requestId: string }, { id: string; status: "revoked" }>("integrations:revokeTrackerConnection");
 const readinessQuery = makeFunctionReference<"query", Record<string, never>, { executionEnabled: boolean }>("runtimeReadiness:current");
 type Member = { id: string; userId: string; name: string | null; githubLogin: string | null; role: "viewer" | "developer" | "admin" | "owner"; status: "active" | "invited"; createdAt: number; updatedAt: number };
 const membersQuery = makeFunctionReference<"query", { organizationId: string }, Member[]>("memberships:list");
@@ -390,4 +400,30 @@ export function MembersWorkspaceState() {
   async function submitInvite(event: React.FormEvent) { event.preventDefault(); if (!organizationId || !canManage) return; if (membersSampleTour) { setMessage("Sample tour: no invitation was sent. Sign in to manage a real workspace."); return; } setWorking(true); setMessage(""); try { await invite({ organizationId, githubLogin, role: inviteRole, requestId: requestId() }); setGithubLogin(""); setMessage("Invitation created. The person can accept it after signing in with that GitHub account."); } catch (error) { const code = error instanceof Error ? error.message : ""; setMessage(code.includes("member_must_sign_in_first") ? "That GitHub user must sign in to BuildIT once before you can invite them." : "The invitation was not created. Your access may have changed; refresh and try again."); } finally { setWorking(false); } }
   async function update(member: Member, action: "remove" | Member["role"]) { if (!organizationId || !canManage) return; if (membersSampleTour) { setMessage("Sample tour: no member was changed. Sign in to manage a real workspace."); return; } setWorking(true); setMessage(""); try { if (action === "remove") await remove({ organizationId, membershipId: member.id, requestId: requestId() }); else await changeRole({ organizationId, membershipId: member.id, role: action, requestId: requestId() }); setMessage(action === "remove" ? "Member access removed." : "Member role updated."); } catch (reason) { setMessage(recentLoginRequired(reason) ? "Your GitHub security check expired, so nothing changed. Verify with GitHub, then make the change again." : "The member change was refused. BuildIT preserves the last owner and rechecks your role before every change."); } finally { setWorking(false); } }
   return <><section className="connection-hero"><div><span className="status success">Current workspace</span><h2>{connection.organization.name}</h2><p>Your role: {connection.organization.role}. Roles and invitations apply only to this workspace.</p></div><a className="button secondary" href="/account">Manage account</a></section>{canManage?<form className="review-start-form" onSubmit={submitInvite}><label className="field"><span>GitHub username</span><input value={githubLogin} onChange={event=>setGithubLogin(event.target.value)} placeholder="octocat" autoComplete="off" required /></label><label className="field"><span>Starting role</span><select value={inviteRole} onChange={event=>setInviteRole(event.target.value as typeof inviteRole)}><option value="viewer">Viewer</option><option value="developer">Developer</option><option value="admin">Admin</option></select></label><button className="button" disabled={working||!githubLogin.trim()}>{working?"Saving…":"Invite member"}</button></form>:null}{message?<p className="form-result" role="status">{message}</p>:null}<section className="settings-list" aria-label="Workspace members">{members?.map(member=><article className="setting-row" key={member.id}><div><strong>{member.name||member.githubLogin||"GitHub user"}</strong><p>{member.githubLogin?`@${member.githubLogin} · `:""}{member.status}</p></div><code>{member.role}</code>{canManage&&member.role!=="owner"?<div className="button-row"><select aria-label={`Role for ${member.githubLogin||member.userId}`} value={member.role} disabled={working||member.status!=="active"} onChange={event=>void update(member,event.target.value as Member["role"])}><option value="viewer">Viewer</option><option value="developer">Developer</option><option value="admin">Admin</option></select><button className="button destructive" type="button" disabled={working} onClick={()=>void update(member,"remove")}>Remove</button></div>:<span className="muted-copy">Protected owner</span>}</article>)??<article className="setting-row"><div><strong>Loading members…</strong></div></article>}</section></>;
+}
+
+export function TrackerConnections() {
+  const tour = useSampleTour(), connection = useConnection(), organizationId = connection?.organization?.id;
+  const rows = useQuery(trackerConnectionsQuery, !tour && organizationId ? { organizationId } : "skip");
+  const revoke = useMutation(revokeTracker);
+  const [message, setMessage] = useState(""), [working, setWorking] = useState("");
+  // Nothing to say when there is nothing connected - the two "Not available" cards beside this
+  // already cover the not-set-up story, and an empty panel would just repeat them.
+  if (tour || !organizationId || !rows?.length) return null;
+  const live = rows.filter(row => row.status !== "revoked");
+  if (!live.length) return null;
+  return <section className="settings-list" aria-label="Connected trackers">
+    <article className="setting-row"><div><strong>Connected trackers</strong><p>These hold live credentials for your workspace. Revoking one stops BuildIT reading that tracker immediately; linked context is then reported as unavailable rather than guessed.</p></div><span className="status warning">{live.length} active</span></article>
+    {live.map(row => <article className="setting-row" key={row.id}>
+      <div><strong>{row.provider}{row.workspaceId ? ` · ${row.workspaceId}` : ""}</strong><p>{row.maskedSuffix ? `Key ending ${row.maskedSuffix}. ` : ""}{row.scopes.length ? `Scopes: ${row.scopes.join(", ")}. ` : ""}{row.lastUsedAt ? `Last used ${new Date(row.lastUsedAt).toLocaleDateString()}.` : "Never used."}</p></div>
+      <button className="button destructive" type="button" disabled={working === row.id} onClick={() => {
+        setWorking(row.id); setMessage("");
+        void revoke({ organizationId, connectionId: row.id, requestId: `revoke-tracker-${row.id}` })
+          .then(() => setMessage(`${row.provider} access revoked.`))
+          .catch(reason => setMessage(recentLoginRequired(reason) ? "Sign in with GitHub again to revoke a tracker connection." : "Only an admin can revoke a tracker connection."))
+          .finally(() => setWorking(""));
+      }}>{working === row.id ? "Revoking…" : "Revoke"}</button>
+    </article>)}
+    {message ? <p className="form-result" role="status">{message}</p> : null}
+  </section>;
 }

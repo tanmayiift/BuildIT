@@ -1,4 +1,4 @@
-import { GitHubIntegrationState, MembersWorkspaceState, ModelIntegrationState, RepositoryConnectionView } from "../live-connections";
+import { GitHubIntegrationState, MembersWorkspaceState, ModelIntegrationState, RepositoryConnectionView, TrackerConnections } from "../live-connections";
 import { WorkspaceMetrics, WorkspaceUsage } from "../live-metrics-usage";
 import { WorkspaceAudit } from "../live-audit";
 import { NotificationPreferences } from "../notification-preferences";
@@ -51,7 +51,7 @@ function Usage() {
 }
 
 function Integrations() {
-  return <div className="content"><Header eyebrow="Dependency-specific setup" title="Integrations" description="Connect only the service needed for the next action. No all-or-nothing setup wall." /><div className="integration-grid"><GitHubIntegrationState /><ModelIntegrationState /><UnavailableIntegration name="Linear" description="Private Linear issue access is not enabled. BuildIT will mark linked Linear context unavailable rather than infer requirements." /><UnavailableIntegration name="Jira" description="Private Jira ticket access is not enabled. BuildIT will mark linked Jira context unavailable rather than infer requirements." /></div></div>;
+  return <div className="content"><Header eyebrow="Dependency-specific setup" title="Integrations" description="Connect only the service needed for the next action. No all-or-nothing setup wall." /><div className="integration-grid"><GitHubIntegrationState /><ModelIntegrationState /><UnavailableIntegration name="Linear" description="Private Linear issue access is not enabled. BuildIT will mark linked Linear context unavailable rather than infer requirements." /><UnavailableIntegration name="Jira" description="Private Jira ticket access is not enabled. BuildIT will mark linked Jira context unavailable rather than infer requirements." /></div><TrackerConnections /></div>;
 }
 function UnavailableIntegration({ name, description }: { name: string; description: string }) { return <article className="integration-card"><div><span className="integration-glyph">{name.slice(0, 2).toUpperCase()}</span><span className="status neutral">Not available</span></div><h2>{name}</h2><p>{description}</p><span className="muted-copy">No account access requested</span></article>; }
 
