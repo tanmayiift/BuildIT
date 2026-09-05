@@ -125,7 +125,7 @@ function Numbers({ data }: { data: ProofSummary }) {
       <Metric title="Platform failures" value={platformFailed.toLocaleString()}
         detail="BuildIT's own fault. Never reported as a pass" />
       <Metric title="Median review" value={duration(data.durationMs.median)}
-        detail={`Start to finish, over ${data.durationMs.sampleSize.toLocaleString()} reviews that ran to a verdict`} />
+        detail={`Start to finish, over the last ${data.durationMs.sampleSize.toLocaleString()} reviews that ran to a verdict`} />
       <Metric title="95th percentile" value={duration(data.durationMs.p95)}
         detail="The slow tail, not the average" />
     </div>

@@ -97,6 +97,20 @@ describe("the public proof page", () => {
     expect(screen.getByText("Most recent 2,000")).toBeTruthy();
     expect(document.body.textContent).toContain("a recent window rather than all time");
   });
+
+  // The root boundary answers "We could not load this workspace… Check setup", which is addressed
+  // to a signed-in customer. A stranger on the only public route that reads live data has no
+  // workspace and no setup, so the failure has to be explained in their terms.
+  it("fails in front of a stranger without telling them to check a workspace they do not have", async () => {
+    const { default: ProofError } = await import("./error");
+    render(<ProofError error={new Error("query unavailable")} reset={() => {}} />);
+    expect(screen.getByText("The live numbers did not load")).toBeTruthy();
+    for (const wrong of ["workspace", "setup", "authorized request"]) {
+      expect(document.body.textContent?.toLowerCase(), wrong).not.toContain(wrong);
+    }
+    // And it must not paper over the gap with a number of its own.
+    expect(document.body.textContent).not.toMatch(/\b\d+\b/);
+  });
 });
 
 // The page cannot render what the query does not send, so the privacy guarantee is a property of
@@ -138,3 +152,4 @@ describe("the /proof route", () => {
     for (const path of publicRoutes) expect(known(path), path).toBe(true);
   });
 });
+

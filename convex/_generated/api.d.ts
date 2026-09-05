@@ -57,6 +57,7 @@ import type * as notifications from "../notifications.js";
 import type * as organizations from "../organizations.js";
 import type * as permissionReceipts from "../permissionReceipts.js";
 import type * as publicFunctionPolicy from "../publicFunctionPolicy.js";
+import type * as publicProof from "../publicProof.js";
 import type * as reconcileWorker from "../reconcileWorker.js";
 import type * as repositoryConnections from "../repositoryConnections.js";
 import type * as repositoryMemory from "../repositoryMemory.js";
@@ -147,6 +148,7 @@ declare const fullApi: ApiFromModules<{
   organizations: typeof organizations;
   permissionReceipts: typeof permissionReceipts;
   publicFunctionPolicy: typeof publicFunctionPolicy;
+  publicProof: typeof publicProof;
   reconcileWorker: typeof reconcileWorker;
   repositoryConnections: typeof repositoryConnections;
   repositoryMemory: typeof repositoryMemory;
