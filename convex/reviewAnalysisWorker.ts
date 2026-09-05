@@ -174,12 +174,27 @@ export function selectFindingsModel(provider: ProviderName, primary: string, ava
 export function requireIndependentCritic(findings:FindingCandidate[],decisions:CriticDecision[],independent:boolean){if(independent)return decisions;const risky=new Set(findings.filter(item=>item.origin==="model"&&["critical","high"].includes(item.severity)).map(item=>item.id));return decisions.map(item=>risky.has(item.findingId)?{...item,verdict:"uncertain" as const,missingEvidenceIds:[...new Set([...item.missingEvidenceIds,"independent-critic-unavailable"])],explanation:"An independent approved critic model was unavailable."}:item)}
 
 type ScannerFindingInput = { scanner?: string; ruleId?: string; fingerprint?: string; severity?: "critical" | "warning" | "info"; path?: string; startLine?: number; endLine?: number; summary?: string };
-export function introducedScannerFindings(base: ScannerFindingInput[], head: ScannerFindingInput[]) {
+// A scanner finding may only be attributed to a pull request if the file is in the pull request.
+//
+// Diffing head against base looks like it should be enough, and it is not, because the two
+// revisions do not fetch the same files: head also selects requirement sources and dependency
+// manifests, base selects only what the diff touched. So gitleaks scanned zod's string.test.ts on
+// head, never saw it on base, and three JWT fixtures that had been sitting in that repository all
+// along came back as Critical and Blocking against a pull request that never opened the file.
+//
+// changedPaths closes it from the other side, and is the stronger rule anyway: whatever the two
+// snapshots happened to contain, a finding on a file the author did not touch is not theirs. The
+// base diff still runs, so a finding they did introduce into a file that already had one is still
+// reported.
+export function introducedScannerFindings(base: ScannerFindingInput[], head: ScannerFindingInput[], changedPaths?: ReadonlySet<string>) {
   const key = (item: ScannerFindingInput) => typeof item.fingerprint === "string" && item.fingerprint.length > 0 && typeof item.ruleId === "string" && typeof item.path === "string"
     ? `${item.scanner ?? "unknown"}\0${item.ruleId}\0${item.path}\0${item.fingerprint}` : undefined;
   const remaining = new Map<string, number>();
   for (const item of base) { const value = key(item); if (value) remaining.set(value, (remaining.get(value) ?? 0) + 1); }
-  return head.filter(item => { const value = key(item); if (!value) return true; const count = remaining.get(value) ?? 0; if (!count) return true; if (count === 1) remaining.delete(value); else remaining.set(value, count - 1); return false; });
+  const touched = changedPaths === undefined
+    ? head
+    : head.filter(item => typeof item.path === "string" && changedPaths.has(item.path));
+  return touched.filter(item => { const value = key(item); if (!value) return true; const count = remaining.get(value) ?? 0; if (!count) return true; if (count === 1) remaining.delete(value); else remaining.set(value, count - 1); return false; });
 }
 
 export const analyze = internalAction({
@@ -258,7 +273,13 @@ export const analyze = internalAction({
     const modelFindings = normalizeFindingCriteria(((stage("findings").findings ?? []) as FindingCandidate[]).map(item => ({ ...item, origin: "model" as const })), criteriaIds);
     const critic = requireIndependentCritic(modelFindings,((stage("critic").decisions ?? []) as CriticDecision[]),criticRoute.independent);
     const scannerRuns = validationValue.output?.scanners as { base?: { findings?: ScannerFindingInput[] }; head?: { findings?: ScannerFindingInput[] } } | undefined;
-    const scannerHead = introducedScannerFindings(scannerRuns?.base?.findings ?? [], scannerRuns?.head?.findings ?? []);
+    // The union of what fit in the context and what was dropped for budget - the whole changed set,
+    // because a file excluded for size is still a file the author touched.
+    const changedPaths = new Set<string>([
+      ...untrusted.pull.changes.map(change => change.path),
+      ...untrusted.exclusions.changedPaths,
+    ]);
+    const scannerHead = introducedScannerFindings(scannerRuns?.base?.findings ?? [], scannerRuns?.head?.findings ?? [], changedPaths);
     const scannerFindings: FindingCandidate[] = scannerHead.flatMap((item, index) => {
       if (!item.path || !item.ruleId || !item.severity || !Number.isInteger(item.startLine) || !Number.isInteger(item.endLine)) return [];
       const evidence = [...headEvidence.values()].find(value => value.record.path === item.path);

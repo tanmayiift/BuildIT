@@ -66,6 +66,29 @@ describe("scanner PR attribution", () => {
   it("removes an unchanged base finding and preserves an introduced finding", () => {
     expect(introducedScannerFindings([finding("same")], [finding("same"), finding("new")]).map(item => item.fingerprint)).toEqual(["new"]);
   });
+  // Three JWT fixtures that had been in zod's string.test.ts all along came back Critical and
+  // Blocking on a pull request that never opened that file. The base diff could not catch it: head
+  // fetches requirement sources and test files, base fetches only what the diff touched, so the
+  // scanner never saw those lines on base and every one of them looked introduced.
+  it("never blames a pull request for a finding in a file it did not touch", () => {
+    const untouched = { ...finding("upstream"), path: "packages/zod/src/v4/mini/tests/string.test.ts" };
+    const changed = new Set(["packages/zod/src/v4/classic/tests/number.test.ts"]);
+    expect(introducedScannerFindings([], [untouched], changed)).toEqual([]);
+  });
+
+  it("still reports a finding the pull request did introduce into a file it touched", () => {
+    const changed = new Set(["src/config.ts"]);
+    expect(introducedScannerFindings([finding("old")], [finding("old"), finding("new")], changed)
+      .map(item => item.fingerprint)).toEqual(["new"]);
+  });
+
+  // Without changedPaths the old behaviour has to survive, because the base diff is still the only
+  // thing standing between a pre-existing finding and a blocked merge on paths that were touched.
+  it("falls back to the base comparison when no changed set is supplied", () => {
+    expect(introducedScannerFindings([finding("same")], [finding("same"), finding("new")], undefined)
+      .map(item => item.fingerprint)).toEqual(["new"]);
+  });
+
   it("uses multiset counts and keeps malformed or unfingerprinted head evidence fail-safe", () => {
     const result = introducedScannerFindings([finding("same")], [finding("same"), finding("same"), { ...finding(""), fingerprint: undefined }]);
     expect(result).toHaveLength(2);
