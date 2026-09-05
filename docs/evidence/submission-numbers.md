@@ -1,8 +1,7 @@
-# BuildIT — numbers for the week
+# BuildIT — the week, in numbers
 
-Every figure below was read from the production Convex deployment or from git on 4 September 2026.
-Nothing is estimated, rounded up, or projected. Where there is no number, that is stated rather than
-filled in.
+Every figure here was read from the production database or from git on 5 September 2026. Nothing is
+estimated or rounded up. Where there is no number, that is stated instead of filled in.
 
 **Track: AI Agent as a Service.**
 
@@ -15,83 +14,97 @@ filled in.
 | **Live product** | https://buildit-agentic-review.vercel.app |
 | **Public repo** | https://github.com/tanmayiift/BuildIT |
 | **Core action, no account** | https://buildit-agentic-review.vercel.app/sandbox |
+| **Live numbers, no account** | https://buildit-agentic-review.vercel.app/proof |
+| **Operator dashboard, no login** | https://peacefulbumblebee2324.grafana.net/public-dashboards/070f5673609744cfaaacb0001989e35c |
 
-The core action needs no sign-in: paste code, it is scanned on the server, nothing is stored. It is
-the first button on the home page. Verified logged out at 375×812 on the deployed site.
+The core action needs no sign-in: paste code, it is scanned server-side, nothing is stored. It is
+the first button on the home page. The `/proof` page reads live from the database by a public query
+that returns counts and nothing else — no repository, organization, person or finding is
+identifiable from it.
 
 ---
 
-## Product numbers, from the production database
+## Production numbers
 
-| Table | Rows |
+Open `/proof` to reproduce any of these live.
+
+| | |
 | --- | ---: |
-| `reviews` | 134 |
-| `findings` | 75 |
-| `repositories` | 8 |
-| `organizations` | 2 |
-| `githubInstallations` | 2 |
-| `usageLedger` | 640 |
-| `auditEvents` | 25 |
-| `webhookDeliveries` | 2,922 |
+| Pull requests reviewed | **141** |
+| Distinct repositories | **7** |
+| Findings raised | **150** |
+| Decisive verdicts | **79** |
+| Platform failures | **48** |
+| Model spend | **$18.26** |
+| Model tokens | **10,065,863** |
 
-### What those 134 reviews decided
+### Verdict mix
 
 | Verdict | Count |
 | --- | ---: |
-| `changes_requested` | 49 |
-| `platform_failed` | 42 |
+| `changes_requested` | 50 |
+| `platform_failed` | 48 |
 | `checks_passed` | 25 |
 | `inconclusive` | 11 |
 | `delivered` | 4 |
 | `budget_exhausted` | 2 |
 | `blocked` | 1 |
 
-**74 of 134 reviews reached a decisive verdict.** 42 ended in a platform failure, and that number is
-not hidden: it is on the public features page, regenerated from this same data today. A large part
-of those 42 were the two defects found and fixed this week — a base/head selection mismatch that
-killed reviews on any repository above 400 files, and a model grant that made every provider retry
-fail. The most recent failures are a Vercel Sandbox plan limit, which is a bill, not a bug.
+**48 platform failures of 141 is a third of every review ever run, and it is on the public page.**
+Almost all of them are two defects and one billing failure, all of which are now fixed:
 
-### Cost
-
-**$17.89** of model spend, all of it on the developer's own key, across the whole month. BuildIT
-adds nothing on top — every review's cost is itemised per review in `usageLedger`.
-
-Typical review cost observed on public repositories: **$0.26 – $0.41**.
+1. A base/head selection mismatch that killed every review on any repository above 400 files whose
+   pull request did not touch its manifests. No fixture repository was large enough to trigger it.
+2. A single-use model grant minted once and re-sent on every provider retry, so any rate limit
+   became a platform failure. The retry path was tested and had never once worked in production.
+3. A declined card. Vercel's Sandbox reported "Hobby plan usage limit exceeded" for a team its own
+   API reported as paid Pro, and every review died on it until the invoice cleared.
 
 ---
 
 ## Real output on real surfaces
 
-Two public open-source repositories, reviewed on real pull requests:
+Two public repositories, reviewed on real pull requests, verdicts posted as GitHub check runs.
 
-| Repository | Size | Pull request |
-| --- | ---: | --- |
-| [buildit-demo-got](https://github.com/tanmayiift/buildit-demo-got) — snapshot of `sindresorhus/got` | 130 files | [#1](https://github.com/tanmayiift/buildit-demo-got/pull/1) |
-| [buildit-demo-date-fns](https://github.com/tanmayiift/buildit-demo-date-fns) — snapshot of `date-fns/date-fns` | 1,912 files | [#1](https://github.com/tanmayiift/buildit-demo-date-fns/pull/1) |
+**[buildit-demo-got#1](https://github.com/tanmayiift/buildit-demo-got/pull/1)** — snapshot of
+`sindresorhus/got`, 130 files. Verdict: **Changes need review**.
 
-On date-fns, all 5 required checks passed with complete evidence, including running the repository's
-own 3,248 tests inside an isolated sandbox on both the base and head commits.
+BuildIT found the planted defect by reasoning about it, not by pattern-matching:
 
-### What reviewing real code found — in BuildIT itself
+> **Retry budget never accumulates across attempts when timings.start is per-attempt** —
+> `source/core/calculate-retry-delay.ts:39-43`. *"that value is inspectably tied to a single
+> attempt, not a persisted first-attempt deadline, so the check can reset on each retry instead of
+> accumulating total wall-clock time."*
 
-Pointing the product at real open-source repositories, rather than at fixtures, surfaced six defects
-in BuildIT's own pipeline this week. All six are fixed and merged:
+It raised a second, blocking finding that the added test cannot distinguish a correct
+implementation from a broken one, because `attempts >= 1` passes either way. Both are true. The
+change compiles, lints clean, and passes all 54 of the repository's own retry tests.
 
-1. **Reviews died on most real repositories.** Base and head disagreed about the package manager
-   because head fetched `package.json` and the lockfile while base did not. Every repository above
-   400 files whose pull request did not touch its manifests failed before a check ran. No fixture
-   repository was large enough to trigger it.
-2. **The provider retry path could never succeed.** A single-use model grant was minted once and
-   re-sent on every retry, so any rate limit became a platform failure. The retry machinery was
-   tested and had never once worked in production.
-3. **Pull requests were blamed for failures the base commit already had.** The base/head comparison
-   was computed and thrown away by the report.
-4. **A repository configuration could never be approved.** The only trust route had no UI.
-5. **A scanner rule reported the safe case and missed the dangerous one.** `password !== undefined`
-   was flagged; a secret compared against a key-shaped literal could not match at all.
-6. **The CI vulnerability gate depended on a dead npm endpoint**, failing ~1 run in 5 after nine
-   minutes of retries. Replaced with the offline OSV database. Now 11 seconds.
+It also reported three checks as *"already failing on `bc0655188b88` before this pull request. Not
+attributed to this change"* rather than blaming the author for them.
+
+**[buildit-demo-date-fns#1](https://github.com/tanmayiift/buildit-demo-date-fns/pull/1)** — snapshot
+of `date-fns`, **1,912 files**. Verdict: **Ready for human review**. All 5 required checks passed
+with complete evidence, including running the repository's own 3,248 tests in an isolated sandbox on
+both the base and the head commit.
+
+---
+
+## Observability
+
+The Grafana dashboard above is public and needs no login. It renders live OpenTelemetry from both
+Vercel and Convex: operation rate, service failure ratio, p95 latency broken out per operation
+(`model.invoke`, `sandbox.execute`, `webhook.process`, `artifact.get/put/delete`), review stages and
+outcomes, and provider and runner failures.
+
+Fourteen alert rules with severities, actions and runbook links live in `observability/alerts.yml`,
+and `pnpm alerts:check` runs in CI to prove every rule names a runbook section that exists.
+
+**No duration statistic is published.** The reviews table re-stamps `createdAt` and `startedAt` per
+execution generation, so no timestamp pair on it answers "how long did this take" — measured
+per status, verdict-reaching reviews showed a 0.1s median against 87s for platform failures. Three
+framings were tried and each produced a plausible, wrong number. It is absent rather than
+approximated.
 
 ---
 
@@ -99,22 +112,20 @@ in BuildIT's own pipeline this week. All six are fixed and merged:
 
 | | |
 | --- | ---: |
-| Commits | 504 |
-| Commits this week | 504 (the repository began 29 August) |
-| Tests | 1,397 |
-| Release gates | `verify`, `security:release`, `reliability:release`, `eval`, `deploy:web:check` |
-| Deployed surfaces | Convex, web, broker — sequenced, with broker freshness asserted against the served commit |
+| Commits | **520** (all since 29 August) |
+| Tracked files | 611 |
+| Tests | **1,450** |
+| Release gates | `verify`, `security:release`, `reliability:release`, `eval`, `alerts:check`, `deploy:web:check` |
+| Deployed surfaces | Convex, web, broker — sequenced, broker freshness asserted against the served commit |
 
 ---
 
 ## What there is no number for
 
-**Web analytics are not instrumented.** There is no visitor count, no signup funnel, and no
-impression data, because no analytics package was ever installed. Adding one in the final hour would
-produce a counter with no history behind it, which would be a worse answer than this one.
+**No web analytics.** No package was ever installed, so there is no visitor, signup or impression
+data. Adding a counter on submission morning would produce a number with no history behind it. The
+`/proof` page is the honest substitute: real product usage, not traffic.
 
-**No revenue.** BuildIT is free and bring-your-own-key by design; nobody has been charged, so there
-is nothing to report.
+**No revenue.** BuildIT is free and bring-your-own-key by design. Nobody has been charged.
 
-The honest position is that this week produced a working product with real output on real
-repositories, and no audience numbers.
+This week produced a working product with real output on real repositories, and no audience numbers.
