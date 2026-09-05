@@ -103,7 +103,7 @@ export const completeAnalysis = internalMutation({
     //
     // Recorded as a changed_files gap because that is exactly what it is, and blocksVerdict already
     // knows a changed_files gap must withhold the verdict rather than merely annotate it.
-    if (args.analysisDroppedChangedFile) await ctx.db.patch(review._id, { coverageLevel: "partial" as const, coverageGap: "changed_files" as const });
+    if (args.analysisDroppedChangedFile && review.coverageLevel === "full") await ctx.db.patch(review._id, { coverageLevel: "partial" as const, coverageGap: "analysis_budget" as const });
     if (artifact.redactionStatus === "pending") await ctx.db.patch(artifact._id, { redactionStatus: "redacted" });
     else throw new ConvexError("analysis_artifact_mismatch");
     const quantity = args.inputTokens + args.outputTokens;

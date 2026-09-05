@@ -66,7 +66,7 @@ function findingLines(finding: ReportFinding, index: number) {
 // than a phrase each report restates in its own words.
 export const neverMergedSentence = "BuildIT did not merge this pull request.";
 
-export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "requirements"; unreadableSources?: { total: number; unreadable: number; summary: string; nextStep: string }; changeSummary?: string; configNote?: string; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
+export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "analysis_budget" | "requirements"; unreadableSources?: { total: number; unreadable: number; summary: string; nextStep: string }; changeSummary?: string; configNote?: string; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
   const decision = computeReviewDecision({ isStale: input.isStale, environmentAvailable: input.environmentAvailable, coverageComplete: input.coverage === "complete", ...(input.injectionUnscoped ? { injectionUnscoped: true } : {}), checks: input.checks, findings: input.findings });
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
@@ -130,6 +130,11 @@ function checkExcerpt(check: ReviewCheckDecision) {
     `> ${neverMergedSentence} A human owns the merge decision.`,
     ...(input.injectionSurfaces?.includes("narrative") && !input.injectionSurfaces.includes("unknown")
       ? ["", "> **Intent was not verified.** Instruction-like text appeared in this pull request's description or in a repository document, so BuildIT did not take either at face value when working out what the change is supposed to do. The checks and the cited findings below are unaffected: each one is tied to a file, a line and this exact commit."]
+      : []),
+    // Say it rather than hide it. The model's window could not hold every changed file; the checks,
+    // the scanners and the base/head comparison still covered all of them.
+    ...(input.coverageGap === "analysis_budget"
+      ? ["> **Partial reading.** Not every changed file fitted the analysis budget, so the model was shown a subset. The required checks and scanners ran against all of them on both commits."]
       : []),
     ...(input.coverageGap === "requirements"
       ? ["", input.unreadableSources
