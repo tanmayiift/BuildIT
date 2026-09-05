@@ -84,3 +84,62 @@ export const summary = query({
     };
   },
 });
+
+// "Publish ten pull request links with timestamps and BuildIT's comments" is a fair ask: aggregate
+// counts prove volume but not that any single review was real, and a screenshot proves neither.
+//
+// The hard part is that summary above refuses to name a repository on purpose - naming who BuildIT
+// reviews for is a customer disclosure, and a repository being public does not make the commercial
+// relationship public. A customer's open-source repo must not appear on this page because someone
+// noticed it was world-readable.
+//
+// So the rule is narrower than "public": the repository is public AND its owner is an account
+// BuildIT itself publishes evidence from. Those are snapshots of open-source projects, created by
+// this project, reviewed by this project, for exactly this purpose. Publishing them discloses
+// nothing about anybody else, and the moment a real customer connects a public repository it stays
+// out of this list by default rather than by luck.
+const evidenceOwners = new Set(["tanmayiift"]);
+
+export const recentPublicReviews = query({
+  args: {},
+  handler: async ctx => {
+    // Same bound and same reasoning as summary: this feeds a live subscription, and an unbounded
+    // read of an append-only table eventually crosses Convex's per-query read limit.
+    const repositories = (await ctx.db.query("repositories").take(rowCeiling))
+      .filter(item => item.visibility === "public" && evidenceOwners.has(item.owner));
+    const byId = new Map(repositories.map(item => [item._id, item]));
+    if (!byId.size) return { generatedAt: Date.now(), reviews: [], repositoriesListed: 0 };
+
+    const reviews = (await ctx.db.query("reviews").order("desc").take(rowCeiling))
+      .filter(item => byId.has(item.repositoryId) && item.completedAt !== undefined);
+
+    // One row per pull request, newest first. A pull request reviewed six times should appear once
+    // with its latest verdict, not six times inflating the list it exists to be honest about.
+    const latest = new Map<string, typeof reviews[number]>();
+    for (const review of reviews) {
+      const key = `${review.repositoryId}:${review.prNumber}`;
+      const held = latest.get(key);
+      if (!held || (review.completedAt ?? 0) > (held.completedAt ?? 0)) latest.set(key, review);
+    }
+
+    return {
+      generatedAt: Date.now(),
+      repositoriesListed: byId.size,
+      reviews: [...latest.values()]
+        .sort((left, right) => (right.completedAt ?? 0) - (left.completedAt ?? 0))
+        .slice(0, 40)
+        .map(review => {
+          const repository = byId.get(review.repositoryId)!;
+          return {
+            owner: repository.owner,
+            name: repository.name,
+            prNumber: review.prNumber,
+            // The status literal from validators.ts, not prose - the page maps it, so the wording
+            // stays in one place and a new status cannot silently render as a blank cell.
+            status: review.status,
+            completedAt: review.completedAt ?? 0,
+          };
+        }),
+    };
+  },
+});

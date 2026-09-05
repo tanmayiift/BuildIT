@@ -51,6 +51,9 @@ export const publicFunctionPolicies = {
   // literals and nothing else - no organization, repository, actor or finding is identifiable
   // from what it returns - which is why it can be "public_webhook" and still be "metadata".
   "publicProof:summary": { authorization: "public_webhook", response: "metadata" },
+  // Names only repositories BuildIT publishes its own evidence from - public, and owned by this
+  // project. A customer repository never appears here merely because it is world-readable.
+  "publicProof:recentPublicReviews": { authorization: "public_webhook", response: "metadata" },
   "repositoryConnections:current": { authorization: "authenticated_user", response: "metadata" },
   "repositoryConnections:setReviewPolicy": { authorization: "active_organization_admin_recent_auth", response: "none" },
   "runtimeReadiness:current": { authorization: "authenticated_user", response: "metadata" },

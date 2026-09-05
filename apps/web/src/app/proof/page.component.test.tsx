@@ -115,7 +115,13 @@ describe("the public proof page", () => {
 // to explain why each is missing, and a grep that matched the explanation would pass forever.
 describe("what the query is allowed to return", () => {
   const source = readFileSync(join(import.meta.dirname, "../../../../../convex/publicProof.ts"), "utf8");
-  const code = source.split("\n").filter(line => !line.trim().startsWith("//")).join("\n");
+  const whole = source.split("\n").filter(line => !line.trim().startsWith("//")).join("\n");
+  // Sliced per query, not per file. summary must name no repository at all; recentPublicReviews
+  // exists to name a handful, under a much narrower rule, and asserting the two together would
+  // either weaken summary's guarantee or make the second query impossible to write.
+  const listStart = whole.indexOf("export const recentPublicReviews");
+  const code = whole.slice(0, listStart);
+  const listCode = whole.slice(listStart);
   const returned = code.slice(code.indexOf("return {"));
 
   it("is callable with no identity, and declared that way", () => {
@@ -131,8 +137,41 @@ describe("what the query is allowed to return", () => {
   });
 
   it("bounds every read, because it feeds a live subscription", () => {
-    expect(code).not.toContain(".collect()");
+    expect(whole).not.toContain(".collect()");
     expect([...code.matchAll(/\.take\(rowCeiling\)/g)]).toHaveLength(3);
+    // The list query subscribes the same way and has to be bounded the same way.
+    expect([...listCode.matchAll(/\.take\(rowCeiling\)/g)]).toHaveLength(2);
+  });
+});
+
+// This one is allowed to name a repository, which makes the rule it obeys the thing worth pinning.
+describe("what the pull request list is allowed to name", () => {
+  const source = readFileSync(join(import.meta.dirname, "../../../../../convex/publicProof.ts"), "utf8");
+  const whole = source.split("\n").filter(line => !line.trim().startsWith("//")).join("\n");
+  const listCode = whole.slice(whole.indexOf("export const recentPublicReviews"));
+
+  it("is callable with no identity, and declared that way", () => {
+    expect(publicFunctionPolicies["publicProof:recentPublicReviews"]).toEqual({ authorization: "public_webhook", response: "metadata" });
+    expect(listCode).not.toMatch(/require\w*Role|getAuthUserId|ctx\.auth/);
+  });
+
+  it("names a repository only when it is public AND an account BuildIT publishes evidence from", () => {
+    // Both halves matter. Public alone would put a customer's open-source repository on this page
+    // because someone noticed it was world-readable, which is a disclosure they never agreed to.
+    expect(listCode).toContain('visibility === "public"');
+    expect(listCode).toContain("evidenceOwners.has(item.owner)");
+  });
+
+  it("returns nothing derived from source, and no tenant or commit identifier", () => {
+    const returned = listCode.slice(listCode.indexOf("return {"));
+    for (const field of ["organizationId", "headSha", "baseSha", "pathHmac", "fingerprint", "triggerActor", "ruleId", "githubLogin"]) {
+      expect(returned, `${field} must not reach the response`).not.toContain(field);
+    }
+  });
+
+  it("reports one row per pull request, so a re-reviewed pull request cannot inflate the list", () => {
+    expect(listCode).toContain("latest.set(key, review)");
+    expect(listCode).toContain("`${review.repositoryId}:${review.prNumber}`");
   });
 });
 

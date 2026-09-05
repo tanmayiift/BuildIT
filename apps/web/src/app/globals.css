@@ -348,3 +348,7 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; }
 .handoff-facts dt { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .handoff-facts dd { font-size: 13px; margin: 0; }
 @media (max-width: 620px) { .handoff-facts { grid-template-columns: 1fr; } .handoff-facts dd { margin-bottom: 6px; } }
+.proof-links { margin-top: 28px; }
+.proof-links h2 { font-size: 20px; margin: 0 0 6px; }
+.proof-links .lede { margin-bottom: 14px; }
+.proof-links a { font-variant-numeric: tabular-nums; }

@@ -20,6 +20,12 @@ export type ProofSummary = {
 };
 
 const proofQuery = makeFunctionReference<"query", Record<string, never>, ProofSummary>("publicProof:summary");
+// The counts above prove volume. They cannot prove any single review was real, which is a fair
+// thing to want and the reason this list exists: ten links a stranger can open, each to a pull
+// request carrying BuildIT's own comment and check run.
+type PublicReview = { owner: string; name: string; prNumber: number; status: string; completedAt: number };
+type PublicReviews = { generatedAt: number; repositoriesListed: number; reviews: PublicReview[] };
+const publicReviewsQuery = makeFunctionReference<"query", Record<string, never>, PublicReviews>("publicProof:recentPublicReviews");
 
 // The stored status is BuildIT's own enum from convex/validators.ts. An unmapped one falls back to
 // the raw value rather than being dropped, so a status added on the server appears here as itself
@@ -58,6 +64,7 @@ function Metric({ title, value, detail, hero = false }: { title: string; value: 
 
 export default function Proof() {
   const data = useQuery(proofQuery, {});
+  const reviewed = useQuery(publicReviewsQuery, {});
 
   return <div className="content trust-page">
     <p className="eyebrow">Live production data · no account, no key</p>
@@ -68,6 +75,7 @@ export default function Proof() {
       are here beside the successes, because a number you can only see when it flatters us is not evidence.
     </p>
     {data === undefined ? <Loading /> : data.reviews.counted === 0 ? <Empty /> : <Numbers data={data} />}
+    {reviewed?.reviews.length ? <ReviewedPullRequests data={reviewed} /> : null}
   </div>;
 }
 
@@ -178,4 +186,64 @@ function Numbers({ data }: { data: ProofSummary }) {
       <a className="quiet-link" href="/sandbox">Run the rules on your own code</a>
     </div>
   </>;
+}
+
+// Deliberately not "every public repository BuildIT has reviewed". The query behind this lists only
+// repositories this project publishes evidence from; a customer's open-source repository stays off
+// this page, because a repository being world-readable does not make the commercial relationship
+// public.
+function ReviewedPullRequests({ data }: { data: PublicReviews }) {
+  return <section className="proof-links">
+    <h2>Every pull request, openable</h2>
+    <p className="lede">
+      {data.reviews.length} pull {data.reviews.length === 1 ? "request" : "requests"} across {data.repositoriesListed} public
+      {data.repositoriesListed === 1 ? " repository" : " repositories"}, newest first. Each link opens a real pull request with
+      BuildIT&rsquo;s comment and check run on it. A pull request reviewed more than once appears once, with its latest verdict.
+    </p>
+    <div className="stage-table-scroll" tabIndex={0} role="region" aria-label="Reviewed pull requests, scrolls horizontally">
+      <table className="stage-table">
+        <thead>
+          <tr>
+            <th scope="col">Pull request</th>
+            <th scope="col">Verdict</th>
+            <th scope="col">Reviewed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.reviews.map(item => (
+            <tr key={`${item.owner}/${item.name}#${item.prNumber}`}>
+              <th scope="row">
+                <a href={`https://github.com/${item.owner}/${item.name}/pull/${item.prNumber}`} rel="noreferrer noopener" target="_blank">
+                  {item.owner}/{item.name}#{item.prNumber}
+                </a>
+              </th>
+              <td><span className="stage-outcome" data-outcome={item.status}>{verdictLabel(item.status)}</span></td>
+              <td className="stage-figure">
+                <time dateTime={new Date(item.completedAt).toISOString()}>
+                  {new Date(item.completedAt).toISOString().replace("T", " ").slice(0, 16)} UTC
+                </time>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>;
+}
+
+// The query returns BuildIT's own status literal rather than prose, so the wording lives here and a
+// status nobody has mapped renders as itself instead of an empty cell.
+function verdictLabel(status: string) {
+  const labels: Record<string, string> = {
+    checks_passed: "Ready for human review",
+    changes_requested: "Changes need review",
+    inconclusive: "Needs attention",
+    delivered: "Autofix delivered",
+    platform_failed: "BuildIT failed",
+    budget_exhausted: "Budget reached",
+    failed_after_bounds: "Stopped at bounds",
+    blocked: "Blocked",
+    cancelled: "Cancelled",
+  };
+  return labels[status] ?? status;
 }
