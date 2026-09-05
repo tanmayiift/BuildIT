@@ -34,6 +34,7 @@ import type * as http from "../http.js";
 import type * as integrations from "../integrations.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_authz from "../lib/authz.js";
+import type * as lib_blockingFindings from "../lib/blockingFindings.js";
 import type * as lib_coverageGate from "../lib/coverageGate.js";
 import type * as lib_credentialRevocation from "../lib/credentialRevocation.js";
 import type * as lib_durableStages from "../lib/durableStages.js";
@@ -125,6 +126,7 @@ declare const fullApi: ApiFromModules<{
   integrations: typeof integrations;
   "lib/audit": typeof lib_audit;
   "lib/authz": typeof lib_authz;
+  "lib/blockingFindings": typeof lib_blockingFindings;
   "lib/coverageGate": typeof lib_coverageGate;
   "lib/credentialRevocation": typeof lib_credentialRevocation;
   "lib/durableStages": typeof lib_durableStages;
