@@ -95,8 +95,10 @@ jobs:
       # in this repository, validated and green. A gate that reads only the file cannot tell you
       # the file is being ignored.
       #
-      # It fails when no token is configured, deliberately. "We could not check" is not "it
-      # matches", and going green on the first is how the drift lasted as long as it did.
+      # Drift fails the build. A missing token warns loudly and passes: that is a setup task no
+      # commit can fix, and failing every push for it turns the build red for a reason nobody can
+      # act on - which teaches people to ignore a red build, the same habit the noisy alert rules
+      # taught. Once the secret exists this is a real gate.
       - name: Alert rules match the deployed stack
         env:
           BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN }}
