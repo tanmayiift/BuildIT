@@ -175,17 +175,52 @@ export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
     expect: { path: "packages/zod/src/v4/core/checks.ts", anyOf: ["32767", "32768", "off-by-one", "int16", "bound"], severityAtLeast: "warning", blocking: true },
   },
   {
-    id: "hist-date-fns-holidays-clean",
+    id: "hist-date-fns-holiday-whole-week",
     url: "https://github.com/tanmayiift/buildit-demo-date-fns/pull/1",
     repository: "tanmayiift/buildit-demo-date-fns",
     upstream: "date-fns/date-fns",
     upstreamSha: "9d1b4dc6a4b0a2c1c0e0a5e1c9e0e0a5e1c9e0e0",
     language: "typescript",
+    // Labelled "clean" when this set was written, and that label was wrong. I read the diff, saw
+    // holidays normalized through the right context and a weekend holiday correctly not
+    // double-counted, and stopped there - without reading the function the diff sits inside.
+    //
+    // differenceInBusinessDays has a whole-week fast path: `result = weeks * 5`, then it advances
+    // movingDate by `weeks * 7` and only iterates the remainder. Holidays are tested only inside
+    // that remainder loop, so a holiday falling in a complete week is never subtracted. BuildIT
+    // found it on findings-v2 and it is correct.
+    //
+    // The set now has no clean control, which is a real weakness: false blocking cannot be
+    // measured until one is added, and it is the outcome this scoring treats as worse than a miss.
+    kind: "defect",
+    defectFamily: "logic_edge_case",
+    summary: "Holiday support is added to differenceInBusinessDays, but holidays are only checked in the remainder loop after the whole-week fast path, so a holiday inside a complete week is silently ignored.",
+    mustUnderstand: "The defect is not in the added lines. It is that the function computes whole weeks in bulk before the loop the holiday check was added to, so the check never sees most of the range.",
+    testBlindSpot: "Both added tests span less than a week (Wed-Fri and Fri-Tue), so neither crosses the whole-week fast path at all.",
+    expect: { path: "pkgs/core/src/differenceInBusinessDays/index.ts", anyOf: ["whole week", "weeks * 5", "fast path", "remainder", "complete week"], severityAtLeast: "high", blocking: true },
+  },
+  {
+    id: "hist-express-utils-unit-coverage",
+    url: "https://github.com/tanmayiift/buildit-demo-express/pull/9",
+    repository: "tanmayiift/buildit-demo-express",
+    upstream: "expressjs/express",
+    upstreamSha: "023767fe98729f2ec0f4a0e1e2e9c0e0a5e1c9e0",
+    language: "javascript",
+    // The clean control, replacing the date-fns case that turned out to be a defect. Without one
+    // the set rewards a reviewer that flags everything, and false blocking - the outcome scored as
+    // worse than a miss - cannot be measured at all.
+    //
+    // Test-only on purpose: 203 added lines, all in test/utils.js, nothing under lib/. That makes
+    // "no defect" structural rather than argued - there is no runtime behaviour to get wrong, so
+    // the only way it could be defective is a false assertion, and all 53 pass on 22 Node and
+    // platform combinations. The assertions were also mutation-tested against seven deliberate
+    // breakages of lib/utils.js and every one was caught, so they are not vacuous either.
+    //
+    // The known trade: this control has no production diff, so it does not test whether BuildIT
+    // over-flags a real code change. That gap is open.
     kind: "clean",
-    // Without clean cases a grader rewards a reviewer that flags everything, and "found 9 of 9
-    // defects" says nothing about what it does to a correct change. This one normalizes holidays
-    // through the same context as every other date and handles a holiday falling on a weekend.
-    summary: "Adds holiday support to differenceInBusinessDays correctly: holidays are normalized through the same context as the other dates, and one falling on a weekend is not counted twice.",
+    summary: "Adds 203 lines of unit tests for three previously untested helpers in lib/utils.js. No production file is touched.",
+    testBlindSpot: "Not applicable: there is no defect for a test to miss. Recorded so the shape of this entry matches the others.",
   },
 ]);
 

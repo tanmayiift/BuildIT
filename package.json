@@ -30,6 +30,7 @@
     "deploy:check": "node scripts/deploy-buildit-production.mjs --dry-run",
     "deploy:production": "node scripts/deploy-buildit-production.mjs",
     "lint:fix": "eslint . --fix",
+    "eval:compare": "tsx packages/evaluations/src/versionComparisonCli.ts",
     "eval:detection": "tsx packages/evaluations/src/detectionCli.ts",
     "evidence:track-record": "node scripts/track-record.mjs",
     "alerts:check": "node scripts/provision-buildit-grafana-alerts.mjs --dry-run",

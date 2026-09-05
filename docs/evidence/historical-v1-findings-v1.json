@@ -1,0 +1,19 @@
+{
+  "setVersion": "historical-v1",
+  "promptVersion": "findings-v1",
+  "recordedAt": "2026-09-05",
+  "provider": "openai",
+  "note": "Read from the check runs and review comments BuildIT posted on each pull request. hist-date-fns-holiday-whole-week was labelled clean at the time and produced no findings; it is scored missed here because the case is a defect, which is what the v2 run revealed.",
+  "cases": [
+    { "caseId": "hist-got-retry-budget", "outcome": "detected" },
+    { "caseId": "hist-body-parser-async-verify-bypass", "outcome": "detected" },
+    { "caseId": "hist-gson-millisecond-carry", "outcome": "detected" },
+    { "caseId": "hist-axios-evicted-session-leak", "outcome": "missed" },
+    { "caseId": "hist-p-queue-weighted-concurrency", "outcome": "missed" },
+    { "caseId": "hist-requests-env-ca-override", "outcome": "missed" },
+    { "caseId": "hist-itsdangerous-salt-ignored", "outcome": "missed" },
+    { "caseId": "hist-express-view-cache-key", "outcome": "missed" },
+    { "caseId": "hist-zod-int16-off-by-one", "outcome": "missed" },
+    { "caseId": "hist-date-fns-holiday-whole-week", "outcome": "missed" }
+  ]
+}

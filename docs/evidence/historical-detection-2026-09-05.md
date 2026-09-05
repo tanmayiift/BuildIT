@@ -7,6 +7,12 @@ threshold with no run behind it or a suite that graded the grader.
 correct change. Defined in `packages/evaluations/src/historicalCases.ts`, every case openable on
 GitHub.
 
+> **Superseded as the current result, kept as the baseline.** This is the `findings-v1` run. A
+> targeted prompt change was made in response to it and the comparison is in
+> [`prompt-change-findings-v2.md`](prompt-change-findings-v2.md) — detection went 3 of 10 to 5 of
+> 10. That run also proved one label on this page wrong: `date-fns` was recorded here as a correct
+> change and is in fact a defect, so the "no clean change blocked" claim below is not supported.
+
 **Prompt version:** `findings-v1`. **Provider:** OpenAI. Read from the check runs and review
 comments BuildIT actually posted, not from a local re-run.
 

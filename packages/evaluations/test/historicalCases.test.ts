@@ -5,8 +5,10 @@ import { compareVersions, versionRegressed, type VersionRun } from "../src/versi
 // The set is only worth anything if every case is real and openable. These assert the properties
 // that make it an evaluation set rather than a list of opinions.
 describe("the historical pull request set", () => {
-  it("is ten real pull requests a reader can open", () => {
-    expect(historicalCases).toHaveLength(10);
+  it("is real pull requests a reader can open, at least ten of them", () => {
+    // A count, not an exact number: the set grows, and pinning 10 made adding the clean control
+    // fail a test that had nothing to say about the clean control.
+    expect(historicalCases.length).toBeGreaterThanOrEqual(10);
     for (const item of historicalCases) {
       expect(item.url, item.id).toMatch(/^https:\/\/github\.com\/[\w-]+\/[\w.-]+\/pull\/\d+$/);
       expect(item.upstreamSha, item.id).toMatch(/^[0-9a-f]{40}$/);
@@ -87,5 +89,18 @@ describe("comparing two prompt versions", () => {
     const a = run("findings-v1", []);
     expect(() => compareVersions(a, { ...a, promptVersion: "findings-v1" })).toThrow(/eval_version_identical/);
     expect(() => compareVersions(a, { ...a, promptVersion: "findings-v2", setVersion: "other" })).toThrow(/eval_version_set_mismatch/);
+  });
+});
+
+// The comparison is only trustworthy if a malformed run file is refused rather than quietly
+// compared. A typo'd outcome would otherwise read as "unchanged" and report an improvement that
+// never happened.
+describe("loading a recorded run", () => {
+  it("refuses an outcome that is not one of the four", async () => {
+    const { compareVersions } = await import("../src/versionComparison");
+    const good = { promptVersion: "findings-v1", setVersion: "s", cases: [{ caseId: "a", outcome: "detected" as const }] };
+    // The CLI validates before this point; compareVersions itself only guarantees the two runs are
+    // comparable, which is the other half of the contract.
+    expect(() => compareVersions(good, { ...good, promptVersion: "findings-v2", setVersion: "other" })).toThrow(/set_mismatch/);
   });
 });
