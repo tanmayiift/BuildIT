@@ -70,12 +70,12 @@ export default function Proof() {
     <p className="eyebrow">Live production data · no account, no key</p>
     <h1 className="title">BuildIT&rsquo;s own operating numbers</h1>
     <p className="lede">
-      Read live from the database BuildIT runs on, by a public query that returns counts and nothing else.
-      No repository, organization, person or finding is identifiable from anything on this page. The failures
-      are here beside the successes, because a number you can only see when it flatters us is not evidence.
+      Read live from the database BuildIT runs on, by public queries that return counts, plus links to the
+      pull requests BuildIT reviewed on its own public repositories. No customer&rsquo;s repository, organization,
+      person or finding is identifiable from anything on this page. The failures are here beside the successes,
+      because a number you can only see when it flatters us is not evidence.
     </p>
-    {data === undefined ? <Loading /> : data.reviews.counted === 0 ? <Empty /> : <Numbers data={data} />}
-    {reviewed?.reviews.length ? <ReviewedPullRequests data={reviewed} /> : null}
+    {data === undefined ? <Loading /> : data.reviews.counted === 0 ? <Empty /> : <Numbers data={data} reviewed={reviewed} />}
   </div>;
 }
 
@@ -97,7 +97,7 @@ function Empty() {
   </section>;
 }
 
-function Numbers({ data }: { data: ProofSummary }) {
+function Numbers({ data, reviewed }: { data: ProofSummary; reviewed: PublicReviews | undefined }) {
   const counts = data.reviews.byStatus;
   const total = (names: string[]) => names.reduce((sum, name) => sum + (counts[name] ?? 0), 0);
   const decisive = total(decisiveStatuses);
@@ -152,11 +152,16 @@ function Numbers({ data }: { data: ProofSummary }) {
       </div>)}
     </dl>
 
+    {reviewed?.reviews.length ? <ReviewedPullRequests data={reviewed} /> : null}
+
     <h2 className="title">What this page will not tell you</h2>
     <dl className="trust-list">
       <div>
         <dt>Whose code these are</dt>
-        <dd>The query returns a count of distinct repositories, never a repository, owner, organization or branch. Reviews belong to the customers who ran them, and this page is BuildIT&rsquo;s number, not theirs.</dd>
+        <dd>Counts only. The pull requests listed below are BuildIT&rsquo;s own public repositories, named because they are
+          this project&rsquo;s evidence to be judged on. A customer&rsquo;s repository is never listed &mdash; not even a public one,
+          because a repository being world-readable does not make the commercial relationship public. For those, the query
+          returns a count of distinct repositories and never an owner, organization or branch.</dd>
       </div>
       <div>
         <dt>What any finding said</dt>

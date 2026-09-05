@@ -189,3 +189,20 @@ describe("the /proof route", () => {
   });
 });
 
+
+// The page used to promise "counts and nothing else" and "no repository is identifiable". The pull
+// request list makes both false, and a proof page that overstates its own privacy is precisely the
+// defect this page exists to prevent. These pin the corrected claim.
+describe("what the page claims about itself", () => {
+  const page = readFileSync(join(import.meta.dirname, "page.tsx"), "utf8");
+
+  it("no longer claims the page returns counts and nothing else", () => {
+    expect(page).not.toContain("returns counts and nothing else");
+    expect(page).not.toContain("No repository, organization, person or finding is identifiable");
+  });
+
+  it("says whose repositories are named, and that a customer's never is", () => {
+    expect(page).toContain("No customer&rsquo;s repository, organization,");
+    expect(page).toContain("world-readable does not make the commercial relationship public");
+  });
+});
