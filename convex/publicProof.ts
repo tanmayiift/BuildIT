@@ -55,7 +55,15 @@ export const summary = query({
 
     // Execution time, not queue time: startedAt is stamped when a runner picks the review up, so
     // this measures BuildIT rather than however long a customer's queue was.
-    const durations = reviews
+    //
+    // Measured over reviews that actually ran the pipeline. A review that died on an unreachable
+    // sandbox stops in milliseconds, and with a third of all runs having failed that way the
+    // median across everything came out at 4ms - arithmetically true and a lie about how long a
+    // review takes. A duration is only meaningful for runs that did the work, so the statuses that
+    // stop early are excluded and the page says which population it is describing.
+    const ranToCompletion = new Set(["checks_passed", "changes_requested", "delivered", "inconclusive"]);
+    const timed = reviews.filter(review => ranToCompletion.has(review.status));
+    const durations = timed
       .map(review => review.startedAt !== undefined && review.completedAt !== undefined ? review.completedAt - review.startedAt : undefined)
       .filter((value): value is number => value !== undefined && value >= 0)
       .sort((a, b) => a - b);
