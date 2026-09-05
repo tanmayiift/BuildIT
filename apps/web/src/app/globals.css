@@ -336,3 +336,6 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; }
   .public-main .content { padding: 28px 20px 40px; }
   .public-foot p, .public-foot nav { padding-inline: 20px; }
 }
+.budget-form { display: grid; gap: 6px; margin-bottom: 12px; }
+.budget-form label { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.budget-form input { padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }

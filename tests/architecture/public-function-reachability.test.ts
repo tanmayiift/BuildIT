@@ -35,7 +35,6 @@ const deliberatelyUnreferenced: Record<string, string> = {
   "integrations:revokeTrackerConnection": "and having never seen the connection, an admin cannot revoke it - a leaked tracker token has no customer-facing kill switch.",
   "memberships:invite": "superseded by memberships:inviteByGitHubLogin, which the members panel calls - this by-userId variant has no caller left.",
   "organizations:clearActive": "the workspace switcher can select a workspace but never clear one, so there is no way back to having none active.",
-  "organizations:updateCapacity": "no budget or concurrency control exists in the interface, so every organization is stuck on the limits it was seeded with.",
   "reviews:get": "the review page reads reviews:getEvidence, which returns the review as well - this narrower query has no caller.",
 };
 
