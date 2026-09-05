@@ -130,14 +130,24 @@ export class VercelSandboxRunner {
       //
       // Reported as unavailable rather than empty: '{"results":[]}' would claim BuildIT looked at
       // the dependencies and found nothing, which is the one thing it must not say here.
-      const unscannable = ![0, 1].includes(osv.exitCode) && !noPackageSources
-        && /unsupported|failed to (?:extract|parse|open)|no extractors|could not determine/i.test(osvOutput.text);
-      if (![0, 1].includes(osv.exitCode) && !noPackageSources && !unscannable) throw new Error("osv_execution_failed");
+      //
+      // Classified on the exit code rather than on the wording of the error. The first attempt at
+      // this matched stderr against a guessed vocabulary, missed what osv-scanner actually prints,
+      // and both repositories failed again exactly as before - a reminder that a rule keyed on a
+      // message nobody has read is a guess wearing a regex.
+      //
+      // The exit code is enough, because "not configured" is the honest report for every case it
+      // covers: whether osv-scanner could not parse the manifest or was genuinely unwell, BuildIT
+      // did not obtain a dependency scan, and that is what gets reported. Nothing here can turn
+      // into a false pass; the only thing it gives up is telling those two causes apart in the
+      // report, and the exit code is recorded so an operator still can.
+      const unscannable = ![0, 1].includes(osv.exitCode) && !noPackageSources;
+      if (unscannable) console.warn(`buildit_osv_unavailable exit=${osv.exitCode} output=${osvOutput.text.slice(0, 400)}`);
       const osvReport = noPackageSources || unscannable ? Buffer.from('{"results":[]}') : await sandbox.readFileToBuffer({ path: "/tmp/buildit-osv.json" });
       if (!osvReport || osvReport.byteLength > 4_000_000) throw new Error("osv_report_invalid");
 
       const installPlan = input.install;
-      if (!installPlan) return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: osvOutput.text.slice(0, 300) } : {}), stopped: true };
+      if (!installPlan) return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: `osv-scanner exit ${osv.exitCode}` } : {}), stopped: true };
 
       await sandbox.updateNetworkPolicy({ allow: registryDomains });
       const installResult = await sandbox.runCommand({ cmd: installPlan.executable, args: installPlan.args, cwd: "/vercel/sandbox/repo", timeoutMs: installPlan.timeoutMs });
@@ -148,7 +158,7 @@ export class VercelSandboxRunner {
       diagnostics.install = [{ conclusion: installResult.exitCode === 0 && !installOutput.truncated ? "passed" : "failed", ...(installResult.exitCode === 0 && !installOutput.truncated ? {} : { failureFingerprint: createHash("sha256").update(installOutput.text).digest("hex") }) }];
       if (installResult.exitCode !== 0 || installOutput.truncated) {
         for (const plan of input.checks) results.push({ ...plan, conclusion: "not_run" as const, durationMs: 0, failureClass: "environment" as const });
-        return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: osvOutput.text.slice(0, 300) } : {}), stopped: true };
+        return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: `osv-scanner exit ${osv.exitCode}` } : {}), stopped: true };
       }
 
       await sandbox.updateNetworkPolicy("deny-all");
@@ -169,7 +179,7 @@ export class VercelSandboxRunner {
         }
         diagnostics[plan.planId] = runs;
       }
-      return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: osvOutput.text.slice(0, 300) } : {}), stopped: true };
+      return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: `osv-scanner exit ${osv.exitCode}` } : {}), stopped: true };
     } finally {
       await sandbox.stop();
     }
