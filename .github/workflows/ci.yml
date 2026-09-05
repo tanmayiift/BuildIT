@@ -85,6 +85,28 @@ jobs:
       # Validates every alert rule has a severity, an action and a runbook section that exists.
       - name: Alert rules
         run: pnpm alerts:check
+      # The dashboard had no apply path at all - not an unused script, nothing. So the 14 panel
+      # titles the architecture test pins described a page no automated process had ever created,
+      # and the public dashboard was whatever someone last built by hand in the UI.
+      - name: Dashboard definition
+        run: pnpm dashboard:check
+      # infra/aws/artifacts.yaml is 308 lines of CloudFormation applied by hand - the KMS key, the
+      # OIDC trust scoping, and the 7-day artifact retention backstop. verify-aws-boundary.mjs was
+      # written to detect drift from it and had zero references, so nothing has ever compared the
+      # committed template against the live stack.
+      - name: AWS artifact boundary matches the template
+        env:
+          BUILDIT_AWS_REGION: ${{ secrets.BUILDIT_AWS_REGION }}
+          BUILDIT_AWS_STACK: ${{ secrets.BUILDIT_AWS_STACK }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$BUILDIT_AWS_STACK" ]; then
+            echo "buildit_aws_boundary_not_configured: no AWS credentials, so the artifact boundary was NOT checked."
+            echo "  The 7-day retention backstop and Ireland-only assertion in infra/aws/artifacts.yaml are unverified against the live stack."
+            exit 0
+          fi
+          pnpm smoke:aws-boundary
       - name: Evaluation gate
         run: pnpm eval
       - name: CLI journey smoke

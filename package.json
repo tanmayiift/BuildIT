@@ -34,6 +34,8 @@
     "evidence:track-record": "node scripts/track-record.mjs",
     "alerts:check": "node scripts/provision-buildit-grafana-alerts.mjs --dry-run",
     "alerts:verify": "node scripts/provision-buildit-grafana-alerts.mjs --verify",
+    "dashboard:check": "node scripts/provision-buildit-grafana-dashboard.mjs --dry-run",
+    "dashboard:provision": "node scripts/provision-buildit-grafana-dashboard.mjs",
     "alerts:provision": "node scripts/provision-buildit-grafana-alerts.mjs"
   },
   "devDependencies": {

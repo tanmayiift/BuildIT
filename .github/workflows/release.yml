@@ -103,3 +103,20 @@ jobs:
         env:
           BUILDIT_E2E_BASE_URL: https://buildit-agentic-review.vercel.app
         run: pnpm test:e2e
+      # release:wiring has existed since the deploy script was written and had zero references
+      # anywhere. Its own header records the failure it catches - web and broker pointing at
+      # different Convex deployments - as having "happened twice and looked exactly like the fix
+      # not working". Post-release is the only place it can run, because it reads the deployed
+      # surfaces rather than the repository.
+      - name: Web and broker agree on one Convex deployment
+        env:
+          BUILDIT_WEB_CONVEX_URL: ${{ secrets.BUILDIT_WEB_CONVEX_URL }}
+          BUILDIT_BROKER_CONVEX_URL: ${{ secrets.BUILDIT_BROKER_CONVEX_URL }}
+          BUILDIT_EXPECTED_CONVEX_URL: ${{ secrets.BUILDIT_EXPECTED_CONVEX_URL }}
+        run: |
+          if [ -z "$BUILDIT_EXPECTED_CONVEX_URL" ]; then
+            echo "buildit_wiring_not_configured: BUILDIT_EXPECTED_CONVEX_URL is unset, so web/broker Convex agreement was NOT checked."
+            echo "  Add BUILDIT_WEB_CONVEX_URL, BUILDIT_BROKER_CONVEX_URL and BUILDIT_EXPECTED_CONVEX_URL as repository secrets to enable it."
+            exit 0
+          fi
+          pnpm release:wiring
