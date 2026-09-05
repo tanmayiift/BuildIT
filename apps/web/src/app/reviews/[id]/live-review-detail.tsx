@@ -4,6 +4,13 @@ import { Component, useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
 import { comparisonRefusal, dismissalReasonLabel, dismissalReasons, dismissalRefusal, eventPresentation, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
 import type { DismissalReason, SuppressionScope } from "./review-presentation";
+// Sub-second stages are common, and "0s" reads as a missing measurement rather than a fast one.
+function formatDuration(durationMs: number) {
+  if (durationMs < 1_000) return `${Math.round(durationMs)}ms`;
+  if (durationMs < 60_000) return `${(durationMs / 1_000).toFixed(1)}s`;
+  return `${Math.floor(durationMs / 60_000)}m ${Math.round((durationMs % 60_000) / 1_000)}s`;
+}
+
 type Evidence = {
   review: {
     id: string;
@@ -87,7 +94,17 @@ type Evidence = {
     outputTokens: number;
     promptVersion: string;
     createdAt: number;
+    // Optional because rows written before per-stage timing and cost existed carry neither, and
+    // the table says "not recorded" for those rather than showing a zero it did not measure.
+    runId?: string;
+    durationMs?: number;
+    costUsd?: number;
+    requestId?: string;
+    requestHash: string;
   }>;
+  runId: string;
+  modelDurationMs: number;
+  stagesMissingDuration: number;
   spend: { costUsd: number; inputTokens: number; outputTokens: number };
 };
 type FindingDetail = {
@@ -375,10 +392,10 @@ export function LiveReviewDetail({ id }: { id: string }) {
       ) : null}
       {evidence.stages.length ? (
         <Section
-          eyebrow="Model stages"
-          title="What each stage cost"
-          detail={`$${evidence.spend.costUsd.toFixed(4)} · ${(evidence.spend.inputTokens + evidence.spend.outputTokens).toLocaleString()} tokens`}
-          foot="Recorded per model call. No prompt or repository source is stored here."
+          eyebrow={`Run trace · ${evidence.runId}`}
+          title="What each stage did, cost, and how long it took"
+          detail={`$${evidence.spend.costUsd.toFixed(4)} · ${(evidence.spend.inputTokens + evidence.spend.outputTokens).toLocaleString()} tokens · ${formatDuration(evidence.modelDurationMs)} of measured model time`}
+          foot={`${evidence.stagesMissingDuration ? `${evidence.stagesMissingDuration} of ${evidence.stages.length} stages predate duration recording and show no time. ` : ""}Measured model time is the sum of the provider calls, not wall clock: the review record re-stamps its start on every retry, so no honest end-to-end figure exists for it. No prompt or repository source is stored here.`}
         >
           <div className="stage-table-scroll" tabIndex={0} role="region" aria-label="Stage details, scrolls horizontally">
             <table className="stage-table">
@@ -390,6 +407,9 @@ export function LiveReviewDetail({ id }: { id: string }) {
                   <th scope="col">Outcome</th>
                   <th scope="col">In</th>
                   <th scope="col">Out</th>
+                  <th scope="col">Time</th>
+                  <th scope="col">Cost</th>
+                  <th scope="col">Provider call</th>
                 </tr>
               </thead>
               <tbody>
@@ -408,6 +428,12 @@ export function LiveReviewDetail({ id }: { id: string }) {
                     </td>
                     <td className="stage-figure">{item.inputTokens.toLocaleString()}</td>
                     <td className="stage-figure">{item.outputTokens.toLocaleString()}</td>
+                    <td className="stage-figure">{item.durationMs === undefined ? <span className="muted-copy">not recorded</span> : formatDuration(item.durationMs)}</td>
+                    <td className="stage-figure">{item.costUsd === undefined ? <span className="muted-copy">&mdash;</span> : `$${item.costUsd.toFixed(4)}`}</td>
+                    {/* The provider's own id for the call, so a cost or latency claim here can be
+                        checked against the provider's record rather than taken on trust. Falls back
+                        to the request hash, which at least identifies the exact prompt sent. */}
+                    <td className="stage-request"><code>{item.requestId ?? item.requestHash}</code></td>
                   </tr>
                 ))}
               </tbody>

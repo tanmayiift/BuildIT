@@ -30,6 +30,7 @@ export const storedTextClassifications = {
   patchFingerprint: "hashed_metadata", pathHmac: "hashed_metadata", planId: "metadata",
   previousHash: "hashed_metadata", promptVersion: "metadata", reasonCode: "metadata",
   rejectionReasonCode: "metadata", requestHash: "hashed_metadata", requestId: "operational_identifier",
+  runId: "operational_identifier",
   resourceIdHash: "hashed_metadata", resourceType: "metadata", ruleId: "metadata", scannerName: "metadata", scannerVersion: "metadata",
   rulesDigest: "hashed_metadata", runnerImageVersion: "metadata", sandboxId: "operational_identifier",
   schemaVersion: "metadata", scopeValueHmac: "hashed_metadata", slug: "metadata",

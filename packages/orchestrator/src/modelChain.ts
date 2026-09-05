@@ -29,7 +29,12 @@ export type ModelStageRequest = {
   maxOutputTokens: number;
 };
 export type ModelStageInvoker = (request: ModelStageRequest) => Promise<ProviderResult>;
-export type StageUsage = Pick<ProviderResult, "provider" | "model" | "finishReason" | "inputTokens" | "outputTokens" | "requestId"> & { stage: PromptStage;promptVersion:string;schemaVersion:string;requestFingerprint:string;attempt:number;outcome:"valid"|"schema_invalid" };
+// durationMs is measured around the provider call itself. It is the only honest per-stage timing
+// available: the durable workflow stamps its checkpoints as startedAt + index so replay stays
+// deterministic, so nothing derived from those timestamps is a real elapsed time. Without this the
+// product could say what a review cost but never how long it took - which is exactly the gap the
+// review of BuildIT called out, and why /proof publishes no duration at all.
+export type StageUsage = Pick<ProviderResult, "provider" | "model" | "finishReason" | "inputTokens" | "outputTokens" | "requestId"> & { stage: PromptStage;promptVersion:string;schemaVersion:string;requestFingerprint:string;attempt:number;outcome:"valid"|"schema_invalid";durationMs:number };
 
 const repairOutputLimit = 16_000;
 function repairInput(input: string, repairOf: unknown) {
@@ -84,6 +89,7 @@ export async function runModelReviewChain(input: {
     onAttempt: async attempt=>{const queue=attempts.get(attempt.stage),usage=queue?.shift();if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},
     executor: async request => {
       const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);
+      const startedAt = Date.now();
       const result = await input.invoke({
         ...request,
         input: providerInput,
@@ -98,6 +104,9 @@ export async function runModelReviewChain(input: {
         finishReason: result.finishReason,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
+        // Measured around the provider call and nothing else, so a slow stage is distinguishable
+        // from a slow queue. Math.max guards a non-monotonic clock rather than trusting the host.
+        durationMs: Math.max(0, Date.now() - startedAt),
         requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas[request.stage])).digest("hex"),
         ...(result.requestId ? { requestId: result.requestId } : {}),
       };attempts.set(request.stage,[...(attempts.get(request.stage)??[]),usage]);
@@ -122,8 +131,9 @@ export async function runModelPatchChain(input: {
     onAttempt: async attempt=>{const usage=attempts.shift();if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},
     executor: async request => {
       const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);
+      const startedAt = Date.now();
       const result = await input.invoke({ ...request, input: providerInput, schemaName: "buildit_patch_v1", schema: stageSchemas.patch, maxOutputTokens: 8_000 });
-      attempts.push({ stage: "patch", provider: result.provider, model: result.model, finishReason: result.finishReason, inputTokens: result.inputTokens, outputTokens: result.outputTokens,requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas.patch)).digest("hex"), ...(result.requestId ? { requestId: result.requestId } : {}) });
+      attempts.push({ stage: "patch", durationMs: Math.max(0, Date.now() - startedAt), provider: result.provider, model: result.model, finishReason: result.finishReason, inputTokens: result.inputTokens, outputTokens: result.outputTokens,requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas.patch)).digest("hex"), ...(result.requestId ? { requestId: result.requestId } : {}) });
       return result.value;
     },
   });

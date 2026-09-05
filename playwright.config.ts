@@ -17,6 +17,19 @@ export default defineConfig({
       name: "mobile",
       use: { ...devices["iPhone 13"], browserName: "chromium" },
     },
+    // Interaction proof, not extra coverage. "The setup route is live" was answerable only with a
+    // URL, so this project exists to answer it with a recording of a signed-out stranger operating
+    // the product end to end.
+    //
+    // testMatch, not a global `video: "on"`: recording the other ~200 cases would film every axe
+    // sweep and every screenshot comparison, slow the browser CI job for evidence nobody watches,
+    // and bury the one film that is the point. trace is "on" here for the same reason - the
+    // journey is worth stepping through even when it passes.
+    {
+      name: "onboarding",
+      testMatch: /onboarding\.spec\.ts$/,
+      use: { ...devices["Desktop Chrome"], video: "on", trace: "on" },
+    },
   ],
   webServer: externalBaseUrl
     ? undefined

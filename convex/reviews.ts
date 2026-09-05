@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { runIdFor } from "./lib/runIdentity";
 import { blockingFindingCount } from "./lib/blockingFindings";
 import { query } from "./_generated/server";
 import { requireOrganizationRole, requireRepositoryRole } from "./lib/authz";
@@ -86,10 +87,25 @@ export const getEvidence = query({
         validationOutcome: item.validationOutcome, completedValidation: item.completedValidation, startedAt: item.startedAt, completedAt: item.completedAt })),
       events: events.map(item => ({ id: item._id, sequence: item.sequence, type: item.type, stage: item.stage,
         code: item.internalCode, hasPublicMessage: Boolean(item.publicMessageArtifactId), createdAt: item.createdAt })),
+      // Every field a reviewer of BuildIT asked for and could not find: what each stage was given,
+      // what it returned, how long it took, what it cost, and the provider's own id for the call so
+      // the claim can be checked against a bill. durationMs and costMicros were both computable
+      // before and stored nowhere - the cost was calculated to charge the budget and discarded, and
+      // the duration was never measured at all.
       stages: stageRuns.map(item => ({ id: item._id, stage: item.stage, roundNumber: item.roundNumber,
         provider: item.provider, model: item.model, attempt: item.attempt, outcome: item.outcome,
         finishReason: item.finishReason, inputTokens: item.inputTokens, outputTokens: item.outputTokens,
-        promptVersion: item.promptVersion, createdAt: item.createdAt })),
+        promptVersion: item.promptVersion, createdAt: item.createdAt,
+        runId: item.runId, durationMs: item.durationMs, costUsd: item.costMicros === undefined ? undefined : item.costMicros / 1_000_000,
+        requestId: item.requestId, requestHash: item.requestHash.slice(0, 12) })),
+      // The run this page is showing. Older rows predate runId, so the review's current identity is
+      // the fallback rather than a guess at which generation an unlabelled row belonged to.
+      runId: runIdFor(review._id, review.executionGeneration),
+      // Sum of measured provider time. Deliberately not review.completedAt - review.startedAt:
+      // startedAt is re-stamped on every execution generation, which is why /proof publishes no
+      // duration at all. This number is the part that was actually measured, and it says so.
+      modelDurationMs: stageRuns.reduce((sum, item) => sum + (item.durationMs ?? 0), 0),
+      stagesMissingDuration: stageRuns.filter(item => item.durationMs === undefined).length,
       spend: { costUsd: totalCostUsd(ledger), inputTokens: stageRuns.reduce((sum, item) => sum + item.inputTokens, 0),
         outputTokens: stageRuns.reduce((sum, item) => sum + item.outputTokens, 0) },
     };

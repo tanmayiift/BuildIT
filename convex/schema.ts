@@ -169,6 +169,12 @@ export default defineSchema({
     organizationId:v.id("organizations"),repositoryId:v.id("repositories"),reviewId:v.id("reviews"),roundNumber:v.optional(v.number()),stage:value.modelStage,
     provider:value.provider,model:v.string(),promptVersion:v.string(),schemaVersion:v.string(),finishReason:v.string(),requestHash:v.string(),requestId:v.optional(v.string()),
     attempt:v.number(),outcome:value.modelStageOutcome,inputTokens:v.number(),outputTokens:v.number(),createdAt:v.number(),
+    // Optional because rows written before this existed have neither, and backfilling a duration
+    // nobody measured would be inventing evidence. durationMs is the provider call itself;
+    // costMicros is what recordStageRun already computed to charge the budget and then discarded,
+    // so per-stage cost was derivable from tokens but never actually stored anywhere.
+    durationMs:v.optional(v.number()),costMicros:v.optional(v.number()),
+    runId:v.optional(v.string()),
   }).index("by_review",["reviewId"]).index("by_review_stage",["reviewId","stage"]),
 
   requirements: defineTable({
