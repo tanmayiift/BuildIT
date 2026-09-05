@@ -33,7 +33,6 @@ function summary(overrides: Partial<ProofSummary> = {}): ProofSummary {
     },
     findings: { counted: 318, truncated: false },
     spend: { modelSpendUsd: 12.4137, modelTokens: 4_812_663, counted: 940, truncated: false },
-    durationMs: { sampleSize: 88, median: 74_500, p95: 212_000 },
     ...overrides,
   };
 }
@@ -59,8 +58,6 @@ describe("the public proof page", () => {
     // 41 + 30 + 7 decisive verdicts, computed from byStatus rather than sent by the server.
     expect(screen.getByText("78")).toBeTruthy();
     // Seconds under a minute and a half, minutes above it - both formats, from the real fields.
-    expect(screen.getByText("74.5s")).toBeTruthy();
-    expect(screen.getByText("3m 32s")).toBeTruthy();
   });
 
   it("shows the unflattering numbers, not only the flattering ones", () => {
@@ -84,7 +81,7 @@ describe("the public proof page", () => {
   });
 
   it("reports an empty database as empty instead of inventing an example", () => {
-    state.proof = summary({ reviews: { counted: 0, truncated: false, repositoriesReviewed: 0, byStatus: {} }, findings: { counted: 0, truncated: false }, durationMs: { sampleSize: 0, median: null, p95: null } });
+    state.proof = summary({ reviews: { counted: 0, truncated: false, repositoriesReviewed: 0, byStatus: {} }, findings: { counted: 0, truncated: false } });
     render(<Proof />);
     expect(screen.getByText("No reviews recorded in this deployment")).toBeTruthy();
     expect(screen.queryByText("Pull requests reviewed")).toBeNull();

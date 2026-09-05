@@ -30,11 +30,6 @@ import { rowCostUsd } from "./lib/usageCost";
 // instead of letting a capped count read as a total.
 const rowCeiling = 2_000;
 
-function percentile(sortedAscending: number[], fraction: number) {
-  if (sortedAscending.length === 0) return null;
-  const rank = Math.min(sortedAscending.length - 1, Math.max(0, Math.ceil(fraction * sortedAscending.length) - 1));
-  return sortedAscending[rank]!;
-}
 
 export const summary = query({
   args: {},
@@ -53,34 +48,11 @@ export const summary = query({
     // The id is used to size a set and is then discarded; it is never returned.
     const repositoriesReviewed = new Set(reviews.map(review => String(review.repositoryId))).size;
 
-    // Execution time, not queue time: startedAt is stamped when a runner picks the review up, so
-    // this measures BuildIT rather than however long a customer's queue was.
-    //
-    // Measured over reviews that actually ran the pipeline. A review that dies on an unreachable
-    // sandbox is stamped started and completed milliseconds apart, so mixing those into the median
-    // measures how fast BuildIT fails rather than how long a review takes - arithmetically true and
-    // an answer to a question nobody asked. track-record.json records platform failures as a large
-    // share of this deployment's history, which is exactly the size of population that would drag
-    // the figure down. A duration is only meaningful for a run that did the work, so the statuses
-    // that stop early are excluded and the page names the population it is describing.
-    const ranToCompletion = new Set(["checks_passed", "changes_requested", "delivered", "inconclusive"]);
-    // Over a recent window, not all of history, and the page says so.
-    //
-    // Two things drag a lifetime median away from describing the product. A review that dies on an
-    // unreachable sandbox is stamped started and completed milliseconds apart, so the failure
-    // population pulls the number toward zero; and the early development runs that make up most of
-    // the history never executed a sandbox at all. Measured over everything, both the median and
-    // the 95th percentile came out at 4ms while reviews running today take forty to forty-five
-    // seconds - a number that is arithmetically defensible and tells the reader nothing true.
-    //
-    // `reviews` is already newest-first, so taking the head of the filtered list is the most recent
-    // window rather than an arbitrary slice.
-    const durationWindow = 25;
-    const timed = reviews.filter(review => ranToCompletion.has(review.status)).slice(0, durationWindow);
-    const durations = timed
-      .map(review => review.startedAt !== undefined && review.completedAt !== undefined ? review.completedAt - review.startedAt : undefined)
-      .filter((value): value is number => value !== undefined && value >= 0)
-      .sort((a, b) => a - b);
+    // No duration statistic. It was on this page and it was wrong: verdict-reaching reviews showed
+    // a median of 0.1s while platform failures showed 87s, because a review row's createdAt and
+    // startedAt are both re-stamped per execution generation, so neither pair measures the wait a
+    // person experienced. A latency number nobody can defend does not belong on a page whose whole
+    // claim is that the numbers are checkable - so it is absent, and the absence is deliberate.
 
     // kind "model_tokens" is the only priced kind; sandbox_seconds is recorded at unitCost 0. The
     // ledger's currency label is "provider_billed" because the spend lands on the customer's own
@@ -108,11 +80,6 @@ export const summary = query({
         modelTokens,
         counted: ledger.length,
         truncated: ledger.length === rowCeiling,
-      },
-      durationMs: {
-        sampleSize: durations.length,
-        median: percentile(durations, 0.5),
-        p95: percentile(durations, 0.95),
       },
     };
   },

@@ -17,7 +17,6 @@ export type ProofSummary = {
   reviews: { counted: number; truncated: boolean; byStatus: Record<string, number>; repositoriesReviewed: number };
   findings: { counted: number; truncated: boolean };
   spend: { modelSpendUsd: number; modelTokens: number; counted: number; truncated: boolean };
-  durationMs: { sampleSize: number; median: number | null; p95: number | null };
 };
 
 const proofQuery = makeFunctionReference<"query", Record<string, never>, ProofSummary>("publicProof:summary");
@@ -42,14 +41,6 @@ const statusTones: Record<string, string> = {
 };
 // A verdict a human can act on. Everything else is either still running or an admission of failure.
 const decisiveStatuses = ["checks_passed", "changes_requested", "delivered"];
-
-function duration(ms: number | null) {
-  if (ms === null) return "—";
-  if (ms < 1000) return `${ms} ms`;
-  const seconds = ms / 1000;
-  if (seconds < 90) return `${seconds.toFixed(1)}s`;
-  return `${Math.floor(seconds / 60)}m ${String(Math.round(seconds % 60)).padStart(2, "0")}s`;
-}
 
 function money(usd: number) {
   if (usd === 0) return "$0.00";
@@ -124,10 +115,10 @@ function Numbers({ data }: { data: ProofSummary }) {
         detail="Checks passed, changes requested or Autofix delivered" />
       <Metric title="Platform failures" value={platformFailed.toLocaleString()}
         detail="BuildIT's own fault. Never reported as a pass" />
-      <Metric title="Median review" value={duration(data.durationMs.median)}
-        detail={`Start to finish, over the last ${data.durationMs.sampleSize.toLocaleString()} reviews that ran to a verdict`} />
-      <Metric title="95th percentile" value={duration(data.durationMs.p95)}
-        detail="The slow tail, not the average" />
+      <Metric title="Model tokens" value={data.spend.modelTokens.toLocaleString()}
+        detail="Billed to each customer's own provider key, never to BuildIT" />
+      <Metric title="Statuses recorded" value={Object.keys(data.reviews.byStatus).length.toLocaleString()}
+        detail="Every outcome below, none of them rounded away" />
     </div>
 
     <section className="metric-explainer">

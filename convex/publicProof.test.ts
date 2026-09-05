@@ -12,7 +12,6 @@ type Proof = {
   reviews: { counted: number; truncated: boolean; byStatus: Record<string, number>; repositoriesReviewed: number };
   findings: { counted: number; truncated: boolean };
   spend: { modelSpendUsd: number; modelTokens: number; counted: number; truncated: boolean };
-  durationMs: { sampleSize: number; median: number | null; p95: number | null };
 };
 const proofSummary = makeFunctionReference<"query", Record<string, never>, Proof>("publicProof:summary");
 
@@ -125,16 +124,6 @@ describe("the public proof summary", () => {
   // Four real runs at 10s, 20s, 30s and 40s. Beside them sit a review still analyzing, and two
   // platform failures - one of which the clock says took 4ms. Both kinds have to stay out: one has
   // no end, and the other has an end that answers a different question.
-  it("times the reviews that ran the pipeline, not the ones that died before it", async () => {
-    const t = convexTest(schema, modules);
-    await seedTenant(t, "northwind", "ledger-service", "octocat", alpha);
-    await seedTenant(t, "contoso", "billing-api", "hubot", beta);
-    const result = await t.query(proofSummary, {});
-
-    expect(result.durationMs.sampleSize).toBe(4);
-    expect(result.durationMs.median).toBe(20_000);
-    expect(result.durationMs.p95).toBe(40_000);
-  });
 
   it("reports an empty database honestly instead of failing or guessing", async () => {
     const t = convexTest(schema, modules);
@@ -143,7 +132,6 @@ describe("the public proof summary", () => {
     expect(result.reviews.byStatus).toEqual({});
     expect(result.findings.counted).toBe(0);
     expect(result.spend.modelSpendUsd).toBe(0);
-    expect(result.durationMs).toEqual({ sampleSize: 0, median: null, p95: null });
   });
 
   // The reason this endpoint can be unauthenticated. Every seeded value below is something a
