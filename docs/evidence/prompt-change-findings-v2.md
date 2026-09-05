@@ -94,9 +94,21 @@ than a week, so neither crosses the fast path.
 `findings-v2` found it and was right. The label came from reading the diff and not the function the
 diff sits inside — the same mistake the case itself is about.
 
-**So the set currently has no clean control, and false blocking cannot be measured properly.** That
-is the outcome this scoring treats as worse than a miss, and it is unmeasured rather than zero. A
-replacement control is being added.
+**So the set lost its clean control, and false blocking is unmeasured rather than zero.** That is the
+outcome this scoring treats as worse than a miss.
+
+A replacement is now in the set — `hist-express-utils-unit-coverage`
+([express#9](https://github.com/tanmayiift/buildit-demo-express/pull/9)): 203 added lines, all in
+`test/utils.js`, nothing under `lib/`. That makes "no defect" structural rather than argued, since
+there is no runtime behaviour to get wrong, and the assertions were mutation-tested against seven
+deliberate breakages of `lib/utils.js` — every one caught — so they are not vacuous either. Its known
+limitation is that it carries no production diff, so it cannot test whether BuildIT over-flags a
+real code change.
+
+**BuildIT has not yet reviewed it.** Four attempts returned `model provider is busy` — the OpenAI
+key was rate limited by the ~18 reviews this exercise ran in one afternoon. So the false-blocking
+number below is still missing, and the honest position is that it is unmeasured, not zero. The
+review is a single comment away once the key resets.
 
 ### A partial substitute, until it lands
 
