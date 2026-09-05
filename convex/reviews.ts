@@ -56,7 +56,7 @@ export const getEvidence = query({
     const review = await ctx.db.get(args.reviewId);
     if (!review) throw new Error("not_found_or_forbidden");
     const access = await requireRepositoryRole(ctx, review.repositoryId, "viewer", review.organizationId);
-    const [requirements, findings, checks, rounds, events, stageRuns, ledger] = await Promise.all([
+    const [requirements, findings, checks, rounds, events, stageRuns, ledger, runStates] = await Promise.all([
       ctx.db.query("requirements").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
       ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
       ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
@@ -64,6 +64,7 @@ export const getEvidence = query({
       ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
       ctx.db.query("modelStageRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
       ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
+      ctx.db.query("runState").withIndex("by_review", q => q.eq("reviewId", review._id)).take(50),
     ]);
     return { review: { ...publicReview(review), baseSha: review.baseSha, baseRef: review.baseRef, mode: review.mode,
       statusReasonCode: review.statusReasonCode, trigger: review.trigger, provider: review.provider, model: review.model,
@@ -101,6 +102,19 @@ export const getEvidence = query({
       // The run this page is showing. Older rows predate runId, so the review's current identity is
       // the fallback rather than a guess at which generation an unlabelled row belonged to.
       runId: runIdFor(review._id, review.executionGeneration),
+      // The handoff record. "Which memory was applied" and "what the planner chose" were both
+      // computed on every review and visible on none, which is why handoffs and memory read as
+      // claims rather than behaviour.
+      handoffs: runStates.sort((left, right) => left.createdAt - right.createdAt).map(item => ({
+        stage: item.stage, stateVersion: item.stateVersion, durationMs: item.durationMs,
+        filesSelected: item.filesSelected, filesChanged: item.filesChanged,
+        coverage: item.coverage, coverageGap: item.coverageGap,
+        plannedStages: item.plannedStages, findingsSpecialists: item.findingsSpecialists,
+        skippedStages: item.skippedStages,
+        memoryDismissed: item.memoryDismissed, memoryRecurring: item.memoryRecurring,
+        memoryReviewsSeen: item.memoryReviewsSeen,
+        decisions: item.decisions,
+      })),
       // Sum of measured provider time. Deliberately not review.completedAt - review.startedAt:
       // startedAt is re-stamped on every execution generation, which is why /proof publishes no
       // duration at all. This number is the part that was actually measured, and it says so.

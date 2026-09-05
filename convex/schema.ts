@@ -165,6 +165,31 @@ export default defineSchema({
   }).index("by_review", ["reviewId", "sequence"])
     .index("by_org_created", ["organizationId", "createdAt"]),
 
+  // One typed object per stage, so the handoff between workers is a record rather than an
+  // inference. Before this, each stage re-derived what the previous one had decided - the review
+  // plan was recomputed and its reasons discarded, and the memory injected into the findings prompt
+  // left no trace that it had been used at all, which is why "handoffs and memory" read as
+  // unevidenced. Nothing here carries repository content or model prose: counts, fingerprints,
+  // artifact ids and decisions only, the same bar repositoryMemory holds itself to.
+  runState: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.id("reviews"),
+    runId: v.string(), stage: value.runStateStage, stateVersion: v.number(),
+    // What the stage selected and how completely.
+    filesSelected: v.optional(v.number()), filesChanged: v.optional(v.number()),
+    coverage: v.optional(v.string()), coverageGap: v.optional(v.string()),
+    // What the planner chose, and why it skipped what it skipped. planReview computes this on every
+    // run and it was thrown away every time.
+    plannedStages: v.optional(v.array(v.string())), findingsSpecialists: v.optional(v.number()),
+    skippedStages: v.optional(v.array(v.object({ stage: v.string(), because: v.string() }))),
+    // Which memory was actually applied. Counts, never the fingerprints themselves.
+    memoryDismissed: v.optional(v.number()), memoryRecurring: v.optional(v.number()), memoryReviewsSeen: v.optional(v.number()),
+    // Decisions the run made that were not the default path.
+    decisions: v.optional(v.array(v.object({ kind: v.string(), reason: v.string(), detail: v.optional(v.string()) }))),
+    artifactIds: v.optional(v.array(v.id("artifacts"))),
+    durationMs: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_run_stage", ["runId", "stage"]).index("by_review", ["reviewId"]),
+
   modelStageRuns: defineTable({
     organizationId:v.id("organizations"),repositoryId:v.id("repositories"),reviewId:v.id("reviews"),roundNumber:v.optional(v.number()),stage:value.modelStage,
     provider:value.provider,model:v.string(),promptVersion:v.string(),schemaVersion:v.string(),finishReason:v.string(),requestHash:v.string(),requestId:v.optional(v.string()),

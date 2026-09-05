@@ -48,6 +48,7 @@ const evidence = {
   },
   repository: { owner: "acme", name: "public-api" },
   requirements: [], findings: [], checks: [], rounds: [], events: [], stages: [],
+  runId: "run-current:0000", modelDurationMs: 0, stagesMissingDuration: 0, handoffs: [],
   spend: { costUsd: 0.4, inputTokens: 1_000, outputTokens: 200 },
 };
 
@@ -270,5 +271,57 @@ describe("dismissing a finding a person knows is wrong", () => {
     expect(unmatched.textContent).toContain("path 0123456789ab · line 44");
     expect(unmatched.textContent).not.toContain("src/billing/refund.ts");
     expect(within(unmatched).getByRole("button", { name: "Dismiss this finding" })).not.toBeNull();
+  });
+});
+
+// The handoff record is the answer to "how does context move between stages, and is prior
+// knowledge reused" - a question the product could only answer by pointing at source code. These
+// assert the screen says it, and says it in numbers a person can read rather than table names.
+describe("the handoff record", () => {
+  // afterEach(cleanup) at the top of this file is scoped to the describe it sits in, so without
+  // this the second render finds the first one still mounted.
+  afterEach(cleanup);
+  const showing = (handoffs: unknown[]) => {
+    state.evidence = { ...evidence, handoffs };
+    state.runs = [run("run-current", 1_700_000_000_000)];
+    render(<LiveReviewDetail id="run-current" />);
+    return screen.getByText("What each stage was given, and what it carried forward").closest("section")!;
+  };
+
+  it("says which memory was applied and how much of the repository it came from", () => {
+    const section = showing(([{
+      stage: "analysis", stateVersion: 1, durationMs: 42_000,
+      filesSelected: 120, filesChanged: 8, coverage: "full",
+      memoryDismissed: 3, memoryRecurring: 2, memoryReviewsSeen: 17,
+    }]));
+    expect(section.textContent).toContain("3 dismissed and 2 recurring findings from 17 earlier reviews");
+    expect(section.textContent).toContain("120");
+    expect(section.textContent).toContain("8 changed");
+  });
+
+  it("names the stages the planner chose and why it skipped one", () => {
+    const section = showing(([{
+      stage: "analysis", stateVersion: 1,
+      plannedStages: ["review_plan", "findings", "critic", "arbitration", "report"],
+      findingsSpecialists: 3,
+      skippedStages: [{ stage: "requirements", because: "no canonical requirements were supplied with this pull request" }],
+    }]));
+    expect(section.textContent).toContain("3 findings specialists");
+    expect(section.textContent).toContain("no canonical requirements were supplied");
+  });
+
+  it("says a partial reading was budget rather than a file it could not read", () => {
+    const section = showing(([{ stage: "analysis", stateVersion: 2, coverage: "partial", coverageGap: "analysis_budget" }]));
+    expect(section.textContent).toContain("checks and scanners still ran on all of them");
+    // The distinction matters: this gap does not withhold a verdict and changed_files does.
+    expect(section.textContent).not.toContain("could not be read");
+    expect(section.textContent).toContain("attempt 2");
+  });
+
+  it("renders nothing at all for a review recorded before handoffs existed", () => {
+    state.evidence = evidence;
+    state.runs = [run("run-current", 1_700_000_000_000)];
+    render(<LiveReviewDetail id="run-current" />);
+    expect(screen.queryByText("What each stage was given, and what it carried forward")).toBeNull();
   });
 });

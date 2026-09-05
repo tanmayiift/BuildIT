@@ -140,3 +140,7 @@ export const metricName = v.union(
   v.literal("effective_loc_added"), v.literal("effective_loc_removed"),
   v.literal("effective_loc_net"), v.literal("effective_loc_reverted"),
 );
+
+// The stages that hand work to another stage. report and publication consume the analysis
+// output rather than producing state for a successor, so they do not write a row.
+export const runStateStage = v.union(v.literal("context"), v.literal("validation"), v.literal("analysis"));

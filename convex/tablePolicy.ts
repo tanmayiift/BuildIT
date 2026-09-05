@@ -16,6 +16,10 @@ export const tablePolicies = {
   reviews: { scope: "review", parents: ["organizationId", "repositoryId", "configRevisionId"], data: "metadata" },
   reviewEvents: { scope: "review", parents: ["organizationId", "reviewId", "publicMessageArtifactId"], data: "artifact_reference_only" },
   modelStageRuns: { scope: "review", parents: ["organizationId", "repositoryId", "reviewId"], data: "metadata" },
+  // Counts, decisions and artifact references. No repository content or model prose, deliberately:
+  // this record is read back near a prompt, so anything richer would be a path for one stage to
+  // steer the next.
+  runState: { scope: "review", parents: ["organizationId", "repositoryId", "reviewId"], data: "metadata" },
   requirements: { scope: "review", parents: ["organizationId", "reviewId", "contentArtifactId"], data: "artifact_reference_only" },
   findingFeedback: { scope: "review", parents: ["organizationId", "repositoryId", "reviewId", "findingId"], data: "metadata" },
   pullRequestPauses: { scope: "repository", parents: ["organizationId", "repositoryId"], data: "metadata" },

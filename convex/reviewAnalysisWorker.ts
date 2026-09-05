@@ -225,8 +225,23 @@ export const analyze = internalAction({
     const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }), memory }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
     let injectionUnscoped = false;
     const injectionSurfaces = new Set<"code" | "narrative" | "checks" | "unknown">();
+    const analysisStartedAt = Date.now();
     const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
       onInjection: report => { injectionUnscoped ||= report.scope.unscoped; for (const surface of report.scope.surfaces) injectionSurfaces.add(surface); },
+      // planReview runs on every review and its output was discarded on every review - the chain
+      // recomputed it internally and nothing ever saw which stages were chosen, how many findings
+      // specialists were spawned, or why a stage was skipped. Recording it is what makes the routing
+      // a decision somebody can inspect rather than a claim in a README.
+      onPlan: async plan => { await ctx.runMutation(internal.runStateData.record, {
+        ...args, stage: "analysis" as const,
+        plannedStages: [...plan.stages],
+        findingsSpecialists: plan.findingsSpecialists,
+        skippedStages: plan.skipped.map(item => ({ stage: item.stage, because: item.because })),
+        memoryDismissed: memory.dismissedFingerprints.length,
+        memoryRecurring: memory.recurringFingerprints.length,
+        memoryReviewsSeen: memory.reviewsSeen,
+        now: Date.now(),
+      }); },
       invoke: async (stageRequest: ModelStageRequest): Promise<ProviderResult> => {
         const stage = stageRequest.stage as PromptStage;
         const model = stage === "findings" ? findingsModel : stage === "critic" ? criticRoute.model : scope.model;
@@ -304,6 +319,19 @@ export const analyze = internalAction({
     const changedPathSet = new Set(untrusted.pull.changes.map(change => change.path));
     const analysisDroppedChangedFile = untrusted.exclusions.changedPaths.length > 0
       || untrusted.exclusions.paths.some(path => changedPathSet.has(path));
+    // The handoff record for this stage: what it actually looked at, how completely, how long the
+    // model work took, and which artifact carries the output. Written before the verdict mutation so
+    // a failure in that mutation still leaves a trace of what the stage did.
+    await ctx.runMutation(internal.runStateData.record, {
+      ...args, stage: "analysis" as const,
+      filesSelected: untrusted.files.length,
+      filesChanged: changedPathSet.size,
+      coverage: untrusted.coverage,
+      ...(analysisDroppedChangedFile ? { coverageGap: "analysis_budget" } : {}),
+      artifactIds: [reserved.artifactId],
+      durationMs: Math.max(0, Date.now() - analysisStartedAt),
+      now: Date.now(),
+    });
     await ctx.runMutation(internal.reviewModelData.completeAnalysis, { ...args, ...(analysisDroppedChangedFile ? { analysisDroppedChangedFile: true } : {}), artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, credentialId: scope.credentialDocumentId, inputTokens, outputTokens,
       requirements: requirements.map(item => { const source = provenanceByRequirementId.get(item.id)!; return { externalIdHash: fingerprint(item.id, fingerprintKey), status: item.status, confidence: item.confidence,
         sourceType: source.type, sourceUrlHash: source.urlHash, fetchedVersion: source.version }; }),

@@ -31,6 +31,10 @@ export const storedTextClassifications = {
   previousHash: "hashed_metadata", promptVersion: "metadata", reasonCode: "metadata",
   rejectionReasonCode: "metadata", requestHash: "hashed_metadata", requestId: "operational_identifier",
   runId: "operational_identifier",
+  // coverage is one of full|partial; because is planReview's own fixed explanation for skipping a
+  // stage, written in this repository rather than taken from a repository under review; kind and
+  // reason name a routing decision from a closed set. None is free text from a customer or a model.
+  coverage: "metadata", because: "metadata", kind: "metadata", reason: "metadata", detail: "metadata",
   resourceIdHash: "hashed_metadata", resourceType: "metadata", ruleId: "metadata", scannerName: "metadata", scannerVersion: "metadata",
   rulesDigest: "hashed_metadata", runnerImageVersion: "metadata", sandboxId: "operational_identifier",
   schemaVersion: "metadata", scopeValueHmac: "hashed_metadata", slug: "metadata",

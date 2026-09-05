@@ -4,6 +4,16 @@ import { Component, useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
 import { comparisonRefusal, dismissalReasonLabel, dismissalReasons, dismissalRefusal, eventPresentation, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
 import type { DismissalReason, SuppressionScope } from "./review-presentation";
+// Why a stage saw less than everything. Named here rather than reusing the verdict reason map,
+// because a gap on the handoff record is a description of what was read - not a reason a verdict
+// was withheld, and analysis_budget deliberately does not withhold one.
+const coverageGapLabel: Record<string, string> = {
+  analysis_budget: "not every changed file fitted the model's context budget; checks and scanners still ran on all of them",
+  changed_files: "a changed file could not be read",
+  diff_truncated: "the diff was too large to read in full",
+  requirements: "a linked requirement source could not be read",
+};
+
 // Sub-second stages are common, and "0s" reads as a missing measurement rather than a fast one.
 function formatDuration(durationMs: number) {
   if (durationMs < 1_000) return `${Math.round(durationMs)}ms`;
@@ -105,6 +115,22 @@ type Evidence = {
   runId: string;
   modelDurationMs: number;
   stagesMissingDuration: number;
+  handoffs?: Array<{
+    stage: string;
+    stateVersion: number;
+    durationMs?: number;
+    filesSelected?: number;
+    filesChanged?: number;
+    coverage?: string;
+    coverageGap?: string;
+    plannedStages?: string[];
+    findingsSpecialists?: number;
+    skippedStages?: Array<{ stage: string; because: string }>;
+    memoryDismissed?: number;
+    memoryRecurring?: number;
+    memoryReviewsSeen?: number;
+    decisions?: Array<{ kind: string; reason: string; detail?: string }>;
+  }>;
   spend: { costUsd: number; inputTokens: number; outputTokens: number };
 };
 type FindingDetail = {
@@ -439,6 +465,46 @@ export function LiveReviewDetail({ id }: { id: string }) {
               </tbody>
             </table>
           </div>
+        </Section>
+      ) : null}
+      {(evidence.handoffs ?? []).length ? (
+        <Section
+          eyebrow="Handoffs and memory"
+          title="What each stage was given, and what it carried forward"
+          detail={`${(evidence.handoffs ?? []).length} recorded ${(evidence.handoffs ?? []).length === 1 ? "stage" : "stages"}`}
+          foot="Counts, decisions and artifact references only. No repository content or model text is stored in the handoff record, because it is read back into the neighbourhood of a prompt."
+        >
+          <ul className="handoff-list">
+            {(evidence.handoffs ?? []).map(item => (
+              <li key={`${item.stage}-${item.stateVersion}`} className="handoff-row">
+                <div className="handoff-head">
+                  <strong>{stagePresentation(item.stage)}</strong>
+                  {item.stateVersion > 1 ? <span className="stage-round"> · attempt {item.stateVersion}</span> : null}
+                  {item.durationMs === undefined ? null : <span className="handoff-time">{formatDuration(item.durationMs)}</span>}
+                </div>
+                <dl className="handoff-facts">
+                  {item.filesSelected === undefined ? null : (
+                    <><dt>Files read</dt><dd>{item.filesSelected.toLocaleString()}{item.filesChanged === undefined ? "" : ` of which ${item.filesChanged.toLocaleString()} changed`}</dd></>
+                  )}
+                  {item.coverage === undefined ? null : (
+                    <><dt>Coverage</dt><dd>{item.coverage === "full" ? "Complete" : `Partial${item.coverageGap ? ` — ${coverageGapLabel[item.coverageGap] ?? item.coverageGap}` : ""}`}</dd></>
+                  )}
+                  {item.plannedStages === undefined ? null : (
+                    <><dt>Stages planned</dt><dd>{item.plannedStages.map(stagePresentation).join(" → ")}{item.findingsSpecialists && item.findingsSpecialists > 1 ? ` · ${item.findingsSpecialists} findings specialists` : ""}</dd></>
+                  )}
+                  {item.skippedStages?.length ? (
+                    <><dt>Stages skipped</dt><dd>{item.skippedStages.map(skip => `${stagePresentation(skip.stage)} — ${skip.because}`).join("; ")}</dd></>
+                  ) : null}
+                  {item.memoryReviewsSeen === undefined ? null : (
+                    <><dt>Memory applied</dt><dd>{item.memoryDismissed ?? 0} dismissed and {item.memoryRecurring ?? 0} recurring findings from {item.memoryReviewsSeen} earlier {item.memoryReviewsSeen === 1 ? "review" : "reviews"} of this repository</dd></>
+                  )}
+                  {item.decisions?.length ? (
+                    <><dt>Decisions</dt><dd>{item.decisions.map(decision => `${decision.kind}: ${decision.reason}`).join("; ")}</dd></>
+                  ) : null}
+                </dl>
+              </li>
+            ))}
+          </ul>
         </Section>
       ) : null}
       {earlierRuns.length ? (

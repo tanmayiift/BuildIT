@@ -33,7 +33,16 @@ const flawedSnippet = [
 const flawedLine = 2;
 const scanPath = "src/example.ts";
 
-test("a stranger with no account can scan code, understand every setup step, and check the numbers", async ({ page }) => {
+test("a stranger with no account can scan code, understand every setup step, and check the numbers", async ({ page }, testInfo) => {
+  // The assertions below run the journey in about two seconds, which is a correct test and a
+  // useless film: six screens at a third of a second each, none of them on screen long enough to
+  // read. The `onboarding` project exists to be watched, so it holds a beat at each step and types
+  // the code rather than pasting it. The desktop and mobile projects run the identical journey as
+  // ordinary regression coverage and pay nothing for pacing they do not record.
+  const recording = testInfo.project.name === "onboarding";
+  const beat = async () => { if (recording) await page.waitForTimeout(1_200); };
+  testInfo.setTimeout(90_000);
+
   // ---------------------------------------------------------------- the front door
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Autonomous code review that cites its evidence." })).toBeVisible();
@@ -45,6 +54,7 @@ test("a stranger with no account can scan code, understand every setup step, and
   // The primary action asks for nothing, and says so in its own label.
   const scanNow = page.getByRole("link", { name: /scan code now/i });
   await expect(scanNow).toBeVisible();
+  await beat();
   await scanNow.click();
   await page.waitForURL(/\/sandbox$/);
 
@@ -55,7 +65,8 @@ test("a stranger with no account can scan code, understand every setup step, and
   await expect(page.getByRole("main").getByRole("link", { name: /sign in/i })).toHaveCount(0);
 
   await page.getByLabel("File path", { exact: true }).fill(scanPath);
-  await page.getByLabel("Code", { exact: true }).fill(flawedSnippet);
+  await page.getByLabel("Code", { exact: true }).pressSequentially(flawedSnippet, { delay: recording ? 12 : 0 });
+  await beat();
   await page.getByRole("button", { name: "Check this code" }).click();
 
   const result = page.locator(".scan-result");
@@ -71,6 +82,7 @@ test("a stranger with no account can scan code, understand every setup step, and
   await expect(result.getByText("Ran: buildit-rules, secret-patterns.")).toBeVisible();
   await expect(result.getByText("Did not run: gitleaks, osv-scanner, tests, lint, typecheck, AI review.", { exact: true })).toBeVisible();
   await expect(page.getByText(/What this is not:\s*a verdict/)).toBeVisible();
+  await beat();
 
   // ---------------------------------------------------------------- step 1 of 4: GitHub access
   await page.getByRole("link", { name: "Connect a GitHub repository" }).click();
@@ -91,6 +103,7 @@ test("a stranger with no account can scan code, understand every setup step, and
 
   const advance = page.getByRole("link", { name: "Continue", exact: true });
   await expect(advance).toBeVisible();
+  await beat();
   await advance.click();
 
   // ---------------------------------------------------------------- step 2 of 4: repository policy
@@ -106,6 +119,7 @@ test("a stranger with no account can scan code, understand every setup step, and
   // Still signed out, and the page says so plainly instead of implying progress it does not have.
   await expect(page.getByRole("heading", { name: "Nothing is connected" })).toBeVisible();
   await expect(page.getByText("GitHub sign-in identifies you. It does not grant repository or model access.")).toBeVisible();
+  await beat();
 
   await page.getByRole("link", { name: "Continue", exact: true }).click();
 
@@ -120,6 +134,7 @@ test("a stranger with no account can scan code, understand every setup step, and
   await expect(page.getByText(/separate credential broker/i)).toBeVisible();
   // No key field is offered to someone who cannot yet own one.
   await expect(page.getByLabel("API key")).toHaveCount(0);
+  await beat();
 
   await page.getByRole("link", { name: "Continue", exact: true }).click();
 
@@ -138,6 +153,7 @@ test("a stranger with no account can scan code, understand every setup step, and
   await expect(page.getByText("Execution remains disabled until adversarial tests pass")).toBeVisible();
   // The last step still offers a way forward rather than ending in a wall.
   await expect(page.getByRole("link", { name: "Open review queue" })).toBeVisible();
+  await beat();
 
   // ---------------------------------------------------------------- and check the claims
   await page.getByRole("link", { name: "Live numbers" }).click();
@@ -145,18 +161,27 @@ test("a stranger with no account can scan code, understand every setup step, and
   await expect(page.getByRole("heading", { name: /BuildIT.s own operating numbers/, level: 1 })).toBeVisible();
   await expect(page.getByText("Live production data · no account, no key", { exact: true })).toBeVisible();
 
-  // Live, so the values are whatever production says right now - but they must be real numbers
-  // read from the database, and the page must not have fallen back to an example or an error.
+  // Live data over an open subscription, so the figures are whatever production says right now.
+  // What is pinned is that real ones arrived and are legible as numbers.
+  //
+  // Which backend answers is decided by NEXT_PUBLIC_CONVEX_URL at build time. CI, the release
+  // workflow and the deploy script all point at the production deployment, which serves
+  // `publicProof:summary`; the Ireland *development* deployment does not have that function
+  // deployed at all, so a local build reading a stale .env.local renders the error boundary this
+  // block ends by forbidding. That failure is the environment being wrong, not the page.
   const reviewed = page.locator(".metric").filter({ hasText: "Pull requests reviewed" });
-  await expect(reviewed).toBeVisible({ timeout: 20_000 });
+  await expect(reviewed, "/proof rendered no live figure. Check which backend this build reads: NEXT_PUBLIC_CONVEX_URL must point at a deployment that serves publicProof:summary, which the Ireland development deployment does not.").toBeVisible({ timeout: 20_000 });
   await expect(reviewed.locator("strong")).toHaveText(/^[\d,]+$/);
   const failures = page.locator(".metric").filter({ hasText: "Platform failures" });
   // The unflattering number is on the same screen as the flattering one. That is the claim.
   await expect(failures.locator("strong")).toHaveText(/^[\d,]+$/);
   await expect(failures.getByText("BuildIT's own fault. Never reported as a pass")).toBeVisible();
+  // Nothing cached, sampled or estimated is ever substituted, so a page that could not read the
+  // database says so plainly - and that is not the state this journey is allowed to end in.
   await expect(page.getByRole("heading", { name: "The live numbers did not load" })).toHaveCount(0);
 
   // The whole journey happened without an account, and the page still offers sign-in rather than
   // having quietly created one.
   await expect(page.getByRole("link", { name: "Sign in", exact: true }).first()).toBeVisible();
+  await beat();
 });
