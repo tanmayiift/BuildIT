@@ -30,28 +30,28 @@ Open `/proof` to reproduce any of these live.
 
 | | |
 | --- | ---: |
-| Pull requests reviewed | **141** |
-| Distinct repositories | **7** |
-| Findings raised | **150** |
-| Decisive verdicts | **79** |
+| Pull requests reviewed | **147** |
+| Distinct repositories | **9** |
+| Findings raised | **153** |
+| Decisive verdicts | **80** |
 | Platform failures | **48** |
-| Model spend | **$18.26** |
-| Model tokens | **10,065,863** |
+| Model spend | **$21.15** |
+| Model tokens | **12,114,047** |
 
 ### Verdict mix
 
 | Verdict | Count |
 | --- | ---: |
-| `changes_requested` | 50 |
+| `changes_requested` | 53 |
 | `platform_failed` | 48 |
-| `checks_passed` | 25 |
+| `checks_passed` | 27 |
 | `inconclusive` | 11 |
 | `delivered` | 4 |
 | `budget_exhausted` | 2 |
 | `blocked` | 1 |
 
-**48 platform failures of 141 is a third of every review ever run, and it is on the public page.**
-Almost all of them are two defects and one billing failure, all of which are now fixed:
+**48 platform failures of 147 is nearly a third of every review ever run, and it is on the public
+page.** Almost all of them are two defects and one billing failure, all now fixed:
 
 1. A base/head selection mismatch that killed every review on any repository above 400 files whose
    pull request did not touch its manifests. No fixture repository was large enough to trigger it.
@@ -60,33 +60,65 @@ Almost all of them are two defects and one billing failure, all of which are now
 3. A declined card. Vercel's Sandbox reported "Hobby plan usage limit exceeded" for a team its own
    API reported as paid Pro, and every review died on it until the invoice cleared.
 
+**The count has not moved since.** Every review run after those fixes landed reached a verdict; the
+48 is entirely historical, and it stays on the page because a failure rate you delete once you have
+fixed it was never evidence in the first place.
+
 ---
 
 ## Real output on real surfaces
 
-Two public repositories, reviewed on real pull requests, verdicts posted as GitHub check runs.
+Four public repositories, reviewed on real pull requests, verdicts posted as GitHub check runs that
+anyone can open without an account.
 
-**[buildit-demo-got#1](https://github.com/tanmayiift/buildit-demo-got/pull/1)** — snapshot of
-`sindresorhus/got`, 130 files. Verdict: **Changes need review**.
+| Pull request | Repository | Files | Verdict |
+| --- | --- | ---: | --- |
+| [buildit-demo-got#1](https://github.com/tanmayiift/buildit-demo-got/pull/1) | `sindresorhus/got` | 130 | Ready for human review |
+| [buildit-demo-date-fns#1](https://github.com/tanmayiift/buildit-demo-date-fns/pull/1) | `date-fns` | 1,912 | Ready for human review |
+| [buildit-demo-express#7](https://github.com/tanmayiift/buildit-demo-express/pull/7) | `expressjs/express` | 142 | Ready for human review |
+| [buildit-demo-zod#1](https://github.com/tanmayiift/buildit-demo-zod/pull/1) | `colinhacks/zod` | 1,146 | Ready for human review |
 
-BuildIT found the planted defect by reasoning about it, not by pattern-matching:
+`date-fns` is the scale evidence: 1,912 files, and the repository's own 3,248 tests executed in an
+isolated sandbox on both the base and the head commit before any verdict was written.
+
+`zod` is the attribution evidence. Three of its required checks — `test`, `lint`, `gitleaks` — have
+been failing in that repository since before the pull request existed. BuildIT ran them on both
+commits, reported *"already failing on `1a295bdeca5b` before this pull request. Not attributed to
+this change"*, and let the verdict stand at green.
+
+### What it found, and how reliably
+
+Each of these pull requests carries a deliberately planted defect. Measured across ten runs of
+`got#1` at the same commit:
+
+| | |
+| --- | ---: |
+| Findings-stage context, every run | 45,823 – 48,235 input tokens |
+| Findings-stage output | 279 – 804 tokens |
+| Runs that reported the planted defect | some, not all |
+
+On the runs where it landed, it landed by reasoning rather than pattern-matching:
 
 > **Retry budget never accumulates across attempts when timings.start is per-attempt** —
 > `source/core/calculate-retry-delay.ts:39-43`. *"that value is inspectably tied to a single
 > attempt, not a persisted first-attempt deadline, so the check can reset on each retry instead of
 > accumulating total wall-clock time."*
 
-It raised a second, blocking finding that the added test cannot distinguish a correct
-implementation from a broken one, because `attempts >= 1` passes either way. Both are true. The
-change compiles, lints clean, and passes all 54 of the repository's own retry tests.
+It also raised, on those runs, a second blocking finding: the added test cannot distinguish a
+correct implementation from a broken one, because `attempts >= 1` passes either way. Both are true.
 
-It also reported three checks as *"already failing on `bc0655188b88` before this pull request. Not
-attributed to this change"* rather than blaming the author for them.
+**The last two runs found neither, and the pull request currently shows no findings.** The context
+handed to the model was the same size on every run; the model's output was not. The `express` pull
+request's planted defect — a view cache keyed on `name` alone while the change adds a per-render
+`root` option, so two roots collide — has not been reported on any run.
 
-**[buildit-demo-date-fns#1](https://github.com/tanmayiift/buildit-demo-date-fns/pull/1)** — snapshot
-of `date-fns`, **1,912 files**. Verdict: **Ready for human review**. All 5 required checks passed
-with complete evidence, including running the repository's own 3,248 tests in an isolated sandbox on
-both the base and the head commit.
+This is the honest state of it: **BuildIT's checks, attribution and evidence are deterministic, and
+its findings are not.** The verdict machinery reruns identically — same checks, same base/head
+comparison, same pre-existing attribution. The model stage samples. Nothing here reruns a review
+until it looks good, and no screenshot of a luckier run is presented as the steady state.
+
+The number this page does not print is precision and recall, for the same reason: they need blind
+human adjudication over a labelled set, not a count of what the model happened to say.
 
 ---
 
@@ -112,9 +144,9 @@ approximated.
 
 | | |
 | --- | ---: |
-| Commits | **520** (all since 29 August) |
-| Tracked files | 611 |
-| Tests | **1,450** |
+| Commits | **525** (all since 29 August) |
+| Tracked files | 612 |
+| Tests | **1,455** |
 | Release gates | `verify`, `security:release`, `reliability:release`, `eval`, `alerts:check`, `deploy:web:check` |
 | Deployed surfaces | Convex, web, broker — sequenced, broker freshness asserted against the served commit |
 
