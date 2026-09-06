@@ -33,12 +33,19 @@ export function classifyPlatformFailure(error: string): PlatformFailureReason {
   return "platform_error";
 }
 
-function body(reason: PlatformFailureReason, detail: string | undefined) {
+function body(reason: PlatformFailureReason, detail: string | undefined, soleProvider: boolean) {
   const files = failureDetail(detail, "files");
   const limit = failureDetail(detail, "limit");
   if (reason === "provider_rate_limited") {
     return ["The model provider refused this run because its rate limit was reached.",
-      "Retry once the provider's limit resets. No code decision was made."];
+      "Retry once the provider's limit resets. No code decision was made.",
+      ...(soleProvider
+        // BuildIT restarts a rate-limited review on another connected provider automatically, and
+        // this workspace has only one, so there was nothing to fall back to. Saying "retry later"
+        // and stopping hides the fix: the second key is what makes this recoverable rather than a
+        // wait. Left unsaid, the same dead end repeats every time the limit is hit.
+        ? ["This workspace has one model provider connected, so there was nothing to fall back to. With a second provider connected, BuildIT restarts the review on it automatically instead of stopping here."]
+        : [])];
   }
   if (reason === "repository_too_large") {
     return [`This repository is larger than BuildIT can read one file at a time${files ? `: ${files.toLocaleString()} files against a limit of ${(limit ?? 0).toLocaleString()}` : ""}.`,
@@ -53,7 +60,10 @@ function body(reason: PlatformFailureReason, detail: string | undefined) {
   if (reason === "model_unavailable") {
     return ["The connected model key could not be used for this review: the provider refused it, or the selected model is not available to that key.",
       "No code decision was made and nothing was charged.",
-      "Check the model connection in BuildIT, then start a new review. Retrying without changing it will fail the same way."];
+      "Check the model connection in BuildIT, then start a new review. Retrying without changing it will fail the same way.",
+      ...(soleProvider
+        ? ["This workspace has one model provider connected. With a second one, BuildIT would have restarted this review on it rather than stopping."]
+        : [])];
   }
   if (reason === "change_too_large") {
     return ["This pull request is too large for BuildIT to hold in one review.",
@@ -89,6 +99,8 @@ export function platformFailureReport(input: {
   headSha: string;
   reason: PlatformFailureReason;
   detail?: string;
+  /** True when no other provider had a valid credential, so no fallback was possible. */
+  soleProvider?: boolean;
 }) {
   if (!/^[0-9a-f]{40}$/i.test(input.headSha))
     throw new Error("invalid_head_sha");
@@ -98,7 +110,7 @@ export function platformFailureReport(input: {
     summary: [
       `Head: \`${input.headSha.toLowerCase()}\``,
       "",
-      ...body(input.reason, input.detail).flatMap(line => [line, ""]),
+      ...body(input.reason, input.detail, input.soleProvider === true).flatMap(line => [line, ""]),
       "BuildIT did not merge this pull request.",
     ].join("\n"),
   };

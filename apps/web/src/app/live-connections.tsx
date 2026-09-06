@@ -13,7 +13,7 @@ type Connection = {
   repositories: Array<{ id: string; installationId: string; githubRepositoryId: number; owner: string; name: string; defaultBranch: string; visibility: "public" | "private" | "internal" | "unknown"; autofixMode: "disabled" | "stacked" | "direct_push"; reviewProfile?: "quiet" | "balanced" | "thorough"; reviewTrigger?: "manual" | "automatic"; changelogOnMerge?: boolean; paused: boolean; indexState: string; approvedConfigHash?: string; pendingConfigHash?: string; updatedAt: number }>;
 };
 const connectionQuery = makeFunctionReference<"query", Record<string, never>, Connection>("repositoryConnections:current");
-const credentialQuery = makeFunctionReference<"query", { organizationId: string }, Array<{ status: string }>>("integrations:listProviderCredentials");
+const credentialQuery = makeFunctionReference<"query", { organizationId: string }, Array<{ status: string; provider: string }>>("integrations:listProviderCredentials");
 const receiptQuery = makeFunctionReference<"query", Record<string, never>, null | {identity:{login:string;lastAuthenticatedAt?:number};organization:{name:string;role:string;region:"eu-west-1";retentionHours:number};installations:Array<{installationId:number;accountLogin:string;accountType:"user"|"organization";status:string;permissions:{metadata:"read";contents:"read"|"write";pullRequests:"write";issues:"read";checks:"read"|"write"};lastSynchronizedAt:number}>;repositories:Array<{id:string;owner:string;name:string;visibility:string;autofixMode:string}>;credentials:Array<{id:string;provider:string;repositoryId?:string;maskedSuffix:string;lastValidatedAt?:number;lastUsedAt?:number}>;boundaries:{sourceRegion:"eu-west-1";maximumSourceRetentionHours:number;mergeAuthority:false;workflowWrite:false;repositoryAdministration:false}}>("permissionReceipts:current");
 // The broker can create a Jira or Linear connection - packages/broker/src/convex-gateway.ts calls
 // integrations:storeEncryptedTrackerConnection - so rows can exist in trackerConnections. Both the
@@ -83,7 +83,11 @@ export function useCredentialReadiness(connection: Connection | undefined) {
   const canManage = role === "owner" || role === "admin";
   const credentials = useQuery(credentialQuery, canManage && connection?.organization ? { organizationId: connection.organization.id } : "skip");
   const valid = credentials?.filter(item => item.status === "valid") ?? [];
-  return { canManage, checking: Boolean(canManage && connection?.organization && credentials === undefined), ready: valid.length > 0, validCount: valid.length };
+  // Distinct providers, not credential count. Two keys for the same provider are two ways to hit
+  // the same rate limit, and BuildIT only falls back to a *different* provider - so two OpenAI keys
+  // look redundant and protect against nothing.
+  const providers = [...new Set(valid.map(item => item.provider))];
+  return { canManage, checking: Boolean(canManage && connection?.organization && credentials === undefined), ready: valid.length > 0, validCount: valid.length, providerCount: providers.length };
 }
 
 const stateCopy: Record<Connection["state"], { title: string; body: string }> = {
@@ -321,14 +325,21 @@ function RepositoryList({ repositories, canManage, savingRepositoryId, onSave }:
 
 export function ModelIntegrationState() {
   const connection = useConnection();
-  const { canManage, checking, ready, validCount } = useCredentialReadiness(connection);
+  const { canManage, checking, ready, validCount, providerCount } = useCredentialReadiness(connection);
   const loading = !connection || checking;
   // Only an owner or admin may read the credential list, so a developer or viewer is told
   // where the state lives rather than being shown a misleading "not connected".
   const label = loading ? "Checking…" : !canManage ? "Owner or admin manages this" : ready ? `${validCount} connected` : "Connect when analyzing";
-  const body = ready
-    ? "A validated key is stored for this workspace. It is used only for the provider request you authorize."
-    : "Your key is used only for the provider request you authorize.";
+  // A workspace with one provider has no fallback: BuildIT restarts a rate-limited or refused
+  // review on a *different* provider, and with only one there is nothing to restart on. That is not
+  // hypothetical - roughly twenty reviews in one afternoon exhausted a single key and every one of
+  // them dead-ended. The card said "1 connected" throughout, which is true and reads like enough.
+  const singleProvider = ready && providerCount === 1;
+  const body = singleProvider
+    ? "A validated key is stored for this workspace. Because it is the only provider connected, a rate limit or a refused key stops reviews until it clears — with a second provider, BuildIT restarts the review on that one instead."
+    : ready
+      ? "A validated key is stored for this workspace. It is used only for the provider request you authorize."
+      : "Your key is used only for the provider request you authorize.";
   return <article className="integration-card" data-connected={ready || undefined}><div><span className="integration-glyph">AN</span><span className={`status ${ready ? "success" : "neutral"}`}>{label}</span></div><h2>Anthropic / OpenAI / Gemini</h2><p>{body}</p><a href="/setup/model">{ready ? "Manage model keys" : "Compare model setup"} →</a></article>;
 }
 

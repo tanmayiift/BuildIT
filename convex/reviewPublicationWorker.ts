@@ -114,6 +114,7 @@ type FailureScope = {
   headSha: string;
   reason: PlatformFailureReason;
   detail?: string;
+  soleProvider?: boolean;
 };
 
 export const publishPlatformFailure = internalAction({
@@ -132,6 +133,7 @@ export const publishPlatformFailure = internalAction({
         headSha: scope.headSha,
         reason: scope.reason,
         ...(scope.detail ? { detail: scope.detail } : {}),
+        ...(scope.soleProvider ? { soleProvider: true } : {}),
       }),
       github = new GitHubAppClient({
         appId: required("GITHUB_APP_ID"),

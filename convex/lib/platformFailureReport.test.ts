@@ -127,3 +127,36 @@ describe("an unreachable check environment says so", () => {
     expect(classifyPlatformFailure("execution_failed")).toBe("platform_error");
   });
 });
+
+// A rate limit on the only connected provider is a dead end the product used to hide: the check run
+// said "retry once the provider's limit resets", which is true and useless, because the thing that
+// makes it recoverable is a second key rather than waiting. Observed in production - roughly twenty
+// reviews in one afternoon exhausted the single OpenAI key and every one of them stopped here with
+// no way forward offered.
+describe("a provider failure with nothing to fall back to", () => {
+  const sha = "a".repeat(40);
+  it("names the second key as the fix when the workspace has one provider", () => {
+    const report = platformFailureReport({ headSha: sha, reason: "provider_rate_limited", soleProvider: true });
+    expect(report.summary).toContain("one model provider connected");
+    expect(report.summary).toContain("restarts the review on it automatically");
+    expect(report.conclusion).toBe("action_required");
+  });
+
+  it("stays quiet about it when another provider is connected, because then it did fall back", () => {
+    const report = platformFailureReport({ headSha: sha, reason: "provider_rate_limited" });
+    expect(report.summary).not.toContain("one model provider connected");
+    expect(report.summary).toContain("rate limit was reached");
+  });
+
+  it("says it for model_unavailable too, which fails over for the same reason", () => {
+    expect(platformFailureReport({ headSha: sha, reason: "model_unavailable", soleProvider: true }).summary)
+      .toContain("one model provider connected");
+  });
+
+  it("never says it for a failure another provider could not have fixed", () => {
+    for (const reason of ["repository_too_large", "change_too_large", "sandbox_unavailable", "platform_misconfigured"] as const) {
+      expect(platformFailureReport({ headSha: sha, reason, soleProvider: true }).summary)
+        .not.toContain("one model provider connected");
+    }
+  });
+});

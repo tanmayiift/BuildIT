@@ -75,6 +75,17 @@ export const platformFailureScope = internalQuery({
       headSha: review.headSha,
       reason: classifyPlatformFailure(review.statusReasonCode ?? ""),
       ...(review.statusDetail ? { detail: review.statusDetail } : {}),
+      // Whether a second provider could have rescued this review. durableReview already computes
+      // the same set to decide whether to fall back; it is recomputed here rather than carried on
+      // the review, because the answer the report should give is the one true at the moment the
+      // author reads it - if a key was added in between, telling them to add one is wrong.
+      soleProvider: (await ctx.db
+        .query("providerCredentials")
+        .withIndex("by_org_status", q => q.eq("organizationId", review.organizationId).eq("status", "valid"))
+        .collect())
+        .filter(item => item.lastValidatedAt && item.provider !== review.provider
+          && (item.repositoryId === undefined || item.repositoryId === review.repositoryId))
+        .length === 0,
     };
   },
 });
