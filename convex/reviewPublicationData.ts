@@ -1,4 +1,4 @@
-import { classifyPlatformFailure } from "./lib/platformFailureReport";
+import { isPlatformFailureReason } from "./lib/platformFailureReport";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -73,7 +73,9 @@ export const platformFailureScope = internalQuery({
       githubRepositoryId: repository.githubRepositoryId,
       prNumber: review.prNumber,
       headSha: review.headSha,
-      reason: classifyPlatformFailure(review.statusReasonCode ?? ""),
+      // Read the stored reason rather than re-deriving it. durableReview already classified the raw
+      // error and wrote the answer here; classifying that answer again lost two of the eight.
+      reason: isPlatformFailureReason(review.statusReasonCode) ? review.statusReasonCode : "platform_error",
       ...(review.statusDetail ? { detail: review.statusDetail } : {}),
       // Whether a second provider could have rescued this review. durableReview already computes
       // the same set to decide whether to fall back; it is recomputed here rather than carried on

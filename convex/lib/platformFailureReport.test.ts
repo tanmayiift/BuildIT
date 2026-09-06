@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyPlatformFailure, platformFailureReport } from "./platformFailureReport";
+import { classifyPlatformFailure, isPlatformFailureReason, platformFailureReport } from "./platformFailureReport";
 
 describe("source-free platform failure report", () => {
   it("reports a provider limit as no code decision and never as a pass", () => {
@@ -158,5 +158,39 @@ describe("a provider failure with nothing to fall back to", () => {
       expect(platformFailureReport({ headSha: sha, reason, soleProvider: true }).summary)
         .not.toContain("one model provider connected");
     }
+  });
+});
+
+// The publisher used to run classifyPlatformFailure over a value classifyPlatformFailure had
+// already produced. That round trip is not the identity, and the two reasons it loses are the two
+// a user can act on: a refused model key and a missing environment variable both arrived as
+// "review did not complete. Retry only after the service is available", which for a refused key is
+// advice that cannot work. This pins the property the publisher now relies on instead.
+describe("classifying an already-classified reason", () => {
+  const reasons = ["provider_rate_limited", "repository_too_large", "repository_access_refused",
+    "model_unavailable", "change_too_large", "platform_misconfigured", "sandbox_unavailable",
+    "platform_error"] as const;
+
+  it("is not idempotent, which is why the stored code must be read rather than re-derived", () => {
+    const lost = reasons.filter(reason => classifyPlatformFailure(reason) !== reason);
+    expect(lost).toEqual(["model_unavailable", "platform_misconfigured"]);
+  });
+
+  it("recognises every reason it can produce", () => {
+    for (const reason of reasons) expect(isPlatformFailureReason(reason)).toBe(true);
+  });
+
+  it("refuses anything that is not one, so an unknown code still falls back", () => {
+    for (const value of ["", "queued", "required_check_failed", undefined]) {
+      expect(isPlatformFailureReason(value)).toBe(false);
+    }
+  });
+
+  it("keeps the actionable body for a refused key, which the round trip used to erase", () => {
+    const direct = platformFailureReport({ headSha: "b".repeat(40), reason: "model_unavailable" });
+    expect(direct.title).toBe("BuildIT: the connected model could not be used");
+    expect(direct.summary).toContain("Check the model connection in BuildIT");
+    const roundTripped = platformFailureReport({ headSha: "b".repeat(40), reason: classifyPlatformFailure("model_unavailable") });
+    expect(roundTripped.summary).not.toContain("Check the model connection in BuildIT");
   });
 });

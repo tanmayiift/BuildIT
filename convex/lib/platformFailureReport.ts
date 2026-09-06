@@ -22,6 +22,25 @@ export function failureDetail(raw: string | undefined, key: string) {
 // Ordered most specific first. Everything here was already known internally by the time the review
 // died - it just was not told to the person waiting, who got "a required platform step failed" for
 // a missing environment variable, a model their key cannot reach, and a 3 MB diff alike.
+// classifyPlatformFailure reads a raw thrown error. Its own output is not a valid input to it:
+// round-trip the eight reasons through it and "model_unavailable" and "platform_misconfigured"
+// both fall out as "platform_error", because neither string contains any of the substrings the
+// function looks for. durableReview classifies the raw error once and stores the result, and the
+// publisher used to classify that stored result a second time - so the two failures a user can
+// actually act on arrived on the pull request as "review did not complete. Retry only after the
+// service is available", which for a refused key is advice that cannot work.
+//
+// This is the guard that lets the stored code be trusted instead of re-derived. Anything written
+// by a path that does not store a real reason still falls back to platform_error.
+const platformFailureReasons = new Set<string>([
+  "provider_rate_limited", "repository_too_large", "repository_access_refused", "model_unavailable",
+  "change_too_large", "platform_misconfigured", "sandbox_unavailable", "platform_error",
+]);
+
+export function isPlatformFailureReason(value: string | undefined): value is PlatformFailureReason {
+  return value !== undefined && platformFailureReasons.has(value);
+}
+
 export function classifyPlatformFailure(error: string): PlatformFailureReason {
   if (error.includes("repository_too_large")) return "repository_too_large";
   if (error.includes("repository_access_refused")) return "repository_access_refused";
