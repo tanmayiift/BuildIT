@@ -18,6 +18,15 @@ export function assertReportPublicationContract(body: string, headSha: string) {
   }
 }
 
+// A push to the repository's default branch used to cancel every review running against it, which
+// killed reviews mid-flight on any repository with normal merge traffic and re-queued none of them.
+// The reviews run to their verdict now, and this is the honest caveat that comes with one: the
+// findings are about this head commit against the base the review pinned, not against the base as
+// it stands while the author is reading.
+export function baseAdvanceNote(drift: { baseRef: string; baseSha: string; observedBaseSha: string }) {
+  return `_Reviewed against \`${drift.baseRef}\` at \`${drift.baseSha}\`. That branch has since moved to \`${drift.observedBaseSha}\`, and nothing here was re-checked against it._`;
+}
+
 export function publicationTitle(status: string) {
   if (status === "changes_requested") return "Changes need review";
   if (status === "checks_passed") return "Ready for human review";
@@ -78,8 +87,10 @@ export const publish = internalAction({
     if (!response.ok) throw new Error(`report_artifact_download_${response.status}`);
     const bodyBuffer = Buffer.from(await response.arrayBuffer());
     if (bodyBuffer.byteLength !== scope.report.size || createHash("sha256").update(bodyBuffer).digest("hex") !== scope.report.checksum) throw new Error("report_artifact_integrity_failed");
-    const body = bodyBuffer.toString("utf8");
-    assertReportPublicationContract(body, scope.headSha);
+    const reportBody = bodyBuffer.toString("utf8");
+    assertReportPublicationContract(reportBody, scope.headSha);
+    const drift = await ctx.runQuery(internal.reviewState.baseAdvance, { organizationId: args.organizationId, reviewId: args.reviewId });
+    const body = drift ? `${reportBody}\n\n${baseAdvanceNote(drift)}` : reportBody;
     const github = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") }), tokenScope = { installationId: scope.installationId, repositoryId: scope.githubRepositoryId, stage: "review" as const }, token = await github.tokenFor(tokenScope);
     try {
       const current = await fetch(`https://api.github.com/repositories/${scope.githubRepositoryId}/pulls/${scope.prNumber}`, { headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "BuildIT" } });
@@ -172,8 +183,10 @@ export const publishPlatformFailure = internalAction({
         },
       );
       if (!current.ok) throw new Error(`github_pull_${current.status}`);
-      const value = (await current.json()) as { head?: { sha?: unknown } };
-      if (value.head?.sha !== scope.headSha) throw new Error("stale_head");
+      // Deliberately no stale-head refusal here, unlike publish. A moved head does not make "this
+      // review died" untrue, and refusing to say so left the pull request showing "BuildIT is
+      // reviewing this pull request" with nothing ever replacing it. The check run is written
+      // against the commit this review pinned, so it cannot overwrite a newer review's verdict.
       const sideEffectId: Id<"githubSideEffects"> = await ctx.runMutation(
           internal.reviewState.reserveSideEffect,
           {
@@ -228,7 +241,10 @@ export const acknowledge = internalAction({
     try {
       const token = await github.tokenFor(tokenScope);
       const writer = new GitHubRepositoryWriter({ repositoryId: args.githubRepositoryId, installationToken: token });
-      await writer.createCheckRun({
+      // Upsert rather than create: with a conclusion this is the last word on a review that will
+      // not publish a report - a cancellation, a give-up - and creating a second check run left the
+      // acknowledgement one this review had already posted in_progress on the head commit for good.
+      await writer.upsertCheckRun({
         name: "BuildIT / review", headSha: args.headSha,
         ...(args.conclusion ? { conclusion: args.conclusion } : {}),
         title: args.title, summary: args.summary,

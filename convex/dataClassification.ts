@@ -25,7 +25,7 @@ export const storedTextClassifications = {
   githubLogin: "personal_identity", headSha: "operational_identifier", headRefHash: "hashed_metadata", baseRefHash: "hashed_metadata", image: "personal_identity",
   internalCode: "metadata", leaseOwner: "operational_identifier", login: "personal_identity", maskedSuffix: "metadata", finishReason: "metadata", outcome: "metadata", stage: "metadata",
   model: "metadata", modelVersion: "metadata", name: "metadata", nameHash: "hashed_metadata",
-  networkPolicyVersion: "metadata", nonce: "encrypted_secret", observedHeadSha: "operational_identifier", outputHash: "hashed_metadata",
+  networkPolicyVersion: "metadata", nonce: "encrypted_secret", observedHeadSha: "operational_identifier", observedBaseSha: "operational_identifier", outputHash: "hashed_metadata",
   operationKey: "operational_identifier", organizationTimezone: "metadata", owner: "metadata", wrappedDataKey: "encrypted_secret", kmsKeyId: "operational_identifier", envelopeVersion: "metadata",
   patchFingerprint: "hashed_metadata", pathHmac: "hashed_metadata", planId: "metadata",
   previousHash: "hashed_metadata", promptVersion: "metadata", reasonCode: "metadata",

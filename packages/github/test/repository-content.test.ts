@@ -131,4 +131,46 @@ describe("dependency manifests survive a narrowed fetch", () => {
     });
     expect(result.files.map(file => file.path).sort()).toEqual(["pnpm-lock.yaml", "src/rates.ts"]);
   });
+
+  // Keeping the manifest was not enough. The per-file size ceiling is applied before the keep
+  // predicate ever runs, so a 1.4 MB package-lock.json - an ordinary size for a few hundred
+  // dependencies - was dropped as oversized and never offered to selection. detectPackageManager
+  // then saw no lockfile on either revision, install, test, lint and typecheck never ran, and the
+  // dependency audit reported a clean scan of a repository it had not read. maxFileBytes bounds what
+  // is worth showing the model; a lockfile is parsed and installed from, never shown.
+  it("fetches a lockfile larger than the per-file ceiling the model context is sized by", async () => {
+    const entries = [
+      { path: "package.json", type: "blob", sha: blobSha, size: 400 },
+      { path: "package-lock.json", type: "blob", sha: blobSha, size: 1_400_000 },
+      { path: "src/rates.ts", type: "blob", sha: blobSha, size: 10 },
+      { path: "docs/generated.ts", type: "blob", sha: blobSha, size: 1_400_000 },
+    ];
+    const http = vi.fn(async (url: string | URL) => {
+      const value = String(url);
+      return value.includes("/commits/") ? commit() : value.includes("/trees/") ? tree(entries) : blob("1234567890");
+    });
+    const result = await new RepositoryContentClient(http).fetchExactCommit({
+      installationToken: "token", repositoryId: 7, commitSha: sha,
+      limits: { maxFileBytes: 1_000_000, maxMustFetchBytes: 2_000_000 },
+      select: { keep: () => true, relevantOnlyAbove: 400, mustFetch: (path: string) => dependencyManifest.test(path) || path === "package.json" },
+    });
+    expect(result.files.map(file => file.path).sort()).toEqual(["package-lock.json", "package.json", "src/rates.ts"]);
+    // An ordinary oversized file is still dropped: this raises the ceiling for the paths the
+    // execution plan is derived from, not for the repository.
+    expect(result.omitted).toEqual([{ path: "docs/generated.ts", reason: "oversized" }]);
+  });
+
+  it("still drops a manifest past the ceiling the snapshot chunker can carry", async () => {
+    const entries = [{ path: "pnpm-lock.yaml", type: "blob", sha: blobSha, size: 2_400_000 }];
+    const http = vi.fn(async (url: string | URL) => {
+      const value = String(url);
+      return value.includes("/commits/") ? commit() : value.includes("/trees/") ? tree(entries) : blob("1234567890");
+    });
+    const result = await new RepositoryContentClient(http).fetchExactCommit({
+      installationToken: "token", repositoryId: 7, commitSha: sha,
+      limits: { maxFileBytes: 1_000_000, maxMustFetchBytes: 2_000_000 },
+      select: { keep: () => true, relevantOnlyAbove: 400, mustFetch: (path: string) => dependencyManifest.test(path) },
+    });
+    expect(result.omitted).toEqual([{ path: "pnpm-lock.yaml", reason: "oversized" }]);
+  });
 });

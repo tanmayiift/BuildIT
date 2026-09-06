@@ -7,8 +7,10 @@
 const uuid = (prefix: string) => `${prefix}23e4567-e89b-12d3-a456-426614174000`;
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
+import workpoolComponent from "@convex-dev/workpool/test";
 import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "./_generated/api";
+import { terminalStatuses } from "./lib/lifecycle";
 import schema from "./schema";
 import { normalizeGitHubProfile } from "./lib/githubProfile";
 import { makeFunctionReference } from "convex/server";
@@ -3357,7 +3359,13 @@ describe("GitHub webhook durability", () => {
     });
     expect(after?.leaseOwner).toBeUndefined();
   });
-  it("stales active reviews when their exact default-branch base moves", async () => {
+  // Rewritten deliberately, not weakened: this asserted that a push to the default branch cancels
+  // every in-flight review whose base is that branch. It does not any more. One routine merge was
+  // killing every other open pull request's review at once, silently - the cancellation was never
+  // published, so the author watched the check simply stop - and permanently, since nothing
+  // re-queued them. The base moving does not make findings about the head commit wrong; it makes
+  // them findings against an older base, which the published report now says.
+  it("records that the base moved without cancelling the reviews running against it", async () => {
     const t = convexTest(schema, modules),
       tenant = await seedTenant(t, "alpha", "alice"),
       records = await t.run(async (ctx) => ({
@@ -3389,8 +3397,25 @@ describe("GitHub webhook durability", () => {
     );
     expect(result).toEqual({ staleCount: 1, ignored: false });
     const after = await t.run((ctx) => ctx.db.get(tenant.reviewId));
-    expect(after).toMatchObject({ isStale: true, executionGeneration: 1 });
-    expect(after?.leaseOwner).toBeUndefined();
+    // Marked, and still alive: the generation is untouched so the running workflow keeps its fence,
+    // and the status is not terminal so the verdict it is working towards still gets published.
+    expect(after).toMatchObject({
+      observedBaseSha: "d".repeat(40),
+      baseAdvancedAt: 20,
+      isStale: false,
+      executionGeneration: 0,
+    });
+    expect(terminalStatuses.has(after!.status)).toBe(false);
+
+    // Redelivery of the same push must not double-count, since GitHub retries.
+    const again = await t.mutation(internal.githubWebhookData.reconcileDefaultBranchPush, {
+      installationId: records.installation.installationId,
+      githubRepositoryId: records.repository.githubRepositoryId,
+      ref: "refs/heads/main",
+      afterSha: "d".repeat(40),
+      now: 21,
+    });
+    expect(again).toEqual({ staleCount: 0, ignored: false });
   });
 });
 
@@ -4069,6 +4094,9 @@ describe("a second tenant brings their own key", () => {
 describe("a failure after the decision is not swallowed", () => {
   const seedTerminal = async () => {
     const t = convexTest(schema, modules);
+    // Publication is retried on the workpool rather than fired once at the scheduler, so the
+    // component has to be registered for workflowCompleted to reach the end of its handler.
+    workpoolComponent.register(t, "reviewWorkpool");
     const tenant = await seedTenant(t, "post-decision-failure", "alice");
     const workflowId = "kd7fake0workflow0id0000000000000";
     await t.run(ctx => ctx.db.patch(tenant.reviewId, {

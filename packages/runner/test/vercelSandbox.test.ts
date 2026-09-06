@@ -3,17 +3,24 @@ import { describe, expect, it, vi } from "vitest";
 import { defaultExecutionPlans } from "../src/index";
 import { VercelSandboxRunner, type SandboxFactory, type SandboxLike } from "../src/vercelSandbox";
 
-function fixture(options: { env?: string; installExit?: number; testExits?: number[]; osvExit?: number; osvOutput?: string; testDurationMs?: number; installDurationMs?: number } = {}) {
+function fixture(options: { env?: string; installExit?: number; testExits?: number[]; osvExit?: number; osvOutput?: string; testDurationMs?: number; installDurationMs?: number; omitTestDuration?: boolean; gitleaksExit?: number; gitleaksReportBytes?: number; gitleaksReportMissing?: boolean } = {}) {
   const calls: Array<unknown> = [], stop = vi.fn(async () => ({}));
   const sandbox: SandboxLike = {
     writeFiles: vi.fn(async files => { calls.push(["files", files]); }),
-    readFileToBuffer: vi.fn(async file => Buffer.from(file.path.includes("osv") ? '{"results":[]}' : "[]")),
+    readFileToBuffer: vi.fn(async file => {
+      if (file.path.includes("osv")) return Buffer.from('{"results":[]}');
+      if (options.gitleaksReportMissing) return null;
+      return options.gitleaksReportBytes ? Buffer.alloc(options.gitleaksReportBytes) : Buffer.from("[]");
+    }),
     updateNetworkPolicy: vi.fn(async policy => { calls.push(["network", policy]); }),
     runCommand: vi.fn(async command => {
       calls.push(["command", command]);
-      const isEnv = command.cmd === "env", isOsv = command.cmd === "osv-scanner", isTest = command.cmd === "pnpm" && command.args[0] === "run" && command.args[1] === "test", exitCode = isEnv ? 0 : isOsv ? options.osvExit ?? 0 : command.cmd === "pnpm" && command.args[0] === "install" ? options.installExit ?? 0 : isTest ? options.testExits?.shift() ?? 0 : 0;
+      const isEnv = command.cmd === "env", isOsv = command.cmd === "osv-scanner", isGitleaks = command.cmd === "gitleaks", isTest = command.cmd === "pnpm" && command.args[0] === "run" && command.args[1] === "test", exitCode = isEnv ? 0 : isOsv ? options.osvExit ?? 0 : isGitleaks ? options.gitleaksExit ?? 0 : command.cmd === "pnpm" && command.args[0] === "install" ? options.installExit ?? 0 : isTest ? options.testExits?.shift() ?? 0 : 0;
       const durationMs = isTest ? options.testDurationMs ?? 10 : command.cmd === "pnpm" && command.args[0] === "install" ? options.installDurationMs ?? 10 : 10;
-      return { exitCode, durationMs, stdout: async () => isEnv ? options.env ?? "CI=true\n" : isOsv ? options.osvOutput ?? "ok" : "ok", stderr: async () => "" };
+      const stream = { stdout: async () => isEnv ? options.env ?? "CI=true\n" : isOsv ? options.osvOutput ?? "ok" : "ok", stderr: async () => "" };
+      // The SDK declares durationMs optional on CommandFinished and passes the API value straight
+      // through, so a kill can arrive with no duration at all.
+      return isTest && options.omitTestDuration ? { exitCode, ...stream } : { exitCode, durationMs, ...stream };
     }),
     stop,
   };
@@ -151,18 +158,100 @@ describe("Vercel sandbox runner", () => {
     }
   });
 
-  it("records an empty dependency scan when there is no manifest to scan", async () => {
+  // A root lockfile larger than maxFileBytes is dropped by repository-content before selection can
+  // force it back in, so "this repository has no manifests" and "this repository's manifest never
+  // arrived" reach the runner identically. Calling the first an empty scan published
+  // `| osv-scanner | Required | Passed |` under "Ready for human review" for repositories whose
+  // dependencies were never read. The runner cannot tell the two apart, and does not have to: it
+  // obtained no dependency scan either way, and that is the honest row.
+  it("reports the dependency audit as unavailable when no manifest reached the sandbox", async () => {
     const f = fixture();
     const result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files: [{ path: "package.json", content: "{}" }], install, checks: [test] });
     expect(result.osvReport).toBe('{"results":[]}');
+    expect(result.unavailableScanners).toEqual(["osvScanner"]);
+    expect(result.unavailableReason).toContain("no dependency manifest");
     expect(f.stop).toHaveBeenCalledOnce();
+  });
+
+  // The argv bound stays; calling what it left out a clean audit does not. All 33 are force-selected
+  // into the snapshot, so a vulnerability declared in the 33rd was passing review unseen.
+  it("reports the dependency audit as unavailable when there are more manifests than one scan takes", async () => {
+    const f = fixture(), files = Array.from({ length: 33 }, (_, index) => ({ path: `services/s${index}/requirements.txt`, content: "flask==1.0" }));
+    const result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files, install, checks: [test] });
+    const osv = (f.calls as Array<[string, { cmd?: string; args?: string[] }]>).find(call => call[0] === "command" && call[1].cmd === "osv-scanner");
+    expect(osv?.[1].args?.filter(arg => arg === "--lockfile")).toHaveLength(32);
+    expect(result.unavailableScanners).toEqual(["osvScanner"]);
+    expect(result.unavailableReason).toContain("33 manifests");
   });
 
   it("records a complete empty dependency scan for a valid lockfile with no packages", async () => {
     const f = fixture({ osvExit: 128, osvOutput: "No package sources found, --help for usage information." });
     const result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files: [{ path: "package-lock.json", content: '{"lockfileVersion":3,"packages":{"":{}}}' }], install, checks: [test] });
     expect(result.osvReport).toBe('{"results":[]}');
+    // The manifest was here and was read: an empty result from a lockfile that declares nothing is
+    // a scan that happened, and stays a pass.
+    expect(result.unavailableScanners).toBeUndefined();
     expect(f.stop).toHaveBeenCalledOnce();
+  });
+});
+
+// gitleaks was the one scanner that could still take the whole review with it. The osv-scanner path
+// beside it degrades to an advisory not-configured row; a gitleaks SIGKILL at
+// SANDBOX_SCANNER_TIMEOUT_MS, or a renamed binary after an image bump, threw - the broker answered
+// 503 scanner_unavailable, classifyPlatformFailure matched nothing, and the author was told to
+// retry a condition that is deterministic per repository. Every retry lost the review identically.
+describe("a secret scan that could not run", () => {
+  const plans = defaultExecutionPlans("pnpm"), install = plans.install, test = plans.checks[0]!;
+  const files = [{ path: "package.json", content: "{}" }, { path: "pnpm-lock.yaml", content: "lockfileVersion: '9.0'" }];
+
+  it("degrades to an unavailable scanner instead of losing the review", async () => {
+    const f = fixture({ gitleaksExit: 137 }), runner = new VercelSandboxRunner(f.create);
+    const result = await runner.run({ runtime: "node24", files, install, checks: [test] });
+    expect(result.unavailableScanners).toEqual(["gitleaks"]);
+    expect(result.unavailableReason).toContain("gitleaks exit 137");
+    // The code review still ships: the repository's own test ran and its result is reported.
+    expect(result.results.find(item => item.planId === "test")).toMatchObject({ conclusion: "passed" });
+    // An empty findings list the report will not read as a clean secret scan, because of the row above.
+    expect(result.gitleaksReport).toBe("[]");
+  });
+
+  it("degrades the same way when the report is unreadable or too large", async () => {
+    for (const options of [{ gitleaksReportMissing: true }, { gitleaksReportBytes: 2_000_001 }]) {
+      const f = fixture(options), result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files, install, checks: [test] });
+      expect(result.unavailableScanners).toEqual(["gitleaks"]);
+      expect(result.gitleaksReport).toBe("[]");
+    }
+  });
+
+  it("still reports a gitleaks that did run as a scan that happened", async () => {
+    const f = fixture(), result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files, install, checks: [test] });
+    expect(result.unavailableScanners).toBeUndefined();
+  });
+});
+
+// The duration half of the timeout test falls open toward blaming the author: an out-of-memory kill
+// of a heavy suite, or a kill the SDK reports with no durationMs at all, was published as a red
+// "Changes need review" saying the author's tests are broken, evidenced by a truncated kill.
+describe("a check the operating system killed", () => {
+  const plans = defaultExecutionPlans("pnpm"), install = plans.install, test = plans.checks[0]!;
+  const files = [{ path: "package.json", content: "{}" }, { path: "pnpm-lock.yaml", content: "lockfileVersion: '9.0'" }];
+
+  it("is not attributed to the code under review when the duration denies a timeout", async () => {
+    const f = fixture({ testExits: [137, 137], testDurationMs: 900 }), runner = new VercelSandboxRunner(f.create);
+    const result = await runner.run({ runtime: "node24", files, install, checks: [test] });
+    expect(result.results.find(item => item.planId === "test")).toMatchObject({ conclusion: "not_run", failureClass: "resource_limit" });
+  });
+
+  it("is not attributed to it when the SDK reports no duration at all", async () => {
+    const f = fixture({ testExits: [137, 137], omitTestDuration: true }), runner = new VercelSandboxRunner(f.create);
+    const result = await runner.run({ runtime: "node24", files, install, checks: [test] });
+    expect(result.results.find(item => item.planId === "test")).toMatchObject({ conclusion: "not_run", failureClass: "resource_limit" });
+  });
+
+  it("treats a killed install the same way, so no check is blamed on missing dependencies", async () => {
+    const f = fixture({ installExit: 137, installDurationMs: 900 }), runner = new VercelSandboxRunner(f.create);
+    const result = await runner.run({ runtime: "node24", files, install, checks: [test] });
+    expect(result.results.find(item => item.planId === "install")).toMatchObject({ conclusion: "not_run", failureClass: "resource_limit" });
   });
 });
 
@@ -192,9 +281,12 @@ describe("dependency scanning outside Node", () => {
   it("reviews a repository that has no dependency manifest at all", async () => {
     const f = fixture(), runner = new VercelSandboxRunner(f.create);
     const result = await runner.run({ runtime: "node22", files: [{ path: "src/Main.kt", content: "fun main() {}" }], install, checks: [test] });
-    // Nothing to scan is an empty dependency scan, not a scanner failure.
+    // Nothing to scan is not a scanner failure and must not end the review - but it is not a clean
+    // dependency scan either, so the audit lands as an advisory row rather than a required pass.
     expect(result.osvReport).toBe('{"results":[]}');
     expect(result.gitleaksReport).toBe("[]");
+    expect(result.unavailableScanners).toEqual(["osvScanner"]);
+    expect(result.results.find(item => item.planId === "test")).toMatchObject({ conclusion: "passed" });
   });
 
   it("scans a lockfile from an ecosystem osv-scanner supports", async () => {

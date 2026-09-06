@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
 import { requireOrganizationRole, requireRecentGitHubLogin, requireUserId, type AppRole } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
 import { role } from "./validators";
@@ -101,6 +101,18 @@ export const listInvitations = query({
   },
 });
 
+// "No active workspace" is not only an unset preference: it is also a preference pointing at an
+// organization the person was removed from or that was deleted, which is exactly what
+// organizations:active already reads as null. Both shapes have to be rescued, and a member who is
+// working inside another workspace must never be moved out of it by accepting a second invitation.
+async function activeWorkspaceReachable(ctx: MutationCtx, userId: string, organizationId: Id<"organizations"> | undefined) {
+  if (!organizationId) return false;
+  const organization = await ctx.db.get(organizationId);
+  if (!organization || organization.deletedAt) return false;
+  const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", organizationId).eq("userId", userId)).unique();
+  return membership?.status === "active";
+}
+
 export const accept = mutation({
   args: { organizationId: v.id("organizations"), requestId: v.string() },
   handler: async (ctx, args) => {
@@ -108,6 +120,17 @@ export const accept = mutation({
     const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", args.organizationId).eq("userId", userId)).unique();
     if (!membership || membership.status !== "invited") throw new ConvexError("invitation_not_found");
     await ctx.db.patch(membership._id, { status: "active", updatedAt: now });
+    // Accepting flipped the membership and left userPreferences alone, and only
+    // githubInstallationsData's claim path and organizations:selectActive ever wrote
+    // activeOrganizationId. So organizations:listMine returned the workspace while
+    // organizations:active returned null: /account said "You joined Acme", the sidebar showed that
+    // name as the active organization, and every workspace page disagreed - with no control that
+    // could fix it, because the switcher's only writer was a change event a member with one
+    // workspace can never fire. Accepting an invitation is the invitee's first action, so the
+    // workspace they just joined becomes active here when nothing else already is.
+    const preference = await ctx.db.query("userPreferences").withIndex("by_user", q => q.eq("userId", userId)).unique();
+    if (!preference) await ctx.db.insert("userPreferences", { userId, activeOrganizationId: args.organizationId, updatedAt: now });
+    else if (!(await activeWorkspaceReachable(ctx, userId, preference.activeOrganizationId))) await ctx.db.patch(preference._id, { activeOrganizationId: args.organizationId, updatedAt: now });
     await appendAuditEvent(ctx, { organizationId: args.organizationId, actorId: userId, action: "membership.accepted", resourceType: "membership", resourceId: membership._id, requestId: args.requestId, result: "allowed", createdAt: now });
     return membership._id;
   },

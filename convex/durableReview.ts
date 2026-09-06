@@ -1,14 +1,16 @@
 import { vWorkflowId, type WorkflowId } from "@convex-dev/workflow";
-import { vResultValidator } from "@convex-dev/workpool";
+import { vResultValidator, vWorkIdValidator } from "@convex-dev/workpool";
 import { selectProviderModel } from "@buildit/providers";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { fallbackWorthTrying } from "./lib/providerFallback";
-import { classifyPlatformFailure } from "./lib/platformFailureReport";
-import { internalMutation, internalQuery } from "./_generated/server";
-import { durableReviewStages } from "./lib/durableStages";
+import { classifyPlatformFailure, type PlatformFailureReason } from "./lib/platformFailureReport";
+import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
+import { durableReviewStages, nextStageAfter } from "./lib/durableStages";
 import { terminalStatuses } from "./lib/lifecycle";
-import { reviewWorkflowManager } from "./workflowManager";
+import { publishCancellationNotice } from "./reviewState";
+import { reviewWorkflowManager, reviewWorkpool } from "./workflowManager";
 
 export function isSafeAutofixDecline(error: unknown) {
   return error instanceof Error && error.message === "autofix_no_accepted_findings";
@@ -61,8 +63,17 @@ export const checkpoint = internalMutation({
       if (existing.stage !== args.stage || existing.type !== "stage_completed") throw new ConvexError("checkpoint_conflict");
       return existing._id;
     }
-    const status = args.stage === "context" ? "analyzing" : "validating";
-    await ctx.db.patch(args.reviewId, { currentStage: args.stage, status, updatedAt: args.now });
+    // Named for what runs NEXT, because that is what the person watching is waiting on. The stage
+    // order was flipped to [context, validation, analysis] in 8150ae8 so validation evidence feeds
+    // the model, and this mapping was left behind: the dashboard said "Reviewing code" while the
+    // sandbox was running the checks, and "Running checks" while the model was reviewing. After the
+    // last stage the review is composing and publishing its report, which the delivery path reads
+    // as `validating` - finalizeDecision refuses any other status.
+    const upcoming = nextStageAfter(durableReviewStages.slice(0, durableReviewStages.indexOf(args.stage) + 1));
+    const status = upcoming === "analysis" ? "analyzing" : "validating";
+    // Real time, unlike args.now, which is the workflow's deterministic clock. The stuck-review
+    // sweeper reaps on inactivity and had nothing truthful to measure it against.
+    await ctx.db.patch(args.reviewId, { currentStage: args.stage, status, lastProgressAt: Date.now(), updatedAt: args.now });
     return ctx.db.insert("reviewEvents", {
       organizationId: args.organizationId, reviewId: args.reviewId, sequence: args.sequence,
       type: "stage_completed", stage: args.stage, internalCode: `durable_${args.stage}_complete`,
@@ -127,12 +138,12 @@ export const execute = reviewWorkflowManager.define({
           }else{
             await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"failed"});
             await step.runMutation(internal.reviewAutofixData.failPlatform,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration,code:error instanceof Error?error.message:"autofix_failed",now:args.startedAt+index+3});
-            // Publish it. This branch used to end here, and because autofix is the last stage the
-            // workflow then returned success - so workflowCompleted, which only publishes on a
-            // failed result, wrote nothing. The pull request author saw "BuildIT is reviewing"
-            // simply stop, with nothing on GitHub: the worst failure mode for a product whose
-            // whole value is evidence on the pull request.
-            await step.runAction(internal.reviewPublicationWorker.publishPlatformFailure,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});
+            // Fall back to a second provider, or publish. This branch used to end by publishing
+            // directly, and because autofix is the last stage the workflow then returned success -
+            // so workflowCompleted, which only publishes on a failed result, wrote nothing, and its
+            // provider-fallback block was unreachable for every autofix run. A rate limit that
+            // BuildIT would have survived on the workspace's second key ended the run instead.
+            await step.runMutation(internal.durableReview.fallbackOrReport,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration,now:args.startedAt+index+4});
           }
         }
       }else{
@@ -175,6 +186,186 @@ export const start = internalMutation({
     });
     await ctx.db.patch(args.reviewId, { workflowId: String(workflowId), startedAt: args.now, updatedAt: args.now });
     return String(workflowId);
+  },
+});
+
+// Publication is the whole output of the product: a review that reached a verdict and could not
+// post it looks, on the pull request, exactly like a review that never ran. Both publishers used to
+// be a bare `scheduler.runAfter(0, ...)`, which Convex runs exactly once - so a GitHub 5xx or a
+// secondary rate limit outliving the workflow's ~4 seconds of step retries lost the report for
+// good, while the dashboard showed a finished review. The pool retries with real backoff over
+// roughly an hour, and publicationCompleted turns the last failure into something the author can
+// see rather than silence.
+const publicationRetry = { maxAttempts: 6, initialBackoffMs: 30_000, base: 3 } as const;
+
+type PublicationScope = {
+  organizationId: Doc<"reviews">["organizationId"];
+  reviewId: Doc<"reviews">["_id"];
+  expectedHeadSha: string;
+  expectedGeneration: number;
+};
+
+async function enqueueVerdictPublication(ctx: MutationCtx, args: PublicationScope) {
+  await reviewWorkpool.enqueueAction(ctx, internal.reviewPublicationWorker.publish, args, {
+    retry: publicationRetry,
+    onComplete: internal.durableReview.publicationCompleted,
+    context: { reviewId: args.reviewId, kind: "verdict" as const },
+  });
+}
+
+async function enqueueFailurePublication(ctx: MutationCtx, args: PublicationScope) {
+  await reviewWorkpool.enqueueAction(ctx, internal.reviewPublicationWorker.publishPlatformFailure, args, {
+    retry: publicationRetry,
+    onComplete: internal.durableReview.publicationCompleted,
+    context: { reviewId: args.reviewId, kind: "platform_failure" as const },
+  });
+}
+
+// The last word when publication has run out of attempts. It goes up through acknowledge, which
+// needs neither the broker nor a pull-request lookup and never throws into its caller, so it is the
+// one message that can still land when the path that was supposed to carry the report cannot.
+export const publicationCompleted = internalMutation({
+  args: {
+    workId: vWorkIdValidator,
+    result: vResultValidator,
+    context: v.object({
+      reviewId: v.id("reviews"),
+      kind: v.union(v.literal("verdict"), v.literal("platform_failure")),
+    }),
+  },
+  handler: async (ctx, args) => {
+    if (args.result.kind === "success") return;
+    const review = await ctx.db.get(args.context.reviewId);
+    if (!review) return;
+    const repository = await ctx.db.get(review.repositoryId);
+    const installation = repository ? await ctx.db.get(repository.installationId) : null;
+    const last = await ctx.db
+      .query("reviewEvents")
+      .withIndex("by_review", q => q.eq("reviewId", review._id))
+      .order("desc")
+      .first();
+    await ctx.db.insert("reviewEvents", {
+      organizationId: review.organizationId,
+      reviewId: review._id,
+      sequence: (last?.sequence ?? 0) + 1,
+      type: "delivery_recorded",
+      stage: "complete",
+      internalCode: "publication_gave_up",
+      metadata: {},
+      createdAt: Date.now(),
+    });
+    // A review cancelled or superseded while the retries were running has already had its own
+    // notice posted on that commit; telling the author on top of it that a report could not be
+    // delivered would replace an accurate message with a misleading one.
+    if (!repository || !installation || review.status === "cancelled" || review.isStale) return;
+    await ctx.scheduler.runAfter(0, internal.reviewPublicationWorker.acknowledge, {
+      installationId: installation.installationId,
+      githubRepositoryId: repository.githubRepositoryId,
+      headSha: review.headSha,
+      conclusion: "action_required",
+      title: args.context.kind === "verdict"
+        ? "BuildIT: the review finished but its report could not be posted"
+        : "BuildIT: review did not complete",
+      summary: [
+        `Head: \`${review.headSha.toLowerCase()}\``,
+        "",
+        ...(args.context.kind === "verdict"
+          ? ["BuildIT finished reviewing this commit, but GitHub would not accept the report for long enough that BuildIT stopped retrying.",
+            "The result is on this review's page in BuildIT. No code was changed."]
+          : ["BuildIT stopped before reaching a decision, and could not post why for long enough that it stopped retrying.",
+            "No code decision was reached and no code was changed."]),
+        "",
+        "Comment `@buildit review` to start a new one.",
+        "",
+        "BuildIT did not merge this pull request.",
+      ].join("\n"),
+    });
+  },
+});
+
+// The second connected provider is what makes a rate limit or a refused key recoverable rather than
+// a dead end. This was written inline in workflowCompleted, which autofix never reaches, so an
+// autofix run killed by its provider could not fall back to a key that would have rescued the
+// identical `@buildit review`. Both paths call it here instead of keeping two copies.
+async function startProviderFallback(
+  ctx: MutationCtx,
+  review: Doc<"reviews">,
+  failureReason: PlatformFailureReason,
+  now: number,
+) {
+  const credentials = await ctx.db
+    .query("providerCredentials")
+    .withIndex("by_org_status", q => q.eq("organizationId", review.organizationId).eq("status", "valid"))
+    .collect();
+  const alternatives = [...new Set(credentials
+    .filter(item => item.lastValidatedAt && item.provider !== review.provider
+      && (item.repositoryId === undefined || item.repositoryId === review.repositoryId))
+    .map(item => item.provider))];
+  const fallback = fallbackWorthTrying({ reason: failureReason, alternatives, parentReviewId: review.parentReviewId });
+  const fallbackCredential = fallback ? credentials.find(item => item.provider === fallback) : undefined;
+  const fallbackModel = fallbackCredential
+    ? selectProviderModel(fallbackCredential.provider, fallbackCredential.availableModels)
+    : undefined;
+  if (!fallback || !fallbackModel) return false;
+  const { _id: _ignoredId, _creationTime: _ignoredAt, ...carried } = review;
+  const retryId = await ctx.db.insert("reviews", {
+    ...carried,
+    parentReviewId: review._id,
+    provider: fallback as typeof review.provider,
+    model: fallbackModel,
+    status: "queued",
+    statusReasonCode: undefined,
+    statusDetail: undefined,
+    nextActionCode: "none",
+    githubCheckConclusion: undefined,
+    currentStage: "queue",
+    coverageLevel: "limited",
+    coverageGap: undefined,
+    budgetConsumed: 0,
+    providerRetryCount: 0,
+    executionGeneration: 0,
+    workflowId: undefined,
+    leaseOwner: undefined,
+    leaseExpiresAt: undefined,
+    completedAt: undefined,
+    startedAt: undefined,
+    lastProgressAt: undefined,
+    promptInjectionUnscopedAt: undefined,
+    createdAt: now,
+    updatedAt: now,
+  });
+  const last = await ctx.db
+    .query("reviewEvents")
+    .withIndex("by_review", q => q.eq("reviewId", review._id))
+    .order("desc")
+    .first();
+  await ctx.db.insert("reviewEvents", {
+    organizationId: review.organizationId, reviewId: review._id, sequence: (last?.sequence ?? 0) + 1,
+    type: "status_changed", stage: "complete", internalCode: "provider_fallback_started", metadata: {}, createdAt: now,
+  });
+  await ctx.scheduler.runAfter(0, internal.durableReview.start, {
+    organizationId: review.organizationId, reviewId: retryId,
+    expectedHeadSha: review.headSha, expectedGeneration: 0, now,
+  });
+  return true;
+}
+
+// Reached only from the autofix branch, which records its own platform failure and so can never
+// arrive at workflowCompleted's failed result. Without this, a second connected key was invisible
+// to autofix and the run always ended on the generic "a required platform step failed".
+export const fallbackOrReport = internalMutation({
+  args: { ...executionArgs, now: v.number() },
+  handler: async (ctx, args): Promise<"fallback_started" | "failure_published"> => {
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
+    if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration)
+      throw new ConvexError("cancelled_or_replaced");
+    if (await startProviderFallback(ctx, review, classifyPlatformFailure(review.statusReasonCode ?? ""), args.now))
+      return "fallback_started";
+    await enqueueFailurePublication(ctx, {
+      organizationId: args.organizationId, reviewId: args.reviewId,
+      expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,
+    });
+    return "failure_published";
   },
 });
 
@@ -258,7 +449,7 @@ export const workflowCompleted = internalMutation({
         }
         return;
       }
-      await ctx.scheduler.runAfter(0, internal.reviewPublicationWorker.publish, {
+      await enqueueVerdictPublication(ctx, {
         organizationId: review.organizationId,
         reviewId: review._id,
         expectedHeadSha: review.headSha,
@@ -300,66 +491,13 @@ export const workflowCompleted = internalMutation({
         metadata: {},
         createdAt: now,
       });
-      const credentials = await ctx.db
-        .query("providerCredentials")
-        .withIndex("by_org_status", q => q.eq("organizationId", review.organizationId).eq("status", "valid"))
-        .collect();
-      const alternatives = [...new Set(credentials
-        .filter(item => item.lastValidatedAt && item.provider !== review.provider
-          && (item.repositoryId === undefined || item.repositoryId === review.repositoryId))
-        .map(item => item.provider))];
-      const fallback = fallbackWorthTrying({ reason: failureReason, alternatives, parentReviewId: review.parentReviewId });
-      const fallbackCredential = fallback ? credentials.find(item => item.provider === fallback) : undefined;
-      const fallbackModel = fallbackCredential
-        ? selectProviderModel(fallbackCredential.provider, fallbackCredential.availableModels)
-        : undefined;
-      if (fallback && fallbackModel) {
-        const { _id: _ignoredId, _creationTime: _ignoredAt, ...carried } = review;
-        const retryId = await ctx.db.insert("reviews", {
-          ...carried,
-          parentReviewId: review._id,
-          provider: fallback as typeof review.provider,
-          model: fallbackModel,
-          status: "queued",
-          statusReasonCode: undefined,
-          statusDetail: undefined,
-          nextActionCode: "none",
-          githubCheckConclusion: undefined,
-          currentStage: "queue",
-          coverageLevel: "limited",
-          coverageGap: undefined,
-          budgetConsumed: 0,
-          providerRetryCount: 0,
-          executionGeneration: 0,
-          workflowId: undefined,
-          leaseOwner: undefined,
-          leaseExpiresAt: undefined,
-          completedAt: undefined,
-          startedAt: undefined,
-          promptInjectionUnscopedAt: undefined,
-          createdAt: now,
-          updatedAt: now,
-        });
-        await ctx.db.insert("reviewEvents", {
-          organizationId: review.organizationId, reviewId: review._id, sequence: (last?.sequence ?? 0) + 2,
-          type: "status_changed", stage: "complete", internalCode: "provider_fallback_started", metadata: {}, createdAt: now,
-        });
-        await ctx.scheduler.runAfter(0, internal.durableReview.start, {
-          organizationId: review.organizationId, reviewId: retryId,
-          expectedHeadSha: review.headSha, expectedGeneration: 0, now,
-        });
-        return;
-      }
-      await ctx.scheduler.runAfter(
-        0,
-        internal.reviewPublicationWorker.publishPlatformFailure,
-        {
-          organizationId: review.organizationId,
-          reviewId: review._id,
-          expectedHeadSha: review.headSha,
-          expectedGeneration: nextGeneration,
-        },
-      );
+      if (await startProviderFallback(ctx, review, failureReason, now)) return;
+      await enqueueFailurePublication(ctx, {
+        organizationId: review.organizationId,
+        reviewId: review._id,
+        expectedHeadSha: review.headSha,
+        expectedGeneration: nextGeneration,
+      });
     }
   },
 });
@@ -385,6 +523,10 @@ export const cancel = internalMutation({
         executionGeneration: review.executionGeneration + 1, leaseOwner: undefined,
         leaseExpiresAt: undefined, updatedAt: args.now,
       });
+      // Cancelling used to be a database write and nothing else, so the acknowledgement check run
+      // this review put up stayed in_progress on the head commit forever. Where "BuildIT / review"
+      // is a required check, that made BuildIT the reason the pull request could not be merged.
+      await publishCancellationNotice(ctx, args.reviewId);
     }
   },
 });

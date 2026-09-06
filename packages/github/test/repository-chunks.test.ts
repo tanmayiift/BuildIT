@@ -16,6 +16,17 @@ describe("repository snapshot chunks", () => {
     expect(chunks.every(chunk => Buffer.byteLength(JSON.stringify(chunk)) <= 3_000)).toBe(true);
   });
 
+  // Only head's first chunk shares its artifact with the pull request context. Sizing every chunk
+  // for that passenger meant a lockfile that fits any later chunk failed the whole review with
+  // snapshot_file_too_large - a platform error in place of the drop it was meant to replace.
+  it("moves a file the first chunk cannot hold into the next chunk", () => {
+    const lockfile = { path: "package-lock.json", sha: "b".repeat(40), size: 2_000, content: "x".repeat(2_000) };
+    const chunks = chunkRepositorySnapshot({ ...snapshot, files: [lockfile] }, 4_000, 4, 1_200);
+    expect(chunks.flatMap(chunk => chunk.files).map(file => file.path)).toEqual(["package-lock.json"]);
+    expect(Buffer.byteLength(JSON.stringify(chunks[0]))).toBeLessThanOrEqual(1_200);
+    expect(chunks.every(chunk => chunk.chunkCount === chunks.length)).toBe(true);
+  });
+
   it("fails rather than silently dropping a file or exceeding the chunk count", () => {
     expect(() => chunkRepositorySnapshot(snapshot, 1_024, 2)).toThrow(/snapshot_(?:file_too_large|chunk_limit_exceeded)/);
     expect(() => chunkRepositorySnapshot(snapshot, 0, 0)).toThrow("invalid_snapshot_chunk_limits");

@@ -1,3 +1,4 @@
+import { publishCancellationNotice, recordBaseAdvance } from "./reviewState";
 import { v } from "convex/values";
 import { selectProviderModel } from "@buildit/providers";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
@@ -482,6 +483,11 @@ export const reconcilePullRequestHead = internalMutation({
         leaseExpiresAt: active ? undefined : review.leaseExpiresAt,
         updatedAt: args.now,
       });
+      // The row went terminal above, and the acknowledgement check run created when the review
+      // started did not. It stayed in_progress on the old head forever, and where an organization
+      // has made "BuildIT / review" a required check, BuildIT itself blocked the merge with nothing
+      // in the product able to clear it. No-ops unless this patch actually cancelled the review.
+      await publishCancellationNotice(ctx, review._id);
       staleCount++;
     }
     return { staleCount };
@@ -526,38 +532,24 @@ export const reconcileDefaultBranchPush = internalMutation({
     const branch = args.ref.slice("refs/heads/".length);
     if (branch !== repository.defaultBranch)
       return { staleCount: 0, ignored: true };
-    const reviews = await ctx.db
-      .query("reviews")
-      .withIndex("by_org_status", (q) =>
-        q.eq("organizationId", repository.organizationId),
-      )
-      .collect();
-    let staleCount = 0;
-    for (const review of reviews) {
-      if (
-        review.repositoryId !== repository._id ||
-        review.baseRef !== branch ||
-        review.baseSha === args.afterSha.toLowerCase() ||
-        review.isStale ||
-        terminalStatuses.has(review.status)
-      )
-        continue;
-      await ctx.db.patch(review._id, {
-        isStale: true,
-        staleSince: args.now,
-        status: "cancelled",
-        statusReasonCode: "superseded_by_new_commit",
-        nextActionCode: "start_new_review",
-        githubCheckConclusion: "neutral",
-        currentStage: "complete",
-        completedAt: args.now,
-        executionGeneration: review.executionGeneration + 1,
-        leaseOwner: undefined,
-        leaseExpiresAt: undefined,
-        updatedAt: args.now,
-      });
-      staleCount++;
-    }
+    // This used to cancel every in-flight review in the repository whose base was this branch, so
+    // one routine merge killed every other open pull request's review at once - silently, because
+    // the cancellation was never published, and permanently, because nothing re-queued them. The
+    // author watched "BuildIT is reviewing this pull request" simply stop.
+    //
+    // The base moving does not make findings about the head commit wrong. It makes them findings
+    // against an older base, which is a caveat to state rather than a result to throw away.
+    // Cancelling and re-queueing was the other option and is worse: it spends the model budget
+    // again on every merge, and on a repository where merges arrive faster than reviews finish, no
+    // review ever completes.
+    const { driftedCount } = await recordBaseAdvance(ctx, {
+      organizationId: repository.organizationId,
+      repositoryId: repository._id,
+      branch,
+      afterSha: args.afterSha,
+      now: args.now,
+    });
+    const staleCount = driftedCount;
     return { staleCount, ignored: false };
   },
 });

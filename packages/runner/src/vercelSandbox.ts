@@ -29,6 +29,13 @@ const unsafeInstallControl = /(^|\/)(?:\.git|\.npmrc|\.yarnrc(?:\.yml)?|\.pnpmfi
 export function isUnsafeInstallControlPath(path: string) { return unsafeInstallControl.test(path); }
 export const dependencyManifest = /(^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock(?:b)?|Cargo\.lock|go\.mod|go\.sum|poetry\.lock|Pipfile\.lock|pdm\.lock|uv\.lock|requirements(?:[-.][\w.-]+)?\.txt|Gemfile\.lock|composer\.lock|mix\.lock|pubspec\.lock|conan\.lock|gradle\.lockfile|buildscript-gradle\.lockfile|packages\.lock\.json|renv\.lock|pom\.xml)$/;
 
+// osv-scanner takes one --lockfile argument per manifest, so the scan needs an argv bound. The
+// bound stayed, but the truncation used to be silent: a Go monorepo with 17 modules has 34
+// manifests, and the audit reported Required/Passed having opened 32 of them, in whatever order
+// GitHub's tree happened to return - a known-vulnerable dependency declared in the 33rd shipped
+// with a green check and no signal anywhere. Past the bound the audit is unavailable, not clean.
+const osvManifestLimit = 32;
+
 // What the execution plan is derived from, and therefore what BOTH revisions must be able to see.
 // detectPackageManager reads these from base and head and refuses the review when the two disagree,
 // so a selection rule that keeps a lockfile on head and drops it on base is not a missing file - it
@@ -43,15 +50,24 @@ export const executionPlanInput = (path: string) => dependencyManifest.test(path
 // the author their tests were broken when in truth it ran out of time. What the SDK does give us
 // is the duration and SIGKILL's 128+9 exit code, and both must agree before we call it a timeout.
 //
-// Two adjacent traps this exposed, recorded rather than fixed because both need the sandbox moved
+// One adjacent trap this exposed, recorded rather than fixed because it needs the sandbox moved
 // off the synchronous request path, which the 300s ceiling in packages/broker/vercel.json forces:
 // an install that overruns 60s returns early below and no check runs at all, so the report shows
-// one install row and nothing else; and a gitleaks SIGKILL at SANDBOX_SCANNER_TIMEOUT_MS throws
-// gitleaks_execution_failed, which becomes a 503 and kills the review outright rather than
-// degrading it.
+// one install row and nothing else.
 const sigkillExit = 137;
 function timedOut(exitCode: number | undefined, durationMs: number | undefined, timeoutMs: number) {
   return exitCode === sigkillExit && (durationMs ?? 0) >= timeoutMs;
+}
+// The AND above falls open toward blaming the author. A SIGKILL whose duration does not reach the
+// plan's ceiling was called "failed" with failureClass "code", which computeReviewDecision routes
+// to changes_requested - so an out-of-memory kill of a heavy test suite published a red "Changes
+// need review" telling the author their tests were broken, evidenced by a truncated kill. The
+// sandbox is created with vcpus only and never receives the plan's memoryMb, so that kill is a live
+// path; and durationMs is optional on the SDK's CommandFinished, so a kill can arrive with no
+// duration at all and satisfy neither half. Nothing about exit 137 is ever attributable to the code
+// under review: it is the resource_limit class, which the type declared and no path produced.
+function resourceKilled(exitCode: number | undefined, durationMs: number | undefined, timeoutMs: number) {
+  return exitCode === sigkillExit && !timedOut(exitCode, durationMs, timeoutMs);
 }
 
 async function output(result: Finished, limit: number) {
@@ -92,7 +108,8 @@ export class VercelSandboxRunner {
         if (!file.path || file.path.startsWith("/") || file.path.split("/").includes("..")) throw new Error("sandbox_unsafe_path");
         if (isUnsafeInstallControlPath(file.path)) throw new Error("sandbox_untrusted_install_control");
       }
-      const lockfiles = input.files.map(file => file.path).filter(path => dependencyManifest.test(path)).slice(0, 32);
+      const manifests = input.files.map(file => file.path).filter(path => dependencyManifest.test(path));
+      const lockfiles = manifests.slice(0, osvManifestLimit);
       await sandbox.writeFiles(input.files.map(file => ({ path: `/vercel/sandbox/repo/${file.path}`, content: Buffer.from(file.content) })));
       const environment = await sandbox.runCommand({ cmd: "env", args: [], timeoutMs: 10_000 });
       const environmentText = await environment.stdout();
@@ -102,21 +119,31 @@ export class VercelSandboxRunner {
         sandbox.runCommand({ cmd: "gitleaks", args: ["dir", "--no-banner", "--no-color", "--redact=100", "--exit-code", "0", "--report-format", "json", "--report-path", "/tmp/buildit-gitleaks.json", "--max-target-megabytes", "10", "/vercel/sandbox/repo"], timeoutMs: SANDBOX_SCANNER_TIMEOUT_MS }),
         sandbox.runCommand({ cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", ...lockfiles.flatMap(path => ["--lockfile", `/vercel/sandbox/repo/${path}`])], cwd: "/vercel/sandbox/repo", timeoutMs: SANDBOX_SCANNER_TIMEOUT_MS }),
       ]);
-      if (gitleaks.exitCode !== 0) throw new Error("gitleaks_execution_failed");
-      const gitleaksReport = await sandbox.readFileToBuffer({ path: "/tmp/buildit-gitleaks.json" });
-      if (!gitleaksReport || gitleaksReport.byteLength > 2_000_000) throw new Error("gitleaks_report_invalid");
+      // gitleaks runs with --exit-code 0, so a non-zero exit is never a finding - it is only ever a
+      // runner problem: a SIGKILL at SANDBOX_SCANNER_TIMEOUT_MS on a large tree, or a missing binary
+      // after an image bump. Throwing here made the broker answer 503 scanner_unavailable and
+      // classifyPlatformFailure had no match for that string, so the author was told to "retry only
+      // after the service is available" for a condition deterministic per repository - every retry
+      // lost the review the same way, with the sandbox healthy and the code readable. The osv-scanner
+      // path below was fixed for exactly this and the secret scan never got the same treatment.
+      const gitleaksFile = gitleaks.exitCode === 0 ? await sandbox.readFileToBuffer({ path: "/tmp/buildit-gitleaks.json" }) : null;
+      const gitleaksUnavailable = gitleaks.exitCode !== 0 ? `gitleaks exit ${gitleaks.exitCode}`
+        : !gitleaksFile ? "gitleaks wrote no report"
+        : gitleaksFile.byteLength > 2_000_000 ? `gitleaks report ${gitleaksFile.byteLength} bytes` : undefined;
+      if (gitleaksUnavailable) console.warn(`buildit_gitleaks_unavailable reason=${gitleaksUnavailable}`);
+      // An empty findings list is what the parser needs; unavailableScanners below is what stops it
+      // being read as a clean secret scan.
+      const gitleaksReport = gitleaksFile && !gitleaksUnavailable ? gitleaksFile : Buffer.from("[]");
 
       // Keep lockfile paths absolute. The SDK honours cwd, but the scanner itself
       // resolves lockfiles before it changes working directory in some runtimes.
       // An absolute, sandbox-owned path prevents a false scanner failure while
       // preserving the same no-network, read-only scan boundary.
       const osvOutput = await output(osv, 8_192);
-      // No manifest means no dependencies to scan. Reported as an empty result so the check is
-      // honest about having run and found nothing, rather than claiming the scanner was down.
       // OSV-Scanner exits 128 and writes no report for a valid lockfile with no
       // package sources. That is a complete empty dependency scan, not a scanner
       // outage. Every other non-result remains a hard failure.
-      const noPackageSources = !lockfiles.length || (osv.exitCode === 128 && /No package sources found/.test(osvOutput.text));
+      const emptyLockfile = osv.exitCode === 128 && /No package sources found/.test(osvOutput.text);
       // osv-scanner cannot resolve every ecosystem's manifest offline - a Maven pom.xml or a
       // Python pyproject.toml needs a resolver it is deliberately not allowed to reach, because
       // this sandbox has no network at scan time. That is a capability BuildIT does not have for
@@ -141,24 +168,41 @@ export class VercelSandboxRunner {
       // did not obtain a dependency scan, and that is what gets reported. Nothing here can turn
       // into a false pass; the only thing it gives up is telling those two causes apart in the
       // report, and the exit code is recorded so an operator still can.
-      const unscannable = ![0, 1].includes(osv.exitCode) && !noPackageSources;
-      if (unscannable) console.warn(`buildit_osv_unavailable exit=${osv.exitCode} output=${osvOutput.text.slice(0, 400)}`);
-      const osvReport = noPackageSources || unscannable ? Buffer.from('{"results":[]}') : await sandbox.readFileToBuffer({ path: "/tmp/buildit-osv.json" });
+      //
+      // "No manifest reached the sandbox" joined the same list. It used to mean an empty result and
+      // a Required/Passed row, on the reasoning that no manifest means no dependencies - but the
+      // runner cannot tell a repository that has no manifests from one whose manifest was never
+      // delivered, and a root lockfile above the fetch ceiling produced exactly the second while
+      // looking exactly like the first. That published "Ready for human review" carrying
+      // `| osv-scanner | Required | Passed |` for a repository whose dependencies were never
+      // scanned. BuildIT did not obtain a dependency scan in either case, and that is what it says.
+      const osvUnavailable = !lockfiles.length ? "no dependency manifest reached the sandbox"
+        : manifests.length > lockfiles.length ? `${manifests.length} manifests exceed the ${osvManifestLimit} one scan can take`
+        : ![0, 1].includes(osv.exitCode) && !emptyLockfile ? `osv-scanner exit ${osv.exitCode}` : undefined;
+      if (osvUnavailable) console.warn(`buildit_osv_unavailable reason=${osvUnavailable} exit=${osv.exitCode} output=${osvOutput.text.slice(0, 400)}`);
+      // A truncated scan still keeps whatever it did find: the manifests it opened were opened, and
+      // a vulnerability among them is real however incomplete the audit. Everything else has no
+      // report on disk to read.
+      const osvReport = lockfiles.length && [0, 1].includes(osv.exitCode) && !emptyLockfile ? await sandbox.readFileToBuffer({ path: "/tmp/buildit-osv.json" }) : Buffer.from('{"results":[]}');
       if (!osvReport || osvReport.byteLength > 4_000_000) throw new Error("osv_report_invalid");
+      const unavailableScanners = [...(gitleaksUnavailable ? ["gitleaks" as const] : []), ...(osvUnavailable ? ["osvScanner" as const] : [])];
+      const scannerStatus: { unavailableScanners?: Array<"gitleaks" | "osvScanner">; unavailableReason?: string } =
+        unavailableScanners.length ? { unavailableScanners, unavailableReason: [gitleaksUnavailable, osvUnavailable].filter(Boolean).join("; ") } : {};
 
       const installPlan = input.install;
-      if (!installPlan) return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: `osv-scanner exit ${osv.exitCode}` } : {}), stopped: true };
+      if (!installPlan) return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...scannerStatus, stopped: true };
 
       await sandbox.updateNetworkPolicy({ allow: registryDomains });
       const installResult = await sandbox.runCommand({ cmd: installPlan.executable, args: installPlan.args, cwd: "/vercel/sandbox/repo", timeoutMs: installPlan.timeoutMs });
       const installOutput = await output(installResult, installPlan.outputBytes);
       outputs.push({ planId: installPlan.planId, ...installOutput });
       const installTimedOut = timedOut(installResult.exitCode, installResult.durationMs, installPlan.timeoutMs);
-      results.push({ ...installPlan, conclusion: installOutput.truncated ? "truncated" : installResult.exitCode === 0 ? "passed" : installTimedOut ? "timed_out" : "failed", exitCode: installResult.exitCode, durationMs: installResult.durationMs ?? 0, ...(installResult.exitCode === 0 ? {} : { failureClass: installTimedOut ? ("timeout" as const) : ("code" as const) }) });
+      const installKilled = resourceKilled(installResult.exitCode, installResult.durationMs, installPlan.timeoutMs);
+      results.push({ ...installPlan, conclusion: installOutput.truncated ? "truncated" : installResult.exitCode === 0 ? "passed" : installTimedOut ? "timed_out" : installKilled ? "not_run" : "failed", exitCode: installResult.exitCode, durationMs: installResult.durationMs ?? 0, ...(installResult.exitCode === 0 ? {} : { failureClass: installTimedOut ? ("timeout" as const) : installKilled ? ("resource_limit" as const) : ("code" as const) }) });
       diagnostics.install = [{ conclusion: installResult.exitCode === 0 && !installOutput.truncated ? "passed" : "failed", ...(installResult.exitCode === 0 && !installOutput.truncated ? {} : { failureFingerprint: createHash("sha256").update(installOutput.text).digest("hex") }) }];
       if (installResult.exitCode !== 0 || installOutput.truncated) {
         for (const plan of input.checks) results.push({ ...plan, conclusion: "not_run" as const, durationMs: 0, failureClass: "environment" as const });
-        return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: `osv-scanner exit ${osv.exitCode}` } : {}), stopped: true };
+        return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...scannerStatus, stopped: true };
       }
 
       await sandbox.updateNetworkPolicy("deny-all");
@@ -167,7 +211,8 @@ export class VercelSandboxRunner {
         const captured = await output(result, plan.outputBytes);
         outputs.push({ planId: plan.planId, ...captured });
         const checkTimedOut = timedOut(result.exitCode, result.durationMs, plan.timeoutMs);
-        results.push({ ...plan, conclusion: captured.truncated ? "truncated" : checkTimedOut ? "timed_out" : classifyCheckConclusion({ exitCode: result.exitCode, output: captured.text }), exitCode: result.exitCode, durationMs: result.durationMs ?? 0, ...(result.exitCode === 0 ? {} : { failureClass: checkTimedOut ? ("timeout" as const) : ("code" as const) }) });
+        const checkKilled = resourceKilled(result.exitCode, result.durationMs, plan.timeoutMs);
+        results.push({ ...plan, conclusion: captured.truncated ? "truncated" : checkTimedOut ? "timed_out" : checkKilled ? "not_run" : classifyCheckConclusion({ exitCode: result.exitCode, output: captured.text }), exitCode: result.exitCode, durationMs: result.durationMs ?? 0, ...(result.exitCode === 0 ? {} : { failureClass: checkTimedOut ? ("timeout" as const) : checkKilled ? ("resource_limit" as const) : ("code" as const) }) });
         const firstPassed = result.exitCode === 0 && !captured.truncated;
         const runs: DiagnosticRun[] = [{ conclusion: firstPassed ? "passed" : "failed", ...(firstPassed ? {} : { failureFingerprint: createHash("sha256").update(captured.text).digest("hex") }) }];
         if (plan.required && !firstPassed) {
@@ -179,7 +224,7 @@ export class VercelSandboxRunner {
         }
         diagnostics[plan.planId] = runs;
       }
-      return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...(unscannable ? { unavailableScanners: ["osvScanner" as const], unavailableReason: `osv-scanner exit ${osv.exitCode}` } : {}), stopped: true };
+      return { credentialTeardownProved: true, results, outputs, diagnostics, gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), ...scannerStatus, stopped: true };
     } finally {
       await sandbox.stop();
     }

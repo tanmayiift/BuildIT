@@ -187,8 +187,20 @@ type ScannerFindingInput = { scanner?: string; ruleId?: string; fingerprint?: st
 // base diff still runs, so a finding they did introduce into a file that already had one is still
 // reported.
 export function introducedScannerFindings(base: ScannerFindingInput[], head: ScannerFindingInput[], changedPaths?: ReadonlySet<string>) {
+  // Deliberately not the scanner's fingerprint. Both line-based scanners build theirs out of the
+  // line number - builditRules as `${path}:${line}:${rule}`, gitleaks from its own File:Rule:Line -
+  // so inserting a single line anywhere above an existing match changes it. Base and head then
+  // disagree about a match neither commit introduced, and the pull request is told under
+  // "Critical - Blocking - Confirmed by evidence" that it disabled TLS verification or committed a
+  // secret that has been sitting in that file for years.
+  //
+  // scanner + rule + path, counted as a multiset, answers the question that actually matters: how
+  // many times does this rule match this file on each side. One match that moved is consumed by the
+  // one on base; a genuinely added second match finds the count already spent and is reported. That
+  // is the same distinction the fingerprint was reaching for, without being sensitive to where in
+  // the file the line happens to sit.
   const key = (item: ScannerFindingInput) => typeof item.fingerprint === "string" && item.fingerprint.length > 0 && typeof item.ruleId === "string" && typeof item.path === "string"
-    ? `${item.scanner ?? "unknown"}\0${item.ruleId}\0${item.path}\0${item.fingerprint}` : undefined;
+    ? `${item.scanner ?? "unknown"}\0${item.ruleId}\0${item.path}` : undefined;
   const remaining = new Map<string, number>();
   for (const item of base) { const value = key(item); if (value) remaining.set(value, (remaining.get(value) ?? 0) + 1); }
   const touched = changedPaths === undefined

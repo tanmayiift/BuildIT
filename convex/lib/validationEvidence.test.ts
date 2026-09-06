@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { defaultExecutionPlans, type CheckResult } from "@buildit/runner";
-import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, summarizeExecution, type ExecutionResponse } from "./validationEvidence";
+import { describe, expect, it, vi } from "vitest";
+import { computeReviewDecision } from "@buildit/contracts";
+import { defaultExecutionPlans, VercelSandboxRunner, type CheckResult, type SandboxFactory, type SandboxLike } from "@buildit/runner";
+import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, summarizeExecution, type ExecutionResponse, type ScannerSummary } from "./validationEvidence";
 
 describe("validation evidence", () => {
   it("requires the same unambiguous package manager on base and head", () => {
@@ -70,4 +71,53 @@ describe("validation evidence", () => {
 
   it("makes an alternating diagnostic flaky and never an introduced regression",()=>{const baseSha="a".repeat(40),headSha="b".repeat(40),{install,checks}=defaultExecutionPlans("npm"),plan={...checks[0]!,conclusion:"failed" as const,exitCode:1,durationMs:1},run={credentialTeardownProved:true,stopped:true,results:[plan],outputs:[{planId:"test" as const,text:"failure",truncated:false,evidenceTruncated:false}]},scanner=(commitSha:string)=>({scanner:"builditRules",scannerVersion:"1",commitSha,complete:true as const,findings:[]}),output={base:{...run,results:[{...plan,conclusion:"passed" as const,exitCode:0}]},head:run,diagnostics:{base:{test:[{conclusion:"passed"}]},head:{test:[{conclusion:"failed",failureFingerprint:"x"},{conclusion:"passed"}]}},scanners:{base:scanner(baseSha),head:scanner(headSha)}} as ExecutionResponse,environment={configRevision:"cfg",runnerImage:`runner@sha256:${"c".repeat(64)}`,runtime:"node24" as const,manager:"npm" as const,architecture:"linux-x64",networkPolicy:"deny-all-v1",toolVersions:[],install,checks},paired=pairExecutionEvidence(output,baseSha,headSha,environment),head=paired.summaries.find(item=>item.planId==="test"&&item.revision==="head");expect(head).toMatchObject({conclusion:"flaky",regressionClassification:"flaky"})});
   it("does not call a single failed execution an introduced regression",()=>{const baseSha="a".repeat(40),headSha="b".repeat(40),{install,checks}=defaultExecutionPlans("npm"),basePlan={...checks[0]!,conclusion:"passed" as const,exitCode:0,durationMs:1},headPlan={...basePlan,conclusion:"failed" as const,exitCode:1},result=(plan:CheckResult)=>({credentialTeardownProved:true,stopped:true,results:[plan],outputs:[{planId:"test" as const,text:"bounded",truncated:false,evidenceTruncated:false}]}),scanner=(commitSha:string)=>({scanner:"builditRules",scannerVersion:"1",commitSha,complete:true as const,findings:[]}),output={base:result(basePlan),head:result(headPlan),diagnostics:{base:{test:[{conclusion:"passed"}]},head:{test:[{conclusion:"failed",failureFingerprint:"x"}]}},scanners:{base:scanner(baseSha),head:scanner(headSha)}} as ExecutionResponse,environment={configRevision:"cfg",runnerImage:`runner@sha256:${"c".repeat(64)}`,runtime:"node24" as const,manager:"npm" as const,architecture:"linux-x64",networkPolicy:"deny-all-v1",toolVersions:[],install,checks},paired=pairExecutionEvidence(output,baseSha,headSha,environment),head=paired.summaries.find(item=>item.planId==="test"&&item.revision==="head");expect(head?.regressionClassification).toBe("unknown")});
+});
+
+// The end of the chain finding #1 named. A root lockfile above the fetch ceiling is dropped before
+// selection can force it in, so detectPackageManager finds nothing on either revision and no
+// install, test, lint or typecheck runs - and the dependency audit used to report an empty result,
+// which summarizeExecution records as required and passed. The published check said
+// "Ready for human review" over `| osv-scanner | Required | Passed |` for a repository whose
+// dependencies were never read, and nothing an author or an operator could see explained it.
+//
+// The other half of the requirement is that the review still decides. Treating an unread manifest
+// as grounds to void the verdict is the mistake this codebase has already made twice; the
+// deterministic checks did run, so the fix reports what was and was not scanned and leaves the
+// verdict alone.
+describe("a repository whose dependency manifest never arrived", () => {
+  function sandbox() {
+    const fake: SandboxLike = {
+      writeFiles: vi.fn(async () => {}),
+      readFileToBuffer: vi.fn(async file => Buffer.from(file.path.includes("osv") ? '{"results":[]}' : "[]")),
+      updateNetworkPolicy: vi.fn(async () => ({})),
+      runCommand: vi.fn(async () => ({ exitCode: 0, durationMs: 5, stdout: async () => "CI=true\n", stderr: async () => "" })),
+      stop: vi.fn(async () => ({})),
+    };
+    return vi.fn(async (_input: Parameters<SandboxFactory>[0]) => fake);
+  }
+
+  // Exactly what packages/broker/src/execution-http.ts composes from a runner result.
+  const scannerSummary = (commitSha: string, unavailableScanners?: string[]): ScannerSummary => ({
+    scanner: "builditRules", scannerVersion: "combined", commitSha, complete: true,
+    runs: [{ scanner: "builditRules", scannerVersion: "1.0.0" }, { scanner: "gitleaks", scannerVersion: "8.28.0" }, { scanner: "osvScanner", scannerVersion: "2.2.3" }],
+    ...(unavailableScanners?.length ? { unavailableScanners } : {}), findings: [],
+  });
+
+  it("reports the dependency audit as advisory and still reaches a verdict", async () => {
+    const baseSha = "a".repeat(40), headSha = "b".repeat(40);
+    // No manager was detected, so reviewValidationWorker sends no install and no checks.
+    const revision = async () => new VercelSandboxRunner(sandbox()).run({ runtime: "node24", files: [{ path: "src/index.ts", content: "export {}" }], checks: [] });
+    const [base, head] = [await revision(), await revision()];
+    const output = { base: { ...base, outputs: [] }, head: { ...head, outputs: [] },
+      scanners: { base: scannerSummary(baseSha, base.unavailableScanners), head: scannerSummary(headSha, head.unavailableScanners) } } as unknown as ExecutionResponse;
+    const summaries = summarizeExecution(output, baseSha, headSha);
+    const osv = summaries.find(item => item.revision === "head" && item.planId === "osv-scanner");
+    expect(osv).toMatchObject({ kind: "dependency_audit", required: false, conclusion: "not_run" });
+
+    const decision = computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [],
+      checks: summaries.filter(item => item.revision === "head").map(item => ({ name: item.planId, required: item.required, conclusion: item.conclusion, evidenceComplete: true })) });
+    // Not inconclusive: gitleaks and buildit-rules did run on the delivered tree and are required.
+    expect(decision.status).toBe("checks_passed");
+    expect(summaries.filter(item => item.revision === "head" && item.required).map(item => item.planId).sort()).toEqual(["buildit-rules", "gitleaks"]);
+  });
 });

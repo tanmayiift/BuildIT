@@ -1,8 +1,66 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import * as value from "./validators";
-import { terminalStatuses, transitionAllowed } from "./lib/lifecycle";
+import { activeStatuses, cancellationNotice, terminalStatuses, transitionAllowed } from "./lib/lifecycle";
 import { assertAttemptParent, assertRepositoryParent, assertReviewParent } from "./lib/parentConsistency";
+
+// Cancelling a review used to be a database write and nothing else, so the acknowledgement check
+// run stayed in_progress on the pull request head for good. Call this from every writer that lands
+// a review on `cancelled`: it completes that run instead of leaving it spinning. It publishes only
+// for a review that is actually cancelled, so a review still in `cancelling` is not announced dead
+// before its workflow has stopped.
+export async function publishCancellationNotice(ctx: MutationCtx, reviewId: Id<"reviews">) {
+  const review = await ctx.db.get(reviewId);
+  if (!review || review.status !== "cancelled") return false;
+  const repository = await ctx.db.get(review.repositoryId);
+  const installation = repository ? await ctx.db.get(repository.installationId) : null;
+  if (!repository || !installation) return false;
+  await ctx.scheduler.runAfter(0, internal.reviewPublicationWorker.acknowledge, {
+    installationId: installation.installationId,
+    githubRepositoryId: repository.githubRepositoryId,
+    headSha: review.headSha,
+    conclusion: "neutral",
+    ...cancellationNotice({ headSha: review.headSha, reasonCode: review.statusReasonCode }),
+  });
+  return true;
+}
+
+// A push to the default branch used to cancel every in-flight review in the repository, so one
+// routine merge silently killed every running review and nothing re-queued them. The base moving
+// does not make the head commit's findings wrong - it makes them findings against an older base,
+// which is a caveat the report can state. So the reviews keep running and are stamped here, and
+// reviewPublicationWorker.publish says which base the verdict was reached against.
+export async function recordBaseAdvance(
+  ctx: MutationCtx,
+  args: { repositoryId: Id<"repositories">; organizationId: Id<"organizations">; branch: string; afterSha: string; now: number },
+) {
+  const afterSha = args.afterSha.toLowerCase();
+  let driftedCount = 0;
+  for (const status of activeStatuses) {
+    const reviews = await ctx.db.query("reviews")
+      .withIndex("by_org_status", q => q.eq("organizationId", args.organizationId).eq("status", status))
+      .take(200);
+    for (const review of reviews) {
+      if (review.repositoryId !== args.repositoryId || review.baseRef !== args.branch
+        || review.baseSha.toLowerCase() === afterSha || review.observedBaseSha === afterSha) continue;
+      await ctx.db.patch(review._id, { observedBaseSha: afterSha, baseAdvancedAt: args.now, updatedAt: args.now });
+      driftedCount += 1;
+    }
+  }
+  return { driftedCount };
+}
+
+// Read by the publisher, which has to name the base the verdict was actually reached against.
+export const baseAdvance = internalQuery({
+  args: { organizationId: v.id("organizations"), reviewId: v.id("reviews") },
+  handler: async (ctx, args) => {
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
+    if (!review.observedBaseSha || review.observedBaseSha === review.baseSha.toLowerCase()) return null;
+    return { baseRef: review.baseRef, baseSha: review.baseSha.toLowerCase(), observedBaseSha: review.observedBaseSha };
+  },
+});
 
 export const transition = internalMutation({
   args: {
@@ -87,6 +145,7 @@ export const requestCancellation = internalMutation({
       cancelledBy: args.actorId, cancellationRequestedAt: args.now,
       executionGeneration, leaseOwner: undefined, leaseExpiresAt: undefined, updatedAt: args.now,
     });
+    await publishCancellationNotice(ctx, args.reviewId);
     return executionGeneration;
   },
 });

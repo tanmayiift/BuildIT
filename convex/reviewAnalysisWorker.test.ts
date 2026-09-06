@@ -180,3 +180,39 @@ describe("the context budget holds on a repository large enough to exhaust it", 
     expect(result.exclusions.totals.repositoryFiles).toBeGreaterThan(99);
   });
 });
+
+// The third instance of one shape: a pre-existing problem reported as this pull request's fault.
+// The first was the base/head fetch asymmetry, the second the check run disagreeing with its own
+// comment. This one is subtler - both revisions were read, both were scanned, and the comparison
+// still failed, because the key it compared on encodes where the match sits rather than what it is.
+// builditRules fingerprints as `${path}:${line}:${rule}` and gitleaks carries its own File:Rule:Line,
+// so adding one import above a years-old finding makes head's key differ from base's and the author
+// is told, blocking, that they committed it.
+describe("a scanner finding whose line moved", () => {
+  const at = (line: number, path = "src/http.ts", ruleId = "tls-disabled") => ({
+    scanner: "builditRules" as const, ruleId, path, severity: "critical" as const,
+    startLine: line, endLine: line, fingerprint: `${path}:${line}:${ruleId}`,
+  });
+
+  it("is not introduced when the pull request only shifted it down the file", () => {
+    expect(introducedScannerFindings([at(12)], [at(19)])).toEqual([]);
+  });
+
+  it("is still introduced when the pull request adds a second match of the same rule", () => {
+    const introduced = introducedScannerFindings([at(12)], [at(19), at(64)]);
+    expect(introduced).toHaveLength(1);
+  });
+
+  it("counts matches per rule and per file rather than collapsing them", () => {
+    // Two on base, three on head: exactly one is new however the other two moved.
+    expect(introducedScannerFindings([at(4), at(40)], [at(9), at(44), at(90)])).toHaveLength(1);
+    // A different rule in the same file is its own match, not a shifted one.
+    expect(introducedScannerFindings([at(4)], [at(9), at(30, "src/http.ts", "aws-key")])).toHaveLength(1);
+    // A different file is not the same match either.
+    expect(introducedScannerFindings([at(4)], [at(9), at(4, "src/other.ts")])).toHaveLength(1);
+  });
+
+  it("still reports a match on a file the base never had", () => {
+    expect(introducedScannerFindings([], [at(3)])).toHaveLength(1);
+  });
+});

@@ -43,16 +43,25 @@ export type RepositorySnapshot = {
 // do reach the model. Above it they are neither: boundedAnalysisContext stops at 80KB with changed
 // files sorted first, so on a large repository the rest is fetched, stored, re-downloaded and
 // dropped - while costing two blob requests each against GitHub's secondary rate limit.
-export type RepositorySelection = { keep: (path: string) => boolean; relevantOnlyAbove: number };
+//
+// `mustFetch` marks the paths the review cannot proceed without, and it exists because the size
+// gate below runs before selection does. maxFileBytes is a limit on what the model is shown, and a
+// root lockfile is parsed and installed from, never shown - but a 1 MB package-lock.json, which is
+// an ordinary size, was dropped as oversized before executionPlanInput could force it back in. Both
+// revisions then detected no package manager, so install, test, lint and typecheck never ran.
+export type RepositorySelection = { keep: (path: string) => boolean; relevantOnlyAbove: number; mustFetch?: (path: string) => boolean };
 
 export type RepositoryFetchLimits = {
   maxFiles: number;
   maxFetchFiles: number;
   maxFileBytes: number;
+  // The ceiling for a mustFetch path. Separate from maxFileBytes because it is bounded by what the
+  // snapshot chunker can carry, not by what is worth putting in front of the model.
+  maxMustFetchBytes: number;
   maxTotalBytes: number;
 };
 
-const defaults: RepositoryFetchLimits = { maxFiles: 10_000, maxFetchFiles: 2_500, maxFileBytes: 1_000_000, maxTotalBytes: 50_000_000 };
+const defaults: RepositoryFetchLimits = { maxFiles: 10_000, maxFetchFiles: 2_500, maxFileBytes: 1_000_000, maxMustFetchBytes: 2_000_000, maxTotalBytes: 50_000_000 };
 const excludedSegment = /(^|\/)(?:\.git|node_modules|vendor|dist|build|coverage|\.next|target|__pycache__)(\/|$)/;
 const excludedFile = /(?:\.min\.(?:js|css)|\.(?:png|jpe?g|gif|webp|ico|pdf|zip|gz|jar|class|wasm|woff2?|ttf|eot))$/i;
 
@@ -73,7 +82,9 @@ export class RepositoryContentClient {
 
   async fetchExactCommit(input: { installationToken: string; repositoryId: number; commitSha: string; limits?: Partial<RepositoryFetchLimits>; select?: RepositorySelection }): Promise<RepositorySnapshot> {
     if (!/^[0-9a-f]{40}$/i.test(input.commitSha)) throw new Error("invalid_commit_sha");
-    const limits = { ...defaults, ...input.limits };
+    const merged = { ...defaults, ...input.limits };
+    // A path the review cannot proceed without is never held to a tighter ceiling than one it can.
+    const limits = { ...merged, maxMustFetchBytes: Math.max(merged.maxMustFetchBytes, merged.maxFileBytes) };
     if (limits.maxFiles < 1 || limits.maxFileBytes < 1 || limits.maxTotalBytes < 1) throw new Error("invalid_repository_fetch_limits");
     const authHeaders = { ...headers, Authorization: `Bearer ${input.installationToken}` };
     const commitResponse = await this.http(`https://api.github.com/repositories/${input.repositoryId}/git/commits/${input.commitSha}`, { headers: authHeaders });
@@ -99,7 +110,7 @@ export class RepositoryContentClient {
       if (entry.type !== "blob" || typeof entry.path !== "string" || typeof entry.sha !== "string" || typeof entry.size !== "number") continue;
       if (!safePath(entry.path)) throw new Error("github_tree_unsafe_path");
       if (excludedSegment.test(entry.path) || excludedFile.test(entry.path)) { omitted.push({ path: entry.path, reason: "excluded" }); continue; }
-      if (entry.size > limits.maxFileBytes) { omitted.push({ path: entry.path, reason: "oversized" }); continue; }
+      if (entry.size > (input.select?.mustFetch?.(entry.path) ? limits.maxMustFetchBytes : limits.maxFileBytes)) { omitted.push({ path: entry.path, reason: "oversized" }); continue; }
       if (selected.length >= limits.maxFiles || plannedBytes + entry.size > limits.maxTotalBytes) { omitted.push({ path: entry.path, reason: "budget" }); continue; }
       selected.push({ path: entry.path, sha: entry.sha, size: entry.size });
       plannedBytes += entry.size;

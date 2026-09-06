@@ -128,6 +128,14 @@ export default defineSchema({
     budgetLimit: v.number(), budgetConsumed: v.number(), statusReasonCode: v.optional(value.statusReasonCode), statusDetail: v.optional(v.string()),
     nextActionCode: value.nextActionCode, isStale: v.boolean(), staleSince: v.optional(v.number()),
     observedHeadSha: v.optional(v.string()), trustedRef: v.string(), trustedRefSha: v.string(),
+    // The base branch moving is not the head moving: the review keeps running and its report names
+    // the base it decided against. Before this, a push to the default branch cancelled every
+    // in-flight review in the repository instead.
+    observedBaseSha: v.optional(v.string()), baseAdvancedAt: v.optional(v.number()),
+    // Real time, stamped by the checkpoint mutation. updatedAt cannot serve: a workflow body must
+    // be deterministic, so it carries a synthetic clock, and the stuck-review sweeper was therefore
+    // reaping on row age - killing reviews that were progressing normally or merely queued.
+    lastProgressAt: v.optional(v.number()),
     configRevisionId: v.id("configRevisions"), configProvenance: value.configProvenance,
     provider: value.provider, model: v.string(), modelVersion: v.string(), promptVersion: v.string(),
     evalSetVersion: v.string(), coverageLevel: value.coverageLevel, coverageGap: v.optional(value.coverageGap),

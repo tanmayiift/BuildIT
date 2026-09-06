@@ -117,6 +117,12 @@ export const finalizeDecision = internalMutation({
     // decision to uncertain, which made blocking false, which landed the review on checks_passed
     // with a green check. The verdict has to fail closed: an unscoped signal means BuildIT does
     // not know whether it reviewed the code or the attacker's instructions.
+    // Unreachable today: uncertainPasses is written as 1 and only incremented when a row for the
+    // same fingerprint already exists in the same review, which a single analysis pass never does.
+    // Raising the limit to 1 is the obvious fix and is wrong - requireIndependentCritic forces every
+    // critical finding to uncertain when the credential exposes one model, so a single-provider
+    // workspace would send every serious review to inconclusive. docs/operations/known-defects.md
+    // has the analysis and what the fix depends on.
     const escalatedFinding = findings.some(item => (item.uncertainPasses ?? 0) >= uncertainEscalationLimit && item.resolution === "uncertain");
     if (review.promptInjectionUnscopedAt) incompleteReason = "injection_unscoped";
     else if (escalatedFinding) incompleteReason = "uncertain_escalated";

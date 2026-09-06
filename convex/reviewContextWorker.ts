@@ -60,7 +60,11 @@ export const gather = internalAction({
       const pullContext: PullRequestContext = await new PullRequestContextClient().fetch({ installationToken: token,
         repositoryId: scope.githubRepositoryId, prNumber: scope.prNumber, expectedHeadSha: scope.headSha, expectedBaseSha: scope.baseSha });
       const changedPaths = new Set(pullContext.files.map(file => file.path));
-      const limits = { maxFiles: 10_000, maxFetchFiles: 2_500, maxFileBytes: 1_000_000, maxTotalBytes: 40_000_000 };
+      // maxMustFetchBytes is the ceiling for the manifests below, and it is set here rather than in
+      // the client because it is bounded by the chunk size this worker asks for: a file the chunker
+      // cannot carry fails the review outright, which is worse than the drop it replaces. It must
+      // stay under the 3,700,000-byte chunk budget with room for JSON escaping.
+      const limits = { maxFiles: 10_000, maxFetchFiles: 2_500, maxFileBytes: 1_000_000, maxMustFetchBytes: 2_000_000, maxTotalBytes: 40_000_000 };
       // Head keeps the documents, because requirements are read from them. Base does not: its file
       // contents are filtered out of the model context entirely (reviewAnalysisWorker filters
       // revision !== "base"), so fetching anything beyond the changed files buys a presence check.
@@ -75,8 +79,14 @@ export const gather = internalAction({
       // and fail the review outright - no verdict, no checks - on any repository above the
       // threshold whose pull request left the manifests alone. A path filter cannot suppress these
       // either, for the same reason it cannot turn off the vulnerability scan.
+      //
+      // Keeping them is not enough on its own: the per-file size ceiling is applied before
+      // selection, so a 1 MB package-lock.json - an ordinary size - was dropped as oversized and
+      // never offered to this rule at all. Both revisions then agreed there was no package manager,
+      // and install, test, lint and typecheck silently did not run. mustFetch raises the ceiling for
+      // exactly the paths that answer the question.
       const headSelect = { keep: (path: string) => executionPlanInput(path)
-        || ((changedPaths.has(path) || isRequirementSourcePath(path)) && allowedByRepository(path)), relevantOnlyAbove: 400 };
+        || ((changedPaths.has(path) || isRequirementSourcePath(path)) && allowedByRepository(path)), relevantOnlyAbove: 400, mustFetch: executionPlanInput };
       // Base selects the same paths as head, and that symmetry is the point.
       //
       // The scanners run over whatever each revision fetched, and every "did this change introduce
@@ -87,7 +97,7 @@ export const gather = internalAction({
       // that never opened the file. The same asymmetry had already broken package-manager detection
       // once. Base file contents are still filtered out of the model context, so this costs fetches
       // and nothing else - and being wrong about who introduced a secret costs more.
-      const baseSelect = { keep: (path: string) => headSelect.keep(path), relevantOnlyAbove: 400 };
+      const baseSelect = { keep: (path: string) => headSelect.keep(path), relevantOnlyAbove: 400, mustFetch: headSelect.mustFetch };
       await ctx.runQuery(internal.durableReview.assertActive, args);
       const [headSnapshot, baseSnapshot]: [RepositorySnapshot, RepositorySnapshot] = await Promise.all([
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
@@ -117,7 +127,10 @@ export const gather = internalAction({
         secret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url");
       let chunkCount = 0;
       for (const [revision, snapshot] of [["head", headSnapshot], ["base", baseSnapshot]] as const) {
-        const chunks = chunkRepositorySnapshot(snapshot, revision === "head" ? Math.max(1_100_000, 3_700_000 - pullBytes) : 3_700_000);
+        // Only head's first chunk carries the pull request context, so only it pays for it. Sizing
+        // every head chunk for that passenger meant a file that fits any later chunk still failed
+        // the whole review.
+        const chunks = chunkRepositorySnapshot(snapshot, 3_700_000, 64, revision === "head" ? Math.max(1_100_000, 3_700_000 - pullBytes) : 3_700_000);
         chunkCount += chunks.length;
         for (const chunk of chunks) {
           const body = Buffer.from(JSON.stringify({ version: 1, revision, pull: revision === "head" && chunk.chunkIndex === 0 ? pull : undefined, snapshot: chunk }));

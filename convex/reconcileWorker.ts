@@ -1,7 +1,10 @@
+import type { WorkflowId } from "@convex-dev/workflow";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, type MutationCtx } from "./_generated/server";
 import { activeStatuses, webhookDeliveryRetentionMs } from "./lib/lifecycle";
+import { publishCancellationNotice } from "./reviewState";
+import { reviewWorkflowManager } from "./workflowManager";
 
 // durableReview.reconcileStuck and reviewState.expireBlocked were both implemented, exported and
 // never called: convex/crons.ts declared only artifact cleanup and the telemetry snapshot. A
@@ -11,10 +14,31 @@ import { activeStatuses, webhookDeliveryRetentionMs } from "./lib/lifecycle";
 //
 // It compares review.updatedAt, which durableReview.checkpoint writes from a synthetic clock
 // (args.startedAt + index) because a Convex workflow body must be deterministic - so that value
-// is not real time and cannot measure staleness. _creationTime is stamped by the database and is,
-// which is why it is the clock used here.
+// is not real time and cannot measure staleness. checkpoint stamps lastProgressAt from the
+// mutation, which is real time, and that is the heartbeat this reaps on.
+//
+// Row age was the wrong clock. It measured how long ago the review was CREATED, so a review that
+// was progressing normally through a long validation, and a review that had not started because
+// the step pool was full, were both killed at two hours and told they had stopped responding -
+// while the generation bump silently discarded whatever the still-live workflow went on to decide.
 const stuckAfterMs = 2 * 60 * 60_000;
+// The workflow component is asked whether the review is genuinely still running, but a workflow
+// that says "in progress" forever would be a non-terminal state with no way out, so this is the
+// bound past which the review is retired regardless of what the component reports.
+const giveUpAfterMs = 12 * 60 * 60_000;
 const sweepLimit = 200;
+
+// Any failure to read the component is treated as no answer: one unreadable workflow must not stop
+// the sweep from retiring the rest of the batch.
+async function workflowStillRunning(ctx: MutationCtx, workflowId: string | undefined) {
+  if (!workflowId) return false;
+  try {
+    const status = await reviewWorkflowManager.status(ctx, workflowId as WorkflowId);
+    return status.type === "inProgress";
+  } catch {
+    return false;
+  }
+}
 
 export const sweep = internalMutation({
   args: { now: v.optional(v.number()) },
@@ -48,6 +72,10 @@ export const sweep = internalMutation({
         completedAt: now, executionGeneration: review.executionGeneration + 1,
         leaseOwner: undefined, leaseExpiresAt: undefined, updatedAt: now,
       });
+      // Expiring a blocked review is a cancellation like any other, and it left the same stuck
+      // in_progress check run behind: the author saw "BuildIT is reviewing this pull request"
+      // against a review that had been given up on hours earlier.
+      await publishCancellationNotice(ctx, review._id);
       expired += 1;
     }
 
@@ -55,7 +83,9 @@ export const sweep = internalMutation({
       if (status === "blocked") continue;
       const reviews = await ctx.db.query("reviews").withIndex("by_status", q => q.eq("status", status)).take(sweepLimit);
       for (const review of reviews) {
-        if (review._creationTime + stuckAfterMs > now) continue;
+        const idleSince = review.lastProgressAt ?? review.startedAt ?? review._creationTime;
+        if (idleSince + stuckAfterMs > now) continue;
+        if (review._creationTime + giveUpAfterMs > now && await workflowStillRunning(ctx, review.workflowId)) continue;
         await ctx.db.patch(review._id, {
           status: "platform_failed", statusReasonCode: "platform_error", nextActionCode: "retry_review",
           githubCheckConclusion: "neutral", currentStage: "complete", completedAt: now,

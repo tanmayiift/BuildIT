@@ -24,6 +24,38 @@ export function transitionAllowed(from: string, to: string, resume?: string): bo
   return Boolean(next[from]?.includes(to)) || (interruptible.has(from) && ["blocked", "cancelling", "budget_exhausted", "platform_failed"].includes(to));
 }
 
+// A cancelled review still owns the in_progress "BuildIT / review" check run that went up when it
+// started, and GitHub leaves that run spinning until something completes it. A workspace that made
+// the check required could then never merge the pull request - BuildIT itself blocked the merge,
+// and no action in the product cleared it, because the sweeper only walks active statuses and
+// `cancelled` is terminal. Every writer that ends a review by cancellation renders its notice from
+// here so the three of them cannot say three different things.
+export function cancellationNotice(input: { headSha: string; reasonCode?: string }) {
+  const body = input.reasonCode === "superseded_by_new_commit"
+    ? ["A newer commit replaced the one this review was reading, so BuildIT stopped it.",
+      "No code decision was reached and no code was changed. The review of the new commit answers on its own check."]
+    : input.reasonCode === "blocked_expired"
+      ? ["This review waited for a free slot longer than BuildIT holds one, so it never started.",
+        "No code decision was reached and nothing was charged.",
+        "Comment `@buildit review` to start a new one."]
+      : ["This review was cancelled before it finished.",
+        "No code decision was reached and no code was changed.",
+        "Comment `@buildit review` to start a new one."];
+  return {
+    title: input.reasonCode === "superseded_by_new_commit"
+      ? "BuildIT: superseded by a newer commit"
+      : input.reasonCode === "blocked_expired"
+        ? "BuildIT: review expired before it could start"
+        : "BuildIT: review cancelled",
+    summary: [
+      `Head: \`${input.headSha.toLowerCase()}\``,
+      "",
+      ...body.flatMap(line => [line, ""]),
+      "BuildIT did not merge this pull request.",
+    ].join("\n"),
+  };
+}
+
 // The retention a review actually gets, from the number the organization was told. Capped at the
 // 7-day ceiling the permission receipt states, and defaulting to it when the row is unreadable, so
 // a missing value can never extend retention past what was promised.
