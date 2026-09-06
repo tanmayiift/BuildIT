@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // shape convex/reviews.ts returns - a field invented here would render for nobody.
 const state = vi.hoisted(() => ({
   evidence: undefined as unknown,
+  evidenceError: null as Error | null,
   runs: undefined as unknown,
   comparison: undefined as unknown,
   comparisonError: null as Error | null,
@@ -23,7 +24,11 @@ vi.mock("convex/react", () => ({
   useQuery: (reference: string, args: unknown) => {
     if (args === "skip") return undefined;
     state.queries.push({ reference, args });
-    if (reference === "reviews:getEvidence") return state.evidence;
+    if (reference === "reviews:getEvidence") {
+      // reviews:getEvidence throws rather than returning null, and useQuery rethrows it in render.
+      if (state.evidenceError) throw state.evidenceError;
+      return state.evidence;
+    }
     if (reference === "reviews:runHistory") return state.runs;
     // Convex's useQuery throws a failed query's error out of render rather than returning it.
     if (reference === "reviews:compareRuns") {
@@ -323,5 +328,61 @@ describe("the handoff record", () => {
     state.runs = [run("run-current", 1_700_000_000_000)];
     render(<LiveReviewDetail id="run-current" />);
     expect(screen.queryByText("What each stage was given, and what it carried forward")).toBeNull();
+  });
+});
+
+// The review page had a boundary around the run-diff query and none around the evidence query it is
+// built on. reviews:getEvidence throws - it never returns null - for a malformed id, a review in
+// another workspace, a membership that was removed, and an installation that was suspended or
+// uninstalled, and every one of those took the whole page to app/error.tsx: "We could not load this
+// workspace", wrong noun, no mention of the review, and a Retry button that re-rendered straight
+// back into the same throw because the answer is deterministic. The state the authors wrote for
+// exactly this, at "Review evidence is unavailable", was unreachable: `evidence` was only ever
+// undefined or a thrown error, never the null that branch tested for.
+describe("a review this reader cannot open", () => {
+  const refused = () => new Error("[Request ID: 8f2] Server Error\nUncaught ConvexError: not_found_or_forbidden");
+
+  beforeEach(() => {
+    state.evidence = evidence;
+    state.runs = [run("run-current", 1_700_000_000_000)];
+    state.evidenceError = refused();
+    state.action.mockReset().mockResolvedValue([]);
+  });
+  afterEach(() => { state.evidenceError = null; cleanup(); });
+
+  it("renders the review-scoped unavailable state rather than taking the page down", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<LiveReviewDetail id="run-missing" />);
+
+    const card = (await screen.findByText("Review evidence is unavailable")).closest("section")!;
+    expect(card.textContent).toContain("not in your active workspace");
+    // The two causes a reader has no way of guessing, and would otherwise read as BuildIT losing
+    // their review: their membership was removed, or the App was uninstalled or suspended.
+    expect(card.textContent).toContain("uninstalled or suspended");
+    expect(screen.getByRole("link", { name: "Open review queue" }).getAttribute("href")).toBe("/reviews");
+    // The route error page's copy, and the server's code, must never be what a person reads.
+    expect(document.body.textContent).not.toContain("We could not load this workspace");
+    expect(document.body.textContent).not.toContain("not_found_or_forbidden");
+    expect(document.body.textContent).not.toContain("Server Error");
+    logged.mockRestore();
+  });
+
+  it("says nothing about the review changed when the failure is not a refusal", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.evidenceError = new Error("Failed to fetch");
+    render(<LiveReviewDetail id="run-current" />);
+
+    const card = (await screen.findByText("Review evidence is unavailable")).closest("section")!;
+    expect(card.textContent).toContain("Nothing about the review changed");
+    expect(card.textContent).not.toContain("not in your active workspace");
+    logged.mockRestore();
+  });
+
+  it("still renders the review when the evidence query answers", async () => {
+    // The control: the boundary must not swallow a page that works.
+    state.evidenceError = null;
+    render(<LiveReviewDetail id="run-current" />);
+    expect(await screen.findByText("acme/public-api")).not.toBeNull();
+    expect(screen.queryByText("Review evidence is unavailable")).toBeNull();
   });
 });

@@ -119,9 +119,21 @@ async function startReviewForPullRequest(ctx: ActionCtx, input: StartReviewInput
       },
     );
     if (review.status !== "queued") {
-      const blocked = review.blockedReason === "concurrency_limit_reached"
-        ? { title: "BuildIT is at its review limit", summary: "This workspace already has as many reviews running as its plan allows. This one will not start. Wait for a running review to finish, or cancel one, then comment again." }
-        : { title: "BuildIT needs a model key before it can review", summary: "No model provider is connected to this workspace yet, so there is nothing to run the review with. Connect a key in BuildIT, then comment `@buildit review` again." };
+      // Say which of the three it is. This branch used to answer every non-concurrency case with
+      // "no model provider is connected", which is wrong whenever a key is connected and the
+      // problem is something else - and it sends the reader to the one screen that will not help.
+      const reason = "blockedReason" in review ? review.blockedReason : undefined;
+      const asked = "requestedProvider" in review ? review.requestedProvider : undefined;
+      const requested = asked ? ` \`${asked}\`` : "";
+      const blocked = "alreadyRunning" in review
+        ? { title: "BuildIT is already reviewing this pull request", summary: "A review is running on this commit. Its result will be posted here when it finishes; there is nothing to do. To stop it, comment `@buildit cancel`." }
+        : reason === "concurrency_limit_reached"
+        ? { title: "BuildIT is at its review limit", summary: "This workspace already has as many reviews running as its plan allows. This one will not start. Wait for a running review to finish, then comment `@buildit review` again." }
+        : reason === "provider_model_unavailable"
+          ? { title: "BuildIT cannot use the connected model key", summary: `The key connected for${requested || " this workspace"} exposes no model BuildIT is approved to run. Check the model connection in BuildIT and confirm the key can reach an approved model, then comment \`@buildit review\` again.` }
+          : requested
+            ? { title: `BuildIT has no ${asked} key`, summary: `This review asked for${requested}, and no valid key for that provider is connected to this workspace. Connect one, or comment \`@buildit review\` without a provider to use whichever key is connected.` }
+            : { title: "BuildIT needs a model key before it can review", summary: "No model provider is connected to this workspace yet, so there is nothing to run the review with. Connect a key in BuildIT, then comment `@buildit review` again." };
       await ctx.runAction(internal.reviewPublicationWorker.acknowledge, {
         installationId: input.installationId, githubRepositoryId: input.githubRepositoryId,
         headSha: snapshot.headSha, conclusion: "action_required", ...blocked,

@@ -3365,6 +3365,49 @@ describe("GitHub webhook durability", () => {
   // published, so the author watched the check simply stop - and permanently, since nothing
   // re-queued them. The base moving does not make findings about the head commit wrong; it makes
   // them findings against an older base, which the published report now says.
+  // One `@buildit review provider=<a provider with no key>` used to brick a pull request's reviews
+  // permanently. The refusal was recorded as a `blocked` review; `blocked` is not terminal, so every
+  // later request matched it, returned it, and replayed the same refusal - and because the reuse
+  // path returns before reading a credential, not even naming a provider that does have a key could
+  // get past it. This cost an hour of live debugging, misreported throughout as "no model provider
+  // is connected", which is the one thing it was not.
+  it("retires a blocked review instead of handing it back to every later request", async () => {
+    const t = convexTest(schema, modules);
+    workpoolComponent.register(t, "reviewWorkpool");
+    const tenant = await seedTenant(t, "wedge", "alice");
+    const snapshot = (deliveryId: string) => ({
+      deliveryId, prNumber: 11, headSha: "a".repeat(40), baseSha: "b".repeat(40),
+      headRefHash: "c".repeat(64), baseRefHash: "d".repeat(64), isFork: false,
+      triggerVerb: "review" as const,
+    });
+    const request = async (deliveryId: string, now: number, expectedProvider?: "anthropic" | "openai" | "gemini") => {
+      await t.mutation(internal.githubWebhookData.reserve, {
+        deliveryId, event: "issue_comment", action: "created", installationId: 20,
+        disposition: "processed", signatureValid: true, now,
+      });
+      await t.mutation(internal.githubWebhookData.recordPinnedSnapshot, snapshot(deliveryId));
+      return t.mutation(internal.githubWebhookData.materializeReview, {
+        deliveryId, organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
+        baseRef: "main", triggerActor: "e".repeat(64), actorPermission: "admin" as const, now,
+        ...(expectedProvider ? { expectedProvider } : {}),
+      });
+    };
+
+    // Exactly how it happened in production: name a provider this workspace has no key for.
+    const first = await request("wedge-1", 10, "gemini");
+    expect(first.status).toBe("blocked");
+    expect("blockedReason" in first && first.blockedReason).toBe("provider_credential_invalid");
+
+    // The second request names a provider that does have a key, and must not be handed the refusal.
+    const second = await request("wedge-2", 20);
+    expect(second.reviewId).not.toBe(first.reviewId);
+    expect("alreadyRunning" in second).toBe(false);
+
+    // And the first is retired, so it cannot match a third time either.
+    const retired = await t.run(ctx => ctx.db.get(first.reviewId));
+    expect(terminalStatuses.has(retired!.status)).toBe(true);
+  });
+
   it("records that the base moved without cancelling the reviews running against it", async () => {
     const t = convexTest(schema, modules),
       tenant = await seedTenant(t, "alpha", "alice"),

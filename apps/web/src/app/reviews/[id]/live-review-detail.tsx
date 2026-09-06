@@ -2,7 +2,7 @@
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Component, useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
-import { comparisonRefusal, dismissalReasonLabel, dismissalReasons, dismissalRefusal, eventPresentation, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
+import { comparisonRefusal, dismissalReasonLabel, dismissalReasons, dismissalRefusal, eventPresentation, evidenceRefusal, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
 import type { DismissalReason, SuppressionScope } from "./review-presentation";
 // Why a stage saw less than everything. Named here rather than reusing the verdict reason map,
 // because a gap on the handoff record is a description of what was read - not a reason a verdict
@@ -203,6 +203,27 @@ const evidenceQuery = makeFunctionReference<
           ? "running"
           : "warning";
 export function LiveReviewDetail({ id }: { id: string }) {
+  // Keyed on the id so a refusal on one review does not outlive a move to another one.
+  return <EvidenceBoundary key={id}><ReviewEvidence id={id} /></EvidenceBoundary>;
+}
+
+// reviews:getEvidence throws rather than returning null for a malformed id, a review in another
+// workspace, a membership that was removed, and an installation that was suspended or uninstalled.
+// useQuery rethrows that during render, and only the run-diff query had a boundary - so any one of
+// those took the whole page to app/error.tsx and told the reader "We could not load this
+// workspace", with a Retry button that threw again immediately because the answer never changes.
+class EvidenceBoundary extends Component<{ children: React.ReactNode }, { message: string }> {
+  state: { message: string } = { message: "" };
+  static getDerivedStateFromError(error: unknown) {
+    return { message: evidenceRefusal(error) };
+  }
+  render() {
+    if (!this.state.message) return this.props.children;
+    return <div className="content"><section className="live-state"><span className="state-pulse" /><div><strong>Review evidence is unavailable</strong><p>{this.state.message}</p><a className="button" href="/reviews">Open review queue</a></div></section></div>;
+  }
+}
+
+function ReviewEvidence({ id }: { id: string }) {
   const { isAuthenticated, isLoading } = useConvexAuth(),
     cancel = useAction(cancelAction),
     loadFindingDetails = useAction(findingDetailsAction),

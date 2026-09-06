@@ -164,6 +164,28 @@ export function comparisonRefusal(error: unknown): string {
     : "This comparison could not be loaded, so nothing is shown above. Nothing about either review changed. Choose the run again in a moment.";
 }
 
+// reviews:getEvidence throws for a malformed id, a review in another workspace, a membership that
+// was removed, and a GitHub installation that was suspended or uninstalled - and useQuery rethrows
+// that out of render. With no boundary above it the whole review page went to app/error.tsx and
+// said "We could not load this workspace", which names the wrong thing and offers a Retry button
+// that throws again on the next render, because the answer is deterministic.
+const evidenceRefusals: Record<string, string> = {
+  not_found_or_forbidden:
+    "This review is not in your active workspace, or it no longer exists. That also happens when your membership was removed, or when the BuildIT GitHub App was uninstalled or suspended on its repository. Open the review queue to see the reviews you can read.",
+};
+
+export function evidenceRefusal(error: unknown): string {
+  // Same two shapes as dismissalRefusal: a ConvexError carries its code in .data and repeats it in
+  // .message, and a transport failure has only a message.
+  const source = error as { data?: unknown; message?: unknown } | null;
+  const text = [typeof source?.data === "string" ? source.data : "",
+    typeof source?.message === "string" ? source.message : String(error ?? "")].join(" ");
+  const known = Object.keys(evidenceRefusals).find(code => text.includes(code));
+  return known
+    ? evidenceRefusals[known]!
+    : "This review could not be loaded, so nothing about it is shown. Nothing about the review changed. Open the review queue and try it again from there.";
+}
+
 // Every value of the suppressionScope union in convex/validators.ts, in the order a person narrows
 // a decision. The Record makes a missing key a compile error, so a new scope cannot reach a select
 // as the database word. The labels say how far the decision is recorded as applying: BuildIT reads

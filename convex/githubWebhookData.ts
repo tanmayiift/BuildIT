@@ -233,7 +233,23 @@ export const materializeReview = internalMutation({
           .eq("mode", mode),
       )
       .collect();
-    const existing = matching.find((review) => !terminalStatuses.has(review.status));
+    // A blocked review never started and holds no work: it is a recorded refusal. It was also
+    // non-terminal, so it matched here and was handed back to every later request, which replayed
+    // the same refusal forever. One `@buildit review provider=<a provider with no key>` therefore
+    // bricked that pull request's reviews permanently - the next request could not even be a
+    // different provider, because it never got as far as reading one. Retire it and let the new
+    // request build a fresh review instead.
+    const stale = matching.filter(review => review.status === "blocked");
+    for (const review of stale) {
+      await ctx.db.patch(review._id, {
+        status: "cancelled", statusReasonCode: "superseded_by_new_commit",
+        nextActionCode: "start_new_review", currentStage: "complete",
+        completedAt: args.now, updatedAt: args.now,
+      });
+    }
+    const existing = matching.find(
+      (review) => !terminalStatuses.has(review.status) && review.status !== "blocked",
+    );
     if (existing) {
       await ctx.db.patch(delivery._id, { reviewId: existing._id });
       return {
@@ -241,6 +257,9 @@ export const materializeReview = internalMutation({
         status: existing.status,
         headSha: existing.headSha,
         executionGeneration: existing.executionGeneration,
+        // Carried so the caller can say "a review is already running" rather than falling through
+        // to the no-key message, which is what it used to announce for every reused review.
+        alreadyRunning: true as const,
       };
     }
     let config = repository.configRevisionId
@@ -371,7 +390,22 @@ export const materializeReview = internalMutation({
       reviewId,
       status,
       // The caller tells the pull request why nothing is going to happen, which needs the reason.
-      blockedReason: overConcurrency ? ("concurrency_limit_reached" as const) : credential ? undefined : ("provider_credential_invalid" as const),
+      // Three ways a review refuses to start, and the caller used to be able to name only two - so
+      // anything that was not the concurrency limit was announced on the pull request as "no model
+      // provider is connected", including a key that is connected and simply exposes no model
+      // BuildIT can use. Debugging a live incident against that message costs an hour, because the
+      // one thing it rules out is the thing that is actually wrong.
+      blockedReason: overConcurrency
+        ? ("concurrency_limit_reached" as const)
+        : !credential
+          ? ("provider_credential_invalid" as const)
+          : !model
+            ? ("provider_model_unavailable" as const)
+            : undefined,
+      // Echoed back so the message can say which provider was asked for rather than implying none
+      // exists: `@buildit review provider=anthropic` on an OpenAI-only workspace is a different
+      // problem from having no key at all, and only the author knows which they meant.
+      ...(args.expectedProvider ? { requestedProvider: args.expectedProvider } : {}),
       headSha: delivery.headSha,
       executionGeneration: 0,
     };

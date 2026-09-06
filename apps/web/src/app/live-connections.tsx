@@ -3,6 +3,7 @@
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { ActionLink } from "./action";
+import { executionReadiness, serviceUnconfiguredDetail, serviceUnconfiguredSummary, type RuntimeReadiness } from "./execution-readiness";
 import { useSampleTour } from "./workspace-route-boundary";
 import { useEffect, useState } from "react";
 
@@ -25,7 +26,7 @@ const receiptQuery = makeFunctionReference<"query", Record<string, never>, null 
 type TrackerConnection = { id: string; provider: string; workspaceId: string | null; scopes: string[]; status: string; maskedSuffix: string | null; lastUsedAt: number | null; createdAt: number };
 const trackerConnectionsQuery = makeFunctionReference<"query", { organizationId: string }, TrackerConnection[]>("integrations:listTrackerConnections");
 const revokeTracker = makeFunctionReference<"mutation", { organizationId: string; connectionId: string; requestId: string }, { id: string; status: "revoked" }>("integrations:revokeTrackerConnection");
-const readinessQuery = makeFunctionReference<"query", Record<string, never>, { executionEnabled: boolean }>("runtimeReadiness:current");
+const readinessQuery = makeFunctionReference<"query", Record<string, never>, RuntimeReadiness>("runtimeReadiness:current");
 type Member = { id: string; userId: string; name: string | null; githubLogin: string | null; role: "viewer" | "developer" | "admin" | "owner"; status: "active" | "invited"; createdAt: number; updatedAt: number };
 const membersQuery = makeFunctionReference<"query", { organizationId: string }, Member[]>("memberships:list");
 const inviteMember = makeFunctionReference<"mutation", { organizationId: string; githubLogin: string; role: "viewer" | "developer" | "admin"; requestId: string }, string>("memberships:inviteByGitHubLogin");
@@ -355,15 +356,17 @@ export function ConnectionBanner() {
   const readiness = useQuery(readinessQuery, connection && connection.state !== "signed_out" ? {} : "skip");
   if (!connection) return <div className="preview-banner" role="status"><span className="preview-label">Checking</span><span>Confirming your private workspace before showing repository data.</span></div>;
   const connected = connection?.state === "connected";
-  const execution = readiness?.executionEnabled;
+  const execution = executionReadiness(readiness);
   const message = !connected
     ? "Sample evidence is clearly marked. Connect GitHub to replace setup examples with your isolated workspace."
-    : execution === undefined
+    : execution === "checking"
       ? `${connection.repositories.length} GitHub repositories connected. Checking whether this workspace can start reviews.`
-      : execution
+      : execution === "ready"
         ? `${connection.repositories.length} GitHub repositories connected. Reviews can start only after exact-scope consent.`
-        : `${connection.repositories.length} GitHub repositories connected. Repository execution and AI review remain disabled until their safety gates pass.`;
-  return <div className="preview-banner" role="status"><span className="preview-label">{connected ? execution === undefined ? "Checking" : "Connected" : "Preview"}</span><span>{message}</span><a href={connected ? "/repositories" : "/data-handling"}>{connected ? "View access" : "Trust boundary"}</a></div>;
+        : execution === "service_unconfigured"
+          ? `${connection.repositories.length} GitHub repositories connected. Reviews cannot start because ${serviceUnconfiguredSummary} — a BuildIT service problem, not your repositories or your setup.`
+          : `${connection.repositories.length} GitHub repositories connected. Repository execution and AI review remain disabled until their safety gates pass.`;
+  return <div className="preview-banner" role="status"><span className="preview-label">{connected ? execution === "checking" ? "Checking" : "Connected" : "Preview"}</span><span>{message}</span><a href={connected ? "/repositories" : "/data-handling"}>{connected ? "View access" : "Trust boundary"}</a></div>;
 }
 
 export function SetupProgress() {
@@ -378,23 +381,27 @@ export function OverviewReadiness() {
   const readiness = useQuery(readinessQuery, connection && connection.state !== "signed_out" ? {} : "skip");
   const signedIn = Boolean(connection && connection.state !== "signed_out");
   const connected = connection?.state === "connected";
-  const execution = readiness?.executionEnabled;
+  const execution = executionReadiness(readiness);
   const title = !connected
     ? "Explore freely. Connect only when an action needs it."
-    : execution === undefined
+    : execution === "checking"
       ? "Repository access is ready. Checking review readiness."
-      : execution
+      : execution === "ready"
         ? "Repository access is ready. Review one exact pull request."
-        : "Repository access is ready. Review execution is safety-blocked.";
+        : execution === "service_unconfigured"
+          ? "Repository access is ready. BuildIT cannot start reviews right now."
+          : "Repository access is ready. Review execution is safety-blocked.";
   const detail = !connected
     ? "Browsing this tour needs no key. GitHub is requested when you connect a repository; a model key is requested only when you start AI analysis."
-    : execution === undefined
+    : execution === "checking"
       ? `${connection.repositories.length} selected repositories are visible only inside ${connection.organization?.name}. BuildIT is checking its execution boundary.`
-      : execution
+      : execution === "ready"
         ? `${connection.repositories.length} selected repositories are visible only inside ${connection.organization?.name}. Preview an exact pull request before BuildIT reads code or runs checks.`
-        : `${connection.repositories.length} selected repositories are visible only inside ${connection.organization?.name}. BuildIT will not execute code until sandbox and provider safety checks pass.`;
-  const reviewStep = !connected ? "Add BYOK only when analysis starts" : execution === undefined ? "Checking execution readiness" : execution ? "Preview one exact pull request" : "Blocked until execution safety is ready";
-  return <section className="readiness" aria-labelledby="readiness-title"><div><p className="eyebrow">Your path to a live review</p><h2 id="readiness-title">{title}</h2><p>{detail}</p></div><ol><li data-state={signedIn ? "ready" : undefined}><span>1</span><div><strong>Sign in</strong><small>{signedIn ? "GitHub identity verified" : "Save your workspaces and preferences"}</small></div></li><li data-state={connected ? "ready" : undefined}><span>2</span><div><strong>Select repositories</strong><small>{connected ? `${connection.repositories.length} connected` : "Choose public or private access in GitHub"}</small></div></li><li data-state={execution ? "ready" : undefined}><span>3</span><div><strong>Run a review</strong><small>{reviewStep}</small></div></li></ol></section>;
+        : execution === "service_unconfigured"
+          ? `${connection.repositories.length} selected repositories are visible only inside ${connection.organization?.name}. ${serviceUnconfiguredDetail}`
+          : `${connection.repositories.length} selected repositories are visible only inside ${connection.organization?.name}. BuildIT will not execute code until sandbox and provider safety checks pass.`;
+  const reviewStep = !connected ? "Add BYOK only when analysis starts" : execution === "checking" ? "Checking execution readiness" : execution === "ready" ? "Preview one exact pull request" : execution === "service_unconfigured" ? "Waiting on BuildIT, not on you" : "Blocked until execution safety is ready";
+  return <section className="readiness" aria-labelledby="readiness-title"><div><p className="eyebrow">Your path to a live review</p><h2 id="readiness-title">{title}</h2><p>{detail}</p></div><ol><li data-state={signedIn ? "ready" : undefined}><span>1</span><div><strong>Sign in</strong><small>{signedIn ? "GitHub identity verified" : "Save your workspaces and preferences"}</small></div></li><li data-state={connected ? "ready" : undefined}><span>2</span><div><strong>Select repositories</strong><small>{connected ? `${connection.repositories.length} connected` : "Choose public or private access in GitHub"}</small></div></li><li data-state={execution === "ready" ? "ready" : undefined}><span>3</span><div><strong>Run a review</strong><small>{reviewStep}</small></div></li></ol></section>;
 }
 
 export function SetupAccessSummary({ stepIndex }: { stepIndex: number }) {
@@ -404,7 +411,8 @@ export function SetupAccessSummary({ stepIndex }: { stepIndex: number }) {
   const signedIn = Boolean(connection && connection.state !== "signed_out");
   const connected = connection?.state === "connected";
   const providerDetail = credential.ready ? "Encrypted and valid" : signedIn && !credential.canManage ? "Managed by Admin" : stepIndex > 1 ? "Optional" : "Not requested";
-  return <><p className="eyebrow">Access at this step</p><AccessRow label="GitHub identity" active={signedIn} detail={signedIn ? "Verified" : "Required"} /><AccessRow label="Selected repositories" active={connected} detail={connection === undefined ? "Checking" : connected ? `${connection.repositories.length} connected` : "Not connected"} /><AccessRow label="Provider API key" active={credential.ready} detail={providerDetail} /><AccessRow label="Repository execution" active={readiness?.executionEnabled ?? false} detail={signedIn && readiness === undefined ? "Checking" : readiness?.executionEnabled ? "Release gate passed" : "Safety blocked"} /><p className="aside-note">These states come from your active workspace. A check mark means the connection is verified now.</p></>;
+  const execution = executionReadiness(readiness);
+  return <><p className="eyebrow">Access at this step</p><AccessRow label="GitHub identity" active={signedIn} detail={signedIn ? "Verified" : "Required"} /><AccessRow label="Selected repositories" active={connected} detail={connection === undefined ? "Checking" : connected ? `${connection.repositories.length} connected` : "Not connected"} /><AccessRow label="Provider API key" active={credential.ready} detail={providerDetail} /><AccessRow label="Repository execution" active={execution === "ready"} detail={signedIn && readiness === undefined ? "Checking" : execution === "ready" ? "Release gate passed" : execution === "service_unconfigured" ? "BuildIT configuration incomplete" : "Safety blocked"} /><p className="aside-note">These states come from your active workspace. A check mark means the connection is verified now.</p></>;
 }
 
 export function PermissionReceipt() {
@@ -413,7 +421,13 @@ export function PermissionReceipt() {
   // there tells a fully-connected org the opposite of the truth, on the trust surface.
   if (!connection) return <section className="setup-card" aria-live="polite"><p className="eyebrow">Permission receipt</p><p>Checking what is connected…</p></section>;
   if (connection.state === "signed_out") return <section className="setup-card"><p className="eyebrow">Permission receipt</p><h2>Nothing is connected</h2><p>GitHub sign-in identifies you. It does not grant repository or model access.</p></section>;
-  if (!receipt) return <section className="setup-card" aria-live="polite"><p>Loading verified permission receipt…</p></section>;
+  if (receipt === undefined) return <section className="setup-card" aria-live="polite"><p>Loading verified permission receipt…</p></section>;
+  // permissionReceipts:current returns null, not undefined, when no workspace is active - so this
+  // branch had already been answered and still said "Loading verified permission receipt…" for the
+  // rest of the session, on every setup step past the first. The shape below matches the
+  // signed-out card above it rather than the shared empty state, because this sits between two
+  // other setup cards.
+  if (!receipt) return <section className="setup-card"><p className="eyebrow">Permission receipt</p><h2>No workspace is active yet</h2><p>A receipt lists what one workspace has granted. You are signed in and none is active, so there is nothing to receipt yet.</p><div className="button-row"><ActionLink href="/setup/install">Choose repository access</ActionLink><ActionLink priority="secondary" href="/account">Accept a workspace invitation</ActionLink></div></section>;
   const installation=receipt.installations[0],repositoryNames=receipt.repositories.map(item=>`${item.owner}/${item.name}`),repositoryById=new Map(receipt.repositories.map(item=>[item.id,`${item.owner}/${item.name}`]));
   const manageHref=installation?(installation.accountType==="organization"?`https://github.com/organizations/${encodeURIComponent(installation.accountLogin)}/settings/installations/${installation.installationId}`:`https://github.com/settings/installations/${installation.installationId}`):"https://github.com/apps/buildit-agentic-review/installations/new";
   return <section className="setup-card"><div className="optional-heading"><div><p className="eyebrow">Verified permission receipt</p><h2>{receipt.identity.login} → {receipt.organization.name}</h2></div><span className="status success">Server checked</span></div><div className="trust-terms"><div><strong>Repositories visible</strong><span>{repositoryNames.length?repositoryNames.join(", "):"None selected"}</span></div><div><strong>GitHub can write</strong><span>{installation?"One BuildIT Check, one PR summary, and a consented stacked PR":"Nothing—no active installation"}</span></div><div><strong>GitHub cannot write</strong><span>Merge actions, workflows, repository settings, or unselected repositories</span></div><div><strong>Source handling</strong><span>Encrypted artifacts stay in Ireland ({receipt.boundaries.sourceRegion}); isolated checks run in Paris; source expires within {receipt.boundaries.maximumSourceRetentionHours} hours</span></div></div>{installation?<div className="permission-list"><div><code>Contents · {installation.permissions.contents}</code><span>Read during review; write capability is used only for consented stacked-PR delivery.</span></div><div><code>Pull requests · {installation.permissions.pullRequests}</code><span>Read context and maintain one BuildIT report comment.</span></div><div><code>Checks · {installation.permissions.checks}</code><span>Publish the result on the exact commit.</span></div><div><code>Issues · {installation.permissions.issues}</code><span>Read linked intent. No issue write access.</span></div></div>:null}<section className="permission-provider-access" aria-labelledby="permission-provider-access-title"><div className="permission-provider-heading"><div><p className="eyebrow">Encrypted credentials</p><h3 id="permission-provider-access-title">Model-provider access</h3></div>{receipt.credentials.length?<span className="status success">{receipt.credentials.length} active</span>:null}</div>{receipt.credentials.length?<ul className="permission-provider-list" aria-label="Active model-provider access">{receipt.credentials.map(item=><li key={item.id}><span className="provider-mark" aria-hidden="true">{item.provider.slice(0,2).toUpperCase()}</span><span className="permission-provider-identity"><strong>{modelProviderName(item.provider)}</strong><code aria-label={`Key ending in ${item.maskedSuffix}`}>•••• {item.maskedSuffix}</code></span><dl className="permission-provider-metadata"><div><dt>Scope</dt><dd>{item.repositoryId?repositoryById.get(item.repositoryId)??"Removed repository":"All selected repositories"}</dd></div><div><dt>Activity</dt><dd>{item.lastUsedAt?`Used ${new Date(item.lastUsedAt).toLocaleDateString()}`:"Not used yet"}</dd></div></dl></li>)}</ul>:<p className="muted-copy">No model key is visible to your role, or none is connected.</p>}</section><div className="button-row"><ActionLink priority="secondary" href={manageHref} external>{installation?"Change or revoke GitHub access":"Choose repositories"}</ActionLink><ActionLink priority="tertiary" href="/setup/model">Rotate or revoke model key</ActionLink></div></section>;
@@ -434,11 +448,12 @@ export function SetupHealthState() {
   const readiness = useQuery(readinessQuery, connection && connection.state !== "signed_out" ? {} : "skip");
   const connected = connection?.state === "connected";
   const checking = connection === undefined || (connection.state !== "signed_out" && readiness === undefined);
-  const executionReady = readiness?.executionEnabled ?? false;
+  const execution = executionReadiness(readiness);
+  const executionReady = execution === "ready";
   // This row is the one BuildIT cannot verify from the browser: the App registration is proved
   // by the server returning an installation at all, so derive it rather than asserting it.
   const registrationProved = Boolean(connection && connection.installations.length > 0);
-  return <section className="setup-card"><h2>Readiness checks</h2><div className="health-list"><Health ready={registrationProved} title="GitHub App registration" detail={checking ? "Checking the App installation on the server" : registrationProved ? "Verified App identity and least-privilege permissions" : "No installation has been verified for this workspace yet"} result={checking ? "required" : registrationProved ? "ready" : "required"} /><Health ready={connected} title="Repository installation" detail={connected ? `${connection.repositories.length} selected repositories in ${connection.organization?.name}` : connection ? stateCopy[connection.state].body : "Checking active workspace"} result={connected ? "ready" : "required"} /><Health ready={executionReady} title="Sandbox boundary" detail={checking ? "Checking the execution boundary on the server" : executionReady ? "Broker, runner, and release probes are enabled" : "Execution remains disabled until adversarial tests pass"} result={checking ? "required" : executionReady ? "ready" : "blocked"} /><Health ready={credential.ready} title="Model provider" detail={credential.ready ? "A valid encrypted organization credential is available" : credential.canManage ? "Optional until AI analysis" : "Managed by an organization Admin or Owner"} result={credential.ready ? "ready" : "optional"} /></div></section>;
+  return <section className="setup-card"><h2>Readiness checks</h2><div className="health-list"><Health ready={registrationProved} title="GitHub App registration" detail={checking ? "Checking the App installation on the server" : registrationProved ? "Verified App identity and least-privilege permissions" : "No installation has been verified for this workspace yet"} result={checking ? "required" : registrationProved ? "ready" : "required"} /><Health ready={connected} title="Repository installation" detail={connected ? `${connection.repositories.length} selected repositories in ${connection.organization?.name}` : connection ? stateCopy[connection.state].body : "Checking active workspace"} result={connected ? "ready" : "required"} /><Health ready={executionReady} title="Sandbox boundary" detail={checking ? "Checking the execution boundary on the server" : executionReady ? "Broker, runner, and release probes are enabled" : execution === "service_unconfigured" ? serviceUnconfiguredDetail : "Execution remains disabled until adversarial tests pass"} result={checking ? "required" : executionReady ? "ready" : execution === "service_unconfigured" ? "unavailable" : "blocked"} /><Health ready={credential.ready} title="Model provider" detail={credential.ready ? "A valid encrypted organization credential is available" : credential.canManage ? "Optional until AI analysis" : "Managed by an organization Admin or Owner"} result={credential.ready ? "ready" : "optional"} /></div></section>;
 }
 function Health({ ready, title, detail, result }: { ready: boolean; title: string; detail: string; result: string }) { return <div><span className={`health-dot${ready ? " ready" : ""}`} /><span><strong>{title}</strong><small>{detail}</small></span><code>{result}</code></div>; }
 
@@ -459,12 +474,24 @@ export function MembersWorkspaceState() {
 
 export function TrackerConnections() {
   const tour = useSampleTour(), connection = useConnection(), organizationId = connection?.organization?.id;
-  const rows = useQuery(trackerConnectionsQuery, !tour && organizationId ? { organizationId } : "skip");
+  // integrations:listTrackerConnections requires admin, and Convex rethrows a refused query out of
+  // render - so subscribing on nothing but "an organization id exists" took the whole /integrations
+  // route into app/error.tsx for every viewer and developer, with a Retry button that threw again
+  // on the next render. The sibling useCredentialReadiness gates on exactly this; this one did not.
+  const role = connection?.organization?.role, canManage = role === "owner" || role === "admin";
+  const rows = useQuery(trackerConnectionsQuery, !tour && canManage && organizationId ? { organizationId } : "skip");
   const revoke = useMutation(revokeTracker);
   const [message, setMessage] = useState(""), [working, setWorking] = useState("");
+  if (tour || !organizationId) return null;
+  // A role that may not read this list is told where the state lives. Rendering nothing would leave
+  // the two "Not available" cards beside this as the only answer, and those describe BuildIT's
+  // tracker support rather than what this workspace has connected.
+  if (!canManage) return <section className="settings-list" aria-label="Connected trackers">
+    <article className="setting-row"><div><strong>Connected trackers</strong><p>Only an owner or admin can see which issue trackers {connection?.organization?.name ?? "this workspace"} has connected, or revoke one. Ask one of them if a tracker connection needs changing.</p></div><span className="status neutral">Owner or admin manages this</span></article>
+  </section>;
   // Nothing to say when there is nothing connected - the two "Not available" cards beside this
   // already cover the not-set-up story, and an empty panel would just repeat them.
-  if (tour || !organizationId || !rows?.length) return null;
+  if (!rows?.length) return null;
   const live = rows.filter(row => row.status !== "revoked");
   if (!live.length) return null;
   return <section className="settings-list" aria-label="Connected trackers">

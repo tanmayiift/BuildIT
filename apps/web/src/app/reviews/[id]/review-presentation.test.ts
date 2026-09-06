@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dismissalReasonLabel, dismissalRefusal, eventPresentation, nextActionPresentation, pairFindingDetails, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, suppressionScopeLabel } from "./review-presentation";
+import { dismissalReasonLabel, dismissalRefusal, eventPresentation, evidenceRefusal, nextActionPresentation, pairFindingDetails, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, suppressionScopeLabel } from "./review-presentation";
 
 describe("review presentation", () => {
   it("explains cancellation without implying a code failure", () => {
@@ -67,6 +67,25 @@ describe("review presentation", () => {
     expect(dismissalRefusal(new Error("Failed to fetch"))).toContain("nothing about the review changed");
     for (const code of ["not_found_or_forbidden", "finding_fingerprint_invalid", "Server Error"]) {
       expect(refused + dismissalRefusal(new Error("Failed to fetch"))).not.toContain(code);
+    }
+  });
+
+  // reviews:getEvidence throws for a malformed id, a review in another workspace, a membership that
+  // was removed, and an installation that was suspended or uninstalled - and every one of those
+  // reached the reader as the generic route error page's "We could not load this workspace", which
+  // names the wrong noun and offers a Retry that cannot ever succeed.
+  it("turns a refused review into a sentence about the review, naming what a person can do", () => {
+    const refused = evidenceRefusal(new Error("[Request ID: 8f2] Server Error\nUncaught ConvexError: not_found_or_forbidden"));
+    expect(refused).toContain("not in your active workspace");
+    expect(refused).toContain("review queue");
+    // The uninstall and suspension cases produce the same code, and are the ones a reader is least
+    // likely to guess: every previously-working review URL in the workspace starts refusing at once.
+    expect(refused).toContain("uninstalled or suspended");
+    // A ConvexError puts the code in .data; a transport failure has only a message.
+    expect(evidenceRefusal({ data: "not_found_or_forbidden" })).toBe(refused);
+    expect(evidenceRefusal(new Error("Failed to fetch"))).toContain("Nothing about the review changed");
+    for (const code of ["not_found_or_forbidden", "Server Error", "Request ID"]) {
+      expect(refused + evidenceRefusal(new Error("Failed to fetch"))).not.toContain(code);
     }
   });
 
