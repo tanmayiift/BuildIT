@@ -88,9 +88,15 @@ if (process.argv.includes("--dry-run")) {
 if (process.argv.includes("--verify") || process.argv.includes("--report")) {
   const token = process.env.BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN;
   if (!token) {
-    console.error("buildit_grafana_verification_required: no Grafana read credential is configured; deployed rules were NOT checked.");
-    console.error("Use --dry-run for offline definition validation. A production gate requires live read access.");
-    process.exit(2);
+    const required = process.argv.includes("--require") || process.argv.includes("--report");
+    const message = "no Grafana read credential is configured; deployed alert rules were NOT checked against observability/alerts.yml.";
+    if (required) {
+      console.error(`buildit_grafana_verification_required: ${message}`);
+      process.exit(2);
+    }
+    console.log(`::warning title=Grafana rules unverified::${message} Set BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN to turn this into a real gate.`);
+    console.log("buildit_grafana_verification_skipped: offline definition validation still ran via alerts:check.");
+    process.exit(0);
   }
   const report = await readGrafanaEvidence({ desired: rules, token, base });
   if (process.argv.includes("--report")) {
