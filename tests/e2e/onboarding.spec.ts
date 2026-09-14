@@ -102,37 +102,42 @@ test("a stranger with no account can scan code, understand every setup step, and
   await expect(page.getByRole("link", { name: "Review access in GitHub" })).toBeVisible();
   await expect(page.getByRole("link", { name: /Leave setup and keep exploring/ })).toBeVisible();
 
-  const advance = page.getByRole("link", { name: "Continue", exact: true });
+  const advance = page.getByRole("link", { name: /^Continue to / });
   await expect(advance).toBeVisible();
   await beat();
   await advance.click();
+  await page.waitForURL(/\/setup\/model$/);
+
+  // Reachable and self-explaining, but off the path to a first review - so it is opened, not walked to.
+  await page.goto("/setup/repository");
 
   // ------------------------------------------------- repository policy: reachable, not a step
   // The stepper carries the three screens that stand between a stranger and a first review -
   // GitHub, the model key, the pull request. Repository policy and the boundary check are real
   // pages a person can open and read, and neither is on the path to value, so they say so rather
   // than claiming a number in a journey they are not part of.
-  await page.waitForURL(/\/setup\/repository$/);
   await expect(page.getByText("Optional setup details", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Confirm repository policy", level: 1 })).toBeVisible();
   await expect(page.getByText("Review trusted checks, protected paths, Autofix delivery, budget, and retention before any execution.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Policy preview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Repository policy", exact: true })).toBeVisible();
   // The reader can see the actual values, not a promise that values exist.
   await expect(page.getByText("Tests · typecheck · lint", { exact: true })).toBeVisible();
   await expect(page.getByText(".github/workflows · migrations", { exact: true })).toBeVisible();
   await expect(page.getByText(/A real repository will load these values from its approved trusted ref/)).toBeVisible();
   // Still signed out, and the page says so plainly instead of implying progress it does not have.
+  // The receipt sits behind a disclosure now, so opening it is part of what is being checked: the
+  // summary is a real control and what it reveals is the truth about access, not a placeholder.
+  await page.getByRole("group").getByText("View granted access").click();
   await expect(page.getByRole("heading", { name: "Nothing is connected" })).toBeVisible();
   await expect(page.getByText("GitHub sign-in identifies you. It does not grant repository or model access.")).toBeVisible();
   await beat();
 
-  await page.getByRole("link", { name: "Continue", exact: true }).click();
+  await page.goto("/setup/model");
 
   // ------------------------------------------------------------- step 2 of 3: the model key
-  await page.waitForURL(/\/setup\/model$/);
   await expect(page.getByText("Step 2 of 3 · resumable", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Connect AI only when needed", level: 1 })).toBeVisible();
-  await expect(page.getByText("A model key is optional until you start AI analysis or Autofix. Deterministic checks can be configured first.")).toBeVisible();
+  await expect(page.getByText("Add your own model key for the AI review. It stays encrypted; you approve the cost limit before a review starts.")).toBeVisible();
   // The step a stranger is most likely to bail on, so it has to say it is skippable and why.
   await expect(page.getByText("Optional now", { exact: true })).toBeVisible();
   await expect(page.getByText(/sign in before adding a key/i)).toBeVisible();
@@ -141,10 +146,9 @@ test("a stranger with no account can scan code, understand every setup step, and
   await expect(page.getByLabel("API key")).toHaveCount(0);
   await beat();
 
-  await page.getByRole("link", { name: "Continue", exact: true }).click();
+  await page.goto("/setup/health");
 
   // --------------------------------------------------- the boundary check: reachable, not a step
-  await page.waitForURL(/\/setup\/health$/);
   await expect(page.getByText("Optional setup details", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Prove the setup boundary", level: 1 })).toBeVisible();
   await expect(page.getByText("BuildIT verifies access, configuration, runner isolation, and provider readiness without running repository code.")).toBeVisible();
@@ -157,7 +161,7 @@ test("a stranger with no account can scan code, understand every setup step, and
   await expect(sandboxHealth.getByText("blocked", { exact: true })).toBeVisible();
   await expect(page.getByText("Execution remains disabled until adversarial tests pass")).toBeVisible();
   // The last step still offers a way forward rather than ending in a wall.
-  await expect(page.getByRole("link", { name: "Open review queue" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Continue to / })).toBeVisible();
   await beat();
 
   // ---------------------------------------------------------------- and check the claims
@@ -204,7 +208,7 @@ test("a stranger with no account can scan code, understand every setup step, and
     : backend.state === "serving"
       ? `${backend.url} (via ${backend.source}) answered publicProof:summary with ${backend.reviews} reviews.`
       : describeProofBackend(backend);
-  const reviewed = page.locator(".metric").filter({ hasText: "Pull requests reviewed" });
+  const reviewed = page.locator(".metric").filter({ hasText: "Pull requests with a verdict" });
   await expect(reviewed, `/proof rendered no live figure. ${backendNote}`).toBeVisible({ timeout: 20_000 });
   await expect(reviewed.locator("strong")).toHaveText(/^[\d,]+$/);
   const failures = page.locator(".metric").filter({ hasText: "Platform failures" });
