@@ -10,6 +10,11 @@ import { join } from "node:path";
 //
 // Local tests cannot catch this by construction - they resolve the same source the broken export
 // points at. So the invariant is checked on the manifests instead.
+//
+// broker-deployment-boundary.test.ts asserted something close to this and could not have caught it:
+// both of its checks were hardcoded lists of package names, so a dependency nobody remembered to
+// add was invisible to them by design. These derive the set from the imports that exist, which is
+// the only version that catches the next one.
 describe("shared packages resolve the same way in a deployed function as they do here", () => {
   const root = join(import.meta.dirname, "../../packages");
   const shared = readdirSync(root).filter(name => existsSync(join(root, name, "package.json")));
