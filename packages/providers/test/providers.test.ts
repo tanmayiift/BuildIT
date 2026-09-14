@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { assertStrictSchema, conservativeProviderModelCost, conservativeProviderStageCost, ProviderClient, ProviderError, selectProviderModel } from "../src/index.js";
+import { readFileSync } from "node:fs";
+import { assertStrictSchema, checked, conservativeProviderModelCost, conservativeProviderStageCost, ProviderClient, ProviderError, selectProviderModel } from "../src/index.js";
 const request={model:"allowed",system:"policy",input:"data",schemaName:"result",schema:{type:"object",properties:{ok:{type:"boolean"}},required:["ok"],additionalProperties:false},maxOutputTokens:100};
 describe("provider adapters",()=>{
   it("prefers the cost-effective OpenAI review model when the key can use it",()=>{
@@ -23,4 +24,33 @@ describe("provider adapters",()=>{
     expect(()=>assertStrictSchema({type:"object",properties:{criterionId:{type:"string"}},required:[],additionalProperties:false})).toThrow("malformed_response");
   });
   it("retries only temporary 429 and 529 failures with bounded backoff",async()=>{let call=0;const waits:number[]=[];const client=new ProviderClient(async()=>++call===1?new Response("",{status:429,headers:{"retry-after":"1"}}):call===2?new Response("",{status:529}):new Response(JSON.stringify({candidates:[{finishReason:"STOP",content:{parts:[{text:'{"ok":true}'}]}}]})));await expect(client.generateWithRetry("gemini","key",request,new Set(["allowed"]),{maxRetries:2,baseMs:10},async ms=>{waits.push(ms)})).resolves.toMatchObject({value:{ok:true}});expect(waits).toEqual([1000,20]);const invalid=new ProviderClient(async()=>new Response("",{status:401}));await expect(invalid.generateWithRetry("gemini","key",request,new Set(["allowed"]),{maxRetries:3,baseMs:1},async()=>{})).rejects.toMatchObject({code:"invalid_key"})});
+});
+
+// OpenAI returns 429 both for a rate limit and for an account with no credit. They are opposite
+// conditions - one clears by waiting, the other never does - and both were classified as
+// rate_limited, retried four times, then reported as "the provider is busy".
+describe("telling a rate limit from an empty account", () => {
+  const body = (payload: unknown) => new Response(JSON.stringify(payload), {
+    status: 429, headers: { "content-type": "application/json" },
+  });
+
+  it("reads an exhausted quota out of the 429 body", async () => {
+    await expect(checked(body({ error: { message: "You exceeded your current quota", type: "insufficient_quota" } })))
+      .rejects.toMatchObject({ code: "quota_exhausted" });
+  });
+
+  it("leaves a genuine rate limit retryable, with its Retry-After intact", async () => {
+    const response = new Response(JSON.stringify({ error: { message: "Rate limit reached", type: "requests" } }), {
+      status: 429, headers: { "content-type": "application/json", "retry-after": "30" },
+    });
+    await expect(checked(response)).rejects.toMatchObject({ code: "rate_limited", retryAfterMs: 30_000 });
+  });
+
+  it("does not retry an exhausted quota, because the answer will not change", async () => {
+    // The retry list is the contract: rate_limited and provider_unavailable only.
+    const source = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+    const retryList = source.match(/\["rate_limited","provider_unavailable"\]/);
+    expect(retryList).not.toBeNull();
+    expect(source).not.toContain('["rate_limited","quota_exhausted"');
+  });
 });

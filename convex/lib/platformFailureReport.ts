@@ -3,6 +3,7 @@
 // sentence - "a required platform step failed" - which tells nobody anything.
 export type PlatformFailureReason =
   | "provider_rate_limited"
+  | "provider_quota_exhausted"
   | "repository_too_large"
   | "repository_access_refused"
   | "model_unavailable"
@@ -33,7 +34,7 @@ export function failureDetail(raw: string | undefined, key: string) {
 // This is the guard that lets the stored code be trusted instead of re-derived. Anything written
 // by a path that does not store a real reason still falls back to platform_error.
 const platformFailureReasons = new Set<string>([
-  "provider_rate_limited", "repository_too_large", "repository_access_refused", "model_unavailable",
+  "provider_rate_limited", "provider_quota_exhausted", "repository_too_large", "repository_access_refused", "model_unavailable",
   "change_too_large", "platform_misconfigured", "sandbox_unavailable", "platform_error",
 ]);
 
@@ -44,6 +45,7 @@ export function isPlatformFailureReason(value: string | undefined): value is Pla
 export function classifyPlatformFailure(error: string): PlatformFailureReason {
   if (error.includes("repository_too_large")) return "repository_too_large";
   if (error.includes("repository_access_refused")) return "repository_access_refused";
+  if (error.includes("quota_exhausted")) return "provider_quota_exhausted";
   if (error.includes("rate_limited")) return "provider_rate_limited";
   if (error.includes("http_404") || error.includes("http_401") || error.includes("http_403") || error.includes("provider_credential")) return "model_unavailable";
   if (error.includes("_too_large") || error.includes("tree_truncated")) return "change_too_large";
@@ -55,6 +57,11 @@ export function classifyPlatformFailure(error: string): PlatformFailureReason {
 function body(reason: PlatformFailureReason, detail: string | undefined, soleProvider: boolean) {
   const files = failureDetail(detail, "files");
   const limit = failureDetail(detail, "limit");
+  if (reason === "provider_quota_exhausted") {
+    return ["The model provider refused every request because the account behind this key has no remaining credit or its billing is inactive.",
+      "This is not a rate limit and it will not clear on its own. Waiting and retrying produces the same answer.",
+      "Add credit or fix billing with the provider, then start a new review. No code decision was made and nothing was charged by BuildIT."];
+  }
   if (reason === "provider_rate_limited") {
     return ["The model provider refused this run because its rate limit was reached.",
       "Retry once the provider's limit resets. No code decision was made.",
@@ -105,6 +112,7 @@ function body(reason: PlatformFailureReason, detail: string | undefined, solePro
 
 const titles: Record<PlatformFailureReason, string> = {
   provider_rate_limited: "BuildIT: model provider is busy",
+  provider_quota_exhausted: "BuildIT: the model provider account has no credit left",
   repository_too_large: "BuildIT: this repository is too large to review",
   repository_access_refused: "BuildIT: GitHub refused to serve this repository's files",
   model_unavailable: "BuildIT: the connected model could not be used",

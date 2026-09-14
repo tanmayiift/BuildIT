@@ -39,7 +39,7 @@ export function conservativeProviderStageCost(provider: ProviderName, model: str
 type Http = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export class ProviderError extends Error {
-  constructor(public readonly code: "invalid_key" | "model_unavailable" | "rate_limited" | "provider_unavailable" | "refused" | "truncated" | "malformed_response", public readonly status?: number, public readonly retryAfterMs?: number, public readonly usage?: ProviderUsage) { super(code); this.name = "ProviderError"; }
+  constructor(public readonly code: "invalid_key" | "model_unavailable" | "rate_limited" | "quota_exhausted" | "provider_unavailable" | "refused" | "truncated" | "malformed_response", public readonly status?: number, public readonly retryAfterMs?: number, public readonly usage?: ProviderUsage) { super(code); this.name = "ProviderError"; }
 }
 
 const generateTimeoutMs = 90_000;
@@ -52,9 +52,19 @@ export function assertStrictSchema(schema:JsonSchema){const visit=(node:unknown)
 function own(record:Record<string,unknown>,key:string){return Object.prototype.hasOwnProperty.call(record,key)}
 export function validateSchemaValue(value:unknown,schema:JsonSchema):boolean{const type=schema.type;if(type==="object"){if(!value||typeof value!=="object"||Array.isArray(value))return false;const record=value as Record<string,unknown>,properties=(schema.properties??{}) as Record<string,JsonSchema>,required=Array.isArray(schema.required)?schema.required:[];if(required.some(key=>typeof key!=="string"||!own(record,key)))return false;if(schema.additionalProperties===false&&Object.keys(record).some(key=>!own(properties,key)))return false;return Object.entries(record).every(([key,item])=>!own(properties,key)||validateSchemaValue(item,properties[key]!))}if(type==="array")return Array.isArray(value)&&value.every(item=>validateSchemaValue(item,(schema.items??{}) as JsonSchema));if(type==="string"&&typeof value!=="string"||type==="boolean"&&typeof value!=="boolean"||type==="number"&&(typeof value!=="number"||!Number.isFinite(value))||type==="integer"&&(typeof value!=="number"||!Number.isInteger(value)))return false;if(Array.isArray(schema.enum)&&!schema.enum.includes(value))return false;return true}
 function retryAfter(response: Response) { const header=response.headers.get("retry-after");if(header===null)return undefined;const seconds = Number(header); return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1_000 : undefined; }
-async function checked(response: Response) {
+export async function checked(response: Response) {
   if (response.status === 401 || response.status === 403) throw new ProviderError("invalid_key", response.status);
-  if (response.status === 429) throw new ProviderError("rate_limited", 429, retryAfter(response));
+  // A 429 is two conditions wearing one status code. A real rate limit clears on its own and
+  // deserves a retry; an exhausted prepaid balance returns 429 forever and waiting never fixes it.
+  // Reporting both as "the provider is busy, retry once the limit resets" sends someone off to wait
+  // for something that will not happen - which is the advice BuildIT gave while every review died
+  // on an account with no credit left.
+  if (response.status === 429) {
+    const body = await response.text().catch(() => "");
+    // Matches the signal rather than any one provider's envelope, because they disagree on shape.
+    const exhausted = /insufficient_quota|exceeded_current_quota|billing_not_active|insufficient[_ ]balance|quota.{0,20}exceeded/i.test(body);
+    throw new ProviderError(exhausted ? "quota_exhausted" : "rate_limited", 429, exhausted ? undefined : retryAfter(response));
+  }
   if (response.status >= 500) throw new ProviderError("provider_unavailable", response.status, retryAfter(response));
   if (response.status === 404) throw new ProviderError("model_unavailable", 404);
   if (!response.ok) throw new ProviderError("malformed_response", response.status);

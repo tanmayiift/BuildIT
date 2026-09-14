@@ -200,3 +200,32 @@ it("does not promise that a later model rejection erased earlier charges", () =>
   expect(report.summary).not.toContain("nothing was charged");
   expect(report.summary).toContain("Earlier model attempts may have incurred charges");
 });
+
+// A 429 is two conditions wearing one status code. A rate limit clears on its own; an exhausted
+// prepaid balance returns 429 forever. BuildIT reported both as "the model provider is busy. Retry
+// once the provider's limit resets" - so an account with no credit left produced days of reviews
+// that all died, each one telling the owner to go and wait for something that was never going to
+// happen.
+describe("a 429 that will never clear", () => {
+  const sha = "c".repeat(40);
+
+  it("names an exhausted balance as what it is, and does not tell anyone to wait", () => {
+    const report = platformFailureReport({ headSha: sha, reason: "provider_quota_exhausted" });
+    expect(report.title).toContain("no credit left");
+    expect(report.summary).toContain("not a rate limit");
+    expect(report.summary).toContain("will not clear on its own");
+    expect(report.summary).not.toContain("Retry once the provider");
+  });
+
+  it("still says wait for a genuine rate limit, because that one does clear", () => {
+    const report = platformFailureReport({ headSha: sha, reason: "provider_rate_limited" });
+    expect(report.summary).toContain("rate limit was reached");
+  });
+
+  // Ordering matters: the exhausted-quota code is matched first, because the rate-limit test is a
+  // substring check that would otherwise claim it.
+  it("classifies an exhausted quota ahead of the rate-limit substring", () => {
+    expect(classifyPlatformFailure("quota_exhausted:http_429")).toBe("provider_quota_exhausted");
+    expect(classifyPlatformFailure("rate_limited:http_429")).toBe("provider_rate_limited");
+  });
+});
