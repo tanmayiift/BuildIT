@@ -179,16 +179,99 @@
 .run-diff-empty { color: var(--muted); font-size: .85rem; }
 
 /* Open sandbox. Deliberately plain: it is two regex passes, and dressing it up as a verdict is
-   exactly what the page exists not to do. */
-.scan-result { margin-top: 20px; padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
-.scan-result h2 { margin: 0 0 12px; font-size: 17px; }
-.scan-result ul { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 8px; font-size: 13px; }
-.scan-result strong[data-severity] { text-transform: uppercase; font-size: 11px; letter-spacing: .06em; }
+   exactly what the page exists not to do. The findings sit on the lines they cite because that is
+   the product's whole claim - a list underneath the code throws the citation away. */
+.scan-panel { display: grid; gap: 4px; }
+.scan-form, .scan-output { display: grid; }
+/* A path is short and its width is a hint about that; a full-bleed input invites a paragraph. */
+.scan-path-field { max-width: 340px; }
+.scan-panel .field { display: grid; gap: 6px; margin: 0 0 14px; font-size: 12px; font-weight: 700; }
+.scan-panel label { color: var(--ink-2); }
+.scan-panel input { width: 100%; min-height: 44px; padding: 0 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
+.scan-panel textarea { width: 100%; padding: 11px 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; font: 400 12px/1.7 "JetBrains Mono Variable", monospace; resize: vertical; }
+.scan-result { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.scan-result-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 16px; background: var(--workbench); border-bottom: 1px solid var(--line); }
+.scan-result h2 { margin: 0; font-size: 15px; letter-spacing: -.02em; }
+.scan-tally { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+/* The count is the word as well as the colour: severity is never carried by hue alone. */
+.scan-tally li { padding: 3px 8px; border: 1px solid var(--line-strong); border-radius: 20px; font: 800 10px "JetBrains Mono Variable", monospace; letter-spacing: .05em; text-transform: uppercase; }
+.scan-tally li[data-severity="critical"] { color: var(--danger); background: var(--danger-bg); border-color: #dca6a2; }
+.scan-tally li[data-severity="warning"] { color: var(--warning); background: var(--warning-bg); border-color: #e8c77f; }
+.scan-tally li[data-severity="info"] { color: var(--info); background: var(--info-bg); border-color: #bfd3ec; }
+.scan-code { margin: 0; padding: 8px 0; list-style: none; background: var(--surface); }
+.scan-line { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: start; padding: 0 12px 0 0; border-left: 3px solid transparent; }
+.scan-line[data-flagged] { background: var(--surface-inset); border-left-color: var(--line-strong); }
+.scan-gutter { padding: 2px 10px 2px 0; color: var(--faint); font: 400 11px/1.7 "JetBrains Mono Variable", monospace; text-align: right; user-select: none; }
+.scan-source { padding: 2px 0; font: 400 12px/1.7 "JetBrains Mono Variable", monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.scan-notes { grid-column: 2; display: grid; gap: 6px; margin: 4px 0 8px; padding: 0; list-style: none; }
+.scan-note { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); align-items: baseline; gap: 4px 10px; padding: 9px 11px; background: var(--surface); border: 1px solid var(--line); border-left-width: 3px; border-radius: 6px; font-size: 12px; line-height: 1.5; }
+.scan-note code { color: var(--ink-2); font-size: 11px; overflow-wrap: anywhere; }
+.scan-note span { grid-column: 1 / -1; color: var(--ink-2); }
+.scan-note[data-severity="critical"] { border-left-color: var(--danger); }
+.scan-note[data-severity="warning"] { border-left-color: var(--warning); }
+.scan-note[data-severity="info"] { border-left-color: var(--info); }
+.scan-result strong[data-severity] { text-transform: uppercase; font-size: 10px; letter-spacing: .06em; }
 .scan-result strong[data-severity="critical"] { color: var(--danger); }
 .scan-result strong[data-severity="warning"] { color: var(--warning); }
 .scan-result strong[data-severity="info"] { color: var(--info); }
-.scan-boundary { margin: 0; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.6; }
+.scan-boundary { margin: 0; padding: 11px 16px; color: var(--muted); background: var(--workbench); border-top: 1px solid var(--line); font-size: 11px; line-height: 1.6; }
 .scan-error { margin-top: 16px; padding: 12px 14px; background: var(--danger-bg); border: 1px solid #e2b8b2; border-radius: 7px; color: var(--danger); font-size: 13px; }
+/* In the landing hero the panel is the product demo, so it reads as one card and the listing
+   scrolls rather than pushing the rest of the page below the fold. */
+.hero-scan { padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 0 0 1px rgba(11,49,95,.02), 0 10px 28px rgba(11,49,95,.08); }
+.hero-scan .scan-result { margin-top: 16px; }
+.hero-scan .scan-code { max-height: 260px; overflow-y: auto; }
+.hero-scan .scan-form .field:last-of-type { margin-bottom: 12px; }
+@media (max-width: 560px) { .scan-note { grid-template-columns: max-content minmax(0, 1fr); } .scan-line { grid-template-columns: 34px minmax(0, 1fr); } }
+
+/* /features by stage of a review rather than as one flat list of seventeen claims. The selected
+   button is filled rather than merely outlined, because "which one am I reading" has to survive a
+   monochrome screen. */
+.feature-stages { margin: 12px 0 24px; }
+.stage-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.stage-choices .button { gap: 8px; }
+.stage-choices .button code { color: var(--muted); font-size: 10px; }
+.stage-choices .button[aria-pressed="true"] { color: var(--surface); background: var(--navy); border-color: var(--navy); }
+.stage-choices .button[aria-pressed="true"] code { color: #9db8d5; }
+.stage-panel { padding: 4px 18px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.stage-summary { margin: 14px 0 0; color: var(--ink-2); font-size: 13px; line-height: 1.55; }
+.stage-panel .trust-list { margin: 6px 0 0; }
+.stage-panel .trust-list > div:first-child { border-top: 0; padding-top: 10px; }
+
+/* The trust boundary, drawn. Selection is carried by fill AND stroke weight AND the pressed
+   button, never by hue on its own. */
+.boundary-map { display: grid; gap: 14px; margin: 22px 0; }
+.boundary-figure-scroll { overflow-x: auto; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.boundary-figure { display: block; width: 100%; min-width: 620px; height: auto; }
+.boundary-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.boundary-choices .button[aria-pressed="true"] { color: var(--surface); background: var(--navy); border-color: var(--navy); }
+.boundary-detail { padding: 4px 18px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.boundary-detail .eyebrow { margin: 14px 0 0; color: var(--navy); }
+.boundary-detail dl { display: grid; gap: 12px; margin: 12px 0 0; }
+.boundary-detail dt { margin-bottom: 4px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.boundary-detail dd { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.55; }
+.boundary-caption { max-width: 760px; margin: 14px 0 0; color: var(--ink-2); font-size: 13px; line-height: 1.6; }
+
+/* The verdict mix: the product's first chart. Every band is a texture as well as a colour and
+   every figure is written out beside it, so nothing here is carried by hue alone. The legend is
+   also the filter - reading a proportion and opening the rows behind it are one gesture. */
+.verdict-mix { margin: 0 0 24px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
+.verdict-mix h2 { margin: 0 0 12px; font-size: 15px; letter-spacing: -.02em; }
+.verdict-bar { display: flex; height: 26px; border: 1px solid var(--line-strong); border-radius: 5px; overflow: hidden; }
+/* A single attempt out of two hundred is still a band a reader can see and count. */
+.verdict-bar span { min-width: 5px; box-shadow: 1px 0 0 var(--surface); }
+.verdict-bar span:last-child { box-shadow: none; }
+.verdict-swatch { flex: none; display: inline-block; width: 13px; height: 13px; border: 1px solid var(--line-strong); border-radius: 3px; }
+.verdict-bar span[data-group="decisive"], .verdict-swatch[data-group="decisive"] { background: var(--success); }
+.verdict-bar span[data-group="inconclusive"], .verdict-swatch[data-group="inconclusive"] { background: repeating-linear-gradient(45deg, rgba(255,255,255,.55) 0 3px, rgba(255,255,255,0) 3px 6px), var(--warning); }
+.verdict-bar span[data-group="unfinished"], .verdict-swatch[data-group="unfinished"] { background: repeating-linear-gradient(-45deg, rgba(255,255,255,.55) 0 3px, rgba(255,255,255,0) 3px 6px), var(--danger); }
+.verdict-bar span[data-group="running"], .verdict-swatch[data-group="running"] { background: radial-gradient(rgba(255,255,255,.75) 1.3px, rgba(255,255,255,0) 1.4px) 0 0/6px 6px, var(--info); }
+.verdict-legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 13px 0 0; padding: 0; list-style: none; }
+.verdict-legend .button { gap: 8px; }
+.verdict-legend .button strong { font-family: "JetBrains Mono Variable", monospace; }
+.verdict-legend .button[aria-pressed="true"] { color: var(--surface); background: var(--navy); border-color: var(--navy); }
+.verdict-legend .button[aria-pressed="true"] .verdict-swatch { border-color: rgba(255,255,255,.7); }
+p.evidence-foot { margin: 0; }
 .trust-page textarea { width: 100%; min-height: 220px; padding: 12px; font-family: "JetBrains Mono Variable", monospace; font-size: 12px; line-height: 1.6; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
 .trust-page .field { display: grid; gap: 6px; margin-bottom: 16px; }
 .trust-page .field label { font-size: 12px; font-weight: 700; color: var(--ink-2); }

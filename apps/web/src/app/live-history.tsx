@@ -31,6 +31,17 @@ function duration(ms: number | null) {
   return seconds < 90 ? `${seconds}s` : `${Math.round(seconds / 60)}m`;
 }
 
+type VerdictGroup = "decisive" | "inconclusive" | "unfinished" | "running";
+
+// The bar and the filter must agree about what a status means, so the mapping lives in one place.
+// Anything that is not one of the three settled outcomes is still in flight, not a fourth verdict.
+function statusGroup(status: string): VerdictGroup {
+  if (status === "inconclusive") return "inconclusive";
+  if (status === "platform_failed") return "unfinished";
+  if (status === "changes_requested" || status === "checks_passed" || status === "delivered") return "decisive";
+  return "running";
+}
+
 function verdict(status: string) {
   if (status === "changes_requested") return { label: "Changes requested", tone: "danger" };
   if (status === "checks_passed") return { label: "Ready for review", tone: "success" };
@@ -43,6 +54,7 @@ function verdict(status: string) {
 export function LiveHistory() {
   const connection = useConnection();
   const [refreshKey, setRefreshKey] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selected, setSelected] = useState<VerdictGroup | "all">("all");
   useEffect(() => { const timer = setInterval(() => setRefreshKey(new Date().toISOString().slice(0, 10)), 60_000); return () => clearInterval(timer); }, []);
   const since = useMemo(() => Date.parse(`${refreshKey}T00:00:00.000Z`) - precedingDays, [refreshKey]);
   const organizationId = connection && connection.state !== "signed_out" ? connection.organization?.id : undefined;
@@ -62,6 +74,20 @@ export function LiveHistory() {
   // and as a count - a 100% acceptance rate on two findings means less than it looks.
   const judged = totals.accepted + totals.dismissed;
 
+  // Four numbers on four tiles said what the mix was and made a reader do the arithmetic to see it,
+  // and none of them led anywhere: "14 reached a verdict" could not be turned into the fourteen
+  // pull requests it counted. The bar is the same four numbers as one shape, and its legend is the
+  // filter - so reading a proportion and opening the rows behind it are the same gesture.
+  const settled = totals.decisive + totals.inconclusive + totals.platformFailed;
+  const groups = [
+    { id: "decisive", label: "Reached a verdict", count: totals.decisive },
+    { id: "inconclusive", label: "Inconclusive", count: totals.inconclusive },
+    { id: "unfinished", label: "Did not finish", count: totals.platformFailed },
+    { id: "running", label: "Still running", count: Math.max(0, totals.reviews - settled) },
+  ] as const;
+  const shown = selected === "all" ? history.pullRequests : history.pullRequests.filter(item => statusGroup(item.status) === selected);
+  const selectedGroup = groups.find(group => group.id === selected);
+
   return <>
     {Object.values(partial).some(Boolean) ? <p role="status">History is incomplete. Counts may omit older rows or extra findings, and provider costs may still be pending.</p> : null}
     {/* .metric styles its children by element - span is the label, strong the figure, small the
@@ -74,10 +100,39 @@ export function LiveHistory() {
       <div className="metric"><span>Finding occurrences judged</span><strong>{partial.feedback ? "Incomplete" : judged ? `${Math.round((totals.accepted / judged) * 100)}%` : "—"}</strong><small>{judged ? `${totals.accepted} accepted, ${totals.dismissed} dismissed` : partial.feedback ? "feedback rows omitted" : "no feedback yet"}</small></div>
     </section>
 
+    {totals.reviews > 0 ? <section className="verdict-mix" aria-labelledby="verdict-mix-title">
+      <h2 id="verdict-mix-title">How those attempts ended</h2>
+      {/* Each band carries a texture as well as a colour, and every figure is written out in the
+          legend beside it, so the shape is readable without colour vision and the numbers do not
+          depend on reading the shape at all. */}
+      <div className="verdict-bar" role="img"
+        aria-label={`Of ${totals.reviews} review attempts: ${groups.filter(group => group.count).map(group => `${group.count} ${group.label.toLowerCase()}`).join(", ")}.`}>
+        {groups.filter(group => group.count > 0).map(group =>
+          <span key={group.id} data-group={group.id} style={{ width: `${(group.count / totals.reviews) * 100}%` }} />)}
+      </div>
+      <ul className="verdict-legend">
+        <li><button className="button secondary" type="button" aria-pressed={selected === "all"} onClick={() => setSelected("all")}>
+          All attempts <strong>{totals.reviews}</strong>
+        </button></li>
+        {groups.map(group => <li key={group.id}>
+          <button className="button secondary" type="button" aria-pressed={selected === group.id} onClick={() => setSelected(group.id)}>
+            <span className="verdict-swatch" data-group={group.id} aria-hidden="true" />
+            {group.label} <strong>{group.count}</strong>
+          </button>
+        </li>)}
+      </ul>
+    </section> : null}
+
     <section className="evidence-section">
-      <div className="evidence-heading"><div><p className="eyebrow">Triage</p><h2>Recent attempts ordered by findings</h2></div><span>{history.pullRequests.length} shown</span></div>
+      <div className="evidence-heading"><div><p className="eyebrow">Triage</p><h2>Recent attempts ordered by findings</h2></div><span>{shown.length} shown</span></div>
+      {/* A filter that silently shows nothing is indistinguishable from a broken page, and the list
+          is the part of this summary that can be truncated - so when the filter empties it, the
+          page says which of the two happened rather than leaving a blank panel. */}
+      {selected !== "all" && shown.length === 0 ? <p className="evidence-foot" role="status">
+        {selectedGroup?.count ? `The ${selectedGroup.count} ${selectedGroup.label.toLowerCase()} attempts in this period are not among the rows listed here.` : `No attempt in this period ended ${selectedGroup?.label.toLowerCase()}.`}
+      </p> : null}
       <div className="tour-evidence">
-        {history.pullRequests.map(item => {
+        {shown.map(item => {
           const shown = verdict(item.status);
           return <div className="tour-evidence-row" key={item.reviewId}>
             <strong>#{item.prNumber}{item.stale ? " (superseded)" : ""}</strong>

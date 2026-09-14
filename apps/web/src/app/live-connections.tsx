@@ -145,7 +145,6 @@ function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
           <option value="disabled">Suggestions only</option>
           <option value="stacked">Separate fix PR</option>
         </select> : <strong>{stacked ? "Separate fix PR" : "Suggestions only"}</strong>}
-        <small>{stacked ? "Fixes open as a separate pull request" : "BuildIT reports changes without writing code"}</small>
       </label>
       <label className="repository-policy">
         <span>When to review</span>
@@ -153,7 +152,6 @@ function RepositoryPolicyRow({ repository, canManage, saving, onSave }: {
           <option value="manual">Only when asked</option>
           <option value="automatic">Automatically on every push</option>
         </select> : <strong>{repository.reviewTrigger === "automatic" ? "Automatically on every push" : "Only when asked"}</strong>}
-        <small>{repository.reviewTrigger === "automatic" ? "Reviews start on open and on pushes, spending your model key. `@buildit pause` stops one pull request." : "Nothing runs until someone comments `@buildit review`, so nothing spends your key unasked."}</small>
       </label>
       <label className="repository-policy">
         <span>Changelog on merge</span>
@@ -206,9 +204,10 @@ function ConfigApproval({ repository, canManage, saving, onSave }: {
           aria-label={`Approve .buildit.yml ${pending!.slice(0, 12)} for ${repository.owner}/${repository.name}`}
           onClick={() => void onSave({ approvedConfigHash: pending! })}>{saving ? "Saving…" : "Approve this version"}</button>
       : null}
-    <small>{waiting
-      ? "The last review read a .buildit.yml at this version and used BuildIT's defaults instead, because nobody has approved it. Approving applies it to the next review. Editing the file produces a new version to approve."
-      : "Reviews use this repository's own .buildit.yml. A change to the file needs approving again."}</small>
+    {/* Only the half that is true of this repository right now. Why approval exists at all, and
+        what editing the file does, is in the legend above the list - it was identical on every
+        card, and there can be fifteen of them. */}
+    {waiting ? <small>Reviews used BuildIT&rsquo;s defaults instead.</small> : null}
   </label>;
 }
 
@@ -297,16 +296,20 @@ function RepositoryList({ repositories, canManage, savingRepositoryId, onSave }:
     : repositories;
   return <>
     <details className="repository-legend">
-      <summary>What these four settings do</summary>
+      <summary>What these settings do</summary>
       <dl>
         <dt>Autofix delivery</dt>
-        <dd>Whether BuildIT writes code. A separate fix pull request is never merged by BuildIT; suggestions only means it reports the change without writing it.</dd>
+        <dd>Whether BuildIT writes code. A separate fix pull request is opened for you to review and is never merged by BuildIT; suggestions only means it reports the change without writing it.</dd>
         <dt>When to review</dt>
-        <dd>Automatic reviews start on open and on every push and spend your model key. Manual runs nothing until someone comments <code>@buildit review</code>.</dd>
+        <dd>Automatic reviews start on open and on every push and spend your model key; <code>@buildit pause</code> quietens one pull request. Manual runs nothing until someone comments <code>@buildit review</code>.</dd>
         <dt>Changelog on merge</dt>
         <dd>When a pull request merges, BuildIT opens a separate pull request adding one CHANGELOG line. It never merges that either.</dd>
         <dt>Inline comments</dt>
         <dd>The review comment always carries every finding. This decides how much of it also lands on the diff.</dd>
+        {/* Moved off the cards. It was the longest block on every row and identical on all of
+            them; only which version is waiting differs, and that stays on the card. */}
+        <dt>Repository configuration</dt>
+        <dd>A <code>.buildit.yml</code> on your default branch sets the review profile, path filters and per-path instructions. It is never read from a pull request head, and an admin approves each version before a review uses it — so editing the file produces a new version to approve.</dd>
       </dl>
     </details>
     {filterable ? <div className="repository-filter">

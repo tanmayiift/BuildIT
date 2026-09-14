@@ -3,6 +3,7 @@ import { GitHubIntegrationState, MembersWorkspaceState, ModelIntegrationState, R
 import { WorkspaceMetrics, WorkspaceUsage } from "../live-metrics-usage";
 import { WorkspaceAudit } from "../live-audit";
 import { NotificationPreferences } from "../notification-preferences";
+import { WorkspacePolicyState } from "../live-policies";
 import { notFound } from "next/navigation";
 import { isWorkspaceSection } from "../workspace-sections";
 
@@ -55,27 +56,30 @@ function Integrations() {
   return <div className="content"><Header eyebrow="Dependency-specific setup" title="Integrations" description="Connect only the service needed for the next action. No all-or-nothing setup wall." /><div className="integration-grid"><GitHubIntegrationState /><ModelIntegrationState /><TrackerOAuthCards /></div><TrackerConnections /></div>;
 }
 
-// This page used to show five rows with a disabled button reading "Configure after organization
-// setup" - a control that was never going to appear, on settings that are mostly not settings at
-// all. What is on this page are the boundaries BuildIT holds for every repository; the things a
-// team actually chooses are per repository and live on the Repositories page. Saying so is more
-// useful than a button that does nothing.
+// This page used to show six prose rows, one of which had carried a disabled button reading
+// "Configure after organization setup" - a control that was never going to appear. Deleting it was
+// right; leaving six sentences that describe a workspace without ever reading it was not. "Source
+// retention: 24 hours" was printed to every reader whether or not that was their retention window.
+//
+// The rows that are workspace state now come from the workspace and say how many repositories they
+// currently apply to, each pointing at the page where the choice is made. The rows below them are
+// product invariants with nothing to set, and are stated flatly for exactly that reason.
 function Policies() {
   return <div className="content">
     <Header eyebrow="Trusted configuration" title="Policies"
-      description="These hold for every review, on every repository, and no setting relaxes them. What your team chooses per repository is on the Repositories page." />
+      description="What this workspace is set to, and what no setting can relax." />
+    <h2 className="settings-heading">This workspace</h2>
+    <WorkspacePolicyState />
+    <h2 className="settings-heading">Never relaxed, by any setting</h2>
     <section className="settings-list">
       <Setting title="Human merge boundary" value="Always enforced" detail="BuildIT has no merge authority, including over its own autofix and changelog pull requests." />
-      <Setting title="Autofix delivery" value="Stacked PR only" detail="A fix arrives as a separate pull request. The branch under review is never written to." />
-      <Setting title="Configuration source" value="Trusted ref only" detail="A .buildit.yml is read from your default branch and never from a pull request head, and an admin approves each version on the Repositories page." />
       <Setting title="Convergence bounds" value="3 rounds · 6 proposals" detail="The first limit reached stops the loop, so a review cannot run indefinitely against your key." />
       <Setting title="Required-check policy" value="Advisory" detail="A platform failure is reported as a platform failure. It can never be presented as a check that evaluated your code." />
-      <Setting title="Source retention" value="24 hours" detail="Seven days maximum. Deletion is confirmed against storage and recorded in the audit log." />
     </section>
   </div>;
 }
 function Setting({ title, value, detail }: { title: string; value: string; detail: string }) {
-  return <article className="setting-row"><div><strong>{title}</strong><p>{detail}</p></div><code>{value}</code></article>;
+  return <article className="setting-row"><div><strong>{title}</strong><p>{detail}</p></div><div className="setting-state"><code>{value}</code></div></article>;
 }
 
 function Members() { return <div className="content"><Header eyebrow="Organization access" title="Members & roles" description="One person can belong to multiple organizations with a separate role in each." /><MembersWorkspaceState /></div>; }

@@ -1,10 +1,11 @@
 import { OverviewReadiness } from "./live-connections";
+import { ScanPanel } from "./scan-panel";
 
 const layers = [
   { mark: "01", title: "Choose one pull request", body: "You choose the repositories. Unselected ones stay invisible." },
   { mark: "02", title: "Compare intent with code", body: "It pins the exact commits and says what it could not read." },
-  { mark: "03", title: "Run checks and challenge findings", body: "Tests and scanners supply the facts. A finding must cite them to block, and you can ask it why." },
-  { mark: "04", title: "Hand back an inspectable fix", body: "Findings land on the lines they cite, and with your consent a stacked PR you review and merge yourself." },
+  { mark: "03", title: "Run checks and challenge findings", body: "Tests and scanners supply the facts. A finding must cite them to block." },
+  { mark: "04", title: "Hand back an inspectable fix", body: "Findings land on the lines they cite, and with your consent a stacked PR you merge yourself." },
 ] as const;
 
 export default function Overview() {
@@ -14,20 +15,26 @@ export default function Overview() {
         <p className="eyebrow">For lean B2B software teams</p>
         <h1 id="landing-title">Autonomous code review that cites its evidence.</h1>
         <p className="landing-promise-line">It fixes what it finds and opens a stacked PR. It never merges. A human owns the merge decision.</p>
-        <p>Every finding names the file, the line, and the commit it was checked against.</p>
-        {/* Scanning pasted code needs no account, and it was reachable only from the top nav - so the
-            first thing the page invited a stranger to do was the one thing requiring OAuth. The
-            action that asks for nothing now leads. Connecting a repository keeps its place beside
-            it; the four-step permission model governs what happens after someone chooses that, and
-            is untouched. */}
-        <div className="button-row landing-actions"><a className="button" href="/sandbox">Scan code now — no account</a><a className="button secondary" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
+      </div>
+      {/* The scan was one navigation away behind a link, so the first thing the page asked a
+          stranger to do was still to go somewhere else. The working control is in the hero now and
+          the promise beside it is one sentence, because a reader who can try the thing in four
+          seconds does not need a paragraph arguing that it works.
+
+          It is also its own grid child rather than part of the promise block, so that when the hero
+          stacks on a phone the order becomes claim, then the thing itself, then the two actions
+          that cost something - instead of burying the scanner under both buttons and the fine
+          print. */}
+      <aside className="landing-try" aria-labelledby="landing-try-title">
+        <p className="eyebrow">No account, no key</p>
+        <h2 id="landing-try-title">Scan code now</h2>
+        <ScanPanel variant="hero" />
+        <a className="text-link" href="/sandbox">Open the full sandbox and its limits →</a>
+      </aside>
+      <div className="landing-commit">
+        <div className="button-row landing-actions"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
         <small className="landing-boundary">Scanning pasted code needs nothing. Sign-in identifies you. Repository access is a separate step. A model key is requested only when AI analysis starts.</small>
       </div>
-      <aside className="review-proof" aria-label="What a BuildIT decision contains">
-        <div className="proof-context"><span><small>Repository</small><strong>your-org/api</strong></span><span><small>Commit</small><code>exact head SHA</code></span></div>
-        <div className="proof-verdict"><span className="status warning">Needs evidence</span><h2>One requirement is not covered</h2><p>The finding cannot block until its cited lines and required test output pass verification.</p></div>
-        <dl><div><dt>Requirements</dt><dd>Linked to source</dd></div><div><dt>Checks</dt><dd>Base vs head</dd></div><div><dt>AI claims</dt><dd>Evidence-gated</dd></div><div><dt>Merge</dt><dd>Human only</dd></div></dl>
-      </aside>
     </section>
     <OverviewReadiness />
 

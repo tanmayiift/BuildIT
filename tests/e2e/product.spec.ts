@@ -182,6 +182,65 @@ test("public data handling states the current access boundary", async ({ page })
   await expect(page.getByText(/review screens remain sample data/i)).toHaveCount(0);
 });
 
+// The claims above are unchanged; how the page carries them is not. The trust boundary is a shape -
+// which system holds what, in which region, and what each one refuses - and it was ten paragraphs
+// with nothing to operate, so a reader had to assemble the picture themselves. These assertions
+// exist so the diagram cannot quietly become decoration: selecting a stage has to change what the
+// page says, and the figure has to stay readable to a screen reader that cannot see it at all.
+test("the trust boundary is a diagram a reader can step through, not an essay", async ({ page }) => {
+  await page.goto("/data-handling");
+  const figure = page.getByRole("img", { name: /Your repositories on GitHub reach BuildIT/ });
+  await expect(figure).toBeVisible();
+  // Every region a reader needs is named in the figure itself, not only in the prose beside it.
+  for (const label of ["Convex", "Artifact store", "Isolated sandbox", "Your model provider"]) {
+    await expect(figure.getByText(label, { exact: true })).toBeVisible();
+  }
+
+  const detail = page.locator(".boundary-detail");
+  await expect(detail).toContainText("Your source.");
+  await page.getByRole("button", { name: "Isolated sandbox" }).click();
+  await expect(page.getByRole("button", { name: "Isolated sandbox" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "GitHub", exact: true })).toHaveAttribute("aria-pressed", "false");
+  // The refusal, not just the description - that half is what the page exists for.
+  await expect(detail).toContainText("Network access is denied after the fixed install step");
+
+  await page.getByRole("button", { name: "Your model provider" }).click();
+  await expect(detail).toContainText("Deterministic checks run with no model key at all");
+});
+
+// /features was seventeen claims in one flat list and two links. A features page for a code
+// reviewer that cannot show you a review is asking to be taken on faith, so it now opens with the
+// scan and groups the claims by the stage of a review they belong to.
+test("features shows a working scan and groups its claims by review stage", async ({ page }) => {
+  await page.goto("/features");
+  await page.getByRole("button", { name: "Use an example" }).click();
+  const result = page.locator(".scan-result");
+  await expect(result.locator(".scan-line[data-flagged]")).toHaveCount(2);
+  await expect(result.getByText("TLS certificate verification is disabled")).toBeVisible();
+
+  // Selecting a stage changes which claims are on screen. Nothing was deleted to shorten the page:
+  // the claim that used to sit in the middle of the list is still here, one click away.
+  await expect(page.getByText("Skip what your team would never review")).toBeVisible();
+  await page.getByRole("button", { name: /Hand it back/ }).click();
+  await expect(page.getByText("Skip what your team would never review")).toHaveCount(0);
+  await expect(page.getByText("Ask it about its own review")).toBeVisible();
+  // The refusals are never behind a click - they are what a reader is owed before they choose.
+  await expect(page.getByText("BuildIT has no path to the merge button, by design.")).toBeVisible();
+});
+
+// This page carried six sentences describing a workspace it never read - "Source retention: 24
+// hours" was printed to every reader whether or not that was their window - and had no control of
+// any kind on it. Signed out it must say it has nothing to read rather than show a plausible
+// default, which is the failure mode the deleted disabled button was a symptom of.
+test("policies separates this workspace's state from what no setting can relax", async ({ page }) => {
+  await page.goto("/policies?tour=1");
+  await expect(page.getByRole("heading", { name: "No workspace settings to read yet" })).toBeVisible();
+  await expect(page.getByText("24 hours", { exact: true })).toHaveCount(0);
+  // The invariants have no workspace to depend on, so they are stated whether or not one exists.
+  await expect(page.getByText("Always enforced", { exact: true })).toBeVisible();
+  await expect(page.getByText("3 rounds · 6 proposals", { exact: true })).toBeVisible();
+});
+
 test("repository and integration screens use truthful live connection states", async ({ page }, testInfo) => {
   await page.goto("/repositories?tour=1");
   await expect(page.getByRole("heading", { name: "Repositories" })).toBeVisible();

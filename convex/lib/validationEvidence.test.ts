@@ -105,8 +105,16 @@ describe("a repository whose dependency manifest never arrived", () => {
 
   it("reports the dependency audit as advisory and still reaches a verdict", async () => {
     const baseSha = "a".repeat(40), headSha = "b".repeat(40);
-    // No manager was detected, so reviewValidationWorker sends no install and no checks.
-    const revision = async () => new VercelSandboxRunner(sandbox()).run({ runtime: "node24", files: [{ path: "src/index.ts", content: "export {}" }], checks: [] });
+    // No manager was detected, so reviewValidationWorker sends no install and no checks - and the
+    // three segments that remain are the ones that still have something to do on any tree.
+    const revision = async () => {
+      const runner = new VercelSandboxRunner(sandbox());
+      const common = { runtime: "node24" as const, revision: "base" as const, sandboxName: "buildit-evidence", files: [{ path: "src/index.ts", content: "export {}" }], checks: [] };
+      const prepared = await runner.runSegment({ ...common, segment: { stage: "prepare", index: 0 } });
+      const scanned = await runner.runSegment({ ...common, segment: { stage: "scanners", index: 0 } });
+      const released = await runner.runSegment({ ...common, segment: { stage: "compare", index: 0 } });
+      return { ...prepared, ...scanned, ...released };
+    };
     const [base, head] = [await revision(), await revision()];
     const output = { base: { ...base, outputs: [] }, head: { ...head, outputs: [] },
       scanners: { base: scannerSummary(baseSha, base.unavailableScanners), head: scannerSummary(headSha, head.unavailableScanners) } } as unknown as ExecutionResponse;

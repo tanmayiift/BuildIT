@@ -18,7 +18,10 @@
   .page-heading .button { width: max-content; }
   .readiness, .split-layout, .budget-board { grid-template-columns: 1fr; }
   .landing { gap: 28px; }
-  .landing-hero { grid-template-columns: 1fr; gap: 30px; min-height: 0; padding-top: 12px; }
+  .landing-hero { grid-template-columns: 1fr; grid-template-rows: none; gap: 30px; min-height: 0; padding-top: 12px; }
+  /* Stacked, the left column's two rows and the panel become one flow in DOM order: the claim,
+     the working scanner, then the actions that cost the reader something. */
+  .landing-try { grid-column: 1; grid-row: auto; }
   .landing-flow>ol { grid-template-columns: repeat(2,1fr); grid-template-rows: repeat(2, auto auto auto); }
   .landing-flow li { min-height: 0; }
   .landing-flow li:nth-child(2) { border-right: 0; }

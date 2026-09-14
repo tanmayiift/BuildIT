@@ -53,7 +53,10 @@ describe("connected repository workspace", () => {
     const active = await screen.findByRole("article", { name: "Repository policy for acme/public-api" });
     expect(active.textContent).toContain("Public repository");
     expect(active.textContent).toContain("Reviews active");
-    expect(active.textContent).toContain("Fixes open as a separate pull request");
+    // The card used to restate its own <select> in a sentence underneath it ("Fixes open as a
+    // separate pull request"). The state it was restating is the control's value, so that is what
+    // is asserted now - the sentence explaining what the value means is in the legend, once.
+    expect((screen.getByLabelText("Autofix delivery for acme/public-api") as HTMLSelectElement).value).toBe("stacked");
     expect(screen.getByLabelText("Autofix delivery for acme/public-api")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Pause reviews for acme/public-api" })).not.toBeNull();
 
@@ -205,16 +208,25 @@ describe("a repository list long enough to be hard to read", () => {
 
   it("explains the settings once rather than once per repository", () => {
     render(<RepositoryConnectionView />);
-    // These two sentences never varied with any repository's state, so fifteen copies of each was
-    // thirty paragraphs pushing the repository names off the screen.
+    // These sentences never varied with any repository's state, so fifteen copies of each was
+    // pages of paragraphs pushing the repository names off the screen.
     expect(screen.getAllByText(/It never merges that either/)).toHaveLength(1);
     expect(screen.getAllByText(/how much of it also lands on the diff/)).toHaveLength(1);
+    expect(screen.getAllByText(/never read from a pull request head/)).toHaveLength(1);
   });
 
-  it("keeps the explanation that changes with the setting on the card, where the setting is", () => {
+  // This assertion used to require the opposite - that "Fixes open as a separate pull request" and
+  // the review-trigger sentence appear once per card, on the grounds that they vary with the
+  // setting. They do vary, but only by restating the option already selected in the <select> right
+  // above them, so fifteen repositories rendered thirty sentences that said what the two dropdowns
+  // said. The card keeps the state; the legend keeps the explanation.
+  it("states each repository's choice in its control, not in a paragraph repeated per card", () => {
     render(<RepositoryConnectionView />);
-    // This one does vary - it tells you what your current choice does - so it stays per row.
-    expect(screen.getAllByText("Fixes open as a separate pull request").length).toBe(many.length);
+    expect(screen.queryAllByText("Fixes open as a separate pull request")).toHaveLength(0);
+    expect(screen.queryAllByText(/Nothing runs until someone comments/)).toHaveLength(0);
+    const selects = screen.getAllByLabelText(/^Autofix delivery for/) as HTMLSelectElement[];
+    expect(selects).toHaveLength(many.length);
+    for (const select of selects) expect(select.value).toBe("stacked");
   });
 
   it("offers a filter, and narrows the list to what was typed", async () => {

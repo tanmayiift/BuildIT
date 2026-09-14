@@ -31,12 +31,19 @@ export const EXECUTION_JOB_DEADLINE_MS = 45 * 60_000;
 // defaultExecutionPlans generates and still terminates.
 export const EXECUTION_MAX_STAGE_REENTRIES = 50;
 
+// `scanners` used to sit between `diagnostics` and `compare`, which was harmless only while the
+// whole review happened in one call and the runner could scan before it installed regardless of
+// what this list said. Once each stage became its own invocation the list became the running order,
+// and that order put the secret scan after install and after the repository's own test suite: by
+// then `/vercel/sandbox/repo` contains node_modules and whatever the suite wrote, so gitleaks would
+// report a dependency's test fixture as the author's leaked secret, and a suite that deletes a file
+// could hide a real one. The scan has to see the tree exactly as it arrived.
 export const executionStages = [
   "prepare",
+  "scanners",
   "install",
   "checks",
   "diagnostics",
-  "scanners",
   "compare",
   "complete",
 ] as const;
@@ -80,6 +87,11 @@ export type ExecutionCheckpoint = {
   now: number;
   durationMs: number;
   failureCode?: string;
+  /**
+   * Set by a worker that is continuing to the next segment in the same run, to keep its lease
+   * rather than leaving the job unleased between invocations.
+   */
+  holdLeaseUntil?: number;
 };
 
 function assertNonEmpty(value: string, code: string) {
@@ -181,6 +193,25 @@ export function applyExecutionCheckpoint(job: ExecutionJob, checkpoint: Executio
   const artifactIds = checkpoint.artifactIds ? [...new Set(checkpoint.artifactIds)] : job.artifactIds;
   if (artifactIds.some(id => typeof id !== "string" || id.length === 0 || id.length > 300)) throw new Error("execution_artifact_reference_invalid");
   const terminal = checkpoint.nextStage === "complete";
+  // Dropping the lease on every checkpoint was safe while a job did all its work in one call: the
+  // only thing that could follow was a retry, and a retry should be claimable. Once a run is seven
+  // invocations long, the gap between them is a window where the job sits unleased with a live
+  // worker still driving it - and the sweeper added for exactly the opposite problem will reap it,
+  // killing a review that was progressing normally.
+  //
+  // A continuing worker therefore holds its lease across the checkpoint. Re-claiming instead would
+  // be the obvious alternative and is wrong: claimExecutionJob increments attempt and refuses a
+  // seventh, so a healthy three-check review would exhaust its whole retry budget on itself.
+  //
+  // The hold is bounded by the same lease length a claim gets, so a worker that dies still frees
+  // the job on the normal timetable. A failing or terminal checkpoint always releases, because
+  // both mean this worker is finished with it.
+  const holding = !terminal && !checkpoint.failureCode && checkpoint.holdLeaseUntil !== undefined;
+  if (holding) {
+    if (!Number.isSafeInteger(checkpoint.holdLeaseUntil!) || checkpoint.holdLeaseUntil! <= checkpoint.now) throw new Error("execution_lease_hold_invalid");
+    if (checkpoint.holdLeaseUntil! - checkpoint.now > EXECUTION_LEASE_MS) throw new Error("execution_lease_hold_too_long");
+    if (!job.leaseOwner) throw new Error("execution_lease_hold_unowned");
+  }
   const { leaseOwner: _leaseOwner, leaseUntil: _leaseUntil, ...withoutLease } = job;
   const next: ExecutionJob = {
     ...withoutLease,
@@ -194,8 +225,34 @@ export function applyExecutionCheckpoint(job: ExecutionJob, checkpoint: Executio
     ...(checkpoint.failureCode ? { failureCode: checkpoint.failureCode } : {}),
     ...(terminal && !checkpoint.failureCode ? { completedAt: checkpoint.now } : {}),
     lastRequestKey: checkpoint.requestKey,
+    ...(holding ? { leaseOwner: job.leaseOwner, leaseUntil: checkpoint.holdLeaseUntil } : {}),
   };
   return { job: next, replayed: false };
+}
+
+// The environment probe that proves no credential is reachable from inside the sandbox runs once,
+// in `prepare`, against each revision's sandbox. While a review was one call, the proof and the work
+// were the same result object, so summarizeExecution could read `credentialTeardownProved` straight
+// off it and refuse the evidence otherwise. Segmented, the segment that proves it and the segment
+// that finishes the job are different HTTP requests to a stateless broker, and the obvious repair -
+// re-probe every segment - is the wrong one: it makes the claim cheap, and a segment that quietly
+// stopped probing would still look proven.
+//
+// So the proof is stamped into the cursor, which is the one field of the durable job record this
+// layer owns, and re-stamped by every checkpoint after prepare. A job whose cursor has lost the mark
+// cannot be completed. `+` separates revisions because a cursor is compared for equality, never
+// parsed, by everything else here.
+const teardownMark = "|teardown=";
+
+export function stampCredentialTeardown(cursor: string, revisions: readonly string[]) {
+  const proved = [...new Set(revisions)].sort();
+  if (!proved.length || proved.some(revision => !/^[a-z]{1,16}$/.test(revision))) throw new Error("execution_teardown_proof_invalid");
+  return `${cursor.split(teardownMark)[0]}${teardownMark}${proved.join("+")}`;
+}
+
+export function credentialTeardownRevisions(cursor: string) {
+  const marked = cursor.split(teardownMark);
+  return marked.length === 2 ? marked[1]!.split("+").filter(Boolean) : [];
 }
 
 export function cancelExecutionJob(job: ExecutionJob, now: number): ExecutionJob {

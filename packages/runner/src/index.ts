@@ -1,15 +1,47 @@
+import {EXECUTION_FUNCTION_LIMIT_MS,EXECUTION_JOB_DEADLINE_MS} from "@buildit/contracts";
 export type CheckKind="test"|"lint"|"typecheck"|"build"|"static_analysis"|"dependency_audit"|"secret_scan";
 export type CheckConclusion="passed"|"failed"|"not_run"|"not_configured"|"timed_out"|"truncated";
 export type NamedCommand="install"|"test"|"lint"|"typecheck"|"build";
 export type PackageManager="npm"|"pnpm"|"yarn";
 export type CommandPlan={planId:NamedCommand;origin:"built_in"|"trusted_ref";kind:CheckKind;executable:PackageManager;args:string[];required:boolean;timeoutMs:number;cpuLimit:number;memoryMb:number;outputBytes:number;fileBytes:number;network:"none"|"registry_only"};
 export type CheckResult=CommandPlan&{conclusion:CheckConclusion;exitCode?:number;durationMs:number;failureClass?:"code"|"environment"|"tooling_missing"|"timeout"|"resource_limit"|"network_blocked"|"platform"};
-export const SERVERLESS_PLAN_BUDGET_MS=420_000;
+// Two ceilings, and they used to be one. A review's whole plan had to fit a single /api/execute
+// call, so the function's maxDuration bounded the plan directly - and when that maxDuration was 300
+// seconds the only way to fit was a 30-second test budget, which meant BuildIT could not finish
+// reviewing any repository with a real suite, including its own. Raising maxDuration to 800 bought
+// the budget back and cost the Hobby plan, whose hard ceiling is 300 seconds.
+//
+// Splitting one review across several invocations separates the two: the JOB budgets below bound
+// the sum of every segment and are what the plan is validated against; the SEGMENT budget bounds
+// the most any single invocation may schedule, and is what has to fit 300 seconds. The default plan
+// is unchanged - install 150s, test 150s, lint 60s, typecheck 60s - because no single segment ever
+// runs more than one of them on each revision, in parallel.
+export const EXECUTION_JOB_PLAN_BUDGET_MS=420_000;
 export const SANDBOX_DIAGNOSTIC_RERUN_LIMIT=1;
-export const SERVERLESS_SANDBOX_WORK_BUDGET_MS=570_000;
+export const EXECUTION_JOB_WORK_BUDGET_MS=570_000;
 export const SANDBOX_SCANNER_TIMEOUT_MS=50_000;
-export const SANDBOX_OVERHEAD_RESERVE_MS=80_000;
-export const BROKER_REQUEST_TIMEOUT_MS=760_000;
+export const SANDBOX_ENV_PROBE_TIMEOUT_MS=10_000;
+// The most sandbox wall-clock one segment may schedule. Both revisions run the same unit of work
+// concurrently in two sandboxes, so a segment costs the larger of the two, not their sum.
+export const SERVERLESS_SEGMENT_WORK_BUDGET_MS=210_000;
+// Everything a segment spends outside those commands: verifying the grant, downloading and
+// checksumming up to 80 MB of context on the segments that need it, resuming two sandboxes,
+// serialising the response.
+export const SEGMENT_OVERHEAD_RESERVE_MS=30_000;
+// What the worker waits for one segment. Deliberately the exact sum above rather than the 300s
+// function ceiling: a request allowed to run to the platform's limit would return a duration the
+// checkpoint then rejects as execution_stage_timeout, turning a slow segment into a lost job.
+export const BROKER_REQUEST_TIMEOUT_MS=SERVERLESS_SEGMENT_WORK_BUDGET_MS+SEGMENT_OVERHEAD_RESERVE_MS;
+// What the worker keeps for itself after the broker answers: issuing the next grant and writing the
+// checkpoint. BROKER_REQUEST_TIMEOUT_MS plus this is the segment duration the job record sees, and
+// it must clear EXECUTION_STAGE_LIMIT_MS.
+export const WORKER_CHECKPOINT_RESERVE_MS=30_000;
+// A sandbox now outlives the request that made it, so for the first time it can be orphaned - by a
+// worker that dies between segments, or a job nobody claims again. Its own timeout is the backstop
+// that does not depend on anyone sweeping: derived so that a sandbox created a whole segment after
+// the job was, which is the latest `prepare` can run, still terminates no later than the deadline
+// past which claimExecutionJob refuses to give the job to another worker.
+export const SANDBOX_JOB_LIFETIME_MS=EXECUTION_JOB_DEADLINE_MS-EXECUTION_FUNCTION_LIMIT_MS;
 const commands:Record<PackageManager,Record<NamedCommand,string[]>>={npm:{install:["ci","--ignore-scripts","--no-audit"],test:["run","test"],lint:["run","lint"],typecheck:["run","typecheck"],build:["run","build"]},pnpm:{install:["install","--frozen-lockfile","--ignore-scripts"],test:["run","test"],lint:["run","lint"],typecheck:["run","typecheck"],build:["run","build"]},yarn:{install:["install","--immutable","--mode=skip-builds"],test:["run","test"],lint:["run","lint"],typecheck:["run","typecheck"],build:["run","build"]}};
 const kinds:Record<NamedCommand,CheckKind>={install:"build",test:"test",lint:"lint",typecheck:"typecheck",build:"build"};
 export function createNamedPlan(input:{planId:NamedCommand;manager:PackageManager;origin:"built_in"|"trusted_ref";required:boolean}):CommandPlan{return validatePlan({planId:input.planId,origin:input.origin,kind:kinds[input.planId],executable:input.manager,args:[...commands[input.manager][input.planId]],required:input.required,timeoutMs:input.planId==="install"?600_000:1_200_000,cpuLimit:2,memoryMb:4096,outputBytes:10_000_000,fileBytes:1_000_000_000,network:input.planId==="install"?"registry_only":"none"})}
@@ -25,6 +57,7 @@ export type DiagnosticRun={conclusion:"passed"|"failed";failureFingerprint?:stri
 export function diagnoseFlakiness(runs:DiagnosticRun[],maxRuns=3){if(!Number.isInteger(maxRuns)||maxRuns<2||maxRuns>5)throw new Error("invalid_flaky_rerun_limit");if(runs.length<2)return{classification:"insufficient" as const,nextRunAllowed:runs.length<maxRuns};if(runs.length>maxRuns)throw new Error("flaky_rerun_limit_exceeded");const outcomes=new Set(runs.map(run=>run.conclusion)),failureFingerprints=new Set(runs.filter(run=>run.conclusion==="failed").map(run=>run.failureFingerprint??"missing"));if(outcomes.size>1)return{classification:"flaky" as const,nextRunAllowed:false,fingerprintStable:failureFingerprints.size<=1};if(outcomes.has("passed"))return{classification:"stable_pass" as const,nextRunAllowed:false};if(failureFingerprints.size===1&&!failureFingerprints.has("missing"))return{classification:"stable_failure" as const,nextRunAllowed:false,failureFingerprint:[...failureFingerprints][0]!};return{classification:"unknown_failure" as const,nextRunAllowed:runs.length<maxRuns}}
 export async function runFlakyDiagnostics(initial:DiagnosticRun,rerun:()=>Promise<DiagnosticRun>,maxRuns=3){const runs=[initial];if(initial.conclusion==="passed")return{runs,diagnosis:{classification:"stable_pass" as const,nextRunAllowed:false}};while(runs.length<maxRuns){runs.push(await rerun());const diagnosis=diagnoseFlakiness(runs,maxRuns);if(!diagnosis.nextRunAllowed)return{runs,diagnosis}}return{runs,diagnosis:diagnoseFlakiness(runs,maxRuns)}}
 export * from "./vercelSandbox.js";
+export * from "./executionSegments.js";
 export * from "./executionJob.js";
 
 // A published review said `typecheck  Advisory  **Failed**` and quoted npm's whole complaint

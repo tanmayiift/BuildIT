@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { issueExecutionGrant } from "@buildit/security";
-import { defaultExecutionPlans, VercelSandboxRunner, type SandboxLike } from "@buildit/runner";
+import { defaultExecutionPlans, VercelSandboxRunner, type ExecutionSegment, type SandboxLike } from "@buildit/runner";
 import { handleExecution, safeExecutionError, safeExecutionErrorCategory } from "../src/execution-http";
 
 // Production recorded four `execution_failed` and one `sandbox_unavailable`, and neither was ever
@@ -25,17 +25,19 @@ function artifactBody(revision: "base" | "head") {
   ] } }));
 }
 
-function request() {
+const jobKey = "validation:review-a:0:" + headSha;
+
+function request(segment: ExecutionSegment = { stage: "prepare", index: 0 }) {
   const artifacts = (["base", "head"] as const).map(revision => {
     const content = artifactBody(revision);
     return { revision, artifactId: `${revision}-artifact`, storageKey: `artifacts/org-a/repo-a/review-a/${revision}-artifact/context.json`,
       checksum: createHash("sha256").update(content).digest("hex"), size: content.byteLength, readGrant: `${revision}-read-grant` };
   });
-  const body = { organizationId: "org-a", repositoryId: "repo-a", reviewId: "review-a", baseSha, headSha,
+  const body = { organizationId: "org-a", repositoryId: "repo-a", reviewId: "review-a", jobKey, segment, baseSha, headSha,
     runnerImageVersion: `buildit-runner@sha256:${"f".repeat(64)}`, runtime: "node22" as const, artifacts, ...plans };
   const descriptors = artifacts.map(({ readGrant: _ignored, ...item }) => item);
   const grant = issueExecutionGrant({ organizationId: "org-a", repositoryId: "repo-a", reviewId: "review-a", baseSha, headSha,
-    artifactsHash: hash(descriptors), plansHash: hash({ runnerImageVersion: body.runnerImageVersion, runtime: body.runtime, install: body.install, checks: body.checks }) }, secret, now);
+    artifactsHash: hash(descriptors), plansHash: hash({ runnerImageVersion: body.runnerImageVersion, runtime: body.runtime, install: body.install, checks: body.checks, jobKey: body.jobKey, segment: body.segment }) }, secret, now);
   return new Request("https://broker/api/execute", { method: "POST", headers: { authorization: `Bearer ${grant}` }, body: JSON.stringify(body) });
 }
 
@@ -60,9 +62,9 @@ function workingSandbox(overrides: Partial<SandboxLike> = {}): SandboxLike {
 }
 
 /** Runs the genuine runner and classifier, returning exactly what the review worker would see. */
-async function execute(factory: () => Promise<SandboxLike>) {
+async function execute(factory: () => Promise<SandboxLike>, segment?: ExecutionSegment) {
   const runner = new VercelSandboxRunner(factory);
-  const response = await handleExecution(request(), {
+  const response = await handleExecution(request(segment), {
     artifactBroker: artifactBroker() as never, runner: runner as never,
     grantSecret: secret, consume: async () => true, now,
   });
@@ -108,9 +110,11 @@ describe("what a real sandbox failure becomes", () => {
   });
 
   it("falls back to execution_failed for an unrecognised runtime fault", async () => {
+    // Reading a scanner report back is the `scanners` segment's work, not `prepare`'s, now that one
+    // review is several requests.
     const result = await execute(async () => workingSandbox({
       readFileToBuffer: async () => { throw new Error("unexpected internal state"); },
-    }));
+    }), { stage: "scanners", index: 0 });
     expect(result).toEqual({ status: 503, body: { error: "execution_failed" } });
   });
 

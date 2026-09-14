@@ -52,19 +52,12 @@ test("a stranger with no account can scan code, understand every setup step, and
   // The reader is told what each step will and will not cost them before they take any of them.
   await expect(page.getByText(/Scanning pasted code needs nothing\. Sign-in identifies you\./)).toBeVisible();
 
-  // The primary action asks for nothing, and says so in its own label.
-  const scanNow = page.getByRole("link", { name: /scan code now/i });
-  await expect(scanNow).toBeVisible();
-  await beat();
-  await scanNow.click();
-  await page.waitForURL(/\/sandbox$/);
-
-  // ---------------------------------------------------------------- do the thing, with no account
-  await expect(page.getByRole("heading", { name: /deterministic rules on your own code/i })).toBeVisible();
-  await expect(page.getByText("Open sandbox · no account, no key", { exact: true })).toBeVisible();
-  // Nothing on this page asks the reader to sign in first.
-  await expect(page.getByRole("main").getByRole("link", { name: /sign in/i })).toHaveCount(0);
-
+  // ------------------------------------------------- do the thing, with no account and no navigation
+  // This step used to be "click a link labelled Scan code now, land on /sandbox, then scan". The
+  // link is gone because the scanner itself is in the hero: the shortest path to a stranger seeing
+  // BuildIT work is now zero navigations, and asserting the link would be asserting the detour.
+  // Every assertion that ran on /sandbox below still runs, on the landing page, at full strength.
+  await expect(page.locator(".hero-scan")).toBeVisible();
   await page.getByLabel("File path", { exact: true }).fill(scanPath);
   await page.getByLabel("Code", { exact: true }).pressSequentially(flawedSnippet, { delay: recording ? 12 : 0 });
   await beat();
@@ -73,16 +66,32 @@ test("a stranger with no account can scan code, understand every setup step, and
   const result = page.locator(".scan-result");
   // The count is in the heading in words a non-engineer reads, not a status code.
   await expect(result.getByRole("heading", { name: "1 thing to look at" })).toBeVisible();
-  // The finding cites the file and the line - the product's central claim, made on pasted code.
-  await expect(result.getByText(`${scanPath}:${flawedLine}`, { exact: true })).toBeVisible();
-  await expect(result.getByText("TLS certificate verification is disabled")).toBeVisible();
-  await expect(result.getByText("critical", { exact: true })).toBeVisible();
+  // The finding is rendered ON the line it cites rather than in a list underneath the code. That
+  // placement is the product's central claim - a finding belongs to a line - so the test pins the
+  // line, not just the text: exactly one line is annotated, and it is the one holding the flaw.
+  const flagged = result.locator(".scan-line[data-flagged]");
+  await expect(flagged).toHaveCount(1);
+  await expect(flagged.locator(".scan-source")).toContainText(disabledTls);
+  await expect(flagged.getByText(`${scanPath}:${flawedLine}`, { exact: true })).toBeVisible();
+  await expect(flagged.getByText("TLS certificate verification is disabled")).toBeVisible();
+  await expect(flagged.getByText("critical", { exact: true })).toBeVisible();
 
   // The load-bearing half: a clean result from two regex passes must never read as a clean review,
-  // so the page has to name the checks that never ran rather than let silence imply they did.
+  // so the panel has to name the checks that never ran rather than let silence imply they did.
   await expect(result.getByText("Ran: buildit-rules, secret-patterns.")).toBeVisible();
   await expect(result.getByText("Did not run: gitleaks, osv-scanner, tests, lint, typecheck, AI review.", { exact: true })).toBeVisible();
+  await beat();
+
+  // ------------------------------------------------------- the full sandbox, and what it is not
+  // The hero has no room for the paragraph explaining that this is not a verdict, so that sentence
+  // lives one click away - and the journey still has to reach it by clicking, not by typing a URL.
+  await page.getByRole("link", { name: /Open the full sandbox/i }).click();
+  await page.waitForURL(/\/sandbox$/);
+  await expect(page.getByRole("heading", { name: /deterministic rules on your own code/i })).toBeVisible();
+  await expect(page.getByText("Open sandbox · no account, no key", { exact: true })).toBeVisible();
   await expect(page.getByText(/What this is not:\s*a verdict/)).toBeVisible();
+  // Nothing on this page asks the reader to sign in first.
+  await expect(page.getByRole("main").getByRole("link", { name: /sign in/i })).toHaveCount(0);
   await beat();
 
   // ------------------------------------------------------------- step 1 of 3: GitHub access

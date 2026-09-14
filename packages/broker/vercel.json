@@ -22,7 +22,7 @@
       "maxDuration": 30
     },
     "api/execute.ts": {
-      "maxDuration": 800
+      "maxDuration": 300
     },
     "api/health.ts": {
       "maxDuration": 10

@@ -102,6 +102,7 @@ import type * as reviewValidationWorker from "../reviewValidationWorker.js";
 import type * as reviews from "../reviews.js";
 import type * as runStateData from "../runStateData.js";
 import type * as runtimeReadiness from "../runtimeReadiness.js";
+import type * as sandboxReclaimWorker from "../sandboxReclaimWorker.js";
 import type * as tablePolicy from "../tablePolicy.js";
 import type * as telemetrySnapshotData from "../telemetrySnapshotData.js";
 import type * as telemetrySnapshotWorker from "../telemetrySnapshotWorker.js";
@@ -216,6 +217,7 @@ declare const fullApi: ApiFromModules<{
   reviews: typeof reviews;
   runStateData: typeof runStateData;
   runtimeReadiness: typeof runtimeReadiness;
+  sandboxReclaimWorker: typeof sandboxReclaimWorker;
   tablePolicy: typeof tablePolicy;
   telemetrySnapshotData: typeof telemetrySnapshotData;
   telemetrySnapshotWorker: typeof telemetrySnapshotWorker;
