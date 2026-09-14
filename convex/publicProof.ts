@@ -35,13 +35,21 @@ const rowCeiling = 2_000;
 export const summary = query({
   args: {},
   handler: async (ctx) => {
-    const [reviewRows, findingRows, ledgerRows] = await Promise.all([
+    const [reviewRows, findingRows, ledgerRows, feedbackRows] = await Promise.all([
       ctx.db.query("reviews").order("desc").take(rowCeiling + 1),
       ctx.db.query("findings").order("desc").take(rowCeiling + 1),
       ctx.db.query("usageLedger").withIndex("by_time").order("desc").take(rowCeiling + 1),
+      // The second half of the north star. "Findings raised" says BuildIT spoke; it says nothing
+      // about whether anyone listened, and a reviewer nobody reads is worth reporting as such.
+      ctx.db.query("findingFeedback").order("desc").take(rowCeiling + 1),
     ]);
 
     const reviews = reviewRows.slice(0, rowCeiling), findings = findingRows.slice(0, rowCeiling), ledger = ledgerRows.slice(0, rowCeiling);
+    const feedback = feedbackRows.slice(0, rowCeiling);
+    // Counted per finding, not per row: two people dismissing the same finding is one judgement
+    // about one finding, and counting both would report more feedback than there were findings.
+    const judged = new Set(feedback.map(row => row.fingerprintHmac));
+    const acceptedFingerprints = new Set(feedback.filter(row => row.verdict === "accepted").map(row => row.fingerprintHmac));
     const decisive = decisiveStatuses;
     const distinctCompletedPullRequests = new Set(reviews.filter(review => review.completedAt !== undefined && decisive.has(review.status)).map(review => `${review.repositoryId}:${review.prNumber}`)).size;
 
@@ -80,6 +88,9 @@ export const summary = query({
       findings: {
         counted: findings.length,
         truncated: findingRows.length > rowCeiling,
+        judged: judged.size,
+        accepted: acceptedFingerprints.size,
+        feedbackTruncated: feedbackRows.length > rowCeiling,
       },
       spend: {
         costPending: modelRows.some(row => row.costStatus === "unknown"),

@@ -324,3 +324,44 @@ describe("merge outcome", () => {
     expect(result.elapsed).toBe(0);
   });
 });
+
+// "Findings raised" says BuildIT spoke. It says nothing about whether anyone listened, and a
+// reviewer nobody reads is worth reporting as such - that is the half of the north star the public
+// page never showed, though reviewHistory has computed it privately all along.
+describe("feedback coverage on the public page", () => {
+  it("reports how many findings a human judged, not just how many were raised", async () => {
+    const t = makeTest(), b = await seed(t);
+    const before = await t.query(api.publicProof.summary, {});
+    expect(before.findings.judged).toBe(0);
+    expect(before.findings.accepted).toBe(0);
+
+    await t.run(async ctx => {
+      await ctx.db.insert("findingFeedback", {
+        organizationId: b.organizationId, repositoryId: b.repositoryId, reviewId: b.reviewId,
+        fingerprintHmac: "c".repeat(64), ruleKey: "rule", pathPrefixHmac: "p".repeat(64),
+        verdict: "accepted", actorHash: "actor", occurredAt: b.now,
+      });
+    });
+    const after = await t.query(api.publicProof.summary, {});
+    expect(after.findings.judged).toBe(1);
+    expect(after.findings.accepted).toBe(1);
+  });
+
+  // Two people dismissing the same finding is one judgement about one finding. Counting rows would
+  // let feedback exceed the findings it is feedback on.
+  it("counts a finding once however many people judged it", async () => {
+    const t = makeTest(), b = await seed(t);
+    await t.run(async ctx => {
+      for (const actor of ["one", "two", "three"]) {
+        await ctx.db.insert("findingFeedback", {
+          organizationId: b.organizationId, repositoryId: b.repositoryId, reviewId: b.reviewId,
+          fingerprintHmac: "d".repeat(64), ruleKey: "rule", pathPrefixHmac: "p".repeat(64),
+          verdict: "dismissed", actorHash: actor, occurredAt: b.now,
+        });
+      }
+    });
+    const result = await t.query(api.publicProof.summary, {});
+    expect(result.findings.judged).toBe(1);
+    expect(result.findings.accepted).toBe(0);
+  });
+});
