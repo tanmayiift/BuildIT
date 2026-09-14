@@ -85,7 +85,7 @@ if (process.argv.includes("--dry-run")) {
 // refuses to pass when they differ from the file, including when no token is configured at all -
 // because "we could not check" and "it matches" are not the same answer, and only one of them
 // deserves a green build.
-if (process.argv.includes("--verify") || process.argv.includes("--report")) {
+if (process.argv.includes("--verify") || process.argv.includes("--report") || process.argv.includes("--require")) {
   const token = process.env.BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN;
   if (!token) {
     const required = process.argv.includes("--require") || process.argv.includes("--report");
