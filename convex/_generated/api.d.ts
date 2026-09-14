@@ -56,6 +56,7 @@ import type * as lib_providerRetry from "../lib/providerRetry.js";
 import type * as lib_queueNotification from "../lib/queueNotification.js";
 import type * as lib_recordMetric from "../lib/recordMetric.js";
 import type * as lib_reportingPeriod from "../lib/reportingPeriod.js";
+import type * as lib_reviewOutcome from "../lib/reviewOutcome.js";
 import type * as lib_runIdentity from "../lib/runIdentity.js";
 import type * as lib_runtimeVersion from "../lib/runtimeVersion.js";
 import type * as lib_tenantLimits from "../lib/tenantLimits.js";
@@ -171,6 +172,7 @@ declare const fullApi: ApiFromModules<{
   "lib/queueNotification": typeof lib_queueNotification;
   "lib/recordMetric": typeof lib_recordMetric;
   "lib/reportingPeriod": typeof lib_reportingPeriod;
+  "lib/reviewOutcome": typeof lib_reviewOutcome;
   "lib/runIdentity": typeof lib_runIdentity;
   "lib/runtimeVersion": typeof lib_runtimeVersion;
   "lib/tenantLimits": typeof lib_tenantLimits;
