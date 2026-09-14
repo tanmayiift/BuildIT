@@ -8,7 +8,7 @@
 export const maxProviderAttempts = 3;
 
 const retryable = /(?:^|[^a-z])(?:rate_limited|provider_unavailable|timeout|aborted)(?:$|[^a-z])|http_(?:408|425|429|5\d\d)/i;
-const permanent = /invalid_key|model_unavailable|http_(?:400|401|403|404|422)/i;
+const permanent = /invalid_key|model_unavailable|quota_exhausted|http_(?:400|401|403|404|422)/i;
 
 export function isRetryableProviderReason(reason: string) {
   if (permanent.test(reason)) return false;

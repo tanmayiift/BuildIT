@@ -29,3 +29,16 @@ describe("provider retry", () => {
     expect(retryDelayMs(1, 3_600)).toBe(60_000);
   });
 });
+
+// An exhausted balance arrives as http_429, which the retryable pattern matches on sight. It is not
+// retryable: the account has no credit and the next attempt gets the same answer. `permanent` is
+// tested first, which is what makes naming it there sufficient.
+describe("a 429 that means the account is empty", () => {
+  it("is never retried, however many times the status says 429", () => {
+    expect(isRetryableProviderReason("quota_exhausted:http_429")).toBe(false);
+  });
+
+  it("leaves a real rate limit retryable", () => {
+    expect(isRetryableProviderReason("rate_limited:http_429")).toBe(true);
+  });
+});

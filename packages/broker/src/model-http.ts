@@ -22,6 +22,7 @@ function safe(error: unknown) {
   if (["model_grant_expired", "model_grant_replayed"].includes(code)) return { status: 410, code };
   if (["invalid_key", "model_unavailable", "refused", "truncated", "malformed_response"].includes(code)) return { status: 422, code, ...(error instanceof ProviderError && typeof error.status === "number" ? { providerStatus: error.status } : {}) };
   if (code === "rate_limited") return { status: 429, code };
+  if (code === "quota_exhausted") return { status: 429, code };
   if (code === "provider_unavailable") return { status: 503, code };
   return { status: 503, code: "model_invocation_failed" };
 }
