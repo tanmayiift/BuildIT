@@ -1,4 +1,5 @@
 import { query } from "./_generated/server";
+import { decisiveStatuses } from "./lib/reviewOutcome";
 import { rowCostUsd } from "./lib/usageCost";
 
 // BuildIT has no analytics, and every number it published about itself was a literal typed into a
@@ -41,7 +42,7 @@ export const summary = query({
     ]);
 
     const reviews = reviewRows.slice(0, rowCeiling), findings = findingRows.slice(0, rowCeiling), ledger = ledgerRows.slice(0, rowCeiling);
-    const decisive = new Set(["checks_passed", "changes_requested", "delivered"]);
+    const decisive = decisiveStatuses;
     const distinctCompletedPullRequests = new Set(reviews.filter(review => review.completedAt !== undefined && decisive.has(review.status)).map(review => `${review.repositoryId}:${review.prNumber}`)).size;
 
     // Present statuses only. Zero-filling the whole enum would put eighteen rows on the page,

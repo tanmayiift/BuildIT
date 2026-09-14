@@ -1,20 +1,29 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireOrganizationRole } from "./lib/authz";
+import { concludedStatuses, isAbandoned, isConcluded, isDecisive } from "./lib/reviewOutcome";
 
 type StageTimes = { identityAt?: number | undefined; repositoryAt?: number | undefined; modelKeyAt?: number | undefined; previewAt?: number | undefined; reviewAt?: number | undefined; evidenceAt?: number | undefined; humanDecisionAt?: number | undefined };
 // The same ceiling telemetrySnapshotData uses. Activation is a funnel, not an export: past a
 // few thousand rows the answer stops changing, and an unbounded read on a live subscription
 // re-reads the tenant's whole history on every write.
 const rowCeiling = 1_000;
-const completedEvidenceStatuses = new Set(["checks_passed", "changes_requested", "inconclusive", "delivered", "failed_after_bounds"]);
+// Was a hand-written set here and a differently-spelled one below, which is how this file came to
+// disagree with itself about whether failed_after_bounds counts.
+const completedEvidenceStatuses = concludedStatuses;
 const duration = (from?: number | undefined, to?: number | undefined) => from !== undefined && to !== undefined && to >= from ? to - from : undefined;
 export function summarizeActivation(times: StageTimes, outcomes: string[]) {
   const ordered = [times.identityAt, times.repositoryAt, times.previewAt, times.reviewAt, times.evidenceAt, times.humanDecisionAt].filter((value): value is number => value !== undefined);
   const chronologyValid = ordered.every((value, index) => index === 0 || value >= ordered[index - 1]!);
-  const completed = outcomes.filter(value => ["checks_passed", "changes_requested", "inconclusive", "delivered"].includes(value)).length;
-  const failed = outcomes.filter(value => ["failed_after_bounds", "budget_exhausted", "platform_failed", "cancelled"].includes(value)).length;
-  return { times, chronologyValid, durationMs: { identityToRepository: duration(times.identityAt, times.repositoryAt), repositoryToPreview: duration(times.repositoryAt, times.previewAt), previewToReview: duration(times.previewAt, times.reviewAt), reviewToFirstEvidence: duration(times.reviewAt, times.evidenceAt), identityToFirstEvidence: duration(times.identityAt, times.evidenceAt), firstEvidenceToHumanDecision: duration(times.evidenceAt, times.humanDecisionAt) }, outcomes: { started: outcomes.length, completed, failed, active: Math.max(0, outcomes.length - completed - failed) } };
+  // Three counts rather than two, because "completed" was doing two jobs. concluded answers the
+  // funnel's question - did a result ever come back - and decisive answers the north star's, which
+  // is whether BuildIT actually judged the code. An inconclusive review is the first and not the
+  // second, and reporting only one of them hid that gap.
+  const concluded = outcomes.filter(value => isConcluded(value)).length;
+  const decisive = outcomes.filter(value => isDecisive(value)).length;
+  const failed = outcomes.filter(value => isAbandoned(value)).length;
+  const completed = concluded;
+  return { times, chronologyValid, durationMs: { identityToRepository: duration(times.identityAt, times.repositoryAt), repositoryToPreview: duration(times.repositoryAt, times.previewAt), previewToReview: duration(times.previewAt, times.reviewAt), reviewToFirstEvidence: duration(times.reviewAt, times.evidenceAt), identityToFirstEvidence: duration(times.identityAt, times.evidenceAt), firstEvidenceToHumanDecision: duration(times.evidenceAt, times.humanDecisionAt) }, outcomes: { started: outcomes.length, completed, concluded, decisive, failed, active: Math.max(0, outcomes.length - concluded - failed) } };
 }
 
 export const funnel = query({
