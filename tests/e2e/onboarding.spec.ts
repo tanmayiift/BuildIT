@@ -85,14 +85,14 @@ test("a stranger with no account can scan code, understand every setup step, and
   await expect(page.getByText(/What this is not:\s*a verdict/)).toBeVisible();
   await beat();
 
-  // ---------------------------------------------------------------- step 1 of 4: GitHub access
+  // ------------------------------------------------------------- step 1 of 3: GitHub access
   await page.getByRole("link", { name: "Connect a GitHub repository" }).click();
   await page.waitForURL(/\/setup\/install$/);
 
-  await expect(page.getByText("Step 1 of 4 · resumable", { exact: true })).toBeVisible();
+  await expect(page.getByText("Step 1 of 3 · resumable", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Choose repository access", level: 1 })).toBeVisible();
   // Why: who is actually asking, and what the reader gets for saying yes.
-  await expect(page.getByText("GitHub—not BuildIT—shows the permission request and lets you select specific repositories.")).toBeVisible();
+  await expect(page.getByText("GitHub shows the permission request and lets you select specific repositories.")).toBeVisible();
   await expect(page.getByText("Why connect GitHub?", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /inspect one exact pull request/i })).toBeVisible();
   // The limits, in plain words rather than a scope list.
@@ -107,9 +107,13 @@ test("a stranger with no account can scan code, understand every setup step, and
   await beat();
   await advance.click();
 
-  // ---------------------------------------------------------------- step 2 of 4: repository policy
+  // ------------------------------------------------- repository policy: reachable, not a step
+  // The stepper carries the three screens that stand between a stranger and a first review -
+  // GitHub, the model key, the pull request. Repository policy and the boundary check are real
+  // pages a person can open and read, and neither is on the path to value, so they say so rather
+  // than claiming a number in a journey they are not part of.
   await page.waitForURL(/\/setup\/repository$/);
-  await expect(page.getByText("Step 2 of 4 · resumable", { exact: true })).toBeVisible();
+  await expect(page.getByText("Optional setup details", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Confirm repository policy", level: 1 })).toBeVisible();
   await expect(page.getByText("Review trusted checks, protected paths, Autofix delivery, budget, and retention before any execution.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Policy preview" })).toBeVisible();
@@ -124,9 +128,9 @@ test("a stranger with no account can scan code, understand every setup step, and
 
   await page.getByRole("link", { name: "Continue", exact: true }).click();
 
-  // ---------------------------------------------------------------- step 3 of 4: the model key
+  // ------------------------------------------------------------- step 2 of 3: the model key
   await page.waitForURL(/\/setup\/model$/);
-  await expect(page.getByText("Step 3 of 4 · resumable", { exact: true })).toBeVisible();
+  await expect(page.getByText("Step 2 of 3 · resumable", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Connect AI only when needed", level: 1 })).toBeVisible();
   await expect(page.getByText("A model key is optional until you start AI analysis or Autofix. Deterministic checks can be configured first.")).toBeVisible();
   // The step a stranger is most likely to bail on, so it has to say it is skippable and why.
@@ -139,9 +143,9 @@ test("a stranger with no account can scan code, understand every setup step, and
 
   await page.getByRole("link", { name: "Continue", exact: true }).click();
 
-  // ---------------------------------------------------------------- step 4 of 4: proof it worked
+  // --------------------------------------------------- the boundary check: reachable, not a step
   await page.waitForURL(/\/setup\/health$/);
-  await expect(page.getByText("Step 4 of 4 · resumable", { exact: true })).toBeVisible();
+  await expect(page.getByText("Optional setup details", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Prove the setup boundary", level: 1 })).toBeVisible();
   await expect(page.getByText("BuildIT verifies access, configuration, runner isolation, and provider readiness without running repository code.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Readiness checks" })).toBeVisible();
