@@ -188,7 +188,7 @@
 .scan-panel .field { display: grid; gap: 6px; margin: 0 0 14px; font-size: 12px; font-weight: 700; }
 .scan-panel label { color: var(--ink-2); }
 .scan-panel input { width: 100%; min-height: 44px; padding: 0 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
-.scan-panel textarea { width: 100%; padding: 11px 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; font: 400 12px/1.7 "JetBrains Mono Variable", monospace; resize: vertical; }
+.scan-panel textarea { width: 100%; min-height: 132px; padding: 11px 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; font: 400 12px/1.7 "JetBrains Mono Variable", monospace; resize: vertical; }
 .scan-result { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .scan-result-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 16px; background: var(--workbench); border-bottom: 1px solid var(--line); }
 .scan-result h2 { margin: 0; font-size: 15px; letter-spacing: -.02em; }
@@ -216,12 +216,12 @@
 .scan-result strong[data-severity="info"] { color: var(--info); }
 .scan-boundary { margin: 0; padding: 11px 16px; color: var(--muted); background: var(--workbench); border-top: 1px solid var(--line); font-size: 11px; line-height: 1.6; }
 .scan-error { margin-top: 16px; padding: 12px 14px; background: var(--danger-bg); border: 1px solid #e2b8b2; border-radius: 7px; color: var(--danger); font-size: 13px; }
-/* In the landing hero the panel is the product demo, so it reads as one card and the listing
-   scrolls rather than pushing the rest of the page below the fold. */
-.hero-scan { padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 0 0 1px rgba(11,49,95,.02), 0 10px 28px rgba(11,49,95,.08); }
-.hero-scan .scan-result { margin-top: 16px; }
-.hero-scan .scan-code { max-height: 260px; overflow-y: auto; }
-.hero-scan .scan-form .field:last-of-type { margin-bottom: 12px; }
+/* Where the panel IS the demo rather than the whole page, it reads as one self-contained card and
+   the listing scrolls rather than pushing the rest of the page below the fold. */
+.scan-card { padding: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 0 0 1px rgba(11,49,95,.02), 0 10px 28px rgba(11,49,95,.08); }
+.scan-card .scan-result { margin-top: 16px; }
+.scan-card .scan-code { max-height: 260px; overflow-y: auto; }
+.scan-card .scan-form .field:last-of-type { margin-bottom: 12px; }
 @media (max-width: 560px) { .scan-note { grid-template-columns: max-content minmax(0, 1fr); } .scan-line { grid-template-columns: 34px minmax(0, 1fr); } }
 
 /* /features by stage of a review rather than as one flat list of seventeen claims. The selected
@@ -272,11 +272,6 @@
 .verdict-legend .button[aria-pressed="true"] { color: var(--surface); background: var(--navy); border-color: var(--navy); }
 .verdict-legend .button[aria-pressed="true"] .verdict-swatch { border-color: rgba(255,255,255,.7); }
 p.evidence-foot { margin: 0; }
-.trust-page textarea { width: 100%; min-height: 220px; padding: 12px; font-family: "JetBrains Mono Variable", monospace; font-size: 12px; line-height: 1.6; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; }
-.trust-page .field { display: grid; gap: 6px; margin-bottom: 16px; }
-.trust-page .field label { font-size: 12px; font-weight: 700; color: var(--ink-2); }
-
-.trust-page .field input { min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); }
 
 /* The complete cited finding. Deliberately plain and monospaced: this block exists to be checked,
    not admired, and an engineer reading it should feel they are looking at evidence rather than

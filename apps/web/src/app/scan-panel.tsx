@@ -36,7 +36,7 @@ const placeholder = "Paste a file here. It is checked on the server and never st
 // Ordered worst first, because a reader scanning the tally wants the blocking count first.
 const severityOrder = ["critical", "warning", "info"] as const;
 
-export function ScanPanel({ variant = "page" }: { variant?: "page" | "hero" }) {
+export function ScanPanel({ variant = "page" }: { variant?: "page" | "card" }) {
   const field = useId();
   const [path, setPath] = useState("src/example.ts");
   const [content, setContent] = useState("");
@@ -81,7 +81,7 @@ export function ScanPanel({ variant = "page" }: { variant?: "page" | "hero" }) {
     .map(severity => ({ severity, count: [...notes.values()].flat().filter(note => note.severity === severity).length }))
     .filter(entry => entry.count > 0);
 
-  return <div className={`scan-panel${variant === "hero" ? " hero-scan" : ""}`}>
+  return <div className={`scan-panel${variant === "card" ? " scan-card" : ""}`}>
     <div className="scan-form">
       <div className="field scan-path-field">
         <label htmlFor={`${field}-path`}>File path</label>
@@ -89,7 +89,7 @@ export function ScanPanel({ variant = "page" }: { variant?: "page" | "hero" }) {
       </div>
       <div className="field">
         <label htmlFor={`${field}-content`}>Code</label>
-        <textarea id={`${field}-content`} rows={variant === "hero" ? 7 : 12} spellCheck={false} placeholder={placeholder}
+        <textarea id={`${field}-content`} rows={variant === "card" ? 7 : 12} spellCheck={false} placeholder={placeholder}
           value={content} onChange={event => setContent(event.target.value)} />
       </div>
       <div className="button-row">
@@ -110,7 +110,7 @@ export function ScanPanel({ variant = "page" }: { variant?: "page" | "hero" }) {
           {tally.length ? <ul className="scan-tally">{tally.map(entry =>
             <li key={entry.severity} data-severity={entry.severity}>{entry.count} {entry.severity}</li>)}</ul> : null}
         </div>
-        {/* tabIndex, because in the hero variant this listing scrolls: a scrollable region that
+        {/* tabIndex, because in the card variant this listing scrolls: a scrollable region that
             cannot take focus cannot be scrolled from a keyboard (WCAG 2.1.1). */}
         <ol className="scan-code" tabIndex={0} aria-label={`${scanned.path}, ${scanned.lines.length} lines, ${total} annotated`}>
           {scanned.lines.map((line, index) => {

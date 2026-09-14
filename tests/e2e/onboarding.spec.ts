@@ -57,7 +57,7 @@ test("a stranger with no account can scan code, understand every setup step, and
   // link is gone because the scanner itself is in the hero: the shortest path to a stranger seeing
   // BuildIT work is now zero navigations, and asserting the link would be asserting the detour.
   // Every assertion that ran on /sandbox below still runs, on the landing page, at full strength.
-  await expect(page.locator(".hero-scan")).toBeVisible();
+  await expect(page.locator(".landing-try .scan-panel")).toBeVisible();
   await page.getByLabel("File path", { exact: true }).fill(scanPath);
   await page.getByLabel("Code", { exact: true }).pressSequentially(flawedSnippet, { delay: recording ? 12 : 0 });
   await beat();

@@ -145,7 +145,11 @@ describe("what the query is allowed to return", () => {
 
   it("bounds every read, because it feeds a live subscription", () => {
     expect(whole).not.toContain(".collect()");
-    expect([...code.matchAll(/\.take\(rowCeiling \+ 1\)/g)]).toHaveLength(3);
+    // Every read this query makes is bounded, expressed as the property rather than a count, so
+    // adding a correctly-bounded read does not fail and adding an unbounded one still does.
+    const reads = [...code.matchAll(/ctx\.db\.query\(/g)].length;
+    expect(reads).toBeGreaterThanOrEqual(4);
+    expect([...code.matchAll(/\.take\(rowCeiling \+ 1\)/g)]).toHaveLength(reads);
     // The list query subscribes the same way and has to be bounded the same way.
     expect(listCode).toContain(".take(repositoryLimit + 1)");
     expect(listCode).toContain(".take(reviewsPerRepository + 1)");

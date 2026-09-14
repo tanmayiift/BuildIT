@@ -28,7 +28,7 @@ export default function Overview() {
       <aside className="landing-try" aria-labelledby="landing-try-title">
         <p className="eyebrow">No account, no key</p>
         <h2 id="landing-try-title">Scan code now</h2>
-        <ScanPanel variant="hero" />
+        <ScanPanel variant="card" />
         <a className="text-link" href="/sandbox">Open the full sandbox and its limits →</a>
       </aside>
       <div className="landing-commit">

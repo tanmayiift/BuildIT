@@ -28,7 +28,7 @@ export default function Features() {
     <h1 className="title">Every claim it makes, it can show you</h1>
     <p className="lede">So this page starts by doing it. Paste code and BuildIT&rsquo;s own deterministic rules run on the server and cite the line they fired on — the same citation a full review makes, minus the commit, the sandbox and the model.</p>
 
-    <ScanPanel />
+    <ScanPanel variant="card" />
 
     <h2>What it does, stage by stage</h2>
     <FeatureStages />
