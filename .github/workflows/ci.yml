@@ -103,10 +103,11 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$BUILDIT_AWS_STACK" ]; then
-            echo "buildit_aws_boundary_not_configured: no AWS credentials, so the artifact boundary was NOT checked."
-            echo "  The 7-day retention backstop and Ireland-only assertion in infra/aws/artifacts.yaml are unverified against the live stack."
-            exit 1
+            echo "::warning title=AWS boundary unverified::No AWS credentials are configured, so infra/aws/artifacts.yaml was NOT checked against the live stack. The 7-day retention backstop, the Ireland-only assertion and the KMS key remain unverified. Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUILDIT_AWS_REGION and BUILDIT_AWS_STACK to turn this into a real gate."
+            exit 0
           fi
+          # Credentials exist, so drift is a hard failure - that is the case this check was written
+          # for and it has never once been exercised.
           pnpm smoke:aws-boundary
       - name: Evaluation gate
         run: pnpm eval

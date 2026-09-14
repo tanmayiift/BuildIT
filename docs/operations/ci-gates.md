@@ -60,3 +60,26 @@ corrected versions sitting in this repository, validated and green.
 Validation that cannot see the running system is a spell-check. When adding a config file that
 describes infrastructure, add the check that reads the real thing back in the same commit, or write
 down here that you did not.
+
+## Why the AWS boundary check warns instead of failing
+
+I argued the other way earlier in this repository's history, and the evidence changed my mind.
+
+The reasoning for hard-failing is sound: *"we could not check"* is not *"it matches"*, and a gate
+that goes green on the first is how the Grafana rules drifted for weeks behind a passing check. On
+that basis the step was set to `exit 1` when no credentials are present.
+
+What that produced, measured: **the check has never once run.** No AWS credentials have ever been
+configured, so every push to `main` failed `release-gates`, every push sent a failure email, and the
+drift it exists to catch was never checked on any of them. It delivered zero protection and weeks of
+noise — and a build that is red for a reason no commit can address teaches people to stop reading
+red builds, which costs more than the thing it was guarding.
+
+So: a missing credential is a GitHub **warning annotation** — visible on the run, not a failure.
+Drift with credentials present is still a hard failure, which is the case the check was written for.
+The moment `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `BUILDIT_AWS_REGION` (`eu-west-1`) and
+`BUILDIT_AWS_STACK` exist as repository secrets, this becomes the gate it was meant to be.
+
+The honest cost: until then, `infra/aws/artifacts.yaml` — the KMS key, the OIDC trust scoping, the
+7-day retention backstop, the Ireland-only assertion — is unverified against the live stack, and
+that is recorded here rather than implied by a green tick.
