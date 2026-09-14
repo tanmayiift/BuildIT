@@ -204,6 +204,55 @@ describe("stable live windows", () => {
     expect(recorded.recorded).toBe(true);
     expect((await t.run(ctx => ctx.db.get(id)))?.resolution).toBe("dismissed");
   });
+  // The funnel ended at "evidence rendered", which says BuildIT produced something and nothing
+  // about whether it mattered. humanDecisionAt was declared in StageTimes from the beginning and
+  // never written, so firstEvidenceToHumanDecision was permanently undefined - the one duration
+  // that closes the loop between a finding and a person acting on it.
+  it("records when a human first judged a finding, not just when evidence appeared", async () => {
+    const t = makeTest(), b = await seed(t);
+    await t.run(async ctx => {
+      await ctx.db.insert("reviewEvents", { organizationId: b.organizationId, reviewId: b.reviewId, sequence: 1002,
+        type: "status_changed", stage: "complete", publicMessageArtifactId: b.artifactId,
+        internalCode: "decision", metadata: {}, createdAt: b.now });
+    });
+    const before = await signed(t).query(api.activation.funnel, { organizationId: b.organizationId });
+    expect(before.times.evidenceAt).toBeDefined();
+    expect(before.times.humanDecisionAt).toBeUndefined();
+    expect(before.durationMs.firstEvidenceToHumanDecision).toBeUndefined();
+
+    await t.run(async ctx => {
+      await ctx.db.insert("findingFeedback", {
+        organizationId: b.organizationId, repositoryId: b.repositoryId, reviewId: b.reviewId,
+        fingerprintHmac: "f".repeat(64), ruleKey: "rule", pathPrefixHmac: "p".repeat(64),
+        verdict: "dismissed", actorHash: "actor", occurredAt: before.times.evidenceAt! + 500,
+      });
+    });
+    const after = await signed(t).query(api.activation.funnel, { organizationId: b.organizationId });
+    expect(after.times.humanDecisionAt).toBe(before.times.evidenceAt! + 500);
+    expect(after.durationMs.firstEvidenceToHumanDecision).toBe(500);
+  });
+
+  // A verdict recorded before the evidence it judges cannot be a decision about it, and counting
+  // one would report a negative duration as though the loop closed early.
+  it("ignores feedback that predates the evidence", async () => {
+    const t = makeTest(), b = await seed(t);
+    await t.run(async ctx => {
+      await ctx.db.insert("reviewEvents", { organizationId: b.organizationId, reviewId: b.reviewId, sequence: 1002,
+        type: "status_changed", stage: "complete", publicMessageArtifactId: b.artifactId,
+        internalCode: "decision", metadata: {}, createdAt: b.now });
+    });
+    const before = await signed(t).query(api.activation.funnel, { organizationId: b.organizationId });
+    await t.run(async ctx => {
+      await ctx.db.insert("findingFeedback", {
+        organizationId: b.organizationId, repositoryId: b.repositoryId, reviewId: b.reviewId,
+        fingerprintHmac: "e".repeat(64), ruleKey: "rule", pathPrefixHmac: "p".repeat(64),
+        verdict: "accepted", actorHash: "actor", occurredAt: before.times.evidenceAt! - 1,
+      });
+    });
+    const after = await signed(t).query(api.activation.funnel, { organizationId: b.organizationId });
+    expect(after.times.humanDecisionAt).toBeUndefined();
+  });
+
   it("returns unknown if a bounded report scan cannot establish readiness", async () => {
     const t = makeTest(), b = await seed(t);
     await t.run(async ctx => {

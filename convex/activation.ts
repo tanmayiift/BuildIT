@@ -53,8 +53,20 @@ export const funnel = query({
       if (review?.organizationId === args.organizationId && completedEvidenceStatuses.has(review.status) && event.createdAt >= evidenceFloor && artifact?.organizationId === args.organizationId && artifact.reviewId === review._id && artifact.redactionStatus === "redacted" && !artifact.deletedAt && artifact.expiresAt > Date.now()) evidenceTimes.push(event.createdAt);
     }
     const evidencePartial = reportRows.length > 100;
+    const evidenceAt = !evidencePartial && evidenceTimes.length ? Math.min(...evidenceTimes) : undefined;
+    // The funnel used to end at "evidence rendered", which answers whether BuildIT produced
+    // something and not whether it mattered to anyone. humanDecisionAt was declared in StageTimes
+    // from the start and never populated, so firstEvidenceToHumanDecision was permanently
+    // undefined - the one duration that says a person read a finding and acted on it.
+    //
+    // Every human verdict lands in findingFeedback, whichever way it was given: the dashboard
+    // dismiss control, resolving a review thread on GitHub, or an @buildit dismiss comment. The
+    // first one at or after evidence is the moment the loop closed.
+    const decision = evidenceAt === undefined ? null : await ctx.db.query("findingFeedback")
+      .withIndex("by_org_time", q => q.eq("organizationId", args.organizationId).gte("occurredAt", evidenceAt))
+      .first();
     const times = { identityAt: membership.createdAt, repositoryAt: repository?.createdAt, modelKeyAt: credential?.lastValidatedAt ?? credential?.createdAt,
-      previewAt, reviewAt, evidenceAt: !evidencePartial && evidenceTimes.length ? Math.min(...evidenceTimes) : undefined };
+      previewAt, reviewAt, evidenceAt, humanDecisionAt: decision?.occurredAt };
     return { repositoryConnected: Boolean(repository), modelKeyReady: Boolean(credential),
       pullRequestPreviewed: Boolean(preview), reviewStarted: Boolean(firstReview),
       firstEvidenceReady: evidenceTimes.length > 0 ? true : evidencePartial ? null : false,

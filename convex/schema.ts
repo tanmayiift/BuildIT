@@ -225,7 +225,16 @@ export default defineSchema({
     status: value.executionJobStatus, leaseOwner: v.optional(v.string()), leaseUntil: v.optional(v.number()),
     artifactIds: v.array(v.id("artifacts")), durationMs: v.optional(v.number()), failureCode: v.optional(v.string()),
     lastRequestKey: v.optional(v.string()), createdAt: v.number(), updatedAt: v.number(), completedAt: v.optional(v.number()),
-  }).index("by_job_key", ["jobKey"]).index("by_review", ["reviewId"]).index("by_lease", ["status", "leaseUntil"]),
+    // The sandbox a job opened outlives the function invocation that opened it, and a Convex
+    // mutation cannot call the sandbox SDK to stop one. So the intent to stop it has to be durable
+    // rather than an action the sweeper takes: sandboxReclaimAt is "this sandbox is orphaned",
+    // sandboxReclaimedAt closes the row out - either the runner confirmed the sandbox is gone, or
+    // the attempts ran out, in which case sandboxReclaimAttempts is what tells an operator that
+    // something is still being billed. Without the record, a sweep that ran while the broker was
+    // down would forget the sandbox existed.
+    sandboxReclaimAt: v.optional(v.number()), sandboxReclaimAttempts: v.optional(v.number()), sandboxReclaimedAt: v.optional(v.number()),
+  }).index("by_job_key", ["jobKey"]).index("by_review", ["reviewId"]).index("by_lease", ["status", "leaseUntil"])
+    .index("by_sandbox_reclaim", ["sandboxReclaimedAt", "sandboxReclaimAt"]),
 
   modelStageRuns: defineTable({
     organizationId:v.id("organizations"),repositoryId:v.id("repositories"),reviewId:v.id("reviews"),roundNumber:v.optional(v.number()),stage:value.modelStage,
@@ -390,7 +399,8 @@ export default defineSchema({
     .index("by_review", ["reviewId"])
     .index("by_repository_time", ["repositoryId", "occurredAt"])
     .index("by_finding_actor", ["findingId", "actorHash"])
-    .index("by_review_time", ["reviewId", "occurredAt"]),
+    .index("by_review_time", ["reviewId", "occurredAt"])
+    .index("by_org_time", ["organizationId", "occurredAt"]),
 
   webhookDeliveries: defineTable({
     deliveryId: v.string(), event: v.string(), action: v.string(), installationId: v.optional(v.number()),
