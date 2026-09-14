@@ -141,3 +141,33 @@ tool, not a deletion command. Live alert delivery and recovery are not establish
 References: [Grafana provisioning API](https://grafana.com/docs/grafana/latest/developer-resources/api-reference/http-api/api-legacy/alerting_provisioning/),
 [Prometheus converter](https://github.com/grafana/grafana/blob/main/pkg/services/ngalert/prom/convert.go),
 [generated evaluation nodes](https://github.com/grafana/grafana/blob/main/pkg/services/ngalert/prom/query.go).
+
+## Pausing a provisioned rule: the header that makes it impossible
+
+Several attempts concluded that Grafana exposes no pause action for provisioned rules, because the
+UI does not offer one and the API refused the write. The API does support it. The refusal was:
+
+```
+409 alerting.provenanceMismatch
+cannot update with provided provenance '', needs 'api'
+```
+
+These rules were created through `/api/convert/prometheus/...` with `x-disable-provenance: true`,
+which records provenance `api`. Sending that same header on the **update** asks Grafana to write
+provenance `''`, and it refuses to change a rule's provenance underneath itself. Dropping the header
+lets the update inherit `api` and succeed.
+
+So: `x-disable-provenance` on create, **not** on update.
+
+```js
+// 12 of 12 succeeded once the header was removed.
+await fetch(`/api/v1/provisioning/alert-rules/${uid}`, {
+  method: "PUT",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ ...rule, isPaused: true }),
+});
+```
+
+Pausing rather than deleting, because it is reversible and the corrected copies in
+`buildit-release` already carry every rule's intent. Verified by reading the provisioning API back:
+**14 active in `buildit-release`, 12 paused in `BuildIT release`**, dashboard unchanged at 14 panels.
