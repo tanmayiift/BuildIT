@@ -93,3 +93,22 @@ Persisting them on the round is the prerequisite.
 
 **Until then:** the changelog's fixed-findings list is always empty, which is wrong but not
 misleading — it under-claims. That is the correct direction to be wrong in.
+
+## The model provider account is out of credit (not a BuildIT defect)
+
+Recorded because it explains days of failures that looked like product bugs.
+
+Every review reaching the analysis stage fails with HTTP 429 from OpenAI, and the 429 body carries
+`insufficient_quota` — the account behind the key has no remaining balance. BuildIT reported this as
+*"model provider is busy — retry once the provider's limit resets"* for as long as it lasted, which
+is advice that could never work.
+
+It now says what is true: **"the model provider account has no credit left … this is not a rate
+limit and it will not clear on its own."** Three layers had to agree before that sentence could
+reach a pull request — the provider reading the 429 body, the broker preserving the code rather than
+collapsing it to a generic 503, and the retry rule treating it as permanent rather than matching
+`http_429` and retrying three more times.
+
+**Everything up to the model call works.** The segmented 300-second execution completes, the
+repository's own checks run on both commits, and the failure is the provider refusing to answer.
+Adding credit to the provider account is the only remaining step, and it is not one BuildIT can take.
