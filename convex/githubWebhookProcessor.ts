@@ -371,9 +371,16 @@ export const processPullRequestWebhook = internalAction({
       // for an older head is marked stale above, so eligibility sees only a review that covers the
       // head that just arrived.
       if (args.action === "closed" && args.merged) {
+        const mergedAt = Date.now();
+        // Recorded for every merge, not only where a changelog was asked for. Whether a reviewed
+        // pull request went on to merge is the strongest signal the product gets about whether a
+        // review was worth reading, and it used to be dropped for any workspace with
+        // changelogOnMerge off - which is most of them.
+        await ctx.runMutation(internal.changelogData.recordMergeOutcome, {
+          githubRepositoryId: args.githubRepositoryId, prNumber: args.prNumber, mergedAt });
         await ctx.scheduler.runAfter(0, internal.changelogWorker.record, {
           githubRepositoryId: args.githubRepositoryId, prNumber: args.prNumber,
-          title: args.title ?? `Pull request #${args.prNumber}`, mergedAt: Date.now() });
+          title: args.title ?? `Pull request #${args.prNumber}`, mergedAt });
       }
       if (["opened", "reopened", "synchronize"].includes(args.action ?? "") && args.authorLogin) {
         await startAutomaticReview(ctx, args as { deliveryId: string; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; authorLogin: string });

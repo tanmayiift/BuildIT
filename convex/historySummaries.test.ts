@@ -281,3 +281,46 @@ describe("unknown provider costs", () => {
     expect((await t.query(api.publicProof.summary, {})).spend.costPending).toBe(true);
   });
 });
+
+// BuildIT watched every merge go past and kept none of it. The closed+merged webhook reached
+// changelogWorker and stopped, and only when changelogOnMerge was on - so for most workspaces the
+// strongest available signal about whether a review mattered was observed and dropped. A review
+// that found nothing and one whose findings were fixed before merge looked identical afterwards.
+describe("merge outcome", () => {
+  it("stamps the review that reached a verdict and emits the time to merge", async () => {
+    const t = makeTest(), b = await seed(t);
+    const repository = await t.run(ctx => ctx.db.get(b.repositoryId));
+    const merged = b.now + 90_000;
+    const result = await t.mutation(internal.changelogData.recordMergeOutcome, {
+      githubRepositoryId: repository!.githubRepositoryId, prNumber: 1, mergedAt: merged,
+    });
+    expect(result.recorded).toBe(true);
+    const review = await t.run(ctx => ctx.db.get(b.reviewId));
+    expect(review?.mergedAt).toBe(merged);
+    const metric = await t.run(ctx => ctx.db.query("metricEvents")
+      .filter(q => q.eq(q.field("name"), "human_time_to_merge_ms")).first());
+    expect(metric?.value).toBe(merged - (review!.completedAt ?? 0));
+  });
+
+  it("records a merge once, so a redelivered webhook does not double count", async () => {
+    const t = makeTest(), b = await seed(t);
+    const repository = await t.run(ctx => ctx.db.get(b.repositoryId));
+    const args = { githubRepositoryId: repository!.githubRepositoryId, prNumber: 1, mergedAt: b.now + 5_000 };
+    expect((await t.mutation(internal.changelogData.recordMergeOutcome, args)).recorded).toBe(true);
+    const second = await t.mutation(internal.changelogData.recordMergeOutcome, args);
+    expect(second.recorded).toBe(false);
+    expect(second.reason).toBe("already_recorded");
+  });
+
+  // A clock skew between GitHub's merge timestamp and ours must not produce a duration saying the
+  // merge happened before the review it followed.
+  it("never reports a negative time to merge", async () => {
+    const t = makeTest(), b = await seed(t);
+    const repository = await t.run(ctx => ctx.db.get(b.repositoryId));
+    const result = await t.mutation(internal.changelogData.recordMergeOutcome, {
+      githubRepositoryId: repository!.githubRepositoryId, prNumber: 1, mergedAt: b.now - 10_000,
+    });
+    expect(result.recorded).toBe(true);
+    expect(result.elapsed).toBe(0);
+  });
+});
