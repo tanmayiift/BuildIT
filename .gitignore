@@ -19,3 +19,8 @@ docs/release/deployment.md
 
 # Created by the pinned Playwright container when snapshots are regenerated on Linux.
 .pnpm-store/
+
+# Raw run transcripts from the audit harness. The receipts that get cited - the markdown summaries
+# and the JSON manifests - are committed; these are the 2.6MB of stdout behind them, and a
+# 1.3MB e2e server log in permanent history is bloat nobody will ever read.
+audit/**/*.log
