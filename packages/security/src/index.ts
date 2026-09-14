@@ -73,3 +73,4 @@ export * from "./artifact-grant.js";
 export * from "./model-grant.js";
 export * from "./execution-grant.js";
 export * from "./tracker-grant.js";
+export * from "./tracker-oauth-grant.js";

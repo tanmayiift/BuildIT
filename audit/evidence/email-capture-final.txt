@@ -1,0 +1,113 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ tests/architecture/autofix-cancellation-boundary.test.ts (5 tests) 5ms
+ ✓ packages/operations/test/effectiveLoc.test.ts (4 tests) 2ms
+ ✓ tests/architecture/data-classification.test.ts (3 tests) 2ms
+ ✓ packages/operations/test/email.test.ts (5 tests) 3ms
+ ✓ packages/providers/test/providers.test.ts (12 tests) 7ms
+ ✓ packages/operations/test/email-capture.test.ts (4 tests) 31ms
+ ✓ tests/architecture/model-grant-per-attempt.test.ts (5 tests) 5ms
+ ✓ packages/providers/test/accounting.test.ts (3 tests) 19ms
+ ✓ packages/operations/test/operations.test.ts (3 tests) 1ms
+ ✓ apps/web/src/app/notification-email-state.test.ts (3 tests) 2ms
+ ✓ tests/architecture/public-function-inventory.test.ts (5 tests) 13ms
+ ✓ convex/notifications.test.ts (6 tests) 77ms
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects tenant swaps and request changes before decrypting
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects tenant swaps and request changes before decrypting
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects replay and unsupported models with redacted errors
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_replayed","providerStatus":null}
+
+ ✓ convex/executionRecordIntegrity.test.ts (4 tests) 132ms
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects replay and unsupported models with redacted errors
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > returns only a provider HTTP status for a malformed structured response
+{"component":"model_broker","event":"invocation_failed","category":"malformed_response","providerStatus":400}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > does not retry a retired Gemini alias when the same key exposes no alternative
+{"component":"model_broker","event":"invocation_failed","category":"malformed_response","providerStatus":404}
+
+stdout | packages/broker/test/model-http.test.ts > accounted invocation protocol > performs exactly one provider attempt and returns paid failure usage
+{"component":"model_broker","event":"invocation_failed","category":"truncated","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > accounted invocation protocol > returns a verified Gemini fallback to the worker for a separate reservation
+{"component":"model_broker","event":"invocation_failed","category":"model_unavailable","providerStatus":404}
+
+ ✓ packages/broker/test/model-http.test.ts (8 tests) 14ms
+stderr | convex/accounting.test.ts > Ask accounts before presentation side effects > keeps the charge after empty
+buildit_ask_unanswered { reason: 'model_answer_empty' }
+
+ ✓ convex/accounting.test.ts (20 tests) 190ms
+ ✓ convex/notificationOutbox.test.ts (21 tests) 466ms
+stderr | convex/tenantIsolation.test.ts > audit log keeps showing what just happened > shows the newest events, not the oldest, past the 1000-event mark
+Error when running scheduled function reviewPublicationWorker:acknowledge Error: missing_github_app_id
+    at required (/Users/tanmay/Desktop/Lets Roll/BuildIT/convex/reviewPublicationWorker.ts:12:86)
+    at handler (/Users/tanmay/Desktop/Lets Roll/BuildIT/convex/reviewPublicationWorker.ts:239:49)
+    at handler (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1735:24)
+    at invokeFunction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:56:36)
+    at invokeAction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:202:24)
+    at Function.func.invokeAction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:211:47)
+    at file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1749:79
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:62:14)
+    at file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1749:53
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:66:14)
+Error when running scheduled function reviewPublicationWorker:acknowledge Error: missing_github_app_id
+    at required (/Users/tanmay/Desktop/Lets Roll/BuildIT/convex/reviewPublicationWorker.ts:12:86)
+    at handler (/Users/tanmay/Desktop/Lets Roll/BuildIT/convex/reviewPublicationWorker.ts:239:49)
+    at handler (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1735:24)
+    at invokeFunction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:56:36)
+    at invokeAction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:202:24)
+    at Function.func.invokeAction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:211:47)
+    at file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1749:79
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:62:14)
+    at file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1749:53
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:66:14)
+Error when running scheduled function reviewPublicationWorker:acknowledge Error: missing_github_app_id
+    at required (/Users/tanmay/Desktop/Lets Roll/BuildIT/convex/reviewPublicationWorker.ts:12:86)
+    at handler (/Users/tanmay/Desktop/Lets Roll/BuildIT/convex/reviewPublicationWorker.ts:239:49)
+    at handler (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1735:24)
+    at invokeFunction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:56:36)
+    at invokeAction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:202:24)
+    at Function.func.invokeAction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:211:47)
+    at file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1749:79
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:62:14)
+    at file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1749:53
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:66:14)
+Error when running scheduled function reviewPublicationWorker:acknowledge Error: missing_github_app_id
+    at required (/Users/tanmay/Desktop/Lets Roll/BuildIT/convex/reviewPublicationWorker.ts:12:86)
+    at handler (/Users/tanmay/Desktop/Lets Roll/BuildIT/convex/reviewPublicationWorker.ts:239:49)
+    at handler (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1735:24)
+    at invokeFunction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:56:36)
+    at invokeAction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:202:24)
+    at Function.func.invokeAction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:211:47)
+    at file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1749:79
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:62:14)
+    at file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1749:53
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:66:14)
+
+ ✓ apps/web/src/app/notification-preferences.component.test.tsx (5 tests) 117ms
+stderr | convex/tenantIsolation.test.ts > organization capacity limits can be changed > raises a limit and lets the review that was blocked through
+Error when running scheduled function reviewPublicationWorker:acknowledge Error: missing_github_app_id
+    at required (/Users/tanmay/Desktop/Lets Roll/BuildIT/convex/reviewPublicationWorker.ts:12:86)
+    at handler (/Users/tanmay/Desktop/Lets Roll/BuildIT/convex/reviewPublicationWorker.ts:239:49)
+    at handler (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1735:24)
+    at invokeFunction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:56:36)
+    at invokeAction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:202:24)
+    at Function.func.invokeAction (file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex@1.45.0_react@19.2.8/node_modules/convex/dist/esm/server/impl/registration_impl.js:211:47)
+    at file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1749:79
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:62:14)
+    at file:///Users/tanmay/Desktop/Lets%20Roll/BuildIT/node_modules/.pnpm/convex-test@0.0.56_convex@1.45.0_react@19.2.8_/node_modules/convex-test/dist/index.js:1749:53
+    at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:66:14)
+
+ ✓ convex/tenantIsolation.test.ts (116 tests) 946ms
+
+ Test Files  18 passed (18)
+      Tests  232 passed (232)
+   Start at  09:17:55
+   Duration  1.67s (transform 1.72s, setup 0ms, collect 4.29s, tests 2.03s, environment 592ms, prepare 1.21s)
+

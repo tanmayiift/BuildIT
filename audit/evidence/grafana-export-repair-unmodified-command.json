@@ -1,0 +1,166 @@
+{
+  "generatedAt": "2026-09-14T06:16:44.044Z",
+  "sources": {
+    "before": {
+      "path": "audit/evidence/grafana-current-group-2026-09-14.json",
+      "sha256": "6ca96d13f75f1e85ab337ec405146a05fbce0de8a5a5c3e3edc7f901e19cd19a"
+    },
+    "after": {
+      "path": "audit/evidence/grafana-current-group-2026-09-14.json",
+      "sha256": "6ca96d13f75f1e85ab337ec405146a05fbce0de8a5a5c3e3edc7f901e19cd19a"
+    }
+  },
+  "readOnly": true,
+  "evidenceKind": "native_ui_export_diff",
+  "ruleCount": 14,
+  "repairMatches": false,
+  "structuralFailures": [],
+  "requirementFailures": [
+    {
+      "uid": "e8ce7a9b-5f06-58cb-bc90-52d3a1972668",
+      "title": "BuildITHighFailureRate",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "e8ce7a9b-5f06-58cb-bc90-52d3a1972668",
+      "title": "BuildITHighFailureRate",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "3323ba18-b9a2-5bdd-9c3b-1a1b2110afb2",
+      "title": "BuildITP95LatencyHigh",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "3323ba18-b9a2-5bdd-9c3b-1a1b2110afb2",
+      "title": "BuildITP95LatencyHigh",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "a621fb37-6110-5a9b-81e8-6fcd05bbaf7d",
+      "title": "BuildITTelemetrySilent",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "a621fb37-6110-5a9b-81e8-6fcd05bbaf7d",
+      "title": "BuildITTelemetrySilent",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "600995c2-5186-5d4e-85ed-a313ee7aa699",
+      "title": "BuildITCriticalBoundaryFailure",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "600995c2-5186-5d4e-85ed-a313ee7aa699",
+      "title": "BuildITCriticalBoundaryFailure",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "99a89aa8-cc0b-57c5-bc40-03f1afd54bc4",
+      "title": "BuildITQueueDepthHigh",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "99a89aa8-cc0b-57c5-bc40-03f1afd54bc4",
+      "title": "BuildITQueueDepthHigh",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "859f7f43-dd01-560c-a42e-f77ea1439683",
+      "title": "BuildITProviderFailure",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "859f7f43-dd01-560c-a42e-f77ea1439683",
+      "title": "BuildITProviderFailure",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "fc3a8532-0ef0-5842-86fa-0660a1879afe",
+      "title": "BuildITProviderRetryRateHigh",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "fc3a8532-0ef0-5842-86fa-0660a1879afe",
+      "title": "BuildITProviderRetryRateHigh",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "b21aebde-0589-59ce-913d-230beae6dcd6",
+      "title": "BuildITRunnerFailure",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "b21aebde-0589-59ce-913d-230beae6dcd6",
+      "title": "BuildITRunnerFailure",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "b9897bbc-554d-5acd-90d4-54fae80b68d3",
+      "title": "BuildITRunnerCapacityExhausted",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "b9897bbc-554d-5acd-90d4-54fae80b68d3",
+      "title": "BuildITRunnerCapacityExhausted",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "9534bcc7-3d5a-5e86-9c9a-13d5a8281bb3",
+      "title": "BuildITArtifactDeletionBacklog",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "9534bcc7-3d5a-5e86-9c9a-13d5a8281bb3",
+      "title": "BuildITArtifactDeletionBacklog",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "a542f9b4-2f2f-5038-a00e-ce69e9c45ad1",
+      "title": "BuildITWebhookSignatureSpike",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "a542f9b4-2f2f-5038-a00e-ce69e9c45ad1",
+      "title": "BuildITWebhookSignatureSpike",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "5bc2f8b6-20bb-51a2-b1eb-acbfda69751d",
+      "title": "BuildITLoopGuardTrip",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "5bc2f8b6-20bb-51a2-b1eb-acbfda69751d",
+      "title": "BuildITLoopGuardTrip",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "ab2241ca-678e-5b45-bad0-cb412c516183",
+      "title": "BuildITStaleCheck",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "ab2241ca-678e-5b45-bad0-cb412c516183",
+      "title": "BuildITStaleCheck",
+      "requirement": "notification_settings.receiver"
+    },
+    {
+      "uid": "90ac7cae-4fd6-580a-8f74-bdee00f3228f",
+      "title": "BuildITBudgetExhaustionSpike",
+      "requirement": "execErrState"
+    },
+    {
+      "uid": "90ac7cae-4fd6-580a-8f74-bdee00f3228f",
+      "title": "BuildITBudgetExhaustionSpike",
+      "requirement": "notification_settings.receiver"
+    }
+  ],
+  "actualDifferences": [],
+  "unexpectedDifferences": [],
+  "folderUIDsVerified": false,
+  "fullStackInventoryVerified": false,
+  "deliveryTested": false,
+  "limits": "Only these two exported current groups are compared. Cosmetic changes are reported; no live firing or receiver delivery is inferred."
+}

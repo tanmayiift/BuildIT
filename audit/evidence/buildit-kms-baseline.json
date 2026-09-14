@@ -1,0 +1,66 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AccountAdministration",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::882820282590:root"
+      },
+      "Action": "kms:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "BrokerEnvelopeOperations",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::882820282590:role/buildit-production-content-broker"
+      },
+      "Action": [
+        "kms:Decrypt",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:ReEncryptFrom",
+        "kms:ReEncryptTo",
+        "kms:DescribeKey"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "eu-west-1"
+        },
+        "Null": {
+          "kms:EncryptionContext:purpose": "false",
+          "kms:EncryptionContext:credentialId": "false",
+          "kms:EncryptionContext:organizationId": "false"
+        }
+      }
+    },
+    {
+      "Sid": "BrokerS3ArtifactEncryption",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::882820282590:role/buildit-production-content-broker"
+      },
+      "Action": [
+        "kms:Decrypt",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:DescribeKey"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": "s3.eu-west-1.amazonaws.com",
+          "aws:RequestedRegion": "eu-west-1"
+        },
+        "ArnLike": {
+          "kms:EncryptionContext:aws:s3:arn": [
+            "arn:aws:s3:::buildit-production-882820282590-artifacts-eu-west-1",
+            "arn:aws:s3:::buildit-production-882820282590-artifacts-eu-west-1/*"
+          ]
+        }
+      }
+    }
+  ]
+}

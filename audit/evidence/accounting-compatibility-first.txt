@@ -1,0 +1,311 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ tests/architecture/convex-runtime-boundary.test.ts (1 test) 14ms
+ ✓ tests/architecture/query-bounds.test.ts (6 tests) 18ms
+ ✓ packages/providers/test/providers.test.ts (12 tests) 7ms
+ ✓ tests/architecture/review-feedback-routing.test.ts (4 tests) 46ms
+ ✓ tests/architecture/required-live-gates.test.ts (2 tests) 53ms
+ ✓ convex/lib/platformFailureReport.test.ts (26 tests) 14ms
+ ✓ tests/architecture/merge-boundary.test.ts (1 test) 51ms
+ ✓ packages/orchestrator/test/promptChain.test.ts (19 tests) 20ms
+ ✓ packages/orchestrator/test/modelChain.test.ts (13 tests) 18ms
+ ✓ packages/orchestrator/test/reviewPlan.test.ts (10 tests) 19ms
+ ✓ packages/broker/test/artifact-http.test.ts (6 tests) 9ms
+ ✓ packages/broker/test/convex-gateway.test.ts (5 tests) 5ms
+ ✓ packages/broker/test/origin-allowlist.test.ts (6 tests) 1ms
+ ✓ packages/orchestrator/test/requirements.test.ts (10 tests) 13ms
+ ✓ tests/architecture/public-function-inventory.test.ts (5 tests) 7ms
+ ✓ tests/architecture/workflow-supply-chain.test.ts (4 tests) 3ms
+ ✓ tests/architecture/deployment-command.test.ts (38 tests) 9ms
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > names the provider failing to start
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'Error: Sandbox failed to start: no capacity in region cdg1'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > names the provider dying mid-run
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'Error: Sandbox terminated unexpectedly'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > names an unreachable sandbox control plane
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'TypeError: fetch failed'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > names a sandbox that never answered
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'TimeoutError: The operation timed out'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > names a dropped connection
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'Error: read ECONNRESET'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > falls back to execution_failed for something thrown that is not an Error
+buildit_execute_failure {
+  category: 'unexpected',
+  code: 'execution_failed',
+  reason: 'non_error_thrown'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > falls back to execution_failed for an unrecognised runtime fault
+buildit_execute_failure {
+  category: 'unexpected',
+  code: 'execution_failed',
+  reason: 'Error: unexpected internal state'
+}
+
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects tenant, plan, and artifact changes before sandbox execution
+buildit_execute_failure {
+  category: 'grant',
+  code: 'execution_grant_invalid',
+  reason: 'Error: [redacted]'
+}
+
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects tenant, plan, and artifact changes before sandbox execution
+buildit_execute_failure {
+  category: 'grant',
+  code: 'execution_grant_invalid',
+  reason: 'Error: [redacted]'
+}
+
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects tenant, plan, and artifact changes before sandbox execution
+buildit_execute_failure {
+  category: 'grant',
+  code: 'execution_grant_invalid',
+  reason: 'Error: [redacted]'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > never lets provider text reach the response
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'Error: Sandbox failed: s3://buildit-artifacts[redacted] token=sk-live-9f3 at Sandbox.create'
+}
+
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects tenant, plan, and artifact changes before sandbox execution
+buildit_execute_failure {
+  category: 'grant',
+  code: 'execution_grant_invalid',
+  reason: 'Error: [redacted]'
+}
+
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects work that cannot finish inside the serverless budget
+buildit_execute_failure {
+  category: 'request_policy',
+  code: 'invalid_execution_request',
+  reason: 'Error: [redacted]'
+}
+
+ ✓ packages/broker/test/execution-failure-modes.test.ts (11 tests) 14ms
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects replay before reading artifacts
+buildit_execute_failure {
+  category: 'grant',
+  code: 'execution_grant_replayed',
+  reason: 'Error: [redacted]'
+}
+
+ ✓ packages/broker/test/execution-http.test.ts (7 tests) 15ms
+ ✓ packages/broker/test/http.test.ts (9 tests) 10ms
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects tenant swaps and request changes before decrypting
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects tenant swaps and request changes before decrypting
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects replay and unsupported models with redacted errors
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_replayed","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects replay and unsupported models with redacted errors
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > returns only a provider HTTP status for a malformed structured response
+{"component":"model_broker","event":"invocation_failed","category":"malformed_response","providerStatus":400}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > does not retry a retired Gemini alias when the same key exposes no alternative
+{"component":"model_broker","event":"invocation_failed","category":"malformed_response","providerStatus":404}
+
+ ❯ packages/broker/test/model-http.test.ts (6 tests | 1 failed) 15ms
+   ✓ model broker HTTP boundary > uses a credential once for one exact structured provider call 5ms
+   ✓ model broker HTTP boundary > rejects tenant swaps and request changes before decrypting 2ms
+   ✓ model broker HTTP boundary > rejects replay and unsupported models with redacted errors 1ms
+   ✓ model broker HTTP boundary > returns only a provider HTTP status for a malformed structured response 1ms
+   ✓ model broker HTTP boundary > recovers a legacy Gemini model once using the same key's catalog 1ms
+   × model broker HTTP boundary > does not retry a retired Gemini alias when the same key exposes no alternative 6ms
+     → expected { error: 'malformed_response', …(2) } to deeply equal { error: 'malformed_response', …(1) }
+ ✓ tests/architecture/observability.test.ts (13 tests) 11ms
+ ✓ tests/architecture/public-function-reachability.test.ts (5 tests) 9ms
+ ✓ packages/orchestrator/test/repository-config.test.ts (9 tests) 481ms
+   ✓ saying what happened to the configuration > says when a configuration was found and not used  476ms
+ ✓ packages/orchestrator/test/unreadable-sources.test.ts (10 tests) 484ms
+   ✓ the receipt and the prose > names the source and the remedy instead of listing both possible causes  482ms
+ ✓ packages/orchestrator/test/change-summary.test.ts (7 tests) 3ms
+ ✓ packages/broker/test/artifacts.test.ts (8 tests) 8ms
+ ✓ packages/broker/test/tracker-credentials.test.ts (3 tests) 7ms
+ ✓ packages/broker/test/tracker-http.test.ts (3 tests) 8ms
+ ✓ packages/broker/test/telemetry-ingest.test.ts (6 tests) 5ms
+ ✓ tests/architecture/asvs-control-matrix.test.ts (3 tests) 2ms
+ ✓ tests/architecture/grafana-verification.test.ts (5 tests) 7ms
+ ✓ tests/architecture/production-wiring.test.ts (4 tests) 6ms
+ ✓ tests/architecture/identity-only-access.test.ts (3 tests) 2ms
+ ✓ packages/orchestrator/test/contextIndex.test.ts (11 tests) 7ms
+ ✓ packages/orchestrator/test/patchPolicy.test.ts (48 tests) 9ms
+ ✓ tests/architecture/health-wiring.test.ts (4 tests) 5ms
+ ✓ tests/architecture/release-claim.test.ts (2 tests) 4ms
+ ✓ packages/broker/test/credential-broker.test.ts (4 tests) 6ms
+ ✓ packages/providers/test/accounting.test.ts (3 tests) 4ms
+ ✓ tests/architecture/dependency-audit-gate.test.ts (18 tests) 5ms
+ ✓ tests/architecture/audit-database-refresh.test.ts (3 tests) 5ms
+ ✓ tests/architecture/capability-inventory.test.ts (3 tests) 6ms
+ ✓ tests/architecture/sample-fixture-consistency.test.ts (7 tests) 4ms
+ ✓ tests/architecture/social-preview.test.ts (7 tests) 3ms
+stdout | packages/broker/test/instrumentation.test.ts > broker telemetry boundary > does not inspect request bodies or change responses
+{"event":"broker.request_completed","buildit.operation":"model.invoke","buildit.outcome":"succeeded"}
+
+stdout | packages/broker/test/instrumentation.test.ts > broker telemetry boundary > fails open when no exporter is configured
+{"event":"broker.request_completed","buildit.operation":"artifact.delete","buildit.outcome":"succeeded"}
+
+ ✓ packages/broker/test/instrumentation.test.ts (2 tests) 4ms
+ ✓ packages/orchestrator/test/report.test.ts (25 tests) 10ms
+ ❯ tests/architecture/model-grant-per-attempt.test.ts (5 tests | 1 failed) 6ms
+   ✓ a grant is single-use, so every attempt needs its own > refuses the same token twice, which is why re-sending one breaks the retry 2ms
+   ✓ a grant is single-use, so every attempt needs its own > accepts a freshly minted grant for the identical request 1ms
+   ✓ a grant is single-use, so every attempt needs its own > still binds the request, so a fresh grant cannot be pointed at different content 0ms
+   × what the analysis worker sends > mints a grant inside the retry loop, not once outside it 2ms
+     → the retry must not re-send a token a previous attempt already spent: expected '' to match /authorization: `Bearer \$\{mintGrant\…/
+   ✓ what the analysis worker sends > does not keep a single reusable grant in scope for the loop 0ms
+ ✓ tests/architecture/style-hook-coverage.test.ts (2 tests) 5ms
+ ✓ packages/orchestrator/test/learning.test.ts (9 tests) 2ms
+ ✓ tests/architecture/review-status-contract.test.ts (6 tests) 3ms
+ ✓ tests/architecture/aws-boundary.test.ts (8 tests) 8ms
+ ✓ packages/orchestrator/test/pre-existing-failures.test.ts (9 tests) 4ms
+ ✓ tests/architecture/incident-runbooks.test.ts (4 tests) 2ms
+ ✓ packages/orchestrator/test/changelog.test.ts (8 tests) 3ms
+ ✓ tests/architecture/aws-verifier-credentials.test.ts (1 test) 11ms
+ ✓ tests/architecture/path-filter-safety.test.ts (4 tests) 2ms
+ ✓ packages/orchestrator/test/orchestrator.test.ts (11 tests) 4ms
+ ✓ tests/architecture/data-classification.test.ts (3 tests) 2ms
+ ✓ tests/architecture/design-fixture-boundary.test.ts (4 tests) 2ms
+ ✓ packages/orchestrator/test/findings.test.ts (15 tests) 5ms
+ ✓ packages/orchestrator/test/report-noise.test.ts (8 tests) 5ms
+ ✓ convex/reviewAutofixWorker.test.ts (4 tests) 3ms
+ ❯ tests/architecture/autofix-cancellation-boundary.test.ts (5 tests | 2 failed) 5ms
+   × Autofix cancellation boundary > rechecks the active generation before expensive external work 3ms
+     → fetch(`${brokerUrl}/api/model` occurrence 1: expected -1 to be greater than -1
+   ✓ Autofix cancellation boundary > rechecks the active generation before every GitHub publication 0ms
+   ✓ Autofix cancellation boundary > cleans an exact candidate branch only before a stacked PR exists 0ms
+   ✓ normal review cancellation boundary > finishes cancellation even when the workflow already stopped 0ms
+   × normal review cancellation boundary > fences costly and write-capable external stages 0ms
+     → convex/reviewAnalysisWorker.ts: fetch(`${brokerUrl}/api/model`: expected -1 to be greater than -1
+ ✓ packages/broker/test/execution-diagnostic.test.ts (14 tests) 3ms
+ ✓ tests/architecture/durable-workflow.test.ts (12 tests) 4ms
+ ✓ tests/architecture/instruction-limits.test.ts (4 tests) 2ms
+ ✓ tests/architecture/observability-snapshot.test.ts (2 tests) 2ms
+ ✓ tests/architecture/verdict-single-source.test.ts (7 tests) 2ms
+ ✓ tests/architecture/broker-deployment-boundary.test.ts (3 tests) 1ms
+ ✓ tests/architecture/interface-accessibility.test.ts (3 tests) 2ms
+ ✓ tests/architecture/launch-guides.test.ts (3 tests) 2ms
+ ✓ packages/orchestrator/test/path-instructions.test.ts (6 tests) 2ms
+ ✓ tests/architecture/one-review-entry.test.ts (5 tests) 2ms
+ ✓ tests/architecture/autofix-side-effect-keys.test.ts (4 tests) 2ms
+ ✓ tests/architecture/evaluation-cli-entrypoint.test.ts (1 test) 2ms
+ ✓ tests/architecture/track-record.test.ts (3 tests) 2ms
+ ✓ tests/architecture/changelog-boundary.test.ts (4 tests) 1ms
+ ✓ tests/architecture/execution-release-gate.test.ts (2 tests) 4ms
+ ✓ tests/architecture/tenant-proof-assertions.test.ts (3 tests) 1ms
+ ✓ tests/architecture/context-selection-boundary.test.ts (4 tests) 1ms
+ ✓ tests/architecture/two-user-browser-harness.test.ts (3 tests) 1ms
+ ✓ tests/architecture/review-comment-identity.test.ts (2 tests) 1ms
+ ✓ tests/architecture/webhook-events.test.ts (2 tests) 1ms
+ ✓ tests/architecture/config-trust.test.ts (4 tests) 1ms
+ ✓ packages/orchestrator/test/review-profile.test.ts (6 tests) 2ms
+ ✓ tests/architecture/model-stage-contract.test.ts (3 tests) 2ms
+ ✓ tests/architecture/lint-coverage.test.ts (4 tests) 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/architecture/autofix-cancellation-boundary.test.ts > Autofix cancellation boundary > rechecks the active generation before expensive external work
+AssertionError: fetch(`${brokerUrl}/api/model` occurrence 1: expected -1 to be greater than -1
+ ❯ expectFreshFenceBefore tests/architecture/autofix-cancellation-boundary.test.ts:25:61
+     23|     markerIndex = source.indexOf(marker, markerIndex + 1);
+     24|   }
+     25|   expect(markerIndex, `${marker} occurrence ${occurrence}`).toBeGreate…
+       |                                                             ^
+     26|   const fenceIndex = source.lastIndexOf("await assertActive(ctx, args)…
+     27|   expect(fenceIndex, `${marker} occurrence ${occurrence} has a fence`)…
+ ❯ tests/architecture/autofix-cancellation-boundary.test.ts:33:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/architecture/autofix-cancellation-boundary.test.ts > normal review cancellation boundary > fences costly and write-capable external stages
+AssertionError: convex/reviewAnalysisWorker.ts: fetch(`${brokerUrl}/api/model`: expected -1 to be greater than -1
+ ❯ expectReviewFence tests/architecture/autofix-cancellation-boundary.test.ts:9:45
+      7|   const worker = readFileSync(file, "utf8");
+      8|   const markerIndex = worker.indexOf(marker);
+      9|   expect(markerIndex, `${file}: ${marker}`).toBeGreaterThan(-1);
+       |                                             ^
+     10|   const fenceIndex = worker.lastIndexOf(
+     11|     "ctx.runQuery(internal.durableReview.assertActive, args)",
+ ❯ tests/architecture/autofix-cancellation-boundary.test.ts:69:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/architecture/model-grant-per-attempt.test.ts > what the analysis worker sends > mints a grant inside the retry loop, not once outside it
+AssertionError: the retry must not re-send a token a previous attempt already spent: expected '' to match /authorization: `Bearer \$\{mintGrant\…/
+
+- Expected: 
+/authorization: `Bearer \$\{mintGrant\(\)\}`/
+
++ Received: 
+""
+
+ ❯ tests/architecture/model-grant-per-attempt.test.ts:64:8
+     62|     const authorization = retryLoop.slice(0, retryLoop.indexOf("\n    …
+     63|     expect(authorization, "the retry must not re-send a token a previo…
+     64|       .toMatch(/authorization: `Bearer \$\{mintGrant\(\)\}`/);
+       |        ^
+     65|   });
+     66| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  packages/broker/test/model-http.test.ts > model broker HTTP boundary > does not retry a retired Gemini alias when the same key exposes no alternative
+AssertionError: expected { error: 'malformed_response', …(2) } to deeply equal { error: 'malformed_response', …(1) }
+
+- Expected
++ Received
+
+  {
+    "error": "malformed_response",
++   "notCharged": true,
+    "providerStatus": 404,
+  }
+
+ ❯ packages/broker/test/model-http.test.ts:67:5
+     65|   it("does not retry a retired Gemini alias when the same key exposes …
+     66|     const source = fixture(), generateWithRetry = vi.fn(async () => { …
+     67|     await expect(handleModelInvocation(new Request("https://broker/api…
+       |     ^
+     68|       grantSecret: secret, consume: async () => true,
+     69|       broker: { withCredential: async (_id: string, _access: unknown, …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  3 failed | 85 passed (88)
+      Tests  4 failed | 623 passed (627)
+   Start at  08:31:20
+   Duration  4.43s (transform 1.71s, setup 0ms, collect 12.23s, tests 1.58s, environment 7ms, prepare 4.53s)
+

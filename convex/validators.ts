@@ -102,7 +102,7 @@ export const sideEffectStatus = v.union(v.literal("reserved"), v.literal("comple
 export const webhookDisposition = v.union(v.literal("processed"), v.literal("ignored_bot"), v.literal("ignored_edit"), v.literal("duplicate"), v.literal("rejected"));
 export const webhookStatus = v.union(v.literal("received"), v.literal("enqueued"), v.literal("completed"), v.literal("failed"));
 export const notificationChannel = v.union(v.literal("email"), v.literal("dashboard"));
-export const notificationStatus = v.union(v.literal("pending"), v.literal("sent"), v.literal("failed"));
+export const notificationStatus = v.union(v.literal("pending"), v.literal("processing"), v.literal("captured"), v.literal("suppressed"), v.literal("sent"), v.literal("failed"));
 export const auditResult = v.union(v.literal("allowed"), v.literal("denied"), v.literal("failed"));
 export const statusReasonCode = v.union(
   v.literal("checks_complete"), v.literal("blocking_findings"),
@@ -144,3 +144,16 @@ export const metricName = v.union(
 // The stages that hand work to another stage. report and publication consume the analysis
 // output rather than producing state for a successor, so they do not write a row.
 export const runStateStage = v.union(v.literal("context"), v.literal("validation"), v.literal("analysis"));
+
+// Execution is intentionally separate from review stages. A review stage can
+// contain several serverless requests, while an execution job records the
+// exact resumable cursor that the next request must consume.
+export const executionStage = v.union(
+  v.literal("prepare"), v.literal("install"), v.literal("checks"),
+  v.literal("diagnostics"), v.literal("scanners"), v.literal("compare"),
+  v.literal("complete"),
+);
+export const executionJobStatus = v.union(
+  v.literal("queued"), v.literal("running"), v.literal("checkpointed"),
+  v.literal("completed"), v.literal("failed"), v.literal("cancelled"),
+);

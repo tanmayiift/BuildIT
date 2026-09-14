@@ -1,0 +1,43 @@
+{
+  "startedAt": "2026-09-14T05:56:50.011Z",
+  "completedAt": "2026-09-14T05:56:50.462Z",
+  "scope": "isolated Docker compose buildit-audit-20260914; all container traffic remains on internal network",
+  "proof": "Actual BuildIT recordMeasurement + registered OpenTelemetry SDK HTTP exporter; unmodified SDK payload forwarded by loopback-only transport bridge to real local collector",
+  "productionTest": false,
+  "paidCalls": 0,
+  "measurement": {
+    "name": "queue_depth",
+    "value": 0,
+    "accepted": true
+  },
+  "nodeVersion": "v24.21.0",
+  "sourceRevision": "e9dc368b4f4919e9377d73c744680c731643a6fa",
+  "sourceHashes": {
+    "packages/telemetry/src/index.ts": "5d38187e202855b7b6ba9586db4235b0badee177e3132c5378eed8178431a56f",
+    "packages/telemetry/src/register.ts": "c93c1f19f9c8ad186389086056e8cdf083644737a0ebef2c1f2d2c68b1400877",
+    "packages/telemetry/dist/src/index.js": "0aa7ab92c88a4196ad5c0c10622a26d25bb3b040d8b1e5868464e7b6daf320ca",
+    "packages/telemetry/dist/src/register.js": "4568ec6c46ba8f2c4730c433d7fb2199fb52e4832007f81fd7044020355bd231"
+  },
+  "exports": [
+    {
+      "forwardedAt": "2026-09-14T05:56:50.049Z",
+      "receivedAt": "2026-09-14T05:56:50.309Z",
+      "contentType": "application/json",
+      "bodyBytes": 615,
+      "bodySha256": "af4a22564e852d6d824e234ee8b781068d04572eff362e004558c4778303b69d",
+      "collectorHttpStatus": 200
+    },
+    {
+      "forwardedAt": "2026-09-14T05:56:50.311Z",
+      "receivedAt": "2026-09-14T05:56:50.459Z",
+      "contentType": "application/json",
+      "bodyBytes": 615,
+      "bodySha256": "437fc44ab78455c2abc07233cb37a1432cf1deb7054ba4e9263543e1a71a0720",
+      "collectorHttpStatus": 200
+    }
+  ],
+  "limitations": [
+    "No real Convex cron or broker authentication ingress invoked",
+    "No production Grafana or customer email contacted"
+  ]
+}

@@ -1,0 +1,1700 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "buildit-release",
+      "folder": "buildit",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "e8ce7a9b-5f06-58cb-bc90-52d3a1972668",
+          "title": "BuildITHighFailureRate",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "(sum(rate(buildit_failures_total{buildit_outcome=\"failed\"}[10m])) or vector(0)) / clamp_min((sum(rate(buildit_operations_total{buildit_outcome=~\"succeeded|failed\"}[10m])) or vector(0)), 0.001) > 0.05 and (sum(increase(buildit_operations_total{buildit_outcome=~\"succeeded|failed\"}[10m])) or vector(0)) >= 20",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "for": "10m",
+          "annotations": {
+            "action": "Check the BuildIT failure and latency panels, then pause the failing boundary if the ratio is still rising.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#buildithighfailurerate",
+            "summary": "More than 5% of BuildIT operations are failing"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "page"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "3323ba18-b9a2-5bdd-9c3b-1a1b2110afb2",
+          "title": "BuildITP95LatencyHigh",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "histogram_quantile(0.95, sum by (le) (rate(buildit_operation_duration_milliseconds_bucket[10m]))) > 120000",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "for": "15m",
+          "annotations": {
+            "action": "Compare provider, runner, and queue latency; reduce intake if the slow boundary is saturated.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditp95latencyhigh",
+            "summary": "BuildIT operation p95 is above two minutes"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "ticket"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "a621fb37-6110-5a9b-81e8-6fcd05bbaf7d",
+          "title": "BuildITTelemetrySilent",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "max(absent_over_time(buildit_snapshot[15m]) or vector(0)) > 0.5",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "for": "5m",
+          "annotations": {
+            "action": "Check the Convex cron ran, then the collector delivery path and the most recent deployment. An idle product is not this alert - the snapshot emits whether or not anyone is reviewing.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#buildittelemetrysilent",
+            "summary": "No BuildIT telemetry has arrived for three snapshot intervals"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "ticket"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "600995c2-5186-5d4e-85ed-a313ee7aa699",
+          "title": "BuildITCriticalBoundaryFailure",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "sum(increase(buildit_failures_total{buildit_operation=~\"artifact.delete|sandbox.cleanup|webhook.verify|autofix.loop_guard|review.stale_check\"}[5m])) > 0",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "annotations": {
+            "action": "Stop the affected execution path, confirm cleanup and deletion, then follow the incident runbook before resuming.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditcriticalboundaryfailure",
+            "summary": "A BuildIT security or safety boundary failed"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "page"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "99a89aa8-cc0b-57c5-bc40-03f1afd54bc4",
+          "title": "BuildITQueueDepthHigh",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "max(buildit_snapshot{buildit_measurement=\"queue_depth\"}) > 25",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "for": "10m",
+          "annotations": {
+            "action": "Check worker capacity and provider limits; stop new intake if wait time continues to grow.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditqueuedepthhigh",
+            "summary": "BuildIT review queue has stayed above 25"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "ticket"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "859f7f43-dd01-560c-a42e-f77ea1439683",
+          "title": "BuildITProviderFailure",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "sum(increase(buildit_failures_total{buildit_operation=\"review.delivery\", buildit_error_code=~\"provider_error|rate_limited\"}[15m])) > 0",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "annotations": {
+            "action": "Check provider status and bounded retry counts; disable the failing provider route if errors continue.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditproviderfailure",
+            "summary": "A review ended without a verdict because a provider would not answer"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "ticket"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "fc3a8532-0ef0-5842-86fa-0660a1879afe",
+          "title": "BuildITProviderRetryRateHigh",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "sum(increase(buildit_failures_total{buildit_operation=\"model.invoke\"}[30m])) > 20",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "for": "10m",
+          "annotations": {
+            "action": "No review has failed yet. Check provider status pages and error codes before the retries stop absorbing it.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditproviderretryratehigh",
+            "summary": "BuildIT is retrying provider calls more than usual"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "info"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "b21aebde-0589-59ce-913d-230beae6dcd6",
+          "title": "BuildITRunnerFailure",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "sum(increase(buildit_failures_total{buildit_operation=~\"sandbox.execute|sandbox.cleanup\", buildit_error_code!=\"capacity_exhausted\"}[10m])) > 0",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "annotations": {
+            "action": "Disable untrusted execution, confirm every sandbox stopped, and inspect runner capacity before resuming.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditrunnerfailure",
+            "summary": "BuildIT runner execution or cleanup failed"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "page"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "b9897bbc-554d-5acd-90d4-54fae80b68d3",
+          "title": "BuildITRunnerCapacityExhausted",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "sum(increase(buildit_failures_total{buildit_operation=\"sandbox.execute\", buildit_error_code=\"capacity_exhausted\"}[30m])) > 0",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "annotations": {
+            "action": "Upgrade the Vercel sandbox plan or wait for the reset date. Reviews will return inconclusive until then, which is correct - they are not claiming to have checked anything.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditrunnercapacityexhausted",
+            "summary": "BuildIT cannot run checks: the sandbox plan's usage is spent"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "ticket"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "9534bcc7-3d5a-5e86-9c9a-13d5a8281bb3",
+          "title": "BuildITArtifactDeletionBacklog",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "max(buildit_snapshot{buildit_measurement=\"expired_artifact_backlog\"}) > 0",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "for": "20m",
+          "annotations": {
+            "action": "Pause new artifact creation, run the deletion reconciler, and confirm the backlog returns to zero.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditartifactdeletionbacklog",
+            "summary": "Expired BuildIT artifacts remain undeleted"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "page"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "a542f9b4-2f2f-5038-a00e-ce69e9c45ad1",
+          "title": "BuildITWebhookSignatureSpike",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "sum(increase(buildit_failures_total{buildit_operation=\"webhook.verify\"}[5m])) > 5",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "annotations": {
+            "action": "Check GitHub delivery status and secret rotation history; keep rejected requests blocked.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditwebhooksignaturespike",
+            "summary": "BuildIT is rejecting an unusual number of webhook signatures"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "page"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "5bc2f8b6-20bb-51a2-b1eb-acbfda69751d",
+          "title": "BuildITLoopGuardTrip",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "sum(increase(buildit_failures_total{buildit_operation=\"autofix.loop_guard\"}[5m])) > 0",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "annotations": {
+            "action": "Confirm the run stopped at its configured bound and no further candidate or merge action occurred.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditloopguardtrip",
+            "summary": "A BuildIT Autofix loop safety bound stopped a run"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "ticket"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "ab2241ca-678e-5b45-bad0-cb412c516183",
+          "title": "BuildITStaleCheck",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "sum(increase(buildit_failures_total{buildit_operation=\"review.stale_check\"}[5m])) > 0",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "annotations": {
+            "action": "Confirm the stale run made no write and let the user start a new review at the current commit.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditstalecheck",
+            "summary": "BuildIT stopped because the reviewed commit changed"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "ticket"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        },
+        {
+          "uid": "90ac7cae-4fd6-580a-8f74-bdee00f3228f",
+          "title": "BuildITBudgetExhaustionSpike",
+          "condition": "threshold",
+          "data": [
+            {
+              "refId": "query",
+              "queryType": "prometheus",
+              "relativeTimeRange": {
+                "from": 660,
+                "to": 60
+              },
+              "datasourceUid": "grafanacloud-prom",
+              "model": {
+                "datasource": {
+                  "type": "prometheus",
+                  "uid": "grafanacloud-prom"
+                },
+                "expr": "max(buildit_snapshot{buildit_measurement=\"budget_exhausted_reviews_hour\"}) > 3",
+                "instant": true,
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "query"
+              }
+            },
+            {
+              "refId": "prometheus_math",
+              "queryType": "math",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "is_number($query) || is_nan($query) || is_inf($query)",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "prometheus_math",
+                "type": "math"
+              }
+            },
+            {
+              "refId": "threshold",
+              "queryType": "threshold",
+              "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+              },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "params": [
+                        0
+                      ],
+                      "type": "gt"
+                    }
+                  }
+                ],
+                "datasource": {
+                  "IsPrunable": false,
+                  "access": "",
+                  "apiVersion": "",
+                  "basicAuth": false,
+                  "created": "0001-01-01T00:00:00Z",
+                  "database": "",
+                  "id": -100,
+                  "isDefault": false,
+                  "jsonData": {},
+                  "name": "__expr__",
+                  "readOnly": false,
+                  "type": "__expr__",
+                  "uid": "__expr__",
+                  "updated": "0001-01-01T00:00:00Z",
+                  "url": "",
+                  "withCredentials": false
+                },
+                "expression": "prometheus_math",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "threshold",
+                "type": "threshold"
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "OK",
+          "for": "5m",
+          "annotations": {
+            "action": "Check model routing and context size; do not raise customer ceilings automatically.",
+            "runbook_url": "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditbudgetexhaustionspike",
+            "summary": "More than three BuildIT reviews exhausted their budget this hour"
+          },
+          "labels": {
+            "__converted_prometheus_rule__": "true",
+            "service": "buildit",
+            "severity": "ticket"
+          },
+          "isPaused": false,
+          "missing_series_evals_to_resolve": 1
+        }
+      ]
+    }
+  ]
+}

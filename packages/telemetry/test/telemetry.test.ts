@@ -19,6 +19,14 @@ describe("source-free telemetry", () => {
     expect(safeAttributes({ operation: "customer/repository/name" } as never)).toEqual({ "buildit.operation": "other" });
   });
 
+  it("preserves the capacity-exhausted category used by the runner alert", () => {
+    expect(safeAttributes({ operation: "sandbox.execute", outcome: "failed", errorCode: "capacity_exhausted" })).toEqual({
+      "buildit.operation": "sandbox.execute",
+      "buildit.outcome": "failed",
+      "buildit.error_code": "capacity_exhausted",
+    });
+  });
+
   it("accepts only bounded source-free operational measurements", () => {
     expect(safeMeasurement({ measurement: "queue_depth", value: 12 })).toEqual({
       value: 12,
@@ -48,4 +56,8 @@ describe("source-free telemetry", () => {
       "x-scope-orgid": "42",
     });
   });
+});
+
+it("labels tracker authorization without exposing codes or tokens", () => {
+ expect(safeAttributes({ operation: "tracker.oauth", outcome: "failed", token: "refresh-secret", code: "callback-code", workspaceId: "private-site" } as never)).toEqual({ "buildit.operation": "tracker.oauth", "buildit.outcome": "failed" });
 });

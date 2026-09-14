@@ -1,0 +1,59 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ apps/web/src/app/notification-email-state.test.ts (3 tests) 2ms
+ ✓ tests/architecture/data-classification.test.ts (3 tests) 2ms
+ ✓ packages/operations/test/email.test.ts (5 tests) 3ms
+ ❯ tests/architecture/public-function-inventory.test.ts (5 tests | 1 failed) 19ms
+   × public Convex function inventory > requires an authorization and response-data declaration for every public function 18ms
+     → expected [ 'activation:funnel', …(49) ] to deeply equal [ 'activation:funnel', …(56) ]
+   ✓ public Convex function inventory > never labels an organization or repository endpoint as unauthenticated 0ms
+   ✓ product table security inventory > requires scope, parent, and stored-data declarations for every product table 0ms
+   ✓ product table security inventory > requires repository and review tables to declare their complete parent chain 0ms
+   ✓ product table security inventory > requires a runtime parent-consistency policy for every cross-record tenant table 0ms
+ ✓ convex/notifications.test.ts (6 tests) 33ms
+ ✓ convex/notificationOutbox.test.ts (18 tests) 101ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/architecture/public-function-inventory.test.ts > public Convex function inventory > requires an authorization and response-data declaration for every public function
+AssertionError: expected [ 'activation:funnel', …(49) ] to deeply equal [ 'activation:funnel', …(56) ]
+
+- Expected
++ Received
+
+@@ -42,17 +42,10 @@
+    "reviews:get",
+    "reviews:getEvidence",
+    "reviews:list",
+    "reviews:runHistory",
+    "runtimeReadiness:current",
+-   "trackerOAuth:availability",
+-   "trackerOAuth:begin",
+-   "trackerOAuth:complete",
+-   "trackerOAuth:connect",
+-   "trackerOAuth:disconnect",
+-   "trackerOAuth:projects",
+-   "trackerOAuthData:pending",
+    "usage:prepare",
+    "usage:summarize",
+    "users:revokeOtherSessions",
+    "users:sessions",
+    "users:viewer",
+
+ ❯ tests/architecture/public-function-inventory.test.ts:25:56
+     23| describe("public Convex function inventory", () => {
+     24|   it("requires an authorization and response-data declaration for ever…
+     25|     expect(Object.keys(publicFunctionPolicies).sort()).toEqual(publicF…
+       |                                                        ^
+     26|   });
+     27| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 5 passed (6)
+      Tests  1 failed | 39 passed (40)
+   Start at  09:09:18
+   Duration  572ms (transform 275ms, setup 0ms, collect 868ms, tests 161ms, environment 0ms, prepare 288ms)
+

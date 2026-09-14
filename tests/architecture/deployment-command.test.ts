@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 import {
   aliasArgs, assertAliasMatches, assertBuildITWebDeployContext, assertProbeOk,
   deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, probeWithRetry, resolveDeployLink,
 } from "../../scripts/deploy-buildit-web.mjs";
 import { assertBuildITBrokerDeployContext } from "../../scripts/deploy-buildit-broker.mjs";
-import { assertBrokerServesCommit, assertProductionDeployContext, brokerHealthUrl, checkOrder, deploymentOrder, uncommittedFileCount } from "../../scripts/deploy-buildit-production.mjs";
+import { assertBrokerServesCommit, assertProductionDeployContext, brokerHealthUrl, checkOrder, deploymentOrder, runCoordinatedDeployment, uncommittedFileCount } from "../../scripts/deploy-buildit-production.mjs";
 
 const repoRoot = process.cwd();
 const correctLink = {
@@ -43,6 +44,12 @@ describe("BuildIT web deployment command", () => {
 
   it("deploys to production against the pinned team", () => {
     expect(deployArgs()).toEqual(["deploy", "--prod", "--yes", "--scope", "buildit-agentic-review"]);
+  });
+
+  it("runs the dry-run build through the pinned package manager", () => {
+    const source = readFileSync("scripts/deploy-buildit-web.mjs", "utf8");
+    expect(source).toContain('spawnSync("pnpm", ["--filter", "@buildit/web", "build"]');
+    expect(source).not.toContain('spawnSync("npx", ["pnpm@10.15.0"');
   });
 });
 
@@ -239,23 +246,37 @@ describe("release runs on a runner with no link file", () => {
 describe("BuildIT production deployment command", () => {
   it("accepts only the repository root", () => {
     expect(assertProductionDeployContext({ cwd: repoRoot, repoRoot })).toEqual({
-      steps: ["convex", "web", "broker"],
+      steps: ["broker", "convex", "web"],
       healthUrl: "https://buildit-content-broker.vercel.app/api/health",
     });
     expect(() => assertProductionDeployContext({ cwd: `${repoRoot}/packages/broker`, repoRoot }))
       .toThrow("buildit_production_deploy_must_run_from_repo_root");
   });
 
-  // Convex first so the workers accept what the new web and broker send; broker last because it is
-  // the one whose freshness is then asserted.
-  it("deploys Convex, then web, then the broker", () => {
-    expect(deploymentOrder.map(step => step.name)).toEqual(["convex", "web", "broker"]);
-    expect(deploymentOrder[0]).toMatchObject({ command: "pnpm", args: ["exec", "convex", "deploy", "-y"] });
-    expect(deploymentOrder.at(-1)).toMatchObject({ args: ["deploy:broker:production"] });
+  // The old broker rejects invocationId as an unknown field. New workers cannot be released
+  // until the backwards-compatible broker accepts both old and accounted requests.
+  it("deploys the compatible broker before accounted workers, then the new web contract", () => {
+    expect(deploymentOrder.map(step => step.name)).toEqual(["broker", "convex", "web"]);
+    expect(deploymentOrder[1]).toMatchObject({ command: "pnpm", args: ["exec", "convex", "deploy", "-y", "--env-file", "scripts/buildit-production.env"] });
+    expect(deploymentOrder[0]).toMatchObject({ args: ["deploy:broker:production"] });
   });
 
   it("runs both existing contract checks before touching production", () => {
     expect(checkOrder.map(step => step.args[0])).toEqual(["deploy:web:check", "deploy:broker:check"]);
+  });
+
+  it("stops before new workers when the broker alias is stale", async () => {
+    const completed: string[] = [];
+    await expect(runCoordinatedDeployment({ verifyConvex: async () => undefined, runStep: async (step: { name: string }) => { completed.push(step.name); },
+      verifyBroker: async () => { throw new Error("buildit_broker_stale"); } })).rejects.toThrow("buildit_broker_stale");
+    expect(completed).toEqual(["broker"]);
+  });
+
+  it("verifies the broker before continuing through Convex and web", async () => {
+    const completed: string[] = [];
+    await runCoordinatedDeployment({ verifyConvex: async () => undefined, runStep: async (step: { name: string }) => { completed.push(step.name); },
+      verifyBroker: async () => { completed.push("verified"); } });
+    expect(completed).toEqual(["broker", "verified", "convex", "web"]);
   });
 
   // The static health.json could not tell a fresh deploy from a stale one, so the probe went green
@@ -293,6 +314,92 @@ describe("BuildIT production deployment command", () => {
     const handler = readFileSync(`${repoRoot}/packages/broker/api/health.ts`, "utf8");
     expect(handler).toContain("VERCEL_GIT_COMMIT_SHA");
     expect(handler).toContain('service: "buildit-content-broker"');
-    expect(handler).toContain('status: "available"');
+    expect(handler).toContain('"available" : "misconfigured"');
+  });
+});
+
+
+// Exercise the actual private helper without executing a deployment, login, or its main routine.
+// The sole subprocess capability is replaced before evaluation; output capture is local memory.
+function vercelHelper(surface: "broker" | "web", outcomes: Array<Record<string, unknown>>) {
+  const source = readFileSync(`scripts/deploy-buildit-${surface}.mjs`, "utf8");
+  const declaration = source.match(/function vercel\(args, cwd, env\) \{[\s\S]*?\n\}/)?.[0];
+  if (!declaration) throw new Error("vercel_helper_not_found");
+  const calls: Array<{ command: string; args: string[]; options: Record<string, unknown> }> = [], diagnostics: string[] = [];
+  const run = runInNewContext(`(${declaration})`, {
+    spawnSync: (command: string, args: string[], options: Record<string, unknown>) => {
+      calls.push({ command, args, options });
+      const result = outcomes[calls.length - 1];
+      if (!result) throw new Error("unexpected_cli_retry");
+      return result;
+    },
+    process: { stderr: { write: (text: string) => diagnostics.push(text) } },
+  }) as (args: string[], cwd: string, env?: Record<string, string>) => { stdout: string; stderr: string; combined: string };
+  return { run, calls, diagnostics };
+}
+
+describe("checked Vercel authorization retry", () => {
+  const privateMarker = "PRIVATE_DEPLOY_CREDENTIAL_FIXTURE";
+  const unauthorized = { status: 1, stdout: "", stderr: `Not authorized: ${privateMarker}` };
+
+  it("normalizes a successful broker retry so alias inspection can read the actual target", () => {
+    const output = `  url ${deployedUrl}\n`;
+    const helper = vercelHelper("broker", [unauthorized, { status: 0, stdout: output, stderr: null }]);
+    const args = inspectArgs(brokerLink.projectName), env = { VERCEL_PROJECT_ID: brokerLink.projectId, VERCEL_ORG_ID: brokerLink.orgId, VERCEL_TOKEN: privateMarker };
+    const result = helper.run(args, repoRoot, env);
+    expect(result).toEqual({ stdout: output, stderr: "", combined: `${output}\n` });
+    expect(parseAliasTarget(result.combined)).toBe(deployedUrl);
+    expect(helper.calls).toHaveLength(2);
+    expect(helper.calls[0]).toEqual(helper.calls[1]);
+    expect(helper.calls[1]).toEqual({ command: "vercel", args, options: { cwd: repoRoot, encoding: "utf8", shell: false, env } });
+    expect(helper.diagnostics).toEqual([]);
+  });
+
+  it.each([
+    { name: "nonzero exit", result: { status: 2, stderr: privateMarker }, error: "buildit_broker_deploy_failed:2" },
+    { name: "authorization still rejected", result: unauthorized, error: "buildit_broker_deploy_failed:1" },
+    { name: "signal termination", result: { status: null, signal: "SIGTERM", stderr: privateMarker }, error: "buildit_broker_deploy_failed:unknown" },
+    { name: "spawn failure", result: { status: null, error: { code: "ENOENT", message: privateMarker } }, error: "buildit_broker_deploy_spawn_failed:ENOENT" },
+  ])("checks and classifies the broker retry's $name instead of returning it as success", ({ result, error }) => {
+    const helper = vercelHelper("broker", [unauthorized, result]);
+    expect(() => helper.run(deployArgs(), repoRoot)).toThrow(error);
+    expect(helper.calls).toHaveLength(2);
+    expect(helper.diagnostics.join("\n")).not.toContain(privateMarker);
+  });
+
+  it("does not repeat a failed broker operation unless the failure is authorization", () => {
+    const helper = vercelHelper("broker", [{ status: 3, stderr: `Build failed: ${privateMarker}` }]);
+    expect(() => helper.run(deployArgs(), repoRoot)).toThrow("buildit_broker_deploy_failed:3");
+    expect(helper.calls).toHaveLength(1);
+    expect(helper.diagnostics).toEqual([]);
+  });
+
+  it("does not retry a failure to start the broker CLI even if its output contains an authorization message", () => {
+    const helper = vercelHelper("broker", [{ ...unauthorized, error: { code: "EACCES", message: privateMarker } }]);
+    expect(() => helper.run(deployArgs(), repoRoot)).toThrow("buildit_broker_deploy_spawn_failed:EACCES");
+    expect(helper.calls).toHaveLength(1);
+    expect(helper.diagnostics).toEqual([]);
+  });
+
+  it("keeps the web helper's single-attempt behavior and checked normalization", () => {
+    const helper = vercelHelper("web", [{ status: 0, stdout: null, stderr: `url ${deployedUrl}` }]);
+    const result = helper.run(inspectArgs(correctLink.projectName), repoRoot);
+    expect(result).toEqual({ stdout: "", stderr: `url ${deployedUrl}`, combined: `\nurl ${deployedUrl}` });
+    expect(parseAliasTarget(result.combined)).toBe(deployedUrl);
+    expect(helper.calls).toHaveLength(1);
+  });
+
+  it("fails a web authorization error once without echoing credential-bearing CLI diagnostics", () => {
+    const helper = vercelHelper("web", [unauthorized]);
+    expect(() => helper.run(deployArgs(), repoRoot)).toThrow("buildit_web_deploy_failed:1");
+    expect(helper.calls).toHaveLength(1);
+    expect(helper.diagnostics).toEqual([]);
+  });
+
+  it.each(["broker", "web"] as const)("keeps unknown %s spawn diagnostics out of the thrown error", surface => {
+    const helper = vercelHelper(surface, [{ status: null, error: { code: privateMarker, message: privateMarker } }]);
+    expect(() => helper.run(deployArgs(), repoRoot)).toThrow(`buildit_${surface}_deploy_spawn_failed:unknown`);
+    expect(helper.calls).toHaveLength(1);
+    expect(helper.diagnostics).toEqual([]);
   });
 });

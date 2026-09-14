@@ -1,0 +1,18 @@
+{
+  "recordedAt": "2026-09-14T05:48:46.194503+00:00",
+  "existingAccountLoginOnly": true,
+  "isolatedConfigPath": ".local/production-preflight/vercel-config",
+  "oldSession": {
+    "id": 14209,
+    "result": "cancelled"
+  },
+  "freshSession": {
+    "id": 79709,
+    "exitCode": 1,
+    "authenticated": false,
+    "authFilePresent": false,
+    "explicitExpiryMessageObserved": false
+  },
+  "newApiTokenOrPermissionGrantCreated": false,
+  "activeLoginSessionRemaining": false
+}

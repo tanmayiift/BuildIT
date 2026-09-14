@@ -1,0 +1,16 @@
+{
+  "observedAt": "2026-09-14T06:50:40Z",
+  "account": "882820282590",
+  "region": "eu-west-1",
+  "sourceBucket": "buildit-production-882820282590-artifacts-eu-west-1",
+  "inventoryConfiguration": "DailyDeletionAudit",
+  "destinationBucket": "buildit-production-882820282590-artifact-inventory-eu-west-1",
+  "configurationStatus": "Enabled",
+  "lastExport": {
+    "date": "2026-09-13",
+    "status": "Access denied",
+    "message": "Inventory export failed because S3 does not have access to the destination bucket or KMS key."
+  },
+  "destinationObjectsVisible": 0,
+  "interpretation": "The KMS policy correction is saved, but no post-repair successful inventory delivery is visible yet. Keep the production gate open until a later scheduled export succeeds."
+}

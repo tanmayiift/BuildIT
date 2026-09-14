@@ -1,0 +1,15 @@
+{
+  "checkedAt": "2026-09-14T05:53:26.202Z",
+  "checks": [
+    {
+      "name": "auditSeed:renewSession rejects mismatched simulated user/session",
+      "passed": true
+    },
+    {
+      "name": "auditSeed:browserSession rejects mismatched simulated user/session",
+      "passed": true
+    }
+  ],
+  "browserChecks": 0,
+  "externalPaidCalls": 0
+}

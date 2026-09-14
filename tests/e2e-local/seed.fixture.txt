@@ -1,0 +1,57 @@
+import { v } from "convex/values";
+import { internalMutation } from "./_generated/server";
+export const seed = internalMutation({ args: {}, handler: async ctx => {
+  const previous = await ctx.db.query("organizations").withIndex("by_slug", q => q.eq("slug", "local-audit-a")).unique();
+  if (previous) throw new Error("local_audit_already_seeded");
+  const now = Date.now(), month = new Date(now).toISOString().slice(0, 7);
+  const results = [];
+  for (const [index, name, role, spend] of [[1, "A", "owner", 12.5], [2, "B", "viewer", 3.75]] as const) {
+    const userId = await ctx.db.insert("users", { name: `Simulated audit ${name}`, email: `audit-${name.toLowerCase()}@example.invalid`, githubUserId: 90000 + index, githubLogin: `local-audit-${name.toLowerCase()}` });
+    const sessionId = await ctx.db.insert("authSessions", { userId, expirationTime: now + 8 * 3600000 });
+    await ctx.db.insert("userProfiles", { userId, githubUserId: 90000 + index, githubLogin: `local-audit-${name.toLowerCase()}`, lastAuthenticatedAt: now, updatedAt: now });
+    const organizationId = await ctx.db.insert("organizations", { name: `Local Audit ${name}`, slug: `local-audit-${name.toLowerCase()}`, timezone: "Asia/Kolkata", region: "eu-west-1", retentionHours: 24, monthlyBudget: 100, concurrencyLimit: 2, planId: "local-test", fingerprintKeyVersion: 1, createdAt: now - 3600000, monthlySpendMicros: spend * 1e6, monthlySpendMonth: month, metricTrackingStartedAt: now - 7 * 86400000 });
+    await ctx.db.insert("memberships", { organizationId, userId, role, status: "active", createdAt: now - 3600000, updatedAt: now });
+    await ctx.db.insert("userPreferences", { userId, activeOrganizationId: organizationId, updatedAt: now });
+    const installationId = await ctx.db.insert("githubInstallations", { organizationId, installationId: 90000 + index, accountLogin: `local-audit-${name.toLowerCase()}`, accountType: "organization", permissionSnapshot: { metadata: "read", contents: "write", pullRequests: "write", issues: "read", checks: "write" }, status: "active", createdAt: now - 3500000, updatedAt: now });
+    const repositoryId = await ctx.db.insert("repositories", { organizationId, installationId, githubRepositoryId: 99000 + index, owner: `local-audit-${name.toLowerCase()}`, name: "example", defaultBranch: "main", visibility: "private", enabled: true, autofixMode: "stacked", forkPolicy: "manual_review_only", indexState: "ready", concurrencyLimit: 1, createdAt: now - 3400000, updatedAt: now });
+    const configRevisionId = await ctx.db.insert("configRevisions", { organizationId, repositoryId, sourceCommitSha: "b".repeat(40), sourceRef: "main", contentHash: "local-config", rulesDigest: "local-rules", schemaVersion: "1", validationState: "valid", provenance: "defaults_only", refProtectionState: "unverified", createdAt: now - 3300000 });
+    const reviewId = await ctx.db.insert("reviews", { organizationId, repositoryId, githubRepositoryId: 99000 + index, prNumber: index, isFork: false, baseRef: "main", baseSha: "b".repeat(40), headSha: "a".repeat(40), requiredCheckPolicy: "advisory", completedRoundCount: 0, patchAttemptCount: 0, diagnosticRunCount: 0, providerRetryCount: 0, commandRetryCount: 0, trigger: "dashboard", triggerVerb: "review", triggerActor: "local-audit", triggerActorPermission: "admin", mode: "review", status: "checks_passed", budgetLimit: 20, budgetConsumed: spend, nextActionCode: "none", isStale: false, trustedRef: "main", trustedRefSha: "b".repeat(40), configRevisionId, configProvenance: "defaults_only", provider: "anthropic", model: "claude-sonnet-4-5", modelVersion: "local", promptVersion: "local", evalSetVersion: "local", coverageLevel: "limited", currentStage: "complete", runnerImageVersion: "local", executionGeneration: 0, queuePriority: 0, expiresAt: now + 86400000, createdAt: now - 3000000, updatedAt: now - 2900000, completedAt: now - 2900000 });
+    await ctx.db.insert("usageLedger", { organizationId, repositoryId, reviewId, kind: "model_tokens", quantity: 41000, unitCost: 0, totalCostMicros: spend * 1e6, currency: "provider_billed", occurredAt: now - 2950000 });
+    await ctx.db.insert("usageLedger", { organizationId, repositoryId, reviewId, kind: "ask_tokens", quantity: 1000, unitCost: 0, totalCostMicros: 0, currency: "provider_billed", occurredAt: now - 2950000 });
+    await ctx.db.insert("usageLedger", { organizationId, repositoryId, reviewId, kind: "sandbox_seconds", quantity: 900, unitCost: 0, currency: "platform", occurredAt: now - 2950000 });
+    await ctx.db.insert("metricEvents", { organizationId, repositoryId, reviewId, name: "review_completed", value: index, organizationTimezone: "UTC", occurredAt: now - 2900000 });
+    results.push({ name, userId, sessionId, organizationId, repositoryId, reviewId });
+  }
+  return results;
+} });
+
+export const refreshAuth = internalMutation({ args: { userId: v.id("users") }, handler: async (ctx, args) => {
+  const profile = await ctx.db.query("userProfiles").withIndex("by_user", q => q.eq("userId", args.userId)).unique();
+  if (!profile) throw new Error("local_profile_missing");
+  await ctx.db.patch(profile._id, { lastAuthenticatedAt: Date.now(), updatedAt: Date.now() });
+} });
+export const renewSession = internalMutation({ args: { userId: v.id("users"), sessionId: v.id("authSessions") }, handler: async (ctx, args) => {
+  const session = await ctx.db.get(args.sessionId);
+  if (!await ctx.db.get(args.userId) || (session && session.userId !== args.userId)) throw new Error("local_session_scope_invalid");
+  // Signing out deliberately revokes the simulated session. Recreate it so another test run
+  // can sign in again without re-seeding or overwriting either workspace's business fixtures.
+  if (!session) return { sessionId: await ctx.db.insert("authSessions", { userId: args.userId, expirationTime: Date.now() + 8 * 3600000 }) };
+  await ctx.db.patch(session._id, { expirationTime: Date.now() + 8 * 3600000 });
+  return { sessionId: session._id };
+} });
+// Real Convex Auth refresh credentials for a simulated session. This function is copied only
+// into the ignored, loopback-only backend, never into a production function directory.
+export const browserSession = internalMutation({ args: { userId: v.id("users"), sessionId: v.id("authSessions") }, handler: async (ctx, args) => {
+  const session = await ctx.db.get(args.sessionId);
+  if (!session || session.userId !== args.userId || session.expirationTime < Date.now()) throw new Error("local_session_scope_invalid");
+  const profile = await ctx.db.query("userProfiles").withIndex("by_user", q => q.eq("userId", args.userId)).unique();
+  if (!profile) throw new Error("local_profile_missing");
+  await ctx.db.patch(profile._id, { lastAuthenticatedAt: Date.now(), updatedAt: Date.now() });
+  const tokenId = await ctx.db.insert("authRefreshTokens", { sessionId: args.sessionId, expirationTime: session.expirationTime });
+  return { refreshToken: `${tokenId}|${args.sessionId}` };
+} });
+export const addMetric = internalMutation({ args: { organizationId: v.id("organizations"), reviewId: v.id("reviews") }, handler: async (ctx, args) => {
+  const review = await ctx.db.get(args.reviewId);
+  if (!review || review.organizationId !== args.organizationId) throw new Error("local_fixture_scope_invalid");
+  await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, name: "review_completed", value: 1, organizationTimezone: "UTC", occurredAt: Date.now() });
+} });

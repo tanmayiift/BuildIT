@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-09-14T14:12:57Z",
+  "scope": "BuildIT source release gates after durable execution and figure repairs",
+  "externalSpendUsd": 0,
+  "checks": {
+    "pnpm verify": { "exitCode": 0, "tests": 1971, "files": 223, "lint": true, "typecheck": true, "build": true },
+    "pnpm security:release": { "exitCode": 0, "tests": 702, "files": 88, "dependencyAudit": "clean", "osvDatabaseGeneration": "1789361712318289" },
+    "pnpm reliability:release": { "exitCode": 0, "tests": 335, "files": 28 },
+    "pnpm alerts:check": { "exitCode": 0, "rules": 14 },
+    "pnpm dashboard:check": { "exitCode": 0, "panels": 14 },
+    "pnpm deploy:check": { "exitCode": 0, "deployStarted": false, "order": ["broker", "convex", "web"] },
+    "focused figures and execution regressions": { "exitCode": 0, "tests": 27 }
+  },
+  "productionDeploymentStarted": false,
+  "realProviderCalls": false,
+  "remainingExternalGates": ["publish reviewed source patch (checkout Git index write was rejected)", "production web currently 404 and broker baseline", "production Convex index/accounting reconciliation", "production deployment", "live Grafana credential and exact pause", "AWS CLI/CloudShell content parse", "live GitHub/provider/sandbox journey", "tracker OAuth", "customer email domain/provider"]
+}

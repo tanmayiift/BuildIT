@@ -1,10 +1,12 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
+import { recordReviewMetric, recordRunnerFailure } from "./lib/recordMetric";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import * as value from "./validators";
 import { activeStatuses, cancellationNotice, terminalStatuses, transitionAllowed } from "./lib/lifecycle";
 import { assertAttemptParent, assertRepositoryParent, assertReviewParent } from "./lib/parentConsistency";
+import { queueReviewNotification } from "./lib/queueNotification";
 
 // Cancelling a review used to be a database write and nothing else, so the acknowledgement check
 // run stayed in_progress on the pull request head for good. Call this from every writer that lands
@@ -80,6 +82,7 @@ export const transition = internalMutation({
     if (args.to === "budget_exhausted" && (!args.budgetCeilingId || (args.budgetConsumed ?? 0) < review.budgetLimit)) throw new ConvexError("spend_ceiling_evidence_required");
     if (["inconclusive", "blocked", "cancelled", "platform_failed"].includes(args.to) && !args.statusReasonCode) throw new ConvexError("status_reason_required");
     const terminal = terminalStatuses.has(args.to);
+    if (args.to === "platform_failed") await recordRunnerFailure(ctx, review, args.statusReasonCode ?? "", args.now);
     await ctx.db.patch(args.reviewId, {
       status: args.to, statusReasonCode: args.statusReasonCode, nextActionCode: args.nextActionCode,
       terminationBound: args.terminationBound, budgetCeilingId: args.budgetCeilingId,
@@ -89,6 +92,7 @@ export const transition = internalMutation({
       blockedExpiresAt: args.to === "blocked" ? args.blockedExpiresAt : undefined,
       completedAt: terminal ? args.now : undefined, updatedAt: args.now,
     });
+    if (terminal) await queueReviewNotification(ctx, args.reviewId, args.now);
   },
 });
 
@@ -98,6 +102,7 @@ export const markStale = internalMutation({
     const review = await ctx.db.get(args.reviewId);
     if (!review) throw new ConvexError("review_not_found");
     if (review.headSha === args.observedHeadSha) return;
+    await recordReviewMetric(ctx, review, "stale_review", review.staleSince ?? args.now);
     await ctx.db.patch(args.reviewId, { isStale: true, staleSince: args.now, observedHeadSha: args.observedHeadSha, updatedAt: args.now });
   },
 });
@@ -146,6 +151,7 @@ export const requestCancellation = internalMutation({
       executionGeneration, leaseOwner: undefined, leaseExpiresAt: undefined, updatedAt: args.now,
     });
     await publishCancellationNotice(ctx, args.reviewId);
+    await queueReviewNotification(ctx, args.reviewId, args.now);
     return executionGeneration;
   },
 });
@@ -160,6 +166,7 @@ export const expireBlocked = internalMutation({
       completedAt: args.now, executionGeneration: review.executionGeneration + 1,
       leaseOwner: undefined, leaseExpiresAt: undefined, updatedAt: args.now,
     });
+    await queueReviewNotification(ctx, args.reviewId, args.now);
     return true;
   },
 });

@@ -1,5 +1,6 @@
 import { publishCancellationNotice, recordBaseAdvance } from "./reviewState";
 import { v } from "convex/values";
+import { recordReviewMetric } from "./lib/recordMetric";
 import { selectProviderModel } from "@buildit/providers";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { internalMutation, internalQuery } from "./_generated/server";
@@ -500,6 +501,7 @@ export const reconcilePullRequestHead = internalMutation({
     for (const review of reviews) {
       if (review.headSha === args.observedHeadSha || review.isStale) continue;
       const active = !terminalStatuses.has(review.status);
+      await recordReviewMetric(ctx, review, "stale_review", args.now);
       await ctx.db.patch(review._id, {
         isStale: true,
         staleSince: args.now,

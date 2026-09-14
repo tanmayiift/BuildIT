@@ -1,0 +1,18 @@
+{
+  "startedAt": "2026-09-14T06:01:06.838332+00:00",
+  "completedAt": "2026-09-14T06:01:17.404499+00:00",
+  "scope": "buildit-audit-20260914",
+  "command": "docker compose -p buildit-audit-20260914 -f .local/audit-monitoring/compose.yml down --volumes",
+  "exitCode": 0,
+  "remainingProjectContainers": [],
+  "remainingProjectNetworks": [],
+  "disposableVolumeChecks": [
+    {
+      "name": "e00d710488745c723508c506d1604f706691d385924c037c7ba0a146468140c9",
+      "removed": true
+    }
+  ],
+  "captureEvidencePreserved": true,
+  "globalPruneUsed": false,
+  "otherProjectsStopped": false
+}

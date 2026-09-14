@@ -1,0 +1,206 @@
+{
+  "checkedAt": "2026-09-14T03:43:49.562Z",
+  "runtime": "v24.21.0",
+  "scope": "Signed-out HTTP routing and complete responses; no browser hydration or layout verification",
+  "checks": [
+    {
+      "path": "/",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 28
+    },
+    {
+      "path": "/sign-in",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 8
+    },
+    {
+      "path": "/account",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 7
+    },
+    {
+      "path": "/data-handling",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 7
+    },
+    {
+      "path": "/pricing",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 6
+    },
+    {
+      "path": "/features",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 7
+    },
+    {
+      "path": "/proof",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 6
+    },
+    {
+      "path": "/usage",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 6
+    },
+    {
+      "path": "/metrics",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 5
+    },
+    {
+      "path": "/history",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 5
+    },
+    {
+      "path": "/reviews",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 5
+    },
+    {
+      "path": "/repositories",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 6
+    },
+    {
+      "path": "/policies",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 5
+    },
+    {
+      "path": "/members",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 5
+    },
+    {
+      "path": "/notifications",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 6
+    },
+    {
+      "path": "/audit",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 4
+    },
+    {
+      "path": "/integrations",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 5
+    },
+    {
+      "path": "/setup/install",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 5
+    },
+    {
+      "path": "/setup/repository",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 5
+    },
+    {
+      "path": "/setup/model",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 6
+    },
+    {
+      "path": "/setup/health",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 4
+    },
+    {
+      "path": "/settings",
+      "expectedStatus": 404,
+      "ok": false,
+      "error": "response_timeout",
+      "elapsedMs": 5005
+    },
+    {
+      "path": "/setup/github",
+      "expectedStatus": 404,
+      "ok": false,
+      "error": "response_timeout",
+      "elapsedMs": 5004
+    },
+    {
+      "path": "/setup/run",
+      "expectedStatus": 404,
+      "ok": false,
+      "error": "response_timeout",
+      "elapsedMs": 5002
+    },
+    {
+      "path": "/audit-nonexistent-route",
+      "expectedStatus": 404,
+      "ok": false,
+      "error": "response_timeout",
+      "elapsedMs": 5003
+    },
+    {
+      "path": "/audit-nonexistent-route/child",
+      "expectedStatus": 404,
+      "status": 404,
+      "ok": true,
+      "elapsedMs": 15
+    },
+    {
+      "path": "/api/audit-auth?as=A",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 13
+    },
+    {
+      "path": "/api/audit-auth?as=A",
+      "host": "not-local.invalid",
+      "expectedStatus": 403,
+      "status": 403,
+      "ok": true,
+      "elapsedMs": 4
+    }
+  ],
+  "passed": 24,
+  "total": 28
+}

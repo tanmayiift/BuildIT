@@ -1,0 +1,327 @@
+{
+  "environment": "isolated BuildIT fixtures on http://127.0.0.1:3107 and Convex3218/3219",
+  "browser": "Chrome152 via supported Chrome extension/CUA; real page interactions, no headless browser bypass",
+  "startedAt": "2026-09-14T05:30:55.615Z",
+  "completedAt": "2026-09-14T05:49:47.177Z",
+  "passed": 45,
+  "failed": 0,
+  "cases": [
+    {
+      "name": "owner_usage_correct_cost_and_unknown_labels",
+      "status": "passed",
+      "at": "2026-09-14T05:30:55.615Z"
+    },
+    {
+      "name": "owner_zero_limit_removes_budget_bar",
+      "status": "passed",
+      "at": "2026-09-14T05:31:03.299Z"
+    },
+    {
+      "name": "owner_zero_limit_persists_reload",
+      "status": "passed",
+      "at": "2026-09-14T05:31:11.141Z"
+    },
+    {
+      "name": "owner_budget_restored_live",
+      "status": "passed",
+      "at": "2026-09-14T05:31:18.577Z"
+    },
+    {
+      "name": "owner_repository_pause_live",
+      "status": "passed",
+      "at": "2026-09-14T05:31:50.799Z"
+    },
+    {
+      "name": "owner_repository_pause_persists",
+      "status": "passed",
+      "at": "2026-09-14T05:31:51.138Z"
+    },
+    {
+      "name": "owner_repository_resume_and_comment_save",
+      "status": "passed",
+      "at": "2026-09-14T05:32:04.088Z"
+    },
+    {
+      "name": "owner_comment_setting_persists_reload",
+      "status": "passed",
+      "at": "2026-09-14T05:32:20.278Z"
+    },
+    {
+      "name": "repository_setting_help_expands",
+      "status": "passed",
+      "at": "2026-09-14T05:32:36.519Z"
+    },
+    {
+      "name": "history_distinguishes_attempts_verdicts_unknown_duration",
+      "status": "passed",
+      "at": "2026-09-14T05:32:54.883Z"
+    },
+    {
+      "name": "metrics_recorded_counter_and_no_invented_accuracy",
+      "status": "passed",
+      "at": "2026-09-14T05:33:37.476Z"
+    },
+    {
+      "name": "review_start_without_key_blocks_preview",
+      "status": "passed",
+      "at": "2026-09-14T05:34:26.529Z"
+    },
+    {
+      "name": "review_row_keyboard_opens_exact_result",
+      "status": "passed",
+      "at": "2026-09-14T05:34:49.248Z"
+    },
+    {
+      "name": "onboarding_rejects_unconnected_repository",
+      "status": "passed",
+      "at": "2026-09-14T05:35:08.552Z"
+    },
+    {
+      "name": "onboarding_valid_repo_prefills_PR_and_blocks_without_key",
+      "status": "passed",
+      "at": "2026-09-14T05:35:34.163Z"
+    },
+    {
+      "name": "onboarding_advanced_settings_expand",
+      "status": "passed",
+      "at": "2026-09-14T05:35:34.172Z"
+    },
+    {
+      "name": "onboarding_URL_resumes_after_reload",
+      "status": "passed",
+      "at": "2026-09-14T05:35:43.280Z"
+    },
+    {
+      "name": "model_key_unconfigured_fails_closed",
+      "status": "passed",
+      "at": "2026-09-14T05:35:57.903Z"
+    },
+    {
+      "name": "model_provider_and_repository_scope_update",
+      "status": "passed",
+      "at": "2026-09-14T05:36:07.451Z"
+    },
+    {
+      "name": "metrics_updates_open_browser_without_reload",
+      "status": "passed",
+      "at": "2026-09-14T05:39:26.416Z"
+    },
+    {
+      "name": "mobile_metrics_400px_no_horizontal_overflow",
+      "status": "passed",
+      "at": "2026-09-14T05:39:26.427Z"
+    },
+    {
+      "name": "mobile_menu_keyboard_opens_navigation",
+      "status": "passed",
+      "at": "2026-09-14T05:40:02.740Z"
+    },
+    {
+      "name": "usage_pending_reservation_updates_open_browser",
+      "status": "passed",
+      "at": "2026-09-14T05:40:32.036Z"
+    },
+    {
+      "name": "mobile_keyboard_menu_link_opens_usage",
+      "status": "passed",
+      "at": "2026-09-14T05:40:32.041Z"
+    },
+    {
+      "name": "usage_settlement_updates_open_browser_and_releases_hold",
+      "status": "passed",
+      "at": "2026-09-14T05:40:54.807Z"
+    },
+    {
+      "name": "usage_basic_accessibility_semantics",
+      "status": "passed",
+      "at": "2026-09-14T05:41:50.470Z"
+    },
+    {
+      "name": "integrations_missing_OAuth_apps_are_not_configured",
+      "status": "passed",
+      "at": "2026-09-14T05:42:25.789Z"
+    },
+    {
+      "name": "stale_recent_auth_keeps_session_but_hides_key_entry",
+      "status": "passed",
+      "at": "2026-09-14T05:42:42.035Z"
+    },
+    {
+      "name": "mobile_model_form_400px_no_overflow_or_overlap",
+      "status": "passed",
+      "at": "2026-09-14T05:42:59.499Z"
+    },
+    {
+      "name": "model_key_input_masked",
+      "status": "passed",
+      "at": "2026-09-14T05:42:59.514Z"
+    },
+    {
+      "name": "viewer_usage_isolated_and_budget_read_only",
+      "status": "passed",
+      "at": "2026-09-14T05:43:12.596Z"
+    },
+    {
+      "name": "viewer_repository_policy_read_only",
+      "status": "passed",
+      "at": "2026-09-14T05:44:12.436Z"
+    },
+    {
+      "name": "viewer_cross_workspace_review_denied_in_browser",
+      "status": "passed",
+      "at": "2026-09-14T05:44:21.449Z"
+    },
+    {
+      "name": "viewer_cannot_start_reviews_and_sees_own_queue",
+      "status": "passed",
+      "at": "2026-09-14T05:45:25.869Z"
+    },
+    {
+      "name": "viewer_cannot_manage_model_credentials",
+      "status": "passed",
+      "at": "2026-09-14T05:46:01.904Z"
+    },
+    {
+      "name": "missing_page_clear_mobile_recovery",
+      "status": "passed",
+      "at": "2026-09-14T05:46:28.719Z"
+    },
+    {
+      "name": "missing_page_keyboard_recovery_link",
+      "status": "passed",
+      "at": "2026-09-14T05:46:28.959Z"
+    },
+    {
+      "name": "signout_removes_private_workspace_and_budget",
+      "status": "passed",
+      "at": "2026-09-14T05:46:55.217Z"
+    },
+    {
+      "name": "fixture_relogin_after_real_signout_restores_same_viewer_scope",
+      "status": "passed",
+      "at": "2026-09-14T05:49:17.657Z"
+    },
+    {
+      "name": "final_owner_scope_and_settled_cost_after_fixture_refresh",
+      "status": "passed",
+      "at": "2026-09-14T05:49:18.232Z"
+    },
+    {
+      "name": "owner_route_renders_policies",
+      "status": "passed",
+      "at": "2026-09-14T05:49:45.422Z",
+      "scope": "Route heading and absence of application error/other workspace text only; no settings mutation."
+    },
+    {
+      "name": "owner_route_renders_members",
+      "status": "passed",
+      "at": "2026-09-14T05:49:45.778Z",
+      "scope": "Route heading and absence of application error/other workspace text only; no settings mutation."
+    },
+    {
+      "name": "owner_route_renders_notifications",
+      "status": "passed",
+      "at": "2026-09-14T05:49:46.243Z",
+      "scope": "Route heading and absence of application error/other workspace text only; no settings mutation."
+    },
+    {
+      "name": "owner_route_renders_audit",
+      "status": "passed",
+      "at": "2026-09-14T05:49:46.709Z",
+      "scope": "Route heading and absence of application error/other workspace text only; no settings mutation."
+    },
+    {
+      "name": "owner_route_renders_setup_health",
+      "status": "passed",
+      "at": "2026-09-14T05:49:47.177Z",
+      "scope": "Route heading and absence of application error/other workspace text only; no settings mutation."
+    }
+  ],
+  "externalPaidCalls": 0,
+  "figures": {
+    "ownerInitialSpendUsd": 12.65,
+    "ownerFinalSpendUsd": 12.68,
+    "monthlyLimitUsd": 100,
+    "syntheticSettledCostUsd": 0.03,
+    "reservationRawUsd": 0.13644,
+    "reservationDisplayUsd": "0.14",
+    "finalReservedUsd": 0,
+    "viewerSpendUsd": 3.75,
+    "metricRunsBefore": 7,
+    "metricRunsAfter": 8,
+    "ownerFinalTokensIncludingAsk": 49200
+  },
+  "fixtureRestoration": {
+    "budgetUsd": 100,
+    "ownerRepositoryPaused": false,
+    "ownerInlineComments": "quiet (Only what blocks)",
+    "sessions": "Owner and viewer sign-in rechecked after viewer real sign-out; private fixture session identifiers renewed"
+  },
+  "screenshots": {
+    "delivery": "Inline images in CUA tool results; no documented file-save API, so no downloadable image files claimed",
+    "captures": [
+      {
+        "surface": "mobile metrics before/after event",
+        "minuteUTC": "2026-09-14 05:39"
+      },
+      {
+        "surface": "mobile usage pending reservation and settled cost",
+        "minuteUTC": "2026-09-14 05:40"
+      },
+      {
+        "surface": "mobile model setup stale-auth state and full-page fresh-session form",
+        "minuteUTC": "2026-09-14 05:42"
+      },
+      {
+        "surface": "mobile viewer usage",
+        "minuteUTC": "2026-09-14 05:43"
+      },
+      {
+        "surface": "mobile missing page",
+        "minuteUTC": "2026-09-14 05:46"
+      }
+    ]
+  },
+  "responsive": {
+    "verifiedWidthsCssPx": [
+      400
+    ],
+    "otherObservedDesktopWidthsCssPx": [
+      1512,
+      957
+    ],
+    "note": "Requested390px via viewport API did not initially apply; only actual measured400px is counted. Full model form screenshot showed no control overlap; document width equaled scroll width. Chrome native device preview supplied actual narrow layout."
+  },
+  "untested": [
+    {
+      "area": "Full axe automated audit, contrast and screen-reader speech",
+      "reason": "No supported scanner capability in CUA; read-only evaluate was not used to inject scripts. Basic landmarks, headings, labels, masked key input and keyboard actions checked."
+    },
+    {
+      "area": "Historical B49 pixel-baseline comparison",
+      "reason": "Original failing artifact unavailable. Current400px model setup inspection is not a reconstruction of historical9% mismatch."
+    },
+    {
+      "area": "390px/360px responsive breakpoints and other browser engines",
+      "reason": "Only measured400px responsive state counted."
+    },
+    {
+      "area": "Large-data cap/partial-summary browser fixture",
+      "reason": "No high-volume fixture inserted in this run; bounded metadata covered by prior server/component regressions. Visible legacy/unknown-cost and pending-reservation states were checked here."
+    },
+    {
+      "area": "Live GitHub install, real key validation/model calls/sandbox run, live Linear/Jira OAuth",
+      "reason": "Isolated backend has no real provider/broker credentials; intentional safety gate. No external paid requests or account writes performed."
+    },
+    {
+      "area": "Member invitation/change/removal, notification send, policy mutation outside tested repository controls",
+      "reason": "Only route render checks in these settings pages. No messages sent."
+    }
+  ],
+  "productDefectsReproduced": [],
+  "harnessDefectsFixed": [
+    "Copied CSP did not permit its exact local HTTP/WebSocket backend; copied policy now appends only http/ws127.0.0.1:3218, leaving production source intact.",
+    "Synthetic JWT lacked real Convex Auth refresh credential; local-only session helper now creates valid refresh row and login stores both credentials.",
+    "After deliberate sign-out, renew-auth assumed simulated session still existed; it now recreates only missing fixture session and rewrites private fixture token."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "startedAt": "2026-09-14T06:20:00.496170+00:00",
+  "completedAt": "2026-09-14T06:20:11.219053+00:00",
+  "scope": "buildit-audit-error-20260914",
+  "exitCode": 0,
+  "remainingProjectContainers": [],
+  "remainingProjectNetworks": [],
+  "disposableVolumes": [
+    {
+      "name": "b1bf659833934fc556d53e3c651b8b1b413e3bcb7a33d16b7ed864d825d1fdd1",
+      "removed": true
+    }
+  ],
+  "globalPruneUsed": false,
+  "otherProjectsStopped": false
+}

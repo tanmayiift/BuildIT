@@ -1,0 +1,39 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ packages/providers/test/accounting.test.ts (3 tests) 5ms
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects tenant swaps and request changes before decrypting
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects tenant swaps and request changes before decrypting
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects replay and unsupported models with redacted errors
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_replayed","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects replay and unsupported models with redacted errors
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > returns only a provider HTTP status for a malformed structured response
+{"component":"model_broker","event":"invocation_failed","category":"malformed_response","providerStatus":400}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > does not retry a retired Gemini alias when the same key exposes no alternative
+{"component":"model_broker","event":"invocation_failed","category":"malformed_response","providerStatus":404}
+
+stdout | packages/broker/test/model-http.test.ts > accounted invocation protocol > performs exactly one provider attempt and returns paid failure usage
+{"component":"model_broker","event":"invocation_failed","category":"truncated","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > accounted invocation protocol > returns a verified Gemini fallback to the worker for a separate reservation
+{"component":"model_broker","event":"invocation_failed","category":"model_unavailable","providerStatus":404}
+
+ ✓ packages/broker/test/model-http.test.ts (8 tests) 8ms
+stderr | convex/accounting.test.ts > Ask accounts before presentation side effects > keeps the charge after empty
+buildit_ask_unanswered { reason: 'model_answer_empty' }
+
+ ✓ convex/accounting.test.ts (20 tests) 123ms
+
+ Test Files  3 passed (3)
+      Tests  31 passed (31)
+   Start at  08:43:56
+   Duration  532ms (transform 208ms, setup 0ms, collect 455ms, tests 136ms, environment 0ms, prepare 139ms)
+

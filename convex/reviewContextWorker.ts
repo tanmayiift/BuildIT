@@ -1,4 +1,6 @@
 "use node";
+import { trackerConnectionMatches } from "@buildit/github";
+import { trackerCredentialPayload } from "./lib/trackerCredential";
 import { createHash } from "node:crypto";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
@@ -50,7 +52,7 @@ async function resolveRepositoryConfig(token: string, scope: { githubRepositoryI
 export const gather = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
   handler: async (ctx, args): Promise<{ artifactIds: string[]; chunkCount: number; fileCount: number; omittedCount: number }> => {
-    const scope: { reviewPathFilters?: string[]; organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; baseSha: string; executionGeneration: number; expiresAt: number;trackers:Array<{documentId:Id<"trackerConnections">;id:string;organizationId:string;provider:"github"|"linear"|"jira";workspaceId:string;ciphertext:string;nonce:string;tag:string;wrappedDataKey:string;kmsKeyId:string;envelopeVersion:1;keyVersion:number;aadDigest:string;status:"active";createdBy:string;createdAt:number}> } = await ctx.runQuery(internal.reviewArtifactData.contextScope, args);
+    const scope: { reviewPathFilters?: string[]; organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; baseSha: string; executionGeneration: number; expiresAt: number;trackers: Array<ReturnType<typeof trackerCredentialPayload>> } = await ctx.runQuery(internal.reviewArtifactData.contextScope, args);
     const github = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
     const tokenScope = { installationId: scope.installationId, repositoryId: scope.githubRepositoryId, stage: "review" as const };
     await ctx.runQuery(internal.durableReview.assertActive, args);
@@ -109,7 +111,23 @@ export const gather = internalAction({
       if (!repositoryMatch) throw new Error("pull_request_url_invalid");
       const repositoryUrl = repositoryMatch[1]!, issueClient = new GitHubIssueContextClient(),repositoryIntent=repositoryRequirementSources({files:headSnapshot.files,headSha:scope.headSha,now:Date.now()}),brokerUrl=required("BUILDIT_BROKER_URL").replace(/\/$/,""),trackerSecret=Buffer.from(required("TRACKER_GRANT_SECRET"),"base64url");
       const intent = await acquireRequirements({ prBody: pullContext.body, prUrl: pullContext.htmlUrl, repositoryUrl, headSha: scope.headSha, now: Date.now(), maxSourceBytes: 250_000, fetch: async link => {
-        if (link.type!=="github_issue"){const credential=scope.trackers.find(item=>item.provider===link.type);if(!credential)return{status:"inaccessible",version:"connection_unavailable"};const{documentId:_,...brokerCredential}=credential,grant=issueTrackerGrant({organizationId:String(scope.organizationId),repositoryId:String(scope.repositoryId),reviewId:String(scope.reviewId),credentialScopeId:credential.id,provider:link.type,workspaceId:credential.workspaceId,urlHash:createHash("sha256").update(link.url).digest("hex")},trackerSecret),body=JSON.stringify({organizationId:String(scope.organizationId),repositoryId:String(scope.repositoryId),reviewId:String(scope.reviewId),url:link.url,credential:brokerCredential}),response=await fetch(`${brokerUrl}/api/tracker`,{method:"POST",headers:{authorization:`Bearer ${grant}`,"content-type":"application/json"},body}),output=await response.json()as{result?:{status:"available"|"missing"|"inaccessible"|"image_only"|"oversized";version:string;content?:string}};if(!response.ok||!output.result)throw new Error(`tracker_context_${response.status}`);await ctx.runMutation(internal.reviewArtifactData.markTrackerUsed,{...args,connectionId:credential.documentId,now:Date.now()});return output.result}
+        if (link.type !== "github_issue") {
+          let credential = scope.trackers.find(item => trackerConnectionMatches(item, link));
+          if (!credential) return { status: "inaccessible", version: "connection_unavailable" };
+          // Legacy and OAuth credentials both need a fresh access check after the repository
+          // snapshots finish. The OAuth path additionally renews access when needed.
+          try { credential = trackerCredentialPayload(await ctx.runAction(internal.trackerOAuth.refreshForReview, { ...args, connectionId: credential.documentId })); }
+          catch { return { status: "inaccessible", version: "tracker_reconnect_or_retry_required" }; }
+          if (!trackerConnectionMatches(credential, link)) return { status: "inaccessible", version: "connection_scope_changed" };
+          const { documentId: _, ...brokerCredential } = credential;
+          const grant = issueTrackerGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), credentialScopeId: credential.id, provider: link.type, workspaceId: credential.workspaceId, urlHash: createHash("sha256").update(link.url).digest("hex") }, trackerSecret);
+          const body = JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), url: link.url, credential: brokerCredential });
+          const response = await fetch(`${brokerUrl}/api/tracker`, { method: "POST", headers: { authorization: `Bearer ${grant}`, "content-type": "application/json" }, body });
+          const output = await response.json() as { result?: { status: "available" | "missing" | "inaccessible" | "image_only" | "oversized"; version: string; content?: string } };
+          if (!response.ok || !output.result) throw new Error(`tracker_context_${response.status}`);
+          await ctx.runMutation(internal.reviewArtifactData.markTrackerUsed, { ...args, connectionId: credential.documentId, now: Date.now() });
+          return output.result;
+        }
         const issueNumber = sameRepositoryIssueNumber(link.url, repositoryUrl);
         if (!issueNumber) return { status: "inaccessible", version: "repository_scope_mismatch" };
         return issueClient.fetch({ installationToken: token, repositoryId: scope.githubRepositoryId, issueNumber, maxBytes: 250_000 });

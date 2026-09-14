@@ -1,0 +1,12 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ tests/architecture/aws-verifier-credentials.test.ts (1 test) 2ms
+ ✓ tests/architecture/aws-boundary.test.ts (8 tests) 3ms
+ ✓ tests/architecture/aws-inventory-policy.test.ts (14 tests) 25ms
+
+ Test Files  3 passed (3)
+      Tests  23 passed (23)
+   Start at  09:47:23
+   Duration  279ms (transform 55ms, setup 0ms, collect 71ms, tests 29ms, environment 0ms, prepare 150ms)
+

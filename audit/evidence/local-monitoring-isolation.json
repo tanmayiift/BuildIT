@@ -1,0 +1,202 @@
+{
+  "observedAt": "2026-09-14T05:57:47.376719+00:00",
+  "scope": "Only buildit-audit-20260914 disposable compose project",
+  "originalExportSha256": "6ca96d13f75f1e85ab337ec405146a05fbce0de8a5a5c3e3edc7f901e19cd19a",
+  "localRuleFileSha256": "4bb3bc799b5fea3d38c051c09ed829e0c7e1c77e8a2368450699c1e332e8ebd4",
+  "groups": [
+    {
+      "name": "buildit-release",
+      "folder": "buildit",
+      "interval": "1m",
+      "rules": 14
+    }
+  ],
+  "comparisons": [
+    {
+      "uid": "e8ce7a9b-5f06-58cb-bc90-52d3a1972668",
+      "title": "BuildITHighFailureRate",
+      "for": "10m",
+      "originalFor": "10m",
+      "originalGraphSha256": "90537717754cf2b12b8feea15a68608f6a1790b5d862eba328ec6c4506fd6418",
+      "localGraphSha256": "90537717754cf2b12b8feea15a68608f6a1790b5d862eba328ec6c4506fd6418",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "3323ba18-b9a2-5bdd-9c3b-1a1b2110afb2",
+      "title": "BuildITP95LatencyHigh",
+      "for": "15m",
+      "originalFor": "15m",
+      "originalGraphSha256": "32540a98d13b480aa11c67f9fccfa9f5b6420a255e4e84effb45ee9f07bca853",
+      "localGraphSha256": "32540a98d13b480aa11c67f9fccfa9f5b6420a255e4e84effb45ee9f07bca853",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "a621fb37-6110-5a9b-81e8-6fcd05bbaf7d",
+      "title": "BuildITTelemetrySilent",
+      "for": "5m",
+      "originalFor": "5m",
+      "originalGraphSha256": "59d18127410e590807093428e0f8722a98c91fa5674bdf6049084af3d46ae174",
+      "localGraphSha256": "59d18127410e590807093428e0f8722a98c91fa5674bdf6049084af3d46ae174",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "600995c2-5186-5d4e-85ed-a313ee7aa699",
+      "title": "BuildITCriticalBoundaryFailure",
+      "for": null,
+      "originalFor": null,
+      "originalGraphSha256": "74445247c892857aa7b2f543dccffa918f7c74b5b521b01f380a56e54b0929a4",
+      "localGraphSha256": "74445247c892857aa7b2f543dccffa918f7c74b5b521b01f380a56e54b0929a4",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "99a89aa8-cc0b-57c5-bc40-03f1afd54bc4",
+      "title": "BuildITQueueDepthHigh",
+      "for": "10m",
+      "originalFor": "10m",
+      "originalGraphSha256": "66a5828fb483e07ceae5e263d3e8af517f2f40bbbac94671a1b4054828289439",
+      "localGraphSha256": "66a5828fb483e07ceae5e263d3e8af517f2f40bbbac94671a1b4054828289439",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "859f7f43-dd01-560c-a42e-f77ea1439683",
+      "title": "BuildITProviderFailure",
+      "for": null,
+      "originalFor": null,
+      "originalGraphSha256": "e326a73e7b3d34e4dcfbe8afd750c984cc741fdc50d58909be791f92a74fa135",
+      "localGraphSha256": "e326a73e7b3d34e4dcfbe8afd750c984cc741fdc50d58909be791f92a74fa135",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "fc3a8532-0ef0-5842-86fa-0660a1879afe",
+      "title": "BuildITProviderRetryRateHigh",
+      "for": "10m",
+      "originalFor": "10m",
+      "originalGraphSha256": "fff9490b0326e7c1eac099e6b4fe1af3e5fe1ad1b462e0ad49d07b9dce95e979",
+      "localGraphSha256": "fff9490b0326e7c1eac099e6b4fe1af3e5fe1ad1b462e0ad49d07b9dce95e979",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "b21aebde-0589-59ce-913d-230beae6dcd6",
+      "title": "BuildITRunnerFailure",
+      "for": null,
+      "originalFor": null,
+      "originalGraphSha256": "09a7661dec8de2f805c7e814c839a6161b2952d1c0bffaa215f8e56ebdba44b4",
+      "localGraphSha256": "09a7661dec8de2f805c7e814c839a6161b2952d1c0bffaa215f8e56ebdba44b4",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "b9897bbc-554d-5acd-90d4-54fae80b68d3",
+      "title": "BuildITRunnerCapacityExhausted",
+      "for": null,
+      "originalFor": null,
+      "originalGraphSha256": "bd13e2795684e953a13c8d2552ec3bbc2fcdfe252d82a05f11ea5ceb818e1285",
+      "localGraphSha256": "bd13e2795684e953a13c8d2552ec3bbc2fcdfe252d82a05f11ea5ceb818e1285",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "9534bcc7-3d5a-5e86-9c9a-13d5a8281bb3",
+      "title": "BuildITArtifactDeletionBacklog",
+      "for": "20m",
+      "originalFor": "20m",
+      "originalGraphSha256": "5dd1926b7b20d97ce98aa373b28416185d33dd7d2c3be02ddd1212306ef8675b",
+      "localGraphSha256": "5dd1926b7b20d97ce98aa373b28416185d33dd7d2c3be02ddd1212306ef8675b",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "a542f9b4-2f2f-5038-a00e-ce69e9c45ad1",
+      "title": "BuildITWebhookSignatureSpike",
+      "for": null,
+      "originalFor": null,
+      "originalGraphSha256": "d0b325469c1ffc4213ed188bef9a3afbfcb1756c9d340b0624a41fc07a58e7cf",
+      "localGraphSha256": "d0b325469c1ffc4213ed188bef9a3afbfcb1756c9d340b0624a41fc07a58e7cf",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "5bc2f8b6-20bb-51a2-b1eb-acbfda69751d",
+      "title": "BuildITLoopGuardTrip",
+      "for": null,
+      "originalFor": null,
+      "originalGraphSha256": "00841b573d8e22169c5f670f6ec800a345a02af5db6cbe70aab49b738e3eb74f",
+      "localGraphSha256": "00841b573d8e22169c5f670f6ec800a345a02af5db6cbe70aab49b738e3eb74f",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "ab2241ca-678e-5b45-bad0-cb412c516183",
+      "title": "BuildITStaleCheck",
+      "for": null,
+      "originalFor": null,
+      "originalGraphSha256": "81f58475c72a401d36deda841731db1ffab128100a74c0de1b5c9418d511f135",
+      "localGraphSha256": "81f58475c72a401d36deda841731db1ffab128100a74c0de1b5c9418d511f135",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    },
+    {
+      "uid": "90ac7cae-4fd6-580a-8f74-bdee00f3228f",
+      "title": "BuildITBudgetExhaustionSpike",
+      "for": "5m",
+      "originalFor": "5m",
+      "originalGraphSha256": "7d035a157093ef6c4cbbb5a5eaaf5b84a310cda8c8ed22a99244a21effe7ba1c",
+      "localGraphSha256": "7d035a157093ef6c4cbbb5a5eaaf5b84a310cda8c8ed22a99244a21effe7ba1c",
+      "entireRuleIdentical": true,
+      "changedFields": []
+    }
+  ],
+  "network": {
+    "name": "buildit-audit-20260914_audit",
+    "internal": true,
+    "project": "buildit-audit-20260914"
+  },
+  "containers": [
+    {
+      "name": "buildit-audit-20260914-capture-1",
+      "service": "capture",
+      "image": "python:3.12-alpine",
+      "state": "running",
+      "network": "buildit-audit-20260914_audit",
+      "publishedHostPorts": []
+    },
+    {
+      "name": "buildit-audit-20260914-collector-1",
+      "service": "collector",
+      "image": "otel/opentelemetry-collector-contrib:0.135.0",
+      "state": "running",
+      "network": "buildit-audit-20260914_audit",
+      "publishedHostPorts": []
+    },
+    {
+      "name": "buildit-audit-20260914-grafana-1",
+      "service": "grafana",
+      "image": "grafana/grafana:12.1.1",
+      "state": "running",
+      "network": "buildit-audit-20260914_audit",
+      "publishedHostPorts": []
+    },
+    {
+      "name": "buildit-audit-20260914-prometheus-1",
+      "service": "prometheus",
+      "image": "prom/prometheus:v3.6.0",
+      "state": "running",
+      "network": "buildit-audit-20260914_audit",
+      "publishedHostPorts": []
+    }
+  ],
+  "disposableVolumes": [
+    {
+      "container": "buildit-audit-20260914-prometheus-1",
+      "name": "e00d710488745c723508c506d1604f706691d385924c037c7ba0a146468140c9",
+      "destination": "/prometheus"
+    }
+  ]
+}

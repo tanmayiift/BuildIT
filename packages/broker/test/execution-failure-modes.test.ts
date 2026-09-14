@@ -125,6 +125,23 @@ describe("what a real sandbox failure becomes", () => {
 });
 
 describe("what a real sandbox failure is logged as", () => {
+  it("logs a closed operational code without retaining provider exception text or its name", async () => {
+    const shortToken = ["sk", "live", "9f3"].join("-");
+    const secretContext = `s3://buildit-artifacts/org-a/review-a token=${shortToken} source=/src/a.ts private snippet`;
+    const exception = new Error(`Sandbox failed: ${secretContext}`);
+    exception.name = `ProviderError authorization=${shortToken}`;
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const result = await execute(async () => { throw exception; });
+      expect(result).toEqual({ status: 503, body: { error: "sandbox_unavailable" } });
+      expect(logged.mock.calls).toEqual([["buildit_execute_failure", {
+        category: "runner_or_scanner", code: "sandbox_unavailable", reason: "sandbox_unavailable",
+      }]]);
+      const serialized = JSON.stringify(logged.mock.calls);
+      for (const value of [shortToken, "s3://", "org-a", "/src/a.ts", "private snippet", "authorization="]) expect(serialized).not.toContain(value);
+    } finally { logged.mockRestore(); }
+  });
+
   // safeExecutionErrorCategory is the field that exists to make outages measurable. Its regex is
   // anchored ^sandbox_, and the provider says "Sandbox failed to start" - capital S, no underscore
   // - so a real outage was logging as an unexpected code defect. The one thing that had to be

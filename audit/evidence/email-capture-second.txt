@@ -1,0 +1,35 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ❯ packages/operations/test/email-capture.test.ts (4 tests | 1 failed) 12ms
+   ✓ local email capture boundary > needs a local backend and literal loopback capture endpoint 1ms
+   × local email capture boundary > accepts only a matching captured receipt, never a sent result 5ms
+     → expected [Function] to throw error including 'email_capture_receipt_invalid' but got 'email_capture_invalid_receipt'
+   ✓ local email capture boundary > atomically records one local file across retry and rejects changed payloads 5ms
+   ✓ local email capture boundary > says captured on both message formats and prevents mixed-recipient digests 0ms
+ ✓ convex/notificationOutbox.test.ts (18 tests) 102ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/operations/test/email-capture.test.ts > local email capture boundary > accepts only a matching captured receipt, never a sent result
+AssertionError: expected [Function] to throw error including 'email_capture_receipt_invalid' but got 'email_capture_invalid_receipt'
+
+Expected: "email_capture_receipt_invalid"
+Received: "email_capture_invalid_receipt"
+
+ ❯ packages/operations/test/email-capture.test.ts:21:5
+     19|   it("accepts only a matching captured receipt, never a sent result", …
+     20|     const message = decisionEmail(input), http = vi.fn(async () => new…
+     21|     await expect(captureEmail(localEmailCaptureConfig(env)!, message, …
+       |     ^
+     22|     expect(http.mock.calls).toHaveLength(1);
+     23|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 21 passed (22)
+   Start at  09:10:42
+   Duration  472ms (transform 111ms, setup 0ms, collect 211ms, tests 113ms, environment 0ms, prepare 79ms)
+

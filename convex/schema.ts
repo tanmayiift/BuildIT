@@ -2,14 +2,20 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 import * as value from "./validators";
+import { accountingTables } from "./accountingSchema";
+import { notificationTables, emailDecisionStatus } from "./notificationSchema";
+import { trackerOAuthTables } from "./trackerOAuthSchema";
 
 const timestampFields = { createdAt: v.number(), updatedAt: v.number() };
 
 export default defineSchema({
   ...authTables,
+  ...accountingTables,
+  ...notificationTables,
+  ...trackerOAuthTables,
   users: defineTable({
     name: v.optional(v.string()), image: v.optional(v.string()), email: v.optional(v.string()),
-    emailVerificationTime: v.optional(v.number()), phone: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()), emailVerificationExpiresAt: v.optional(v.number()), phone: v.optional(v.string()),
     phoneVerificationTime: v.optional(v.number()), isAnonymous: v.optional(v.boolean()),
     githubUserId: v.optional(v.number()), githubLogin: v.optional(v.string()), login: v.optional(v.string()),
   }).index("email", ["email"]).index("phone", ["phone"]).index("githubUserId", ["githubUserId"]),
@@ -18,6 +24,7 @@ export default defineSchema({
     retentionHours: v.number(), monthlyBudget: v.number(), concurrencyLimit: v.number(),
     planId: v.string(), fingerprintKeyVersion: v.number(), createdAt: v.number(),
     monthlySpendMicros: v.optional(v.number()), monthlySpendMonth: v.optional(v.string()),
+    metricTrackingStartedAt: v.optional(v.number()),
     deletedAt: v.optional(v.number()),
   }).index("by_slug", ["slug"]).index("by_deleted", ["deletedAt"]).index("by_created", ["createdAt"]),
 
@@ -76,7 +83,8 @@ export default defineSchema({
     indexState: value.indexState, concurrencyLimit: v.number(), ...timestampFields,
   }).index("by_github_id", ["githubRepositoryId"])
     .index("by_installation", ["installationId"])
-    .index("by_org_enabled", ["organizationId", "enabled"]),
+    .index("by_org_enabled", ["organizationId", "enabled"])
+    .index("by_owner_visibility", ["owner", "visibility"]),
 
   configRevisions: defineTable({
     organizationId: v.id("organizations"), repositoryId: v.id("repositories"),
@@ -111,8 +119,11 @@ export default defineSchema({
     encryptedAccessToken: v.string(), encryptedRefreshToken: v.optional(v.string()),
     nonce: v.string(), authTag: v.string(), aadDigest: v.string(), keyVersion: v.number(),
     scopes: v.array(v.string()), workspaceId: v.string(), status: value.trackerStatus,
+    credentialFormat: v.optional(v.literal("oauth_bundle_v1")), projectKeys: v.optional(v.array(v.string())),
+    oauthResourceId: v.optional(v.string()), refreshLeaseId: v.optional(v.string()), refreshLeaseExpiresAt: v.optional(v.number()),
     createdBy: v.string(),maskedSuffix:v.string(),lastValidatedAt:v.number(),lastUsedAt:v.optional(v.number()),revokedAt:v.optional(v.number()), expiresAt: v.optional(v.number()), ...timestampFields,
   }).index("by_org_provider", ["organizationId", "provider"])
+    .index("by_org_repo_status", ["organizationId", "repositoryId", "status"])
     .index("by_status", ["status"]),
 
   reviews: defineTable({
@@ -157,7 +168,12 @@ export default defineSchema({
     completedAt: v.optional(v.number()), expiresAt: v.number(), createdAt: v.number(), updatedAt: v.number(),
   }).index("by_org_status", ["organizationId", "status"])
     .index("by_status", ["status", "updatedAt"])
+    .index("by_parent", ["parentReviewId"])
     .index("by_repo_pr_head_mode", ["repositoryId", "prNumber", "headSha", "mode"])
+    .index("by_repo_created", ["repositoryId", "createdAt"])
+    .index("by_repo_pr_created", ["repositoryId", "prNumber", "createdAt"])
+    .index("by_repo_pr_completed", ["repositoryId", "prNumber", "completedAt", "createdAt"])
+    .index("by_repo_completed", ["repositoryId", "completedAt"])
     .index("by_expiry", ["expiresAt"])
     .index("by_org_created", ["organizationId", "createdAt"])
     .index("by_queue", ["organizationId", "status", "createdAt"])
@@ -171,7 +187,8 @@ export default defineSchema({
       reasonCode: v.optional(v.string()), externalIdHash: v.optional(v.string()) }),
     createdAt: v.number(),
   }).index("by_review", ["reviewId", "sequence"])
-    .index("by_org_created", ["organizationId", "createdAt"]),
+    .index("by_org_created", ["organizationId", "createdAt"])
+    .index("by_org_public_message", ["organizationId", "publicMessageArtifactId"]),
 
   // One typed object per stage, so the handoff between workers is a record rather than an
   // inference. Before this, each stage re-derived what the previous one had decided - the review
@@ -198,6 +215,18 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_run_stage", ["runId", "stage"]).index("by_review", ["reviewId"]),
 
+  // A broker request may be interrupted by the serverless ceiling after a
+  // provider or sandbox has already done work. This row is the durable handoff
+  // between requests; its cursor and request key make retries idempotent.
+  executionJobs: defineTable({
+    organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.id("reviews"),
+    jobKey: v.string(), runId: v.string(), expectedHeadSha: v.string(), baseSha: v.string(), expectedGeneration: v.number(),
+    stage: value.executionStage, cursor: v.string(), stateVersion: v.number(), attempt: v.number(),
+    status: value.executionJobStatus, leaseOwner: v.optional(v.string()), leaseUntil: v.optional(v.number()),
+    artifactIds: v.array(v.id("artifacts")), durationMs: v.optional(v.number()), failureCode: v.optional(v.string()),
+    lastRequestKey: v.optional(v.string()), createdAt: v.number(), updatedAt: v.number(), completedAt: v.optional(v.number()),
+  }).index("by_job_key", ["jobKey"]).index("by_review", ["reviewId"]).index("by_lease", ["status", "leaseUntil"]),
+
   modelStageRuns: defineTable({
     organizationId:v.id("organizations"),repositoryId:v.id("repositories"),reviewId:v.id("reviews"),roundNumber:v.optional(v.number()),stage:value.modelStage,
     provider:value.provider,model:v.string(),promptVersion:v.string(),schemaVersion:v.string(),finishReason:v.string(),requestHash:v.string(),requestId:v.optional(v.string()),
@@ -207,8 +236,10 @@ export default defineSchema({
     // costMicros is what recordStageRun already computed to charge the budget and then discarded,
     // so per-stage cost was derivable from tokens but never actually stored anywhere.
     durationMs:v.optional(v.number()),costMicros:v.optional(v.number()),
-    runId:v.optional(v.string()),
-  }).index("by_review",["reviewId"]).index("by_review_stage",["reviewId","stage"]),
+    runId:v.optional(v.string()), invocationId: v.optional(v.id("modelInvocations")),
+  }).index("by_review",["reviewId"]).index("by_review_stage",["reviewId","stage"])
+    .index("by_invocation", ["invocationId"])
+    .index("by_legacy_receipt", ["reviewId", "invocationId", "requestHash", "attempt", "model", "requestId"]),
 
   requirements: defineTable({
     organizationId: v.id("organizations"), reviewId: v.id("reviews"), sourceType: value.sourceType,
@@ -228,7 +259,8 @@ export default defineSchema({
     createdAt: v.number(), updatedAt: v.number(), expiresAt: v.number(),
   }).index("by_organization", ["organizationId"])
     .index("by_review_severity", ["reviewId", "severity"])
-    .index("by_review_fingerprint", ["reviewId", "fingerprintHmac"]),
+    .index("by_review_fingerprint", ["reviewId", "fingerprintHmac"])
+    .index("by_fingerprint", ["fingerprintHmac"]),
 
   evalCandidates: defineTable({
     organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.id("reviews"),
@@ -310,7 +342,11 @@ export default defineSchema({
     // existed; it is a derived price and reconstructing a total from it loses the cost of any
     // call a provider reported no usage for.
     unitCost: v.number(), totalCostMicros: v.optional(v.number()), currency: v.string(), occurredAt: v.number(),
+    invocationId: v.optional(v.id("modelInvocations")), accountingVersion: v.optional(v.number()),
+    costStatus: v.optional(v.union(v.literal("estimated"), v.literal("unknown"))),
+    inputTokens: v.optional(v.number()), outputTokens: v.optional(v.number()),
   }).index("by_org_time", ["organizationId", "occurredAt"])
+    .index("by_repo_time", ["repositoryId", "occurredAt"])
     .index("by_time", ["occurredAt"])
     .index("by_review", ["reviewId"]),
 
@@ -352,7 +388,9 @@ export default defineSchema({
     actorHash: v.string(), occurredAt: v.number(),
   }).index("by_repository_rule", ["repositoryId", "ruleKey", "pathPrefixHmac"])
     .index("by_review", ["reviewId"])
-    .index("by_repository_time", ["repositoryId", "occurredAt"]),
+    .index("by_repository_time", ["repositoryId", "occurredAt"])
+    .index("by_finding_actor", ["findingId", "actorHash"])
+    .index("by_review_time", ["reviewId", "occurredAt"]),
 
   webhookDeliveries: defineTable({
     deliveryId: v.string(), event: v.string(), action: v.string(), installationId: v.optional(v.number()),
@@ -369,12 +407,17 @@ export default defineSchema({
     organizationId: v.id("organizations"), userId: v.string(), type: value.notificationType,
     channel: value.notificationChannel, reviewId: v.optional(v.id("reviews")), sentAt: v.optional(v.number()),
     deliveryStatus: value.notificationStatus, dedupeKey: v.string(), createdAt: v.number(),
+    repositoryId: v.optional(v.id("repositories")), generation: v.optional(v.number()),
+    decisionStatus: v.optional(emailDecisionStatus), digestMode: v.optional(v.union(v.literal("immediate"), v.literal("daily"))),
+    dueAt: v.optional(v.number()), batchId: v.optional(v.id("emailBatches")), capturedAt: v.optional(v.number()), failureCode: v.optional(v.string()),
   }).index("by_dedupe_key", ["dedupeKey"])
-    .index("by_user_created", ["userId", "createdAt"]),
+    .index("by_user_created", ["userId", "createdAt"])
+    .index("by_org_user_due", ["organizationId", "userId", "dueAt"])
+    .index("by_org_user_created", ["organizationId", "userId", "createdAt"]),
 
   notificationPreferences: defineTable({
     organizationId: v.id("organizations"), userId: v.string(), emailEnabled: v.boolean(),
-    emailConsentedAt: v.optional(v.number()),
+    emailConsentedAt: v.optional(v.number()), emailConsentedAddressHash: v.optional(v.string()),
     digestMode: v.union(v.literal("immediate"), v.literal("daily")),
     mutedRepositoryIds: v.array(v.id("repositories")), updatedAt: v.number(),
   }).index("by_org_user", ["organizationId", "userId"]),
@@ -384,15 +427,19 @@ export default defineSchema({
     resourceType: v.string(), resourceIdHash: v.string(), result: value.auditResult,
     requestId: v.string(), previousHash: v.optional(v.string()), eventHash: v.string(), createdAt: v.number(),
   }).index("by_org_created", ["organizationId", "createdAt"])
-    .index("by_request", ["requestId"]),
+    .index("by_request", ["requestId"])
+    .index("by_org_action_result_created", ["organizationId", "action", "result", "createdAt"]),
 
   metricEvents: defineTable({
     organizationId: v.id("organizations"), repositoryId: v.optional(v.id("repositories")),
     reviewId: v.optional(v.id("reviews")), roundId: v.optional(v.id("autofixRounds")),
     name: value.metricName, value: v.number(), organizationTimezone: v.string(), occurredAt: v.number(),
+    eventKey: v.optional(v.string()),
   }).index("by_org_time", ["organizationId", "occurredAt"])
+    .index("by_repo_time", ["repositoryId", "occurredAt"])
     .index("by_name_time", ["name", "occurredAt"])
-    .index("by_review_name", ["reviewId", "name"]),
+    .index("by_review_name", ["reviewId", "name"])
+    .index("by_org_event_key", ["organizationId", "eventKey"]),
 
   reviewLocks: defineTable({
     repositoryId: v.id("repositories"), prNumber: v.number(), headSha: v.string(),

@@ -53,19 +53,23 @@ describe("a grant is single-use, so every attempt needs its own", () => {
   });
 });
 
-// The regression itself lives in the caller, so this pins the caller.
-describe("what the analysis worker sends", () => {
-  const worker = readFileSync(join(import.meta.dirname, "../../convex/reviewAnalysisWorker.ts"), "utf8");
-  const retryLoop = worker.slice(worker.indexOf("for (let attempt = 1; attempt <= maxProviderAttempts"));
-
-  it("mints a grant inside the retry loop, not once outside it", () => {
-    const authorization = retryLoop.slice(0, retryLoop.indexOf("\n        }"));
-    expect(authorization, "the retry must not re-send a token a previous attempt already spent")
-      .toMatch(/authorization: `Bearer \$\{mintGrant\(\)\}`/);
+// Every worker uses the same durable accounting boundary. Dynamic retry/grant checks also
+// exercise this helper in convex/accounting.test.ts.
+describe("what each model worker sends", () => {
+  const helper = readFileSync(join(import.meta.dirname, "../../convex/lib/accountedModel.ts"), "utf8");
+  it("reserves and mints a fresh grant inside each physical attempt", () => {
+    const loop = helper.indexOf("for (let attempt = 1;");
+    const reservation = helper.indexOf("ctx.runMutation(reserve", loop);
+    const grant = helper.indexOf("issueModelInvocationGrant({", reservation);
+    const call = helper.indexOf("await http(", grant);
+    expect(loop).toBeGreaterThan(-1); expect(reservation).toBeGreaterThan(loop);
+    expect(grant).toBeGreaterThan(reservation); expect(call).toBeGreaterThan(grant);
   });
-
-  it("does not keep a single reusable grant in scope for the loop", () => {
-    const code = worker.replace(/^\s*\/\/.*$/gm, "");
-    expect(code).not.toMatch(/const grant = issueModelInvocationGrant/);
+  it("routes analysis, Ask and Autofix through that boundary", () => {
+    for (const name of ["reviewAnalysisWorker.ts", "reviewAskWorker.ts", "reviewAutofixWorker.ts"]) {
+      const worker = readFileSync(join(import.meta.dirname, "../../convex", name), "utf8");
+      expect(worker).toContain("invokeAccountedModel(ctx");
+      expect(worker).not.toContain("issueModelInvocationGrant");
+    }
   });
 });

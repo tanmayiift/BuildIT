@@ -34,7 +34,7 @@ export type ModelStageInvoker = (request: ModelStageRequest) => Promise<Provider
 // deterministic, so nothing derived from those timestamps is a real elapsed time. Without this the
 // product could say what a review cost but never how long it took - which is exactly the gap the
 // review of BuildIT called out, and why /proof publishes no duration at all.
-export type StageUsage = Pick<ProviderResult, "provider" | "model" | "finishReason" | "inputTokens" | "outputTokens" | "requestId"> & { stage: PromptStage;promptVersion:string;schemaVersion:string;requestFingerprint:string;attempt:number;outcome:"valid"|"schema_invalid";durationMs:number };
+export type StageUsage = Pick<ProviderResult, "provider" | "model" | "finishReason" | "inputTokens" | "outputTokens" | "requestId" | "invocationId"> & { stage: PromptStage;promptVersion:string;schemaVersion:string;requestFingerprint:string;attempt:number;outcome:"valid"|"schema_invalid";durationMs:number };
 
 const repairOutputLimit = 16_000;
 function repairInput(input: string, repairOf: unknown) {
@@ -108,7 +108,7 @@ export async function runModelReviewChain(input: {
         // from a slow queue. Math.max guards a non-monotonic clock rather than trusting the host.
         durationMs: Math.max(0, Date.now() - startedAt),
         requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas[request.stage])).digest("hex"),
-        ...(result.requestId ? { requestId: result.requestId } : {}),
+        ...(result.invocationId ? { invocationId: result.invocationId } : {}), ...(result.requestId ? { requestId: result.requestId } : {}),
       };attempts.set(request.stage,[...(attempts.get(request.stage)??[]),usage]);
       return result.value;
     },
@@ -159,7 +159,7 @@ export async function runEscalationCritic(input: {
         inputTokens: result.inputTokens, outputTokens: result.outputTokens,
         durationMs: Math.max(0, Date.now() - startedAt),
         requestFingerprint: createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas.critic)).digest("hex"),
-        ...(result.requestId ? { requestId: result.requestId } : {}),
+        ...(result.invocationId ? { invocationId: result.invocationId } : {}), ...(result.requestId ? { requestId: result.requestId } : {}),
       });
       return result.value;
     },
@@ -184,7 +184,7 @@ export async function runModelPatchChain(input: {
       const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);
       const startedAt = Date.now();
       const result = await input.invoke({ ...request, input: providerInput, schemaName: "buildit_patch_v1", schema: stageSchemas.patch, maxOutputTokens: 8_000 });
-      attempts.push({ stage: "patch", durationMs: Math.max(0, Date.now() - startedAt), provider: result.provider, model: result.model, finishReason: result.finishReason, inputTokens: result.inputTokens, outputTokens: result.outputTokens,requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas.patch)).digest("hex"), ...(result.requestId ? { requestId: result.requestId } : {}) });
+      attempts.push({ stage: "patch", durationMs: Math.max(0, Date.now() - startedAt), provider: result.provider, model: result.model, finishReason: result.finishReason, inputTokens: result.inputTokens, outputTokens: result.outputTokens,requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas.patch)).digest("hex"), ...(result.invocationId ? { invocationId: result.invocationId } : {}), ...(result.requestId ? { requestId: result.requestId } : {}) });
       return result.value;
     },
   });

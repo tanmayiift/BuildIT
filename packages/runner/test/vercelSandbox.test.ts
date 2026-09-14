@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { defaultExecutionPlans } from "../src/index";
 import { VercelSandboxRunner, type SandboxFactory, type SandboxLike } from "../src/vercelSandbox";
 
-function fixture(options: { env?: string; installExit?: number; testExits?: number[]; osvExit?: number; osvOutput?: string; testDurationMs?: number; installDurationMs?: number; omitTestDuration?: boolean; gitleaksExit?: number; gitleaksReportBytes?: number; gitleaksReportMissing?: boolean } = {}) {
+function fixture(options: { env?: string; installExit?: number; testExits?: number[]; osvExit?: number; osvOutput?: string; osvStderr?: string; gitleaksOutput?: string; testDurationMs?: number; installDurationMs?: number; omitTestDuration?: boolean; gitleaksExit?: number; gitleaksReportBytes?: number; gitleaksReportMissing?: boolean } = {}) {
   const calls: Array<unknown> = [], stop = vi.fn(async () => ({}));
   const sandbox: SandboxLike = {
     writeFiles: vi.fn(async files => { calls.push(["files", files]); }),
@@ -17,7 +17,7 @@ function fixture(options: { env?: string; installExit?: number; testExits?: numb
       calls.push(["command", command]);
       const isEnv = command.cmd === "env", isOsv = command.cmd === "osv-scanner", isGitleaks = command.cmd === "gitleaks", isTest = command.cmd === "pnpm" && command.args[0] === "run" && command.args[1] === "test", exitCode = isEnv ? 0 : isOsv ? options.osvExit ?? 0 : isGitleaks ? options.gitleaksExit ?? 0 : command.cmd === "pnpm" && command.args[0] === "install" ? options.installExit ?? 0 : isTest ? options.testExits?.shift() ?? 0 : 0;
       const durationMs = isTest ? options.testDurationMs ?? 10 : command.cmd === "pnpm" && command.args[0] === "install" ? options.installDurationMs ?? 10 : 10;
-      const stream = { stdout: async () => isEnv ? options.env ?? "CI=true\n" : isOsv ? options.osvOutput ?? "ok" : "ok", stderr: async () => "" };
+      const stream = { stdout: async () => isEnv ? options.env ?? "CI=true\n" : isOsv ? options.osvOutput ?? "ok" : isGitleaks ? options.gitleaksOutput ?? "ok" : "ok", stderr: async () => isOsv ? options.osvStderr ?? "" : "" };
       // The SDK declares durationMs optional on CommandFinished and passes the API value straight
       // through, so a kill can arrive with no duration at all.
       return isTest && options.omitTestDuration ? { exitCode, ...stream } : { exitCode, durationMs, ...stream };
@@ -294,5 +294,42 @@ describe("dependency scanning outside Node", () => {
     await runner.run({ runtime: "node22", files: [{ path: "go.mod", content: "module x" }], install, checks: [test] });
     const osv = (f.calls as Array<[string, { cmd?: string; args?: string[] }]>).find(call => call[0] === "command" && call[1].cmd === "osv-scanner");
     expect(String(osv?.[1].args?.join(" "))).toContain("go.mod");
+  });
+});
+
+
+describe("scanner diagnostics never log repository content", () => {
+  const plans = defaultExecutionPlans("pnpm"), install = plans.install, test = plans.checks[0]!;
+  const files = [{ path: "private/requirements.txt", content: "internal-package==1.0" }];
+  it("logs only a safe category and exit code when OSV prints source and a secret", async () => {
+    const warnings = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const logs = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const f = fixture({ osvExit: 2, osvOutput: "private/payroll.py: salary = confidential_source_fixture", osvStderr: "OPENAI_API_KEY=synthetic_secret_fixture" });
+      const result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files, install, checks: [test] });
+      const captured = JSON.stringify([warnings.mock.calls, logs.mock.calls, errors.mock.calls]);
+      for (const forbidden of ["private/payroll.py", "confidential_source_fixture", "synthetic_secret_fixture", "OPENAI_API_KEY"]) expect(captured).not.toContain(forbidden);
+      expect(warnings).toHaveBeenCalledWith("buildit_osv_unavailable", { reason: "unexpected_exit", exitCode: 2 });
+      expect(result.unavailableScanners).toEqual(["osvScanner"]);
+      expect(result.unavailableReason).toContain("osv-scanner exit 2");
+      expect(result.results.find(row => row.planId === "test")?.conclusion).toBe("passed");
+      expect(f.stop).toHaveBeenCalledOnce();
+    } finally { warnings.mockRestore(); logs.mockRestore(); errors.mockRestore(); }
+  });
+  it.each([
+    [{ gitleaksExit: 137 }, "unexpected_exit", 137],
+    [{ gitleaksReportMissing: true }, "report_missing", 0],
+    [{ gitleaksReportBytes: 2_000_001 }, "report_too_large", 0],
+  ] as const)("keeps gitleaks diagnostic categories closed for %o", async (options, reason, exitCode) => {
+    const warnings = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const f = fixture({ ...options, gitleaksOutput: "private-source synthetic_secret_fixture" });
+      const result = await new VercelSandboxRunner(f.create).run({ runtime: "node24", files, install, checks: [test] });
+      expect(warnings).toHaveBeenCalledWith("buildit_gitleaks_unavailable", { reason, exitCode });
+      expect(JSON.stringify(warnings.mock.calls)).not.toContain("synthetic_secret_fixture");
+      expect(result.unavailableScanners).toEqual(["gitleaks"]);
+      expect(result.results.find(row => row.planId === "test")?.conclusion).toBe("passed");
+    } finally { warnings.mockRestore(); }
   });
 });

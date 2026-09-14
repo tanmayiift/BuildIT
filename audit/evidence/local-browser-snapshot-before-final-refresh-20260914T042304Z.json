@@ -1,0 +1,23 @@
+{
+  "capturedAt": "2026-09-14T04:02:45.852019+00:00",
+  "backendCopiedSource": {
+    "files": 114,
+    "sha256": "b7a5a67824a0074a04cf73e5c5f43fd6cc694625d56d2b3ee717843d32784242"
+  },
+  "webCopiedSource": {
+    "files": 84,
+    "sha256": "9443d18dfcef5cf90e240a18311cbd7e751930f4aae8b1b70bcf4aa4779fdd88"
+  },
+  "webBuildId": "CMEqkNibyiGEL6M6qNnPA",
+  "apiChecks": {
+    "completedAt": "2026-09-14T04:00:33.603Z",
+    "passed": 26,
+    "status": "passed"
+  },
+  "httpChecks": {
+    "checkedAt": "2026-09-14T04:00:33.132Z",
+    "passed": 36,
+    "total": 36
+  },
+  "note": "Hashes identify the isolated tested source copies, not a deployed production revision. Package dependencies are linked from this BuildIT checkout."
+}

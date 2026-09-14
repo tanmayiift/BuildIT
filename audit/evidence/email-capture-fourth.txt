@@ -1,0 +1,13 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ tests/architecture/data-classification.test.ts (3 tests) 2ms
+ ✓ packages/operations/test/email-capture.test.ts (4 tests) 10ms
+ ✓ tests/architecture/public-function-inventory.test.ts (5 tests) 20ms
+ ✓ convex/notificationOutbox.test.ts (19 tests) 136ms
+
+ Test Files  4 passed (4)
+      Tests  31 passed (31)
+   Start at  09:12:06
+   Duration  504ms (transform 170ms, setup 0ms, collect 448ms, tests 168ms, environment 0ms, prepare 174ms)
+

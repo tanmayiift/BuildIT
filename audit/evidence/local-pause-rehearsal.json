@@ -1,0 +1,86 @@
+{
+  "startedAt": "2026-09-14T05:48:10.615Z",
+  "scope": "isolated loopback audit backend only",
+  "sourceOrFixtureDataChanged": false,
+  "checks": [
+    {
+      "name": "before: admin read",
+      "httpStatus": 200,
+      "status": "success",
+      "pausedError": false,
+      "hasValue": true
+    },
+    {
+      "name": "before: public read",
+      "httpStatus": 200,
+      "status": "success",
+      "pausedError": false,
+      "hasValue": true
+    },
+    {
+      "name": "pause",
+      "httpStatus": 200,
+      "pausedError": false,
+      "hasValue": false
+    },
+    {
+      "name": "paused: public read",
+      "httpStatus": 200,
+      "status": "error",
+      "pausedError": true,
+      "hasValue": false
+    },
+    {
+      "name": "paused: admin read",
+      "httpStatus": 200,
+      "status": "error",
+      "pausedError": true,
+      "hasValue": false
+    },
+    {
+      "name": "paused: WebSocket system root/reviews",
+      "status": "success",
+      "count": 2,
+      "complete": true
+    },
+    {
+      "name": "paused: WebSocket system workflow/reviews",
+      "status": "success",
+      "count": 0,
+      "complete": true
+    },
+    {
+      "name": "paused: WebSocket system reviewWorkpool/work",
+      "status": "success",
+      "count": 0,
+      "complete": true
+    },
+    {
+      "name": "paused: deployment metadata",
+      "httpStatus": 200,
+      "pausedError": false,
+      "hasValue": false
+    },
+    {
+      "name": "resume",
+      "httpStatus": 200,
+      "pausedError": false,
+      "hasValue": false
+    },
+    {
+      "name": "after: admin read",
+      "httpStatus": 200,
+      "status": "success",
+      "pausedError": false,
+      "hasValue": true
+    },
+    {
+      "name": "after: public read",
+      "httpStatus": 200,
+      "status": "success",
+      "pausedError": false,
+      "hasValue": true
+    }
+  ],
+  "completedAt": "2026-09-14T05:48:10.719Z"
+}

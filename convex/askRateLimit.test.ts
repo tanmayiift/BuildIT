@@ -1,5 +1,11 @@
+/// <reference types="vite/client" />
 import { describe, expect, it } from "vitest";
+import { convexTest } from "convex-test";
+import { internal } from "./_generated/api";
+import schema from "./schema";
+import { summaryFixture } from "./testing/summaryFixture";
 import { usageKind } from "./validators";
+const modules = import.meta.glob("./**/*.ts");
 
 // The first version counted every model_tokens row for the review, so a review's own seven prompt
 // stages used the entire allowance before anybody could ask a question about it - the limiter
@@ -13,13 +19,20 @@ describe("what a question is billed as", () => {
     expect(members).toContain("model_tokens");
   });
 
-  it("keeps the ask worker writing that kind, not the review one", async () => {
-    const { readFileSync } = await import("node:fs");
-    const source = readFileSync(new URL("./reviewAskData.ts", import.meta.url), "utf8");
-    expect(source).toContain('kind: "ask_tokens"');
-    // The limiter must count questions, never the review's own stages.
-    expect(source).toContain('item.kind === "ask_tokens" && item.reviewId === review._id');
-    expect(source).not.toContain('item.kind === "model_tokens" && item.reviewId');
+  it("allows five Ask attempts after review stages and counts unpublished attempts", async () => {
+    const t = convexTest(schema, modules), now = Date.now(), b = await summaryFixture(t, "ask-limit", now);
+    await t.run(async ctx => {
+      await ctx.db.patch(b.reviewId, { model: "claude-sonnet-4-5", status: "checks_passed", completedAt: now });
+      for (let i = 0; i < 7; i++) await ctx.db.insert("usageLedger", { organizationId: b.organizationId, repositoryId: b.repositoryId, reviewId: b.reviewId,
+        kind: "model_tokens", quantity: 10, unitCost: 0.0001, totalCostMicros: 1000, currency: "provider_billed", occurredAt: now });
+    });
+    const request = { organizationId: b.organizationId, reviewId: b.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0,
+      requestHash: "7".repeat(64), stage: "ask", provider: "anthropic" as const, model: "claude-sonnet-4-5", inputBytes: 0, maxOutputTokens: 1, now };
+    for (let i = 0; i < 5; i++) expect(await t.mutation(internal.modelAccounting.reserve, { ...request, invocationKey: `ask-attempt-${i}`.padEnd(20, "x") })).toMatchObject({ allowed: true });
+    expect(await t.mutation(internal.modelAccounting.reserve, { ...request, invocationKey: "ask-attempt-sixthxxxx" })).toMatchObject({ allowed: false, reason: "ask_rate_limited" });
+    const rows = await t.run(ctx => ctx.db.query("usageLedger").collect());
+    expect(rows.filter(row => row.kind === "ask_tokens")).toHaveLength(5);
+    expect(rows.filter(row => row.kind === "model_tokens")).toHaveLength(7);
   });
 });
 

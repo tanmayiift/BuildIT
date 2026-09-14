@@ -3,6 +3,7 @@ import { mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireRepositoryRole } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
+import { recordFindingOpinion } from "./lib/findingOpinions";
 import { suppressionScope } from "./validators";
 
 // findingSuppressions has existed in the schema since the beginning and nothing ever wrote to it,
@@ -48,7 +49,12 @@ export const dismiss = mutation({
     }
 
     // Marking it resolved is what the reader sees; the eval candidate is what the system learns.
-    await ctx.db.patch(finding._id, { resolution: "dismissed", updatedAt: now });
+    const userId = ctx.db.normalizeId("users", access.userId);
+    const profile = userId ? await ctx.db.query("userProfiles").withIndex("by_user", q => q.eq("userId", userId)).unique() : null;
+    const identity = profile?.githubLogin.toLowerCase() ?? `user:${access.userId}`;
+    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(identity));
+    const actorHash = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, "0")).join("");
+    await recordFindingOpinion(ctx, finding, review, { verdict: "dismissed", actorHash, now });
     await ctx.scheduler.runAfter(0, internal.evalLoop.recordDismissedFinding, {
       organizationId: review.organizationId, reviewId: review._id,
       fingerprintHmac: args.fingerprintHmac, reasonCode: args.reasonCode, now,

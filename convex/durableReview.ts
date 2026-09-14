@@ -10,6 +10,9 @@ import { internalMutation, internalQuery, type MutationCtx } from "./_generated/
 import { durableReviewStages, nextStageAfter } from "./lib/durableStages";
 import { terminalStatuses } from "./lib/lifecycle";
 import { publishCancellationNotice } from "./reviewState";
+import { recordRunnerFailure } from "./lib/recordMetric";
+import { queueReviewNotification } from "./lib/queueNotification";
+import { getReviewBudgetSnapshot } from "./lib/budgetAccounting";
 import { reviewWorkflowManager, reviewWorkpool } from "./workflowManager";
 
 export function isSafeAutofixDecline(error: unknown) {
@@ -293,6 +296,15 @@ async function startProviderFallback(
   failureReason: PlatformFailureReason,
   now: number,
 ) {
+  if (review.parentReviewId || review.isStale || review.status === "cancelled" || review.status === "cancelling"
+    || review.cancellationRequestedAt !== undefined || review.expiresAt <= now) return false;
+  let family: Awaited<ReturnType<typeof getReviewBudgetSnapshot>>;
+  try { family = await getReviewBudgetSnapshot(ctx, review); }
+  // Malformed or incomplete accounting must not start more paid work or roll back the
+  // failure already being recorded. The caller will publish that original failure instead.
+  catch { return false; }
+  if (family.members.length > 1) return true; // A replay must not queue/pay for another child.
+  if (family.consumedMicros + family.reservedMicros >= family.limitMicros) return false;
   const credentials = await ctx.db
     .query("providerCredentials")
     .withIndex("by_org_status", q => q.eq("organizationId", review.organizationId).eq("status", "valid"))
@@ -302,7 +314,8 @@ async function startProviderFallback(
       && (item.repositoryId === undefined || item.repositoryId === review.repositoryId))
     .map(item => item.provider))];
   const fallback = fallbackWorthTrying({ reason: failureReason, alternatives, parentReviewId: review.parentReviewId });
-  const fallbackCredential = fallback ? credentials.find(item => item.provider === fallback) : undefined;
+  const fallbackCredential = fallback ? credentials.find(item => item.provider === fallback && item.repositoryId === review.repositoryId)
+    ?? credentials.find(item => item.provider === fallback && item.repositoryId === undefined) : undefined;
   const fallbackModel = fallbackCredential
     ? selectProviderModel(fallbackCredential.provider, fallbackCredential.availableModels)
     : undefined;
@@ -321,6 +334,8 @@ async function startProviderFallback(
     currentStage: "queue",
     coverageLevel: "limited",
     coverageGap: undefined,
+    // This is the child's own recorded usage. Admission sums the original review and
+    // every fallback under the original limit; this zero never grants a fresh allowance.
     budgetConsumed: 0,
     providerRetryCount: 0,
     executionGeneration: 0,
@@ -439,7 +454,7 @@ export const workflowCompleted = internalMutation({
             summary: [
               `Head: \`${review.headSha.toLowerCase()}\``,
               "",
-              `The next model step would have crossed the $${review.budgetLimit} limit chosen for this review, so BuildIT stopped before making that call.`,
+              `BuildIT reached the $${review.budgetLimit} limit chosen for this review and stopped further model work. Recorded estimates and unresolved calls are shown in Usage.`,
               "",
               "No code decision was reached and no code was changed. Start a new review with a higher limit to continue.",
               "",
@@ -460,6 +475,7 @@ export const workflowCompleted = internalMutation({
     if (args.result.kind === "failed") {
       const now = Date.now();
       const failureReason = classifyPlatformFailure(args.result.error);
+      await recordRunnerFailure(ctx, review, args.result.error, now);
       const failureDetailText = args.result.error.match(/(?:files|limit|status)=[^\s"]*/)?.[0]
         ? args.result.error.slice(args.result.error.indexOf("files=")).split(/[\s"]/)[0]
         : undefined;
@@ -492,6 +508,7 @@ export const workflowCompleted = internalMutation({
         createdAt: now,
       });
       if (await startProviderFallback(ctx, review, failureReason, now)) return;
+      await queueReviewNotification(ctx, review._id, now);
       await enqueueFailurePublication(ctx, {
         organizationId: review.organizationId,
         reviewId: review._id,
@@ -527,6 +544,7 @@ export const cancel = internalMutation({
       // this review put up stayed in_progress on the head commit forever. Where "BuildIT / review"
       // is a required check, that made BuildIT the reason the pull request could not be merged.
       await publishCancellationNotice(ctx, args.reviewId);
+      await queueReviewNotification(ctx, args.reviewId, args.now);
     }
   },
 });
@@ -573,6 +591,7 @@ export const reconcileStuck = internalMutation({
           executionGeneration: review.executionGeneration + 1,
           leaseOwner: undefined, leaseExpiresAt: undefined, updatedAt: args.now,
         });
+        await queueReviewNotification(ctx, review._id, args.now);
         reconciled += 1;
       }
     }

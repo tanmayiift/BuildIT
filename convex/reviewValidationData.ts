@@ -5,6 +5,8 @@ import { checkConclusion, checkKind } from "./validators";
 import { blocksVerdict } from "./lib/coverageGate";
 import { computeReviewDecision } from "@buildit/contracts";
 import { assertReviewParent } from "./lib/parentConsistency";
+import { recordReviewMetric } from "./lib/recordMetric";
+import { queueReviewNotification } from "./lib/queueNotification";
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
 const hash = v.string();
@@ -79,6 +81,11 @@ export const completeValidation = internalMutation({
       }
     }
     const durationMs = args.summaries.reduce((sum, item) => sum + item.durationMs, 0);
+    const introduced = args.summaries.some(head => head.revision === "head" && head.conclusion === "failed"
+      && head.regressionClassification !== "flaky" && head.regressionClassification !== "unknown"
+      && args.summaries.some(base => base.revision === "base" && base.conclusion === "passed"
+        && base.nameHash === head.nameHash && base.commandFingerprint === head.commandFingerprint && base.kind === head.kind));
+    if (introduced) await recordReviewMetric(ctx, review, "ci_regression_caught", args.now);
     await ctx.db.insert("usageLedger", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, kind: "sandbox_seconds", quantity: Math.ceil(durationMs / 1000), unitCost: 0, currency: "platform", occurredAt: args.now });
     await ctx.db.patch(review._id, { status: "validating", currentStage: "validation", updatedAt: args.now });
     return artifact._id;
@@ -177,7 +184,8 @@ export const finalizeDecision = internalMutation({
     const githubCheckConclusion = status === "checks_passed" ? "success" as const : status === "changes_requested" ? "failure" as const : "neutral" as const;
     await ctx.db.patch(review._id, { status, statusReasonCode, nextActionCode, githubCheckConclusion, currentStage: "complete", completedAt: args.now, updatedAt: args.now });
     await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", publicMessageArtifactId: report._id, internalCode: `decision_${statusReasonCode}`, metadata: { count: findings.length, ...(incompleteReason ? { reasonCode: incompleteReason } : {}) }, createdAt: args.now });
-    await ctx.db.insert("metricEvents", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id, name: "review_completed", value: 1, organizationTimezone: organization.timezone, occurredAt: args.now });
+    await recordReviewMetric(ctx, review, "review_completed", args.now);
+    await queueReviewNotification(ctx, review._id, args.now);
     if (incomplete) {
       await ctx.scheduler.runAfter(0, internal.evalLoop.recordMissedVerdict, {
         organizationId: args.organizationId, reviewId: review._id,

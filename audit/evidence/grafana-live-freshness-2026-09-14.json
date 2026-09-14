@@ -1,0 +1,43 @@
+{
+  "observedAt": "2026-09-14T05:31:13Z",
+  "surface": "Authenticated Grafana Explore UI",
+  "stack": "peacefulbumblebee2324.grafana.net",
+  "datasource": "grafanacloud-prom",
+  "query": "max(timestamp(buildit_snapshot))",
+  "resultSeries": 1,
+  "value": 1789363762.963,
+  "snapshotAt": "2026-09-14T05:29:22.963000+00:00",
+  "ageSeconds": 110.037,
+  "freshWithin15Minutes": true,
+  "currentGroup": "buildit-release",
+  "currentFolderUID": "alerting-100tcy91e6h0j",
+  "currentRulesNormal": 14,
+  "apiVerification": "not performed; no existing API read credential",
+  "legacyChanged": false,
+  "deliveryDrill": "not performed",
+  "note": "First editor/run interaction submitted zero queries; query inspector established that, then the settled query ran and returned this real series. Initial empty display was not telemetry absence.",
+  "subsequentQuery": {
+    "observedAt": "2026-09-14T05:42:25.793183+00:00",
+    "surface": "Grafana Explore Query inspector -> JSON -> UI clipboard",
+    "queryCount": 1,
+    "rangeRows": 61,
+    "instantRows": 1,
+    "recentDistinctTimestampValues": [
+      1789363537.635,
+      1789363762.963,
+      1789363837.821,
+      1789364063.64,
+      1789364137.979,
+      1789364363.605
+    ],
+    "recentDistinctSnapshotTimes": [
+      "2026-09-14T05:25:37.635000+00:00",
+      "2026-09-14T05:29:22.963000+00:00",
+      "2026-09-14T05:30:37.821000+00:00",
+      "2026-09-14T05:34:23.640000+00:00",
+      "2026-09-14T05:35:37.979000+00:00",
+      "2026-09-14T05:39:23.605000+00:00"
+    ],
+    "scheduledContinuity": "Observed samples across 05:29,05:34,05:39 UTC; not an alert firing/recovery drill"
+  }
+}

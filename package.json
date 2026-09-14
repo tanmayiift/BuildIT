@@ -35,6 +35,7 @@
     "evidence:track-record": "node scripts/track-record.mjs",
     "alerts:check": "node scripts/provision-buildit-grafana-alerts.mjs --dry-run",
     "alerts:verify": "node scripts/provision-buildit-grafana-alerts.mjs --verify",
+    "alerts:pause-legacy": "node scripts/pause-buildit-grafana-legacy.mjs",
     "dashboard:check": "node scripts/provision-buildit-grafana-dashboard.mjs --dry-run",
     "dashboard:provision": "node scripts/provision-buildit-grafana-dashboard.mjs",
     "alerts:provision": "node scripts/provision-buildit-grafana-alerts.mjs"
@@ -50,7 +51,7 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.69.0",
     "vite": "^7.1.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@auth/core": "^0.41.3",

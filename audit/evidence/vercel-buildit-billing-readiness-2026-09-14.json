@@ -1,0 +1,22 @@
+{
+  "observedAt": "2026-09-14T13:25:00Z",
+  "team": "buildit-agentic-review",
+  "plan": "Pro",
+  "status": "Active",
+  "cycleStart": "2026-09-05",
+  "cycleEnd": "2026-10-04",
+  "upcomingInvoiceUsd": 20,
+  "includedCreditUsedUsd": 3.75,
+  "includedCreditUsd": 20,
+  "onDemandBudgetUsd": 0,
+  "coreProjects": [
+    "buildit-agentic-review",
+    "buildit-content-broker"
+  ],
+  "sandboxUsagePresent": true,
+  "plusAddonsEnabled": false,
+  "cancellationSafe": false,
+  "reason": "Current broker execution maxDuration800 exceeds Hobby300; Vercel Sandbox remains runtime dependency; no migration deployed; commercial use incompatible with Hobby restriction.",
+  "liveReadback": "Billing page still shows Pro Plan Active, $3.75 of $20 included credit used, and $20 upcoming invoice.",
+  "subscriptionChanged": false
+}

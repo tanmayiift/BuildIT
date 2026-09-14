@@ -15,7 +15,7 @@
 // than a gate that is loudly down.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, chmodSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, chmodSync, renameSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { advisoriesFromReport, databaseAgeVerdict, databaseChoice, scanVerdict } from "./lib/audit-decisions.mjs";
@@ -96,21 +96,47 @@ function ensureDatabase() {
 
   const head = spawnSync("curl", ["-sSI", "--fail", "--max-time", "60", databaseUrl],
     { encoding: "utf8", shell: false });
-  const headers = head.status === 0 ? head.stdout : "";
-  const generation = headers.match(/^x-goog-generation:\s*(\d+)/im)?.[1];
-  const lastModified = headers.match(/^last-modified:\s*(.+)$/im)?.[1]?.trim();
+  let headers = head.status === 0 ? head.stdout : "";
+  let generation = headers.match(/^x-goog-generation:\s*(\d+)/im)?.[1];
+  let lastModified = headers.match(/^last-modified:\s*(.+)$/im)?.[1]?.trim();
+
+  // Some runners or proxies reject HEAD while allowing ordinary GETs. The public GCS metadata
+  // endpoint gives the same generation and update time without downloading the 222MB archive.
+  // Without this fallback, a transient HEAD failure silently selects an old cache and then fails
+  // the freshness check even though a current database is available.
+  if (!generation || !lastModified) {
+    const metadataUrl = "https://storage.googleapis.com/storage/v1/b/osv-vulnerabilities/o/npm%2Fall.zip";
+    const metadata = spawnSync("curl", ["-sS", "--fail", "--max-time", "60", metadataUrl],
+      { encoding: "utf8", shell: false });
+    if (metadata.status === 0) {
+      try {
+        const parsed = JSON.parse(metadata.stdout);
+        generation = generation ?? String(parsed.generation ?? "");
+        lastModified = lastModified ?? parsed.updated;
+      } catch {
+        // Keep the cache path below. Freshness still decides whether it is trustworthy.
+      }
+    }
+  }
 
   // Already holding the exact object the bucket is serving? Then no 222MB download.
-  if (databaseChoice({ cached, liveGeneration: generation, downloaded: false }).use === "cache") return cached;
+  if (databaseChoice({ cached, liveGeneration: generation, downloaded: false }).reason === "current") return cached;
 
-  const downloaded = Boolean(generation && lastModified && download(databaseUrl, databasePath, 900));
+  // A failed curl may leave a partial file. Keep the previous archive intact until the
+  // replacement finishes, and pin the generation so HEAD metadata describes these bytes.
+  const pendingPath = `${databasePath}.pending`;
+  const versionedUrl = new URL(databaseUrl);
+  if (generation) versionedUrl.searchParams.set("generation", generation);
+  const downloaded = Boolean(generation && lastModified && download(versionedUrl.href, pendingPath, 900));
   const choice = databaseChoice({ cached, liveGeneration: generation, downloaded });
 
   if (choice.use === "downloaded") {
     const meta = { generation, lastModified, retrievedAt: new Date().toISOString() };
+    renameSync(pendingPath, databasePath);
     writeFileSync(databaseMetaPath, `${JSON.stringify(meta, null, 2)}\n`);
     return meta;
   }
+  rmSync(pendingPath, { force: true });
   if (choice.use === "cache") {
     console.error("buildit_audit_database_download_failed_using_cache");
     return cached;
@@ -145,7 +171,11 @@ function scan(binary) {
   if (verdict.kind === "failed") {
     fail(verdict.code, output.split("\n").filter(Boolean).slice(-20).join("\n"));
   }
-  return advisoriesFromReport(JSON.parse(readFileSync(report, "utf8")));
+  let advisories;
+  try { advisories = advisoriesFromReport(JSON.parse(readFileSync(report, "utf8"))); }
+  catch { fail("buildit_audit_report_invalid", "The scanner report is not a valid vulnerability result; no clean verdict is available."); }
+  if (result.status === 1 && advisories.length === 0) fail("buildit_audit_report_inconsistent", "The scanner signaled findings but the report contains no advisories.");
+  return advisories;
 }
 
 const binary = ensureScanner();

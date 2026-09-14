@@ -72,3 +72,29 @@ describe("model broker HTTP boundary", () => {
     expect(generateWithRetry).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("accounted invocation protocol", () => {
+  it("performs exactly one provider attempt and returns paid failure usage", async () => {
+    const { body, token } = fixture({ invocationId: "invocation-1" });
+    const generate = vi.fn(async () => { throw new ProviderError("truncated", undefined, undefined, { inputTokens: 10, outputTokens: 90, usageKnown: true }); });
+    const generateWithRetry = vi.fn();
+    const response = await handleModelInvocation(new Request("https://broker/api/model", { method: "POST", body, headers: { authorization: `Bearer ${token}` } }), {
+      grantSecret: secret, consume: async () => true, now,
+      broker: { withCredential: async (_id: string, _access: unknown, use: (provider: "gemini", key: string) => Promise<unknown>) => use("gemini", "test") } as never,
+      providers: { generate, generateWithRetry } as never,
+    });
+    expect(generate).toHaveBeenCalledTimes(1); expect(generateWithRetry).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({ invocationId: "invocation-1", error: "truncated", usage: { inputTokens: 10, outputTokens: 90, usageKnown: true } });
+  });
+  it("returns a verified Gemini fallback to the worker for a separate reservation", async () => {
+    const { body, token } = fixture({ invocationId: "invocation-2" });
+    const generate = vi.fn(async () => { throw new ProviderError("model_unavailable", 404); });
+    const response = await handleModelInvocation(new Request("https://broker/api/model", { method: "POST", body, headers: { authorization: `Bearer ${token}` } }), {
+      grantSecret: secret, consume: async () => true, now,
+      broker: { withCredential: async (_id: string, _access: unknown, use: (provider: "gemini", key: string) => Promise<unknown>) => use("gemini", "test") } as never,
+      providers: { generate, validateKey: async () => ({ availableModels: ["gemini-2.5-flash"] }) } as never,
+    });
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(await response.json()).toMatchObject({ invocationId: "invocation-2", notCharged: true, providerStatus: 404, availableModels: ["gemini-2.5-flash"] });
+  });
+});

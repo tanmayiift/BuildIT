@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-09-14T14:05:40Z",
+  "command": "BUILDIT_E2E_BASE_URL=http://127.0.0.1:3107 pnpm test:e2e",
+  "scope": "BuildIT local browser suite",
+  "plannedTests": 207,
+  "passedBeforeBrowserFailure": 2,
+  "status": "blocked_locally_ci_equivalent_passed",
+  "reason": "macOS Chromium headless helper terminated before page assertions: bootstrap_check_in org.chromium.Chromium.MachPortRendezvousServer: Permission denied (1100).",
+  "applicationReached": true,
+  "ciEquivalent": {
+    "workflow": "Build and test",
+    "runId": 34811746547,
+    "jobId": 104005470869,
+    "conclusion": "success",
+    "scope": "Chromium install plus pnpm test:e2e on GitHub Actions; this verifies the suite can run in CI, not the deployed production journey."
+  },
+  "externalPaidCalls": 0,
+  "nextAction": "Run the suite against the deployed immutable revision; retain the 45/45 CUA Chrome matrix and the passed CI execution as separate evidence."
+}

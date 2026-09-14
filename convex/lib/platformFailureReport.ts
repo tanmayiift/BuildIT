@@ -78,7 +78,7 @@ function body(reason: PlatformFailureReason, detail: string | undefined, solePro
   }
   if (reason === "model_unavailable") {
     return ["The connected model key could not be used for this review: the provider refused it, or the selected model is not available to that key.",
-      "No code decision was made and nothing was charged.",
+      "No code decision was made. Earlier model attempts may have incurred charges; see Usage for recorded estimates and any unresolved calls.",
       "Check the model connection in BuildIT, then start a new review. Retrying without changing it will fail the same way.",
       ...(soleProvider
         ? ["This workspace has one model provider connected. With a second one, BuildIT would have restarted this review on it rather than stopping."]
@@ -91,12 +91,12 @@ function body(reason: PlatformFailureReason, detail: string | undefined, solePro
   }
   if (reason === "platform_misconfigured") {
     return ["BuildIT is not fully configured for this workspace, so the review could not start.",
-      "No code decision was made and nothing was charged.",
+      "No code decision was made. Earlier model attempts may have incurred charges; see Usage for recorded estimates and any unresolved calls.",
       "This one is on the BuildIT side rather than yours - an operator has to finish the setup. Retrying will not help until they do."];
   }
   if (reason === "sandbox_unavailable") {
     return ["The isolated environment BuildIT runs your checks in could not be reached, so no check was run.",
-      "No code decision was made and nothing was charged.",
+      "No code decision was made. Earlier model attempts may have incurred charges; see Usage for recorded estimates and any unresolved calls.",
       "This is BuildIT's infrastructure rather than anything in your pull request. Starting a new review is the right move once it is back."];
   }
   return ["BuildIT stopped because a required platform step failed.",

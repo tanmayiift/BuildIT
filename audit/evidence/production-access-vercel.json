@@ -1,0 +1,19 @@
+{
+  "generatedAt": "2026-09-14T05:08:48.566964+00:00",
+  "readOnly": true,
+  "teamId": "team_0C3dsIfWxzBINeWinBvtOLMC",
+  "projects": [
+    {
+      "expectedName": "buildit-agentic-review",
+      "expectedId": "prj_rU8IPaf1laMTTmQEhGun9mRxXmGA",
+      "metadataStatus": 403,
+      "errorType": null
+    },
+    {
+      "expectedName": "buildit-content-broker",
+      "expectedId": "prj_tacCioktOE1TKZwHcq0Hxu9VYOU0",
+      "metadataStatus": 403,
+      "errorType": null
+    }
+  ]
+}

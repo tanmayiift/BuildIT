@@ -3,9 +3,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { forbiddenInlineSourceFieldPattern, storedTextClassifications } from "../../convex/dataClassification";
 
-const schemaPath = fileURLToPath(new URL("../../convex/schema.ts", import.meta.url));
-const schema = readFileSync(schemaPath, "utf8");
-const stringFields = [...schema.matchAll(/([A-Za-z][A-Za-z0-9]*):\s*v\.(?:optional\(v\.)?string/g)].map((match) => match[1]);
+const schema = ["schema.ts", "accountingSchema.ts", "notificationSchema.ts", "trackerOAuthSchema.ts"].map(file => readFileSync(fileURLToPath(new URL(`../../convex/${file}`, import.meta.url)), "utf8")).join("\n");
+const stringFields = [...schema.matchAll(/([A-Za-z][A-Za-z0-9]*):\s*v\.(?:(?:optional|array)\(v\.)*string/g)].map((match) => match[1]);
 
 describe("database data classification", () => {
   it("requires an approved classification for every free-text field", () => {

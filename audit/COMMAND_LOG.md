@@ -40,3 +40,15 @@ command below. See DEF-014.
 | 25 | `node apps/cli/dist/index.js <10 negative cases>` | CLI negative-path testing | 4 | All malformed inputs rejected with stable codes; exit 4 | — |
 | 26 | `pnpm smoke:aws-boundary` | AWS boundary proof | **not run** | Read-only, but targets the **production** CloudFormation stack and needs AWS credentials. Skipped per the no-production-contact constraint | BLOCK-01 |
 | 27 | `pnpm test:e2e:tenant-isolation` | Two-real-user isolation | **not run** | Config hard-fails without an HTTPS production target and two real logged-in storage states | BLOCK-02 |
+
+
+## 2026-09-14 implementation run
+
+Baseline: e9dc368b4f4919e9377d73c744680c731643a6fa. BuildIT only.
+
+| Command/check | Purpose | Result | Evidence |
+|---|---|---|---|
+| git status --porcelain; git rev-parse HEAD | Preserve starting state | clean, e9dc368 | task tool output |
+| pnpm verify (planning baseline) | Existing checks before repair | exit 0; scheduled publication warnings require investigation | task tool output |
+| In-memory current handlers and UI expressions | Reproduce numeric bugs without service writes | 20,001 →20,000 no flag; $12.50 →$0/0%; at-cap false overflow | task tool output |
+| Read README, environment example, package instructions, Next client/testing docs | Confirm project setup and editing rules | complete; no secret values read into report | task tool output |

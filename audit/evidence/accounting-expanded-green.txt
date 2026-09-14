@@ -1,0 +1,13 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ tests/architecture/data-classification.test.ts (3 tests) 2ms
+ ✓ packages/providers/test/accounting.test.ts (3 tests) 4ms
+ ✓ tests/architecture/public-function-inventory.test.ts (5 tests) 11ms
+ ✓ convex/accounting.test.ts (13 tests) 95ms
+
+ Test Files  4 passed (4)
+      Tests  24 passed (24)
+   Start at  08:30:56
+   Duration  436ms (transform 149ms, setup 0ms, collect 298ms, tests 112ms, environment 0ms, prepare 154ms)
+

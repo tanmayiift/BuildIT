@@ -34,11 +34,15 @@ const rowCeiling = 2_000;
 export const summary = query({
   args: {},
   handler: async (ctx) => {
-    const [reviews, findings, ledger] = await Promise.all([
-      ctx.db.query("reviews").order("desc").take(rowCeiling),
-      ctx.db.query("findings").order("desc").take(rowCeiling),
-      ctx.db.query("usageLedger").withIndex("by_time").order("desc").take(rowCeiling),
+    const [reviewRows, findingRows, ledgerRows] = await Promise.all([
+      ctx.db.query("reviews").order("desc").take(rowCeiling + 1),
+      ctx.db.query("findings").order("desc").take(rowCeiling + 1),
+      ctx.db.query("usageLedger").withIndex("by_time").order("desc").take(rowCeiling + 1),
     ]);
+
+    const reviews = reviewRows.slice(0, rowCeiling), findings = findingRows.slice(0, rowCeiling), ledger = ledgerRows.slice(0, rowCeiling);
+    const decisive = new Set(["checks_passed", "changes_requested", "delivered"]);
+    const distinctCompletedPullRequests = new Set(reviews.filter(review => review.completedAt !== undefined && decisive.has(review.status)).map(review => `${review.repositoryId}:${review.prNumber}`)).size;
 
     // Present statuses only. Zero-filling the whole enum would put eighteen rows on the page,
     // most of them stating that something never happened.
@@ -67,19 +71,21 @@ export const summary = query({
       rowCeiling,
       reviews: {
         counted: reviews.length,
-        truncated: reviews.length === rowCeiling,
+        truncated: reviewRows.length > rowCeiling,
+        distinctCompletedPullRequests,
         byStatus,
         repositoriesReviewed,
       },
       findings: {
         counted: findings.length,
-        truncated: findings.length === rowCeiling,
+        truncated: findingRows.length > rowCeiling,
       },
       spend: {
+        costPending: modelRows.some(row => row.costStatus === "unknown"),
         modelSpendUsd,
         modelTokens,
         counted: ledger.length,
-        truncated: ledger.length === rowCeiling,
+        truncated: ledgerRows.length > rowCeiling,
       },
     };
   },
@@ -103,43 +109,31 @@ const evidenceOwners = new Set(["tanmayiift"]);
 export const recentPublicReviews = query({
   args: {},
   handler: async ctx => {
-    // Same bound and same reasoning as summary: this feeds a live subscription, and an unbounded
-    // read of an append-only table eventually crosses Convex's per-query read limit.
-    const repositories = (await ctx.db.query("repositories").take(rowCeiling))
-      .filter(item => item.visibility === "public" && evidenceOwners.has(item.owner));
+    const repositoryLimit = 50, reviewsPerRepository = 100, listLimit = 40;
+    const repositoryRows = (await Promise.all([...evidenceOwners].map(owner => ctx.db.query("repositories")
+      .withIndex("by_owner_visibility", q => q.eq("owner", owner).eq("visibility", "public")).take(repositoryLimit + 1)))).flat();
+    const repositories = repositoryRows.slice(0, repositoryLimit);
     const byId = new Map(repositories.map(item => [item._id, item]));
-    if (!byId.size) return { generatedAt: Date.now(), reviews: [], repositoriesListed: 0 };
-
-    const reviews = (await ctx.db.query("reviews").order("desc").take(rowCeiling))
-      .filter(item => byId.has(item.repositoryId) && item.completedAt !== undefined);
-
-    // One row per pull request, newest first. A pull request reviewed six times should appear once
-    // with its latest verdict, not six times inflating the list it exists to be honest about.
+    const pages = await Promise.all(repositories.map(repository => ctx.db.query("reviews")
+      .withIndex("by_repo_completed", q => q.eq("repositoryId", repository._id).gt("completedAt", undefined))
+      .order("desc").take(reviewsPerRepository + 1)));
+    const reviews = pages.flatMap((page, index) => page.slice(0, reviewsPerRepository)
+      .filter(review => review.organizationId === repositories[index]!.organizationId));
     const latest = new Map<string, typeof reviews[number]>();
     for (const review of reviews) {
       const key = `${review.repositoryId}:${review.prNumber}`;
       const held = latest.get(key);
       if (!held || (review.completedAt ?? 0) > (held.completedAt ?? 0)) latest.set(key, review);
     }
-
+    const partial = { repositories: repositoryRows.length > repositoryLimit, reviews: pages.some(page => page.length > reviewsPerRepository), list: latest.size > listLimit };
     return {
-      generatedAt: Date.now(),
-      repositoriesListed: byId.size,
-      reviews: [...latest.values()]
-        .sort((left, right) => (right.completedAt ?? 0) - (left.completedAt ?? 0))
-        .slice(0, 40)
-        .map(review => {
-          const repository = byId.get(review.repositoryId)!;
-          return {
-            owner: repository.owner,
-            name: repository.name,
-            prNumber: review.prNumber,
-            // The status literal from validators.ts, not prose - the page maps it, so the wording
-            // stays in one place and a new status cannot silently render as a blank cell.
-            status: review.status,
-            completedAt: review.completedAt ?? 0,
-          };
-        }),
+      generatedAt: Date.now(), repositoriesListed: byId.size,
+      truncated: Object.values(partial).some(Boolean), partial,
+      limits: { repositories: repositoryLimit, reviewsPerRepository, list: listLimit },
+      reviews: [...latest.values()].sort((left, right) => (right.completedAt ?? 0) - (left.completedAt ?? 0)).slice(0, listLimit).map(review => {
+        const repository = byId.get(review.repositoryId)!;
+        return { owner: repository.owner, name: repository.name, prNumber: review.prNumber, status: review.status, completedAt: review.completedAt! };
+      }),
     };
   },
 });

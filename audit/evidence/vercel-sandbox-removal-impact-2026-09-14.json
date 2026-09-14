@@ -1,0 +1,40 @@
+{
+  "checkedAt": "2026-09-14T11:46:00Z",
+  "scope": "BuildIT Vercel Sandbox dependency and subscription-exit impact",
+  "removalApplied": false,
+  "runner": {
+    "package": "packages/runner/src/vercelSandbox.ts",
+    "provider": "@vercel/sandbox",
+    "region": "cdg1",
+    "networkPolicy": "deny-all",
+    "persistent": false,
+    "workloadBudgetMs": 700000,
+    "serverlessCeilingMs": 800000,
+    "credentials": "short-lived broker-scoped token, teamId and projectId"
+  },
+  "productionCallers": [
+    "packages/broker/src/execution-http.ts -> POST /api/execute",
+    "convex/reviewValidationWorker.ts -> POST /api/execute",
+    "convex/reviewAutofixWorker.ts -> POST /api/execute"
+  ],
+  "dependentCapabilities": [
+    "base and head revision validation",
+    "tests, lint and typecheck execution",
+    "gitleaks and osv scanner evidence",
+    "flaky-check diagnostics and failure classification",
+    "review artifacts and publication gating",
+    "Autofix safety validation"
+  ],
+  "impactIfRemoved": "Without an equivalent isolated executor, review validation cannot run. Reviews that require execution will become unavailable or partial, findings cannot be safely published, and Autofix cannot prove its candidate. Static model review and Ask may still start, but their end-to-end result is not preserved.",
+  "requiredReplacementProof": [
+    "exact base/head commit workspace",
+    "deny-all egress after registry-only install",
+    "no customer credentials in the execution environment",
+    "digest-pinned runtime or image",
+    "at least the current 700000ms workload and 800000ms request budgets",
+    "stop and cleanup guarantees",
+    "tenant limits and artifact access controls",
+    "production review, Ask, Autofix, cancellation, retry, stale-commit and publication-failure tests"
+  ],
+  "decision": "Keep the Sandbox dependency and the BuildIT Pro entitlement until an equivalent executor is deployed and the required production journeys pass."
+}

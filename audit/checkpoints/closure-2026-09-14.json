@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "project": "BuildIT",
+  "lastCompleted": "local-release-gates-and-aws-console-read",
+  "phases": {
+    "local-baseline": "passed",
+    "execution-state-machine": "passed",
+    "convex-execution-job-record": "passed",
+    "grafana-legacy-pause": "blocked-credential-handoff",
+    "immutable-production-release": "blocked-checkout-write-and-external-credentials",
+    "production-e2e": "blocked-production-web-404-baseline-broker",
+    "aws-inventory-read": "partial-console-read-content-parse-blocked",
+    "tracker-oauth": "blocked-credentials",
+    "customer-email": "blocked-sending-domain"
+  },
+  "resume": {
+    "next": "publish-reviewed-patch-then-deploy-broker-convex-web-and-rerun-production-e2e",
+    "completedCursors": ["execution-job-state-and-replay-tests", "local-verify-1971-tests", "aws-console-manifest-checksum-csv-observed", "osv-head-metadata-fallback-test"],
+    "doNotRestart": ["local-baseline", "execution-state-machine", "convex-execution-job-record"]
+  },
+  "externalSpendUsd": 0,
+  "externalSpendLimitUsd": 10
+}

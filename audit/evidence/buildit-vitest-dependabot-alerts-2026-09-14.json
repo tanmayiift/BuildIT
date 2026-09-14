@@ -1,0 +1,110 @@
+{
+  "observedAt": "2026-09-14T06:23:23.326006+00:00",
+  "readOnly": true,
+  "repository": "tanmayiift/BuildIT",
+  "defaultBranch": "main",
+  "defaultBranchCommit": "e9dc368b4f4919e9377d73c744680c731643a6fa",
+  "inventoryComplete": true,
+  "openAlertCount": 3,
+  "distinctAdvisoryCount": 1,
+  "alerts": [
+    {
+      "number": 3,
+      "state": "open",
+      "createdAt": "2026-09-14T06:00:15Z",
+      "updatedAt": "2026-09-14T06:00:15Z",
+      "url": "https://github.com/tanmayiift/BuildIT/security/dependabot/3",
+      "package": "vitest",
+      "ecosystem": "npm",
+      "manifestPath": "pnpm-lock.yaml",
+      "dependencyScope": "development",
+      "advisoryId": "GHSA-82fw-gwwq-j7x9",
+      "cveId": "CVE-2026-84373",
+      "summary": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+      "severity": "medium",
+      "advisoryPublishedAt": "2026-09-08T20:46:45Z",
+      "vulnerableVersionRange": ">= 2.1.0, < 4.1.11",
+      "firstPatchedVersion": "4.1.11"
+    },
+    {
+      "number": 2,
+      "state": "open",
+      "createdAt": "2026-09-14T06:00:15Z",
+      "updatedAt": "2026-09-14T06:00:15Z",
+      "url": "https://github.com/tanmayiift/BuildIT/security/dependabot/2",
+      "package": "@vitest/mocker",
+      "ecosystem": "npm",
+      "manifestPath": "pnpm-lock.yaml",
+      "dependencyScope": "development",
+      "advisoryId": "GHSA-82fw-gwwq-j7x9",
+      "cveId": "CVE-2026-84373",
+      "summary": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+      "severity": "medium",
+      "advisoryPublishedAt": "2026-09-08T20:46:45Z",
+      "vulnerableVersionRange": ">= 2.1.0, < 4.1.11",
+      "firstPatchedVersion": "4.1.11"
+    },
+    {
+      "number": 1,
+      "state": "open",
+      "createdAt": "2026-09-14T06:00:14Z",
+      "updatedAt": "2026-09-14T06:00:14Z",
+      "url": "https://github.com/tanmayiift/BuildIT/security/dependabot/1",
+      "package": "vitest",
+      "ecosystem": "npm",
+      "manifestPath": "package.json",
+      "dependencyScope": "development",
+      "advisoryId": "GHSA-82fw-gwwq-j7x9",
+      "cveId": "CVE-2026-84373",
+      "summary": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+      "severity": "medium",
+      "advisoryPublishedAt": "2026-09-08T20:46:45Z",
+      "vulnerableVersionRange": ">= 2.1.0, < 4.1.11",
+      "firstPatchedVersion": "4.1.11"
+    }
+  ],
+  "defaultBranchFiles": {
+    "vitestManifestRange": "^3.2.4",
+    "lockedVersions": {
+      "vitest": [
+        "3.2.7"
+      ],
+      "@vitest/mocker": [
+        "3.2.7"
+      ]
+    },
+    "packageSha256": "9885c4c67932e2ad66a27d189228781e7f2961b0231e336be88c843a1c895471",
+    "lockSha256": "8aca5da95866df9b8fb76eaf1564c21fc41e8743138563398acb0e48a79df484"
+  },
+  "preparedLocalFiles": {
+    "vitestManifestRange": "^4.1.11",
+    "lockedVersions": {
+      "vitest": [
+        "4.1.11"
+      ],
+      "@vitest/mocker": [
+        "4.1.11"
+      ]
+    },
+    "packageSha256": "603cfde69d5c2ffce30e42503a8b40854ac3e150fc42834c407de19dc281006b",
+    "lockSha256": "031602adc8bbd0d7179516baf2579f5f843dea63ae197f5e4de9cb9c0cb92a6e"
+  },
+  "auditPolicy": {
+    "scanner": "osv-scanner 2.2.3",
+    "lockfile": "pnpm-lock.yaml",
+    "dependencyScope": "entire lockfile including development packages",
+    "severityFiltering": false,
+    "maximumCachedDatabaseAgeDays": 7,
+    "onVulnerability": "fail release gate",
+    "onMissingOrMalformedReport": "fail release gate",
+    "priorRedEvidence": "audit/evidence/security-vitest-advisory-red.log",
+    "existingGreenEvidence": "audit/evidence/security-live-final.log",
+    "cachedDatabaseMetadata": {
+      "generation": "1789361712318289",
+      "lastModified": "Mon, 14 Sep 2026 04:55:12 GMT",
+      "retrievedAt": "2026-09-14T05:51:00.228Z"
+    }
+  },
+  "conclusion": "Already fixed in prepared local package and lockfile at 4.1.11; GitHub default branch still contains vulnerable versions. Publish prepared repair and verify GitHub rescan; do not dismiss or mute.",
+  "changesPerformed": "No dependency/configuration changes, alert dismissal, notification changes or external writes in this check."
+}

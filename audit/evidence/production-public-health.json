@@ -1,0 +1,19 @@
+{
+  "generatedAt": "2026-09-14T05:19:36.808013+00:00",
+  "readOnly": true,
+  "targets": [
+    {
+      "url": "https://buildit-agentic-review.vercel.app/api/health",
+      "statusCode": 404
+    },
+    {
+      "url": "https://buildit-content-broker.vercel.app/api/health",
+      "statusCode": 200,
+      "publicMetadata": {
+        "service": "buildit-content-broker",
+        "status": "available",
+        "commit": "e9dc368b4f4919e9377d73c744680c731643a6fa"
+      }
+    }
+  ]
+}

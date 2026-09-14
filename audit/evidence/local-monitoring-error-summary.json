@@ -1,0 +1,318 @@
+{
+  "completedAt": "2026-09-14T06:19:26.027966+00:00",
+  "result": "passed",
+  "scope": "buildit-audit-error-20260914",
+  "scenario": "Actual isolated Prometheus service stopped and restored; query failures became delivered DatasourceError alerts, then resolved",
+  "productionTest": false,
+  "paidCalls": 0,
+  "testedRules": 14,
+  "businessThresholdScenariosTested": false,
+  "normalBeforeFailure": true,
+  "normalAfterRecovery": true,
+  "currentRuleChanges": [
+    {
+      "uid": "e8ce7a9b-5f06-58cb-bc90-52d3a1972668",
+      "title": "BuildITHighFailureRate",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "3323ba18-b9a2-5bdd-9c3b-1a1b2110afb2",
+      "title": "BuildITP95LatencyHigh",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "a621fb37-6110-5a9b-81e8-6fcd05bbaf7d",
+      "title": "BuildITTelemetrySilent",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "600995c2-5186-5d4e-85ed-a313ee7aa699",
+      "title": "BuildITCriticalBoundaryFailure",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "99a89aa8-cc0b-57c5-bc40-03f1afd54bc4",
+      "title": "BuildITQueueDepthHigh",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "859f7f43-dd01-560c-a42e-f77ea1439683",
+      "title": "BuildITProviderFailure",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "fc3a8532-0ef0-5842-86fa-0660a1879afe",
+      "title": "BuildITProviderRetryRateHigh",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "b21aebde-0589-59ce-913d-230beae6dcd6",
+      "title": "BuildITRunnerFailure",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "b9897bbc-554d-5acd-90d4-54fae80b68d3",
+      "title": "BuildITRunnerCapacityExhausted",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "9534bcc7-3d5a-5e86-9c9a-13d5a8281bb3",
+      "title": "BuildITArtifactDeletionBacklog",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "a542f9b4-2f2f-5038-a00e-ce69e9c45ad1",
+      "title": "BuildITWebhookSignatureSpike",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "5bc2f8b6-20bb-51a2-b1eb-acbfda69751d",
+      "title": "BuildITLoopGuardTrip",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "ab2241ca-678e-5b45-bad0-cb412c516183",
+      "title": "BuildITStaleCheck",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    },
+    {
+      "uid": "90ac7cae-4fd6-580a-8f74-bdee00f3228f",
+      "title": "BuildITBudgetExhaustionSpike",
+      "fields": [
+        "execErrState",
+        "notification_settings"
+      ]
+    }
+  ],
+  "notifications": {
+    "firing": [
+      {
+        "rulename": "BuildITArtifactDeletionBacklog",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITBudgetExhaustionSpike",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITCriticalBoundaryFailure",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITHighFailureRate",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITLoopGuardTrip",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITP95LatencyHigh",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITProviderFailure",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITProviderRetryRateHigh",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITQueueDepthHigh",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITRunnerCapacityExhausted",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITRunnerFailure",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITStaleCheck",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITTelemetrySilent",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      },
+      {
+        "rulename": "BuildITWebhookSignatureSpike",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "resolved": [
+      {
+        "rulename": "BuildITArtifactDeletionBacklog",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:17:00Z"
+      },
+      {
+        "rulename": "BuildITBudgetExhaustionSpike",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:17:00Z"
+      },
+      {
+        "rulename": "BuildITCriticalBoundaryFailure",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:18:00Z"
+      },
+      {
+        "rulename": "BuildITHighFailureRate",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:18:00Z"
+      },
+      {
+        "rulename": "BuildITLoopGuardTrip",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:17:00Z"
+      },
+      {
+        "rulename": "BuildITP95LatencyHigh",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:18:00Z"
+      },
+      {
+        "rulename": "BuildITProviderFailure",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:18:00Z"
+      },
+      {
+        "rulename": "BuildITProviderRetryRateHigh",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:17:00Z"
+      },
+      {
+        "rulename": "BuildITQueueDepthHigh",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:18:00Z"
+      },
+      {
+        "rulename": "BuildITRunnerCapacityExhausted",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:17:00Z"
+      },
+      {
+        "rulename": "BuildITRunnerFailure",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:17:00Z"
+      },
+      {
+        "rulename": "BuildITStaleCheck",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:17:00Z"
+      },
+      {
+        "rulename": "BuildITTelemetrySilent",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:18:00Z"
+      },
+      {
+        "rulename": "BuildITWebhookSignatureSpike",
+        "startsAt": "2026-09-14T06:13:00Z",
+        "endsAt": "2026-09-14T06:17:00Z"
+      }
+    ]
+  },
+  "captureMessageCount": 9,
+  "earliestErrorAt": "2026-09-14T06:13:00Z",
+  "latestErrorResolvedAt": "2026-09-14T06:18:00Z",
+  "notificationDelayObserved": "Grafana error instances remained active until their emitted endsAt (latest06:18:00Z), after query health recovered; all resolved notifications were captured after expiry. No expiry override or rule pause was used.",
+  "receiver": {
+    "name": "BuildIT alerts (Tanmay)",
+    "localIntegration": "webhook",
+    "url": "http://capture:8080/notifications",
+    "actualEmailSent": false
+  },
+  "isolation": {
+    "network": "buildit-audit-error-20260914_audit",
+    "internal": true,
+    "hostPortsPublished": 0,
+    "containers": [
+      {
+        "name": "buildit-audit-error-20260914-capture-1",
+        "image": "python:3.12-alpine"
+      },
+      {
+        "name": "buildit-audit-error-20260914-collector-1",
+        "image": "otel/opentelemetry-collector-contrib:0.135.0"
+      },
+      {
+        "name": "buildit-audit-error-20260914-grafana-1",
+        "image": "grafana/grafana:12.1.1"
+      },
+      {
+        "name": "buildit-audit-error-20260914-prometheus-1",
+        "image": "prom/prometheus:v3.6.0"
+      }
+    ],
+    "createdDisposableVolumes": [
+      "b1bf659833934fc556d53e3c651b8b1b413e3bcb7a33d16b7ed864d825d1fdd1"
+    ]
+  },
+  "versions": {
+    "grafana": "12.1.1",
+    "collector": "0.135.0",
+    "prometheus": "3.6.0"
+  },
+  "limitations": [
+    "Local Grafana12.1.1; does not prove production datasource availability, timing or email delivery",
+    "Unchanged business thresholds/pending periods were preserved but their 14 individual breach cases were not exercised",
+    "The existing receiver name was mapped only to local webhook capture; no real recipient integration or external service was contacted"
+  ]
+}

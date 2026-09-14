@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
 import { terminalStatuses } from "./lib/lifecycle";
+import { assertTrackerReviewActive, trackerCredentialPayload } from "./lib/trackerCredential";
 import { coverageGap } from "./validators";
 
 export const contextScope = internalQuery({
@@ -11,16 +12,19 @@ export const contextScope = internalQuery({
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
     const repository = await ctx.db.get(review.repositoryId), installation = repository ? await ctx.db.get(repository.installationId) : null;
     if (!repository || !repository.enabled || !installation || installation.status !== "active" || installation.organizationId !== args.organizationId) throw new ConvexError("repository_unavailable");
+    await assertTrackerReviewActive(ctx, args);
     // Scoped at the index. by_status is global, so this read every tenant's encrypted tracker
     // tokens into memory before filtering them out in JavaScript.
-    const trackers=(await ctx.db.query("trackerConnections").withIndex("by_org_provider",q=>q.eq("organizationId",args.organizationId)).collect()).filter(item=>item.status==="active"&&(!item.repositoryId||item.repositoryId===repository._id)&&(!item.expiresAt||item.expiresAt>Date.now()));
+    const pages = await Promise.all([repository._id, undefined].map(repositoryId => ctx.db.query("trackerConnections").withIndex("by_org_repo_status", q => q.eq("organizationId", args.organizationId).eq("repositoryId", repositoryId).eq("status", "active")).order("desc").take(51)));
+    if (pages.some(page => page.length > 50)) throw new ConvexError("tracker_connection_limit");
+    const trackers = pages.flat().filter(item => item.credentialFormat === "oauth_bundle_v1" || !item.expiresAt || item.expiresAt > Date.now());
     return { organizationId: args.organizationId, repositoryId: repository._id, reviewId: review._id, reviewPathFilters: repository.reviewPathFilters, trustedRefSha: review.trustedRefSha, approvedConfigHash: repository.approvedConfigHash, approvedConfigBy: repository.approvedConfigBy,
       installationId: installation.installationId, githubRepositoryId: repository.githubRepositoryId,
       prNumber: review.prNumber, headSha: review.headSha, baseSha: review.baseSha,
-      executionGeneration: review.executionGeneration, expiresAt: review.expiresAt,trackers:trackers.map(item=>({documentId:item._id,id:item.credentialScopeId,organizationId:String(item.organizationId),...(item.repositoryId?{repositoryId:String(item.repositoryId)}:{}),provider:item.provider,workspaceId:item.workspaceId,ciphertext:item.encryptedAccessToken,nonce:item.nonce,tag:item.authTag,wrappedDataKey:item.wrappedDataKey,kmsKeyId:item.kmsKeyId,envelopeVersion:item.envelopeVersion,keyVersion:item.keyVersion,aadDigest:item.aadDigest,status:"active" as const,createdBy:item.createdBy,createdAt:item.createdAt})) };
+      executionGeneration: review.executionGeneration, expiresAt: review.expiresAt,trackers:trackers.map(trackerCredentialPayload) };
   },
 });
-export const markTrackerUsed=internalMutation({args:{organizationId:v.id("organizations"),reviewId:v.id("reviews"),connectionId:v.id("trackerConnections"),expectedHeadSha:v.string(),expectedGeneration:v.number(),now:v.number()},handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId),connection=await ctx.db.get(args.connectionId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||!connection||connection.organizationId!==args.organizationId||connection.status!=="active"||(connection.expiresAt&&connection.expiresAt<=args.now))throw new ConvexError("tracker_connection_unavailable");await ctx.db.patch(connection._id,{lastUsedAt:args.now,updatedAt:args.now})}});
+export const markTrackerUsed=internalMutation({args:{organizationId:v.id("organizations"),reviewId:v.id("reviews"),connectionId:v.id("trackerConnections"),expectedHeadSha:v.string(),expectedGeneration:v.number(),now:v.number()},handler:async(ctx,args)=>{const {review}=await assertTrackerReviewActive(ctx,args),connection=await ctx.db.get(args.connectionId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||!connection||connection.organizationId!==args.organizationId||connection.status!=="active"||(connection.repositoryId&&connection.repositoryId!==review.repositoryId)||(connection.expiresAt!==undefined&&connection.expiresAt<=Date.now()))throw new ConvexError("tracker_connection_unavailable");await ctx.db.patch(connection._id,{lastUsedAt:args.now,updatedAt:args.now})}});
 
 export const reserve = internalMutation({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number(),

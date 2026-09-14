@@ -69,7 +69,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # The dependency gate scans a local copy of the OSV database rather than calling npm's
       # advisory endpoint, which stopped answering and was failing roughly one run in five after
-      # nine minutes of retries. The database is 222MB, so it is cached per day; a miss just
+      # nine minutes of retries. The database is 222MB, so it is restored between runs; a miss
       # downloads it again, and a database too old to trust fails the gate rather than passing.
       - name: Cache the OSV vulnerability database
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -95,16 +95,17 @@ jobs:
       # written to detect drift from it and had zero references, so nothing has ever compared the
       # committed template against the live stack.
       - name: AWS artifact boundary matches the template
+        if: ${{ github.event_name != 'pull_request' }}
         env:
           BUILDIT_AWS_REGION: ${{ secrets.BUILDIT_AWS_REGION }}
           BUILDIT_AWS_STACK: ${{ secrets.BUILDIT_AWS_STACK }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$BUILDIT_AWS_STACK" ]; then
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$BUILDIT_AWS_STACK" ]; then
             echo "buildit_aws_boundary_not_configured: no AWS credentials, so the artifact boundary was NOT checked."
             echo "  The 7-day retention backstop and Ireland-only assertion in infra/aws/artifacts.yaml are unverified against the live stack."
-            exit 0
+            exit 1
           fi
           pnpm smoke:aws-boundary
       - name: Evaluation gate
@@ -117,11 +118,14 @@ jobs:
       # in this repository, validated and green. A gate that reads only the file cannot tell you
       # the file is being ignored.
       #
-      # Drift fails the build. A missing token warns loudly and passes: that is a setup task no
-      # commit can fix, and failing every push for it turns the build red for a reason nobody can
-      # act on - which teaches people to ignore a red build, the same habit the noisy alert rules
-      # taught. Once the secret exists this is a real gate.
+      # Missing read credentials block release evidence; offline checks remain separate.
       - name: Alert rules match the deployed stack
+        if: ${{ github.event_name != 'pull_request' }}
         env:
           BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN }}
         run: pnpm alerts:verify
+      - name: Record production-only gates deferred on pull requests
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "buildit_external_gates_deferred: AWS stack and deployed Grafana verification require protected production credentials."
+          echo "  Local security, reliability, rule-definition, dashboard, evaluation, CLI and browser checks still ran above."

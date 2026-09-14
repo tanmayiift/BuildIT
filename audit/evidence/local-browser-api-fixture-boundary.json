@@ -1,0 +1,31 @@
+{
+  "startedAt": "2026-09-14T03:31:38.312Z",
+  "runtime": "v26.8.1",
+  "environment": "loopback-only Convex with simulated identities",
+  "checks": [
+    "A: authenticated workspace and role",
+    "B: authenticated workspace and role",
+    "usage and enforcement share exact budget snapshot",
+    "provider cost appears in budget",
+    "initial USD limit is 100",
+    "legacy reconstruction remains explicitly incomplete",
+    "Ask tokens retained in quantities",
+    "WebSocket metric subscription includes event inserted after subscription"
+  ],
+  "figures": {
+    "before": {
+      "spendUsd": 12.5,
+      "limitUsd": 100,
+      "percent": 12.5,
+      "measuredTokens": 42000
+    },
+    "metricRuns": [
+      1,
+      2
+    ]
+  },
+  "externalPaidCalls": 0,
+  "browserChecks": 0,
+  "status": "failed",
+  "error": "local synthetic invocation obtains atomic reservation"
+}

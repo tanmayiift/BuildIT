@@ -1,10 +1,11 @@
 "use node";
+import { invokeAccountedModel } from "./lib/accountedModel";
 import { createHash } from "node:crypto";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { GitHubAppClient, GitHubRepositoryWriter } from "@buildit/github";
-import { issueArtifactGrant, issueModelInvocationGrant } from "@buildit/security";
+import { issueArtifactGrant } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 
@@ -80,21 +81,12 @@ export const answer = internalAction({
 
       const request = { model: scope.model, system: answerSystem, input: answerInput(buffer.toString("utf8").slice(0, 40_000), args.question),
         schemaName: "ask_answer", schema: answerSchema, maxOutputTokens: 700 };
-      const body = JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
-        stage: "ask", credential: scope.credential, request });
-      const modelGrant = issueModelInvocationGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
-        credentialScopeId: scope.credential.id, provider: scope.provider, model: scope.model, stage: "ask",
-        requestHash: createHash("sha256").update(body).digest("hex") }, Buffer.from(required("MODEL_GRANT_SECRET"), "base64url"));
-      const response = await fetch(`${brokerUrl}/api/model`, { method: "POST",
-        headers: { authorization: `Bearer ${modelGrant}`, "content-type": "application/json" }, body,
-        signal: AbortSignal.timeout(120_000) });
-      // The body is read as text first: a 502 from the edge is HTML, and parsing it as JSON throws
-      // a SyntaxError that hides the real status.
-      const raw = await response.text();
-      let output: { result?: { value?: unknown; inputTokens?: number; outputTokens?: number }; error?: string } = {};
-      try { output = JSON.parse(raw) as typeof output; } catch { { console.error("buildit_ask_unanswered", { reason: "model_non_json" }); return { answered: false, reason: "model_non_json" }; } }
-      if (!response.ok || !output.result) { console.error("buildit_ask_unanswered", { reason: "model_unavailable", status: response.status, error: output.error }); return { answered: false, reason: "model_unavailable" }; }
-      const value = output.result.value as { answer?: unknown; groundedInReview?: unknown } | undefined;
+      const result = await invokeAccountedModel(ctx, { scope: { organizationId: args.organizationId, reviewId: scope.reviewId,
+        expectedHeadSha: scope.headSha, expectedGeneration: scope.executionGeneration }, repositoryId: args.repositoryId,
+        stage: "ask", provider: scope.provider, credential: scope.credential, request, brokerUrl,
+        modelSecret: Buffer.from(required("MODEL_GRANT_SECRET"), "base64url") });
+      // Settlement is durable before answer validation and GitHub publication can fail.
+      const value = result.value as { answer?: unknown; groundedInReview?: unknown } | undefined;
       const text = typeof value?.answer === "string" ? value.answer.trim() : "";
       if (!text) { console.error("buildit_ask_unanswered", { reason: "model_answer_empty" }); return { answered: false, reason: "model_answer_empty" }; }
       // The model said the review does not answer this. Publishing that is the point - it is the
@@ -104,11 +96,6 @@ export const answer = internalAction({
       await writer.upsertIssueComment({ prNumber: args.prNumber, marker,
         body: [grounded ? text : `**The published review does not answer this.** ${text}`, "",
           `> Answered only from the review published for commit \`${scope.headSha.slice(0, 12)}\`. BuildIT did not read the repository again, and it does not merge.`].join("\n") });
-      await ctx.runMutation(internal.reviewAskData.recordAsk, {
-        organizationId: args.organizationId, reviewId: scope.reviewId,
-        inputTokens: output.result?.inputTokens ?? 0, outputTokens: output.result?.outputTokens ?? 0,
-        provider: scope.provider, model: scope.model, now: Date.now(),
-      });
       return { answered: true };
     } finally { await github.revoke(tokenScope); }
   },

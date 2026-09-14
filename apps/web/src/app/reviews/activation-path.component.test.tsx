@@ -16,6 +16,12 @@ describe("activation path", () => {
     expect(screen.getByRole("link", { name: "Model key protected" }).getAttribute("href")).toBe("/setup/model");
     expect(screen.getByRole("link", { name: "Model key protected" }).getAttribute("aria-current")).toBe("step");
   });
+  it("does not treat unexamined evidence as an incomplete setup step", () => {
+    state.funnel = { repositoryConnected: true, modelKeyReady: true, pullRequestPreviewed: true, reviewStarted: true, firstEvidenceReady: null };
+    render(<ActivationPath organizationId="org-a" />);
+    expect(screen.getByText(/Evidence history is incomplete/)).toBeTruthy();
+    expect(screen.queryByText(/Next: Run the review/)).toBeNull();
+  });
   it("names the first evidence moment without claiming safety", () => {
     state.funnel = { repositoryConnected: true, modelKeyReady: true, pullRequestPreviewed: true, reviewStarted: true, firstEvidenceReady: true };
     render(<ActivationPath organizationId="org-a" />);

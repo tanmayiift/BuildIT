@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-09-14T12:22:20Z",
+  "scope": "BuildIT source and local release gates",
+  "externalSpendUsd": 0,
+  "checks": {
+    "pnpm verify": { "exitCode": 0, "tests": 1963, "files": 221, "lint": true, "typecheck": true, "build": true },
+    "pnpm security:release": { "exitCode": 0, "tests": 697, "files": 87, "dependencyAudit": "clean" },
+    "pnpm reliability:release": { "exitCode": 0, "tests": 331, "files": 27 },
+    "pnpm alerts:check": { "exitCode": 0, "rules": 14 },
+    "pnpm dashboard:check": { "exitCode": 0, "panels": 14 },
+    "pnpm deploy:check": {
+      "exitCode": 0,
+      "web": { "project": "buildit-agentic-review", "rootDirectory": "apps/web", "alias": "buildit-agentic-review.vercel.app" },
+      "broker": { "project": "buildit-content-broker", "rootDirectory": "packages/broker", "alias": "buildit-content-broker.vercel.app" },
+      "order": ["broker", "convex", "web"],
+      "deployStarted": false
+    }
+  }
+}

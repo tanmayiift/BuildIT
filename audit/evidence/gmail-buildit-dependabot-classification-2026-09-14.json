@@ -1,0 +1,22 @@
+{
+  "observedAt": "2026-09-14T06:02:15.070379+00:00",
+  "mailbox": "already-open institutional Gmail account",
+  "search": "in:anywhere from:(github.com) BuildIT -\"buildit-demo-express\" dependabot",
+  "matchingThreads": 1,
+  "message": {
+    "repository": "tanmayiift/BuildIT",
+    "pullRequest": 28,
+    "date": "2026-09-04",
+    "subject": "chore(deps): bump actions/checkout from 5.1.0 to 7.0.1",
+    "type": "Routine version PR closed-state comment",
+    "reasonForDelivery": "Recipient modified the open/close state"
+  },
+  "broaderSearch": {
+    "query": "from:notifications@github.com BuildIT dependabot",
+    "matchingThreads": 8,
+    "mainRepositoryThreads": 1,
+    "demoRepositoryThreads": 7
+  },
+  "limitations": "Only this signed-in mailbox searched; count is matching conversations, not all email messages; no unrelated repository modified.",
+  "actions": "Read only; transient unread toggle restored by opening the conversation; no deletion, unsubscribe, send or filter."
+}

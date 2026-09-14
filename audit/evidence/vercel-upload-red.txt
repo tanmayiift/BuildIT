@@ -1,0 +1,360 @@
+
+ RUN  v4.1.11 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts (28 tests | 15 failed) 19ms
+     × excludes audit/evidence/connected-e2e-readiness.json using directory and wildcard ignore semantics 5ms
+     × excludes audit/evidence/buildit-kms-candidate.json using directory and wildcard ignore semantics 1ms
+     × excludes audit/screenshots/usage.png using directory and wildcard ignore semantics 1ms
+     × excludes build.log using directory and wildcard ignore semantics 0ms
+     × excludes apps/web/deploy.log using directory and wildcard ignore semantics 0ms
+     × excludes packages/runner/diagnostics/private.log using directory and wildcard ignore semantics 0ms
+     × excludes coverage/coverage-final.json using directory and wildcard ignore semantics 0ms
+     × excludes packages/providers/coverage/lcov.info using directory and wildcard ignore semantics 0ms
+     × excludes apps/web/coverage/index.html using directory and wildcard ignore semantics 0ms
+     × excludes playwright-report/index.html using directory and wildcard ignore semantics 0ms
+     × excludes apps/web/playwright-report/data/trace.zip using directory and wildcard ignore semantics 0ms
+     × excludes .pnpm-store/v10/files/cache using directory and wildcard ignore semantics 0ms
+     × excludes .claude/launch.json using directory and wildcard ignore semantics 1ms
+     × excludes .claude/skills/prompt-master/SKILL.md using directory and wildcard ignore semantics 1ms
+     × retains the complete representative build tree and the nonsecret production target 1ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 15 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes audit/evidence/connected-e2e-readiness.json using directory and wildcard ignore semantics
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "audit/evidence/connected-e2e-readiness.json",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes audit/evidence/buildit-kms-candidate.json using directory and wildcard ignore semantics
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "audit/evidence/buildit-kms-candidate.json",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes audit/screenshots/usage.png using directory and wildcard ignore semantics
+AssertionError: expected [ 'audit/screenshots/usage.png' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "audit/screenshots/usage.png",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes build.log using directory and wildcard ignore semantics
+AssertionError: expected [ 'build.log' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "build.log",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes apps/web/deploy.log using directory and wildcard ignore semantics
+AssertionError: expected [ 'apps/web/deploy.log' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "apps/web/deploy.log",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes packages/runner/diagnostics/private.log using directory and wildcard ignore semantics
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "packages/runner/diagnostics/private.log",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes coverage/coverage-final.json using directory and wildcard ignore semantics
+AssertionError: expected [ 'coverage/coverage-final.json' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "coverage/coverage-final.json",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes packages/providers/coverage/lcov.info using directory and wildcard ignore semantics
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "packages/providers/coverage/lcov.info",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes apps/web/coverage/index.html using directory and wildcard ignore semantics
+AssertionError: expected [ 'apps/web/coverage/index.html' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "apps/web/coverage/index.html",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes playwright-report/index.html using directory and wildcard ignore semantics
+AssertionError: expected [ 'playwright-report/index.html' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "playwright-report/index.html",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes apps/web/playwright-report/data/trace.zip using directory and wildcard ignore semantics
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "apps/web/playwright-report/data/trace.zip",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes .pnpm-store/v10/files/cache using directory and wildcard ignore semantics
+AssertionError: expected [ '.pnpm-store/v10/files/cache' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   ".pnpm-store/v10/files/cache",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes .claude/launch.json using directory and wildcard ignore semantics
+AssertionError: expected [ '.claude/launch.json' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   ".claude/launch.json",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > excludes .claude/skills/prompt-master/SKILL.md using directory and wildcard ignore semantics
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   ".claude/skills/prompt-master/SKILL.md",
++ ]
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:41:37
+     39| describe("Vercel upload file selection", () => {
+     40|   it.each(privateOrGenerated)("excludes %s using directory and wildcar…
+     41|     expect(uploadSelection([path])).toEqual([]);
+       |                                     ^
+     42|   });
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/15]⎯
+
+ FAIL  tests/architecture/vercel-upload-boundary.test.ts > Vercel upload file selection > retains the complete representative build tree and the nonsecret production target
+AssertionError: expected [ …(32) ] to deeply equal [ 'package.json', …(17) ]
+
+- Expected
++ Received
+
+@@ -1,6 +1,20 @@
+  [
++   "audit/evidence/connected-e2e-readiness.json",
++   "audit/evidence/buildit-kms-candidate.json",
++   "audit/screenshots/usage.png",
++   "build.log",
++   "apps/web/deploy.log",
++   "packages/runner/diagnostics/private.log",
++   "coverage/coverage-final.json",
++   "packages/providers/coverage/lcov.info",
++   "apps/web/coverage/index.html",
++   "playwright-report/index.html",
++   "apps/web/playwright-report/data/trace.zip",
++   ".pnpm-store/v10/files/cache",
++   ".claude/launch.json",
++   ".claude/skills/prompt-master/SKILL.md",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    ".env.example",
+    "apps/web/package.json",
+
+ ❯ tests/architecture/vercel-upload-boundary.test.ts:46:22
+     44|   it("retains the complete representative build tree and the nonsecret…
+     45|     const selected = uploadSelection([...privateOrGenerated, ...requir…
+     46|     expect(selected).toEqual(requiredBuildInputs);
+       |                      ^
+     47|     expect(readFileSync("scripts/buildit-production.env", "utf8")).toM…
+     48|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/15]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  15 failed | 13 passed (28)
+   Start at  11:16:57
+   Duration  181ms (transform 26ms, setup 0ms, import 40ms, tests 19ms, environment 0ms)
+

@@ -30,7 +30,7 @@ function expectFreshFenceBefore(marker: string, occurrence = 1) {
 
 describe("Autofix cancellation boundary", () => {
   it("rechecks the active generation before expensive external work", () => {
-    expectFreshFenceBefore("fetch(`${brokerUrl}/api/model`");
+    expectFreshFenceBefore("invokeAccountedModel(ctx");
     expectFreshFenceBefore("writer.createCandidateCommit(");
     expectFreshFenceBefore("fetch(`${brokerUrl}/api/execute`");
   });
@@ -66,7 +66,7 @@ describe("normal review cancellation boundary", () => {
     expectReviewFence("convex/reviewContextWorker.ts", "fetch(`${brokerUrl}/api/artifacts`");
     expectReviewFence("convex/reviewValidationWorker.ts", "fetch(`${brokerUrl}/api/execute`");
     expectReviewFence("convex/reviewValidationWorker.ts", "method: \"PUT\"");
-    expectReviewFence("convex/reviewAnalysisWorker.ts", "fetch(`${brokerUrl}/api/model`");
+    expectReviewFence("convex/reviewAnalysisWorker.ts", "invokeAccountedModel(ctx");
     expectReviewFence("convex/reviewAnalysisWorker.ts", "method: \"PUT\"");
     expectReviewFence("convex/reviewReportWorker.ts", "method: \"PUT\"");
   });

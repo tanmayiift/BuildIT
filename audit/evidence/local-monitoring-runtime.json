@@ -1,0 +1,197 @@
+{
+  "rules": [
+    {
+      "uid": "e8ce7a9b-5f06-58cb-bc90-52d3a1972668",
+      "title": "BuildITHighFailureRate",
+      "for": "10m",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "(sum(rate(buildit_failures_total{buildit_outcome=\"failed\"}[10m])) or vector(0)) / clamp_min((sum(rate(buildit_operations_total{buildit_outcome=~\"succeeded|failed\"}[10m])) or vector(0)), 0.001) > 0.05 and (sum(increase(buildit_operations_total{buildit_outcome=~\"succeeded|failed\"}[10m])) or vector(0)) >= 20"
+      ]
+    },
+    {
+      "uid": "3323ba18-b9a2-5bdd-9c3b-1a1b2110afb2",
+      "title": "BuildITP95LatencyHigh",
+      "for": "15m",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "histogram_quantile(0.95, sum by (le) (rate(buildit_operation_duration_milliseconds_bucket[10m]))) > 120000"
+      ]
+    },
+    {
+      "uid": "a621fb37-6110-5a9b-81e8-6fcd05bbaf7d",
+      "title": "BuildITTelemetrySilent",
+      "for": "5m",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "max(absent_over_time(buildit_snapshot[15m]) or vector(0)) > 0.5"
+      ]
+    },
+    {
+      "uid": "600995c2-5186-5d4e-85ed-a313ee7aa699",
+      "title": "BuildITCriticalBoundaryFailure",
+      "for": "0s",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "sum(increase(buildit_failures_total{buildit_operation=~\"artifact.delete|sandbox.cleanup|webhook.verify|autofix.loop_guard|review.stale_check\"}[5m])) > 0"
+      ]
+    },
+    {
+      "uid": "99a89aa8-cc0b-57c5-bc40-03f1afd54bc4",
+      "title": "BuildITQueueDepthHigh",
+      "for": "10m",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "max(buildit_snapshot{buildit_measurement=\"queue_depth\"}) > 25"
+      ]
+    },
+    {
+      "uid": "859f7f43-dd01-560c-a42e-f77ea1439683",
+      "title": "BuildITProviderFailure",
+      "for": "0s",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "sum(increase(buildit_failures_total{buildit_operation=\"review.delivery\", buildit_error_code=~\"provider_error|rate_limited\"}[15m])) > 0"
+      ]
+    },
+    {
+      "uid": "fc3a8532-0ef0-5842-86fa-0660a1879afe",
+      "title": "BuildITProviderRetryRateHigh",
+      "for": "10m",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "sum(increase(buildit_failures_total{buildit_operation=\"model.invoke\"}[30m])) > 20"
+      ]
+    },
+    {
+      "uid": "b21aebde-0589-59ce-913d-230beae6dcd6",
+      "title": "BuildITRunnerFailure",
+      "for": "0s",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "sum(increase(buildit_failures_total{buildit_operation=~\"sandbox.execute|sandbox.cleanup\", buildit_error_code!=\"capacity_exhausted\"}[10m])) > 0"
+      ]
+    },
+    {
+      "uid": "b9897bbc-554d-5acd-90d4-54fae80b68d3",
+      "title": "BuildITRunnerCapacityExhausted",
+      "for": "0s",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "sum(increase(buildit_failures_total{buildit_operation=\"sandbox.execute\", buildit_error_code=\"capacity_exhausted\"}[30m])) > 0"
+      ]
+    },
+    {
+      "uid": "9534bcc7-3d5a-5e86-9c9a-13d5a8281bb3",
+      "title": "BuildITArtifactDeletionBacklog",
+      "for": "20m",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "max(buildit_snapshot{buildit_measurement=\"expired_artifact_backlog\"}) > 0"
+      ]
+    },
+    {
+      "uid": "a542f9b4-2f2f-5038-a00e-ce69e9c45ad1",
+      "title": "BuildITWebhookSignatureSpike",
+      "for": "0s",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "sum(increase(buildit_failures_total{buildit_operation=\"webhook.verify\"}[5m])) > 5"
+      ]
+    },
+    {
+      "uid": "5bc2f8b6-20bb-51a2-b1eb-acbfda69751d",
+      "title": "BuildITLoopGuardTrip",
+      "for": "0s",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "sum(increase(buildit_failures_total{buildit_operation=\"autofix.loop_guard\"}[5m])) > 0"
+      ]
+    },
+    {
+      "uid": "ab2241ca-678e-5b45-bad0-cb412c516183",
+      "title": "BuildITStaleCheck",
+      "for": "0s",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "sum(increase(buildit_failures_total{buildit_operation=\"review.stale_check\"}[5m])) > 0"
+      ]
+    },
+    {
+      "uid": "90ac7cae-4fd6-580a-8f74-bdee00f3228f",
+      "title": "BuildITBudgetExhaustionSpike",
+      "for": "5m",
+      "folderUID": "efy7a6war64n4d",
+      "ruleGroup": "buildit-release",
+      "expressions": [
+        "max(buildit_snapshot{buildit_measurement=\"budget_exhausted_reviews_hour\"}) > 3"
+      ]
+    }
+  ],
+  "contacts": [
+    {
+      "uid": "buildit-audit-local-webhook",
+      "name": "buildit-audit-capture",
+      "type": "webhook",
+      "url": "http://capture:8080/notifications",
+      "disableResolveMessage": false
+    },
+    {
+      "uid": "",
+      "name": "email receiver",
+      "type": "email",
+      "url": null,
+      "disableResolveMessage": false
+    }
+  ],
+  "policy": {
+    "receiver": "buildit-audit-capture",
+    "group_by": [
+      "alertname"
+    ],
+    "group_wait": "1s",
+    "group_interval": "5s",
+    "repeat_interval": "1h",
+    "provenance": "file"
+  },
+  "prometheusVersion": {
+    "status": "success",
+    "data": {
+      "version": "3.6.0",
+      "revision": "491734606591ef8c188f5489c70380805bc868c0",
+      "branch": "HEAD",
+      "buildUser": "root@bfdf1aa26e4d",
+      "buildDate": "20250921-19:54:18",
+      "goVersion": "go1.24.7"
+    }
+  },
+  "snapshotTimestamp": {
+    "status": "success",
+    "data": {
+      "resultType": "vector",
+      "result": [
+        {
+          "metric": {},
+          "value": [
+            1789365643.209,
+            "1789365642.755"
+          ]
+        }
+      ]
+    }
+  },
+  "observedAt": "2026-09-14T06:00:43.199954+00:00"
+}

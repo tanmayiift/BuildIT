@@ -12,7 +12,7 @@ const operation = v.union(
 );
 const stage = v.union(v.literal("activation"), v.literal("context"), v.literal("analysis"), v.literal("tests"), v.literal("autofix"), v.literal("delivery"), v.literal("decision"));
 const outcome = v.union(v.literal("started"), v.literal("succeeded"), v.literal("failed"), v.literal("cancelled"), v.literal("blocked"));
-const errorCode = v.optional(v.union(v.literal("UnknownError"), v.literal("cancelled"), v.literal("stale_head"), v.literal("budget_exhausted"), v.literal("loop_guard"), v.literal("provider_error"), v.literal("runner_error"), v.literal("upstream_unavailable"), v.literal("configuration_missing"), v.literal("timeout"), v.literal("rate_limited")));
+const errorCode = v.optional(v.union(v.literal("UnknownError"), v.literal("cancelled"), v.literal("stale_head"), v.literal("budget_exhausted"), v.literal("loop_guard"), v.literal("provider_error"), v.literal("runner_error"), v.literal("capacity_exhausted"), v.literal("upstream_unavailable"), v.literal("configuration_missing"), v.literal("timeout"), v.literal("rate_limited")));
 
 export function safeTelemetryError(error: unknown) {
   const message = error instanceof Error ? error.message : "";
@@ -20,6 +20,7 @@ export function safeTelemetryError(error: unknown) {
   if (message.includes("cancel")) return "cancelled" as const;
   if (message.includes("budget")) return "budget_exhausted" as const;
   if (message.includes("loop") || message.includes("repeated_patch")) return "loop_guard" as const;
+  if (message.includes("capacity") || message.includes("limit exceeded")) return "capacity_exhausted" as const;
   if (message.includes("model") || message.includes("provider")) return "provider_error" as const;
   if (message.includes("execution") || message.includes("runner")) return "runner_error" as const;
   if (message.includes("missing_") || message.includes("configuration")) return "configuration_missing" as const;

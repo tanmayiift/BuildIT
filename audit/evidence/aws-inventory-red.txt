@@ -1,0 +1,120 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ❯ tests/architecture/aws-inventory-policy.test.ts (14 tests | 13 failed) 49ms
+   × S3 inventory encryption permission > lets only the source bucket/account request an inventory encryption key 29ms
+     → expected false to be true // Object.is equality
+   ✓ S3 inventory encryption permission > accepts the complete verified fixture without needing role identity policies 5ms
+   × S3 inventory encryption permission > fails the live verifier when the inventory service cannot use the key 1ms
+     → expected [Function] to throw an error
+   × S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: encryption 1ms
+     → expected [Function] to throw an error
+   × S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: expiry 1ms
+     → expected [Function] to throw an error
+   × S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: destination 1ms
+     → expected [Function] to throw an error
+   × S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: source_scope 1ms
+     → expected [Function] to throw an error
+   × S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: stale_delivery 1ms
+     → expected [Function] to throw an error
+   × S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: missing_checksum 1ms
+     → expected [Function] to throw an error
+   × S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: region 1ms
+     → expected [Function] to throw an error
+   × S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: identity 2ms
+     → expected [Function] to throw an error
+   × S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: provider 2ms
+     → expected [Function] to throw an error
+   × S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: stack_drift 1ms
+     → expected [Function] to throw an error
+   × S3 inventory encryption permission > only issues read operations to the scoped BuildIT resources 3ms
+     → expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > lets only the source bucket/account request an inventory encryption key
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/architecture/aws-inventory-policy.test.ts:79:59
+     77|   it("lets only the source bucket/account request an inventory encrypt…
+     78|     const statements = templateStatements();
+     79|     expect(permitsInventory(statements, account, bucket)).toBe(true);
+       |                                                           ^
+     80|     expect(permitsInventory(statements, "999988887777", bucket)).toBe(…
+     81|     expect(permitsInventory(statements, account, "another-project-buck…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > fails the live verifier when the inventory service cannot use the key
+AssertionError: expected [Function] to throw an error
+
+- Expected: 
+null
+
++ Received: 
+undefined
+
+ ❯ tests/architecture/aws-inventory-policy.test.ts:87:32
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: encryption
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: expiry
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: destination
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: source_scope
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: stale_delivery
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: missing_checksum
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: region
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: identity
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: provider
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: stack_drift
+AssertionError: expected [Function] to throw an error
+
+- Expected: 
+null
+
++ Received: 
+undefined
+
+ ❯ tests/architecture/aws-inventory-policy.test.ts:101:32
+     99|     if (failure === "provider") data.provider.ClientIDList = ["https:/…
+    100|     if (failure === "stack_drift") data.stackProviderArn = `arn:aws:ia…
+    101|     expect(() => verify(data)).toThrow(/aws_boundary_/);
+       |                                ^
+    102|   });
+    103|   it("only issues read operations to the scoped BuildIT resources", ()…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > only issues read operations to the scoped BuildIT resources
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/architecture/aws-inventory-policy.test.ts:106:62
+    104|     const { calls } = verify();
+    105|     for (const args of calls) expect(args[1]).toMatch(/^(?:describe-|g…
+    106|     expect(calls.some(args => args[1] === "get-key-policy")).toBe(true…
+       |                                                              ^
+    107|     expect(calls.some(args => args[1] === "get-bucket-inventory-config…
+    108|     expect(calls.some(args => args[1] === "list-role-policies")).toBe(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  13 failed | 1 passed (14)
+   Start at  09:45:02
+   Duration  402ms (transform 35ms, setup 0ms, collect 29ms, tests 49ms, environment 0ms, prepare 80ms)
+

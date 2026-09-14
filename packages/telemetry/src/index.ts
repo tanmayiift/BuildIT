@@ -8,7 +8,7 @@ export const operationNames = [
   "artifact.get", "artifact.put", "artifact.delete", "credential.save", "credential.preflight", "credential.revoke", "credential.use",
   "github.check", "github.comment", "github.branch", "github.stacked_pr", "model.invoke", "sandbox.execute", "sandbox.cleanup",
   "review.context", "review.requirements", "review.analysis", "review.critic", "review.tests", "review.autofix", "review.delivery", "review.decision", "review.stale_check",
-  "tracker.fetch", "tracker.credential_save", "tracker.credential_preflight", "web.request", "webhook.verify", "webhook.process", "autofix.loop_guard", "telemetry.smoke",
+  "tracker.fetch", "tracker.oauth", "tracker.credential_save", "tracker.credential_preflight", "web.request", "webhook.verify", "webhook.process", "autofix.loop_guard", "telemetry.smoke",
 ] as const;
 export type OperationName = typeof operationNames[number];
 export const measurementNames = [
@@ -31,7 +31,7 @@ const forbidden = /(api.?key|authorization|cookie|credential|diff|email|file|hea
 const allowed = new Set(["stage", "outcome", "provider", "reviewMode", "repositoryVisibility", "errorCode", "operation"]);
 const operationSet = new Set<string>(operationNames);
 const measurementSet = new Set<string>(measurementNames);
-const errorCodes = new Set(["TypeError", "UnknownError", "configuration_missing", "upstream_unavailable", "rate_limited", "timeout", "cancelled", "stale_head", "budget_exhausted", "loop_guard", "deletion_failed", "provider_error", "runner_error", ...Array.from({ length: 600 }, (_, index) => `http_${index}`)]);
+const errorCodes = new Set(["TypeError", "UnknownError", "configuration_missing", "upstream_unavailable", "rate_limited", "timeout", "cancelled", "stale_head", "budget_exhausted", "loop_guard", "deletion_failed", "provider_error", "runner_error", "capacity_exhausted", ...Array.from({ length: 600 }, (_, index) => `http_${index}`)]);
 
 export function safeAttributes(input: SafeAttributes): Attributes {
   const output: Attributes = {};

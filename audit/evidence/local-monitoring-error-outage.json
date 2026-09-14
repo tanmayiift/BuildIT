@@ -1,0 +1,8 @@
+{
+  "startedAt": "2026-09-14T06:12:39.269739+00:00",
+  "stoppedAt": "2026-09-14T06:12:39.529752+00:00",
+  "scope": "Only isolated buildit-audit-error-20260914 Prometheus service stopped to create a real datasource outage",
+  "exitCode": 0,
+  "restoreStartedAt": "2026-09-14T06:14:13.224355+00:00",
+  "restoreExitCode": 0
+}

@@ -1,5 +1,5 @@
 "use node";
-import { isRetryableProviderReason, maxProviderAttempts, providerReasonIsModelUnavailable, retryDelayMs } from "./lib/providerRetry";
+import { invokeAccountedModel } from "./lib/accountedModel";
 import { createHash } from "node:crypto";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
@@ -7,7 +7,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { runEscalationCritic, arbitrateFindings, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, validateFindingCandidates } from "@buildit/orchestrator";
 import { approvedProviderModels, type ProviderName, type ProviderResult } from "@buildit/providers";
-import { fingerprint, issueArtifactGrant, issueModelInvocationGrant, redact, redactForModel } from "@buildit/security";
+import { fingerprint, issueArtifactGrant, redact, redactForModel } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 type RequirementSourceType = "pull_request" | "github_issue" | "linear" | "jira" | "repository_document" | "test";
@@ -245,33 +245,9 @@ export const analyze = internalAction({
         const stage = stageRequest.stage as PromptStage;
         const model = modelOverride ?? (stage === "findings" ? findingsModel : stage === "critic" ? criticRoute.model : scope.model);
         const request = { model, system: stageRequest.system, input: stageRequest.input, schemaName: stageRequest.schemaName, schema: stageRequest.schema, maxOutputTokens: stageRequest.maxOutputTokens };
-        const spend = await ctx.runMutation(internal.reviewModelData.preflightStageSpend,{...args,provider:scope.provider,model,inputBytes:Buffer.byteLength(request.system)+Buffer.byteLength(request.input)+Buffer.byteLength(JSON.stringify(request.schema)),maxOutputTokens:request.maxOutputTokens,now:Date.now()});
-        if (!spend.allowed) throw new Error("budget_preflight_exceeded");
-        const body = JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), stage, credential: scope.credential, request });
-        // Minted per attempt, never once for the loop. A grant is single-use by design - the broker
-        // consumes its grantId - so re-sending the same token on a retry is indistinguishable from a
-        // replay, and the broker was right to refuse it. Minting once meant the provider retry path
-        // could never succeed: every review that hit a rate limit or a transient 5xx died with
-        // model_grant_replayed instead of retrying, which is where "random platform errors" came
-        // from. The grant still binds the same requestHash, so nothing about its scope widens.
-        const mintGrant = () => issueModelInvocationGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), credentialScopeId: scope.credential.id,
-          provider: scope.provider, model, stage, requestHash: createHash("sha256").update(body).digest("hex") }, modelSecret);
         await ctx.runQuery(internal.durableReview.assertActive, args);
-        type ModelReply = { result?: ProviderResult; error?: string; providerStatus?: number; retryAfterSeconds?: number };
-        let response!: Response, output!: ModelReply, reason = "";
-        for (let attempt = 1; attempt <= maxProviderAttempts; attempt += 1) {
-          await ctx.runQuery(internal.durableReview.assertActive, args);
-          response = await fetch(`${brokerUrl}/api/model`, { method: "POST", headers: { authorization: `Bearer ${mintGrant()}`, "content-type": "application/json" }, body });
-          const raw = await response.text();
-          try { output = JSON.parse(raw) as ModelReply; } catch { output = { error: `non_json_response:http_${response.status}` }; }
-          if (response.ok && output.result) return output.result;
-          reason = typeof output.providerStatus === "number" ? `${output.error ?? "provider_error"}:http_${output.providerStatus}` : output.error ?? `http_${response.status}`;
-          if (attempt === maxProviderAttempts || !isRetryableProviderReason(reason)) break;
-          await ctx.runMutation(internal.reviewModelData.recordProviderRetry, { ...args, now: Date.now() });
-          await new Promise(resolve => setTimeout(resolve, retryDelayMs(attempt, output.retryAfterSeconds)));
-        }
-        if (!response.ok || !output.result){await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage,provider:scope.provider,model,promptVersion:`${stage}-v1`,schemaVersion:`${stage}-schema-v1`,finishReason:reason.slice(0,100),requestHash:createHash("sha256").update(stageRequest.system).update("\0").update(stageRequest.input).update("\0").update(JSON.stringify(stageRequest.schema)).digest("hex"),attempt:stageRequest.repairOf===undefined?1:2,outcome:"provider_error",inputTokens:0,outputTokens:0,now:Date.now()});throw new Error(providerReasonIsModelUnavailable(reason) ? `model_unavailable:${reason}`.slice(0, 120) : output.error ?? `model_stage_${response.status}`)}
-        return output.result;
+        return invokeAccountedModel(ctx, { scope: args, repositoryId: scope.repositoryId, stage, provider: scope.provider,
+          credential: scope.credential, request, brokerUrl, modelSecret });
     };
     const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
       onInjection: report => { injectionUnscoped ||= report.scope.unscoped; for (const surface of report.scope.surfaces) injectionSurfaces.add(surface); },
@@ -290,7 +266,7 @@ export const analyze = internalAction({
         now: Date.now(),
       }); },
       invoke: (stageRequest: ModelStageRequest): Promise<ProviderResult> => invokeStage(stageRequest),
-      onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,durationMs:item.durationMs,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); } }));
+      onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,...(item.invocationId?{invocationId:item.invocationId as Id<"modelInvocations">}:{}),stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,durationMs:item.durationMs,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); } }));
     const headEvidence = new Map<string, { record: EvidenceRecord; artifactId: Id<"artifacts"> }>();
     for (const chunk of chunks.filter(item => item.revision === "head")) for (const file of chunk.snapshot.files) {
       if (!chunk.artifactId) throw new Error("context_artifact_reference_missing");
@@ -344,7 +320,7 @@ export const analyze = internalAction({
           // The stages that produced the findings under dispute, so this renders the prompt a
           // first-pass critic would see rather than a novel one whose output means something else.
           priorStages: records.filter(item => ["requirements", "review_plan", "findings"].includes(item.stage)),
-          onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,durationMs:item.durationMs,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); },
+          onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,...(item.invocationId?{invocationId:item.invocationId as Id<"modelInvocations">}:{}),stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,durationMs:item.durationMs,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); },
           invoke: (stageRequest: ModelStageRequest): Promise<ProviderResult> => invokeStage(stageRequest, criticRoute.model),
         });
         const secondOpinion = ((escalationRecords.find(item => item.stage === "critic")?.value?.decisions ?? []) as CriticDecision[]);

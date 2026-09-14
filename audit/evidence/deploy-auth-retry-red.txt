@@ -1,0 +1,164 @@
+
+ RUN  v4.1.11 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ❯ tests/architecture/deployment-command.test.ts (51 tests | 10 failed) 46ms
+     × normalizes a successful broker retry so alias inspection can read the actual target 6ms
+     × checks and classifies the broker retry's 'nonzero exit' instead of returning it as success 1ms
+     × checks and classifies the broker retry's 'authorization still rejected' instead of returning it as success 1ms
+     × checks and classifies the broker retry's 'signal termination' instead of returning it as success 1ms
+     × checks and classifies the broker retry's 'spawn failure' instead of returning it as success 1ms
+     × does not repeat a failed broker operation unless the failure is authorization 1ms
+     × does not retry a failure to start the broker CLI even if its output contains an authorization message 1ms
+     × fails a web authorization error once without echoing credential-bearing CLI diagnostics 1ms
+     × keeps unknown broker spawn diagnostics out of the thrown error 1ms
+     × keeps unknown web spawn diagnostics out of the thrown error 1ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/architecture/deployment-command.test.ts > checked Vercel authorization retry > normalizes a successful broker retry so alias inspection can read the actual target
+AssertionError: expected { status: +0, …(2) } to deeply equal { …(3) }
+
+- Expected
++ Received
+
+  {
+-   "combined": "  url https://buildit-agentic-review-opiiyg2yg-buildit-agentic-review.vercel.app
+-
+- ",
+-   "stderr": "",
++   "status": 0,
++   "stderr": null,
+    "stdout": "  url https://buildit-agentic-review-opiiyg2yg-buildit-agentic-review.vercel.app
+  ",
+  }
+
+ ❯ tests/architecture/deployment-command.test.ts:344:20
+    342|     const args = inspectArgs(brokerLink.projectName), env = { VERCEL_P…
+    343|     const result = helper.run(args, repoRoot, env);
+    344|     expect(result).toEqual({ stdout: output, stderr: "", combined: `${…
+       |                    ^
+    345|     expect(parseAliasTarget(result.combined)).toBe(deployedUrl);
+    346|     expect(helper.calls).toHaveLength(2);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  tests/architecture/deployment-command.test.ts > checked Vercel authorization retry > checks and classifies the broker retry's 'nonzero exit' instead of returning it as success
+ FAIL  tests/architecture/deployment-command.test.ts > checked Vercel authorization retry > checks and classifies the broker retry's 'authorization still rejected' instead of returning it as success
+ FAIL  tests/architecture/deployment-command.test.ts > checked Vercel authorization retry > checks and classifies the broker retry's 'signal termination' instead of returning it as success
+ FAIL  tests/architecture/deployment-command.test.ts > checked Vercel authorization retry > checks and classifies the broker retry's 'spawn failure' instead of returning it as success
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ tests/architecture/deployment-command.test.ts:359:54
+    357|   ])("checks and classifies the broker retry's $name instead of return…
+    358|     const helper = vercelHelper("broker", [unauthorized, result]);
+    359|     expect(() => helper.run(deployArgs(), repoRoot)).toThrow(error);
+       |                                                      ^
+    360|     expect(helper.calls).toHaveLength(2);
+    361|     expect(helper.diagnostics.join("\n")).not.toContain(privateMarker);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  tests/architecture/deployment-command.test.ts > checked Vercel authorization retry > does not repeat a failed broker operation unless the failure is authorization
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "Build failed: PRIVATE_DEPLOY_CREDENTIAL_FIXTURE
++ ",
++ ]
+
+ ❯ tests/architecture/deployment-command.test.ts:368:32
+    366|     expect(() => helper.run(deployArgs(), repoRoot)).toThrow("buildit_…
+    367|     expect(helper.calls).toHaveLength(1);
+    368|     expect(helper.diagnostics).toEqual([]);
+       |                                ^
+    369|   });
+    370|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  tests/architecture/deployment-command.test.ts > checked Vercel authorization retry > does not retry a failure to start the broker CLI even if its output contains an authorization message
+AssertionError: expected [Function] to throw error including 'buildit_broker_deploy_spawn_failed:EA…' but got 'unexpected_cli_retry'
+
+Expected: "buildit_broker_deploy_spawn_failed:EACCES"
+Received: "unexpected_cli_retry"
+
+ ❯ tests/architecture/deployment-command.test.ts:373:54
+    371|   it("does not retry a failure to start the broker CLI even if its out…
+    372|     const helper = vercelHelper("broker", [{ ...unauthorized, error: {…
+    373|     expect(() => helper.run(deployArgs(), repoRoot)).toThrow("buildit_…
+       |                                                      ^
+    374|     expect(helper.calls).toHaveLength(1);
+    375|     expect(helper.diagnostics).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  tests/architecture/deployment-command.test.ts > checked Vercel authorization retry > fails a web authorization error once without echoing credential-bearing CLI diagnostics
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "Not authorized: PRIVATE_DEPLOY_CREDENTIAL_FIXTURE
++ ",
++ ]
+
+ ❯ tests/architecture/deployment-command.test.ts:390:32
+    388|     expect(() => helper.run(deployArgs(), repoRoot)).toThrow("buildit_…
+    389|     expect(helper.calls).toHaveLength(1);
+    390|     expect(helper.diagnostics).toEqual([]);
+       |                                ^
+    391|   });
+    392|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  tests/architecture/deployment-command.test.ts > checked Vercel authorization retry > keeps unknown broker spawn diagnostics out of the thrown error
+AssertionError: expected [Function] to throw error including 'buildit_broker_deploy_spawn_failed:un…' but got 'PRIVATE_DEPLOY_CREDENTIAL_FIXTURE'
+
+Expected: "buildit_broker_deploy_spawn_failed:unknown"
+Received: "PRIVATE_DEPLOY_CREDENTIAL_FIXTURE"
+
+ ❯ tests/architecture/deployment-command.test.ts:395:54
+    393|   it.each(["broker", "web"] as const)("keeps unknown %s spawn diagnost…
+    394|     const helper = vercelHelper(surface, [{ status: null, error: { cod…
+    395|     expect(() => helper.run(deployArgs(), repoRoot)).toThrow(`buildit_…
+       |                                                      ^
+    396|     expect(helper.calls).toHaveLength(1);
+    397|     expect(helper.diagnostics).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  tests/architecture/deployment-command.test.ts > checked Vercel authorization retry > keeps unknown web spawn diagnostics out of the thrown error
+AssertionError: expected [Function] to throw error including 'buildit_web_deploy_spawn_failed:unkno…' but got 'PRIVATE_DEPLOY_CREDENTIAL_FIXTURE'
+
+Expected: "buildit_web_deploy_spawn_failed:unknown"
+Received: "PRIVATE_DEPLOY_CREDENTIAL_FIXTURE"
+
+ ❯ tests/architecture/deployment-command.test.ts:395:54
+    393|   it.each(["broker", "web"] as const)("keeps unknown %s spawn diagnost…
+    394|     const helper = vercelHelper(surface, [{ status: null, error: { cod…
+    395|     expect(() => helper.run(deployArgs(), repoRoot)).toThrow(`buildit_…
+       |                                                      ^
+    396|     expect(helper.calls).toHaveLength(1);
+    397|     expect(helper.diagnostics).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  10 failed | 41 passed (51)
+   Start at  11:04:54
+   Duration  242ms (transform 52ms, setup 0ms, import 71ms, tests 46ms, environment 0ms)
+

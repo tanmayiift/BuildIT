@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ convex/accounting.test.ts (2 tests) 51ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  08:22:18
+   Duration  312ms (transform 74ms, setup 0ms, collect 109ms, tests 51ms, environment 0ms, prepare 30ms)
+

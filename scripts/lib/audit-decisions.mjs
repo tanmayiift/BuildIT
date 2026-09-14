@@ -36,10 +36,16 @@ export function scanVerdict({ status, output = "", reportExists }) {
 }
 
 export function advisoriesFromReport(parsed) {
+  if (!parsed || !Array.isArray(parsed.results)) throw new Error("buildit_audit_report_invalid");
   const advisories = [];
-  for (const entry of parsed?.results ?? []) {
-    for (const item of entry?.packages ?? []) {
-      for (const vulnerability of item?.vulnerabilities ?? []) {
+  for (const entry of parsed.results) {
+    if (!entry || !Array.isArray(entry.packages)) throw new Error("buildit_audit_report_invalid");
+    for (const item of entry.packages) {
+      if (!item || typeof item.package?.name !== "string" || typeof item.package?.version !== "string" ||
+          (item.vulnerabilities !== undefined && !Array.isArray(item.vulnerabilities))) throw new Error("buildit_audit_report_invalid");
+      for (const vulnerability of item.vulnerabilities ?? []) {
+        if (typeof vulnerability?.id !== "string" || !vulnerability.id ||
+            (vulnerability.summary !== undefined && typeof vulnerability.summary !== "string")) throw new Error("buildit_audit_report_invalid");
         advisories.push({
           package: item.package?.name,
           version: item.package?.version,

@@ -1,0 +1,112 @@
+{
+  "generatedAt": "2026-09-14T05:46:55.474Z",
+  "deployment": "judicious-barracuda-968",
+  "readOnly": true,
+  "limitPerTable": 20000,
+  "method": "official CLI BaseConvexClient WebSocket built-in _system/cli/tableData with componentPath",
+  "checks": {
+    "root/reviews": {
+      "count": 193,
+      "truncated": false,
+      "statusCounts": {
+        "platform_failed": 67,
+        "cancelled": 2,
+        "checks_passed": 40,
+        "changes_requested": 64,
+        "inconclusive": 13,
+        "budget_exhausted": 2,
+        "delivered": 4,
+        "blocked": 1
+      },
+      "blocked": [
+        {
+          "reasonCode": "provider_credential_invalid",
+          "hasWorkflowId": false,
+          "budgetConsumed": 0
+        }
+      ]
+    },
+    "root/_scheduled_functions": {
+      "count": 114,
+      "truncated": false,
+      "stateCounts": {
+        "success": 114
+      },
+      "unfinishedFunctions": []
+    },
+    "workflow/workflows": {
+      "count": 191,
+      "truncated": false,
+      "stateCounts": {
+        "failed": 73,
+        "success": 118
+      }
+    },
+    "workflow/steps": {
+      "count": 2822,
+      "truncated": false,
+      "inProgressCount": 0
+    },
+    "workflow/_scheduled_functions": {
+      "count": 0,
+      "truncated": false,
+      "stateCounts": {},
+      "unfinishedFunctions": []
+    },
+    "reviewWorkpool/work": {
+      "count": 0,
+      "truncated": false
+    },
+    "reviewWorkpool/pendingStart": {
+      "count": 0,
+      "truncated": false
+    },
+    "reviewWorkpool/pendingCompletion": {
+      "count": 0,
+      "truncated": false
+    },
+    "reviewWorkpool/pendingCancelation": {
+      "count": 0,
+      "truncated": false
+    },
+    "reviewWorkpool/internalState": {
+      "count": 1,
+      "truncated": false,
+      "runningCount": 0
+    },
+    "reviewWorkpool/_scheduled_functions": {
+      "count": 0,
+      "truncated": false,
+      "stateCounts": {},
+      "unfinishedFunctions": []
+    },
+    "workflow/workpool/work": {
+      "count": 0,
+      "truncated": false
+    },
+    "workflow/workpool/pendingStart": {
+      "count": 0,
+      "truncated": false
+    },
+    "workflow/workpool/pendingCompletion": {
+      "count": 0,
+      "truncated": false
+    },
+    "workflow/workpool/pendingCancelation": {
+      "count": 0,
+      "truncated": false
+    },
+    "workflow/workpool/internalState": {
+      "count": 1,
+      "truncated": false,
+      "runningCount": 0
+    },
+    "workflow/workpool/_scheduled_functions": {
+      "count": 0,
+      "truncated": false,
+      "stateCounts": {},
+      "unfinishedFunctions": []
+    }
+  },
+  "complete": true
+}

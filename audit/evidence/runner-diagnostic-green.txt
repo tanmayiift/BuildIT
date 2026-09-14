@@ -1,0 +1,131 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ packages/runner/test/missing-script.test.ts (8 tests) 2ms
+ ✓ packages/runner/test/runner.test.ts (19 tests) 7ms
+stderr | packages/runner/test/vercelSandbox.test.ts > Vercel sandbox runner > reports the dependency audit as unavailable when no manifest reached the sandbox
+buildit_osv_unavailable { reason: 'manifest_missing', exitCode: 0 }
+
+stderr | packages/runner/test/vercelSandbox.test.ts > Vercel sandbox runner > reports the dependency audit as unavailable when there are more manifests than one scan takes
+buildit_osv_unavailable { reason: 'manifest_limit', exitCode: 0 }
+
+stderr | packages/runner/test/vercelSandbox.test.ts > a secret scan that could not run > degrades to an unavailable scanner instead of losing the review
+buildit_gitleaks_unavailable { reason: 'unexpected_exit', exitCode: 137 }
+
+stderr | packages/runner/test/vercelSandbox.test.ts > a secret scan that could not run > degrades the same way when the report is unreadable or too large
+buildit_gitleaks_unavailable { reason: 'report_missing', exitCode: 0 }
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > names the provider failing to start
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'sandbox_capacity_unavailable'
+}
+
+stderr | packages/runner/test/vercelSandbox.test.ts > a secret scan that could not run > degrades the same way when the report is unreadable or too large
+buildit_gitleaks_unavailable { reason: 'report_too_large', exitCode: 0 }
+
+stderr | packages/runner/test/vercelSandbox.test.ts > dependency scanning outside Node > reviews a repository that has no dependency manifest at all
+buildit_osv_unavailable { reason: 'manifest_missing', exitCode: 0 }
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > names the provider dying mid-run
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'sandbox_terminated'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > names an unreachable sandbox control plane
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'sandbox_network_unavailable'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > names a sandbox that never answered
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'sandbox_network_unavailable'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > names a dropped connection
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'sandbox_network_unavailable'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > falls back to execution_failed for something thrown that is not an Error
+buildit_execute_failure {
+  category: 'unexpected',
+  code: 'execution_failed',
+  reason: 'non_error_thrown'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > falls back to execution_failed for an unrecognised runtime fault
+buildit_execute_failure {
+  category: 'unexpected',
+  code: 'execution_failed',
+  reason: 'execution_failed'
+}
+
+stderr | packages/broker/test/execution-failure-modes.test.ts > what a real sandbox failure becomes > never lets provider text reach the response
+buildit_execute_failure {
+  category: 'runner_or_scanner',
+  code: 'sandbox_unavailable',
+  reason: 'sandbox_unavailable'
+}
+
+ ✓ packages/runner/test/vercelSandbox.test.ts (30 tests) 20ms
+ ✓ packages/broker/test/execution-failure-modes.test.ts (12 tests) 14ms
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects tenant, plan, and artifact changes before sandbox execution
+buildit_execute_failure {
+  category: 'grant',
+  code: 'execution_grant_invalid',
+  reason: 'execution_grant_invalid'
+}
+
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects tenant, plan, and artifact changes before sandbox execution
+buildit_execute_failure {
+  category: 'grant',
+  code: 'execution_grant_invalid',
+  reason: 'execution_grant_invalid'
+}
+
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects tenant, plan, and artifact changes before sandbox execution
+buildit_execute_failure {
+  category: 'grant',
+  code: 'execution_grant_invalid',
+  reason: 'execution_grant_invalid'
+}
+
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects tenant, plan, and artifact changes before sandbox execution
+buildit_execute_failure {
+  category: 'grant',
+  code: 'execution_grant_invalid',
+  reason: 'execution_grant_invalid'
+}
+
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects work that cannot finish inside the serverless budget
+buildit_execute_failure {
+  category: 'request_policy',
+  code: 'invalid_execution_request',
+  reason: 'invalid_execution_request'
+}
+
+stderr | packages/broker/test/execution-http.test.ts > native base/head execution boundary > rejects replay before reading artifacts
+buildit_execute_failure {
+  category: 'grant',
+  code: 'execution_grant_replayed',
+  reason: 'execution_grant_replayed'
+}
+
+ ✓ packages/broker/test/execution-http.test.ts (7 tests) 13ms
+ ✓ packages/broker/test/execution-diagnostic.test.ts (21 tests) 4ms
+
+ Test Files  6 passed (6)
+      Tests  97 passed (97)
+   Start at  09:59:55
+   Duration  562ms (transform 247ms, setup 0ms, collect 1.63s, tests 59ms, environment 1ms, prepare 376ms)
+

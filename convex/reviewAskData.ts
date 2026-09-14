@@ -2,11 +2,9 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { provider } from "./validators";
 import { toMicros } from "./lib/usageCost";
-import { addToMonth } from "./lib/monthlySpend";
+import { addEstimatedCharge } from "./lib/budgetAccounting";
 import { conservativeProviderModelCost } from "@buildit/providers";
 
-const askWindowMs = 10 * 60_000;
-const asksPerWindow = 5;
 
 // Everything an answer may be grounded in, and nothing more. The report artifact is the whole of
 // it: it is already redacted and already published on the pull request, so an answer drawn from it
@@ -19,23 +17,22 @@ export const askScope = internalQuery({
     if (!repository || repository.organizationId !== args.organizationId || !repository.enabled || repository.pausedAt) return null;
     const installation = await ctx.db.get(repository.installationId);
     if (!installation || installation.organizationId !== args.organizationId || installation.status !== "active") return null;
+    const organization = await ctx.db.get(args.organizationId);
+    if (!organization || organization.deletedAt) return null;
 
-    const reviews = await ctx.db.query("reviews")
-      .withIndex("by_repo_pr_head_mode", q => q.eq("repositoryId", args.repositoryId).eq("prNumber", args.prNumber))
-      .order("desc").take(10);
-    const review = reviews.find(item => item.completedAt && ["checks_passed", "changes_requested", "inconclusive", "delivered"].includes(item.status));
-    if (!review) return null;
+    const review = await ctx.db.query("reviews")
+      .withIndex("by_repo_pr_completed", q => q.eq("repositoryId", args.repositoryId).eq("prNumber", args.prNumber).gt("completedAt", undefined))
+      .order("desc").first();
+    // Answer only from the most recently completed evidence. Falling back across a newer
+    // failure or a changed commit could give a confident answer about obsolete code.
+    if (!review || review.organizationId !== args.organizationId || review.isStale
+      || !["checks_passed", "changes_requested", "inconclusive", "delivered"].includes(review.status)) return null;
 
-    // A question costs a model call against the organization's own key, on a public comment box.
-    // Bounded per pull request so a stuck loop or a bored visitor cannot run up someone's bill.
-    const recent = await ctx.db.query("usageLedger")
-      .withIndex("by_org_time", q => q.eq("organizationId", args.organizationId).gte("occurredAt", args.now - askWindowMs))
-      .collect();
-    if (recent.filter(item => item.kind === "ask_tokens" && item.reviewId === review._id).length >= asksPerWindow) return null;
-
-    const credential = (await ctx.db.query("providerCredentials")
-      .withIndex("by_org_status", q => q.eq("organizationId", args.organizationId).eq("status", "valid")).collect())
-      .find(item => item.provider === review.provider && (item.repositoryId === undefined || item.repositoryId === args.repositoryId));
+    // The atomic reservation mutation enforces the rate limit before the provider call.
+    const credentials = (await ctx.db.query("providerCredentials")
+      .withIndex("by_org_status", q => q.eq("organizationId", args.organizationId).eq("status", "valid")).collect());
+    const credential = credentials.find(item => item.provider === review.provider && item.repositoryId === args.repositoryId)
+      ?? credentials.find(item => item.provider === review.provider && item.repositoryId === undefined);
     if (!credential) return null;
 
     const artifacts = await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
@@ -45,7 +42,7 @@ export const askScope = internalQuery({
     return {
       organizationId: review.organizationId, repositoryId: repository._id, reviewId: review._id,
       installationId: installation.installationId, githubRepositoryId: repository.githubRepositoryId,
-      headSha: review.headSha, askId: String(review._id),
+      headSha: review.headSha, executionGeneration: review.executionGeneration, askId: String(review._id),
       provider: review.provider, model: review.model,
       credential: { id: credential.credentialScopeId, organizationId: String(credential.organizationId),
         ...(credential.repositoryId ? { repositoryId: String(credential.repositoryId) } : {}),
@@ -60,8 +57,8 @@ export const askScope = internalQuery({
   },
 });
 
-// An answer is billed like any other model call, on the organization's own key, so BYOK economics
-// stay true and a question shows up in usage rather than being invisibly free.
+// Compatibility for an already-running legacy Ask action. New actions settle their invocation
+// before inspecting the answer or attempting GitHub publication.
 export const recordAsk = internalMutation({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), inputTokens: v.number(), outputTokens: v.number(),
     provider, model: v.string(), now: v.number() },
@@ -73,9 +70,9 @@ export const recordAsk = internalMutation({
       organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id,
       kind: "ask_tokens", quantity: args.inputTokens + args.outputTokens,
       unitCost: cost / Math.max(1, args.inputTokens + args.outputTokens),
-      totalCostMicros: toMicros(cost), currency: "provider_billed", occurredAt: args.now,
+      accountingVersion: 1, costStatus: args.inputTokens + args.outputTokens ? "estimated" : "unknown", totalCostMicros: toMicros(cost), currency: "provider_billed", occurredAt: args.now,
     });
-    const organization = await ctx.db.get(args.organizationId);
-    if (organization) await ctx.db.patch(args.organizationId, addToMonth(organization, toMicros(cost), args.now));
+    await addEstimatedCharge(ctx, args.organizationId, toMicros(cost), args.now, args.inputTokens + args.outputTokens > 0);
+    await ctx.db.patch(review._id, { budgetConsumed: (toMicros(review.budgetConsumed) + toMicros(cost)) / 1_000_000 });
   },
 });

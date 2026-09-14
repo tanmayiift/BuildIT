@@ -1,0 +1,30 @@
+# BuildIT legacy alert pause review
+
+**Do not pause all 12 as equivalent coverage yet.** Eight business predicates match; four intentionally changed, and two cross-cutting defects were found: current query errors were treated as OK, and current rules had no direct recipient. The production policy was separately observed without a BuildIT route. The SDK also drops the capacity-exhausted label needed by the replacement split.
+
+The parent is preparing Error handling and the existing explicit BuildIT recipient on the exact 14 current rules. This review itself made no production changes.
+
+| Legacy UID | Legacy title | Current title / UID | Coverage assessment |
+| --- | --- | --- | --- |
+| `afwt2cuzwjf9cd` | BuildIT telemetry silent | BuildITTelemetrySilent / `a621fb37-6110-5a9b-81e8-6fcd05bbaf7d` | Replaces activity-dependent operations counter with unconditional snapshot heartbeat; original 15-minute absence window and 5-minute pending duration retained. |
+| `ffwt2e95zmfpcc` | BuildIT high failure rate | BuildITHighFailureRate / `e8ce7a9b-5f06-58cb-bc90-52d3a1972668` | Keeps 5% ratio and 10-minute pending duration; adds minimum 20 completed operations to avoid low-volume false alarms. |
+| `dfwt2f4rivshsb` | BuildIT p95 latency high | BuildITP95LatencyHigh / `3323ba18-b9a2-5bdd-9c3b-1a1b2110afb2` | Business predicate, threshold and pending duration match; current evaluation query is delayed by 60 seconds. |
+| `efwt2f5a94dtsb` | BuildIT critical boundary failure | BuildITCriticalBoundaryFailure / `600995c2-5186-5d4e-85ed-a313ee7aa699` | Business predicate, threshold and pending duration match; current evaluation query is delayed by 60 seconds. |
+| `buildit-queue-depth-high` | BuildIT queue depth high | BuildITQueueDepthHigh / `99a89aa8-cc0b-57c5-bc40-03f1afd54bc4` | Business predicate, threshold and pending duration match; current evaluation query is delayed by 60 seconds. |
+| `buildit-provider-failure` | BuildIT provider failure | BuildITProviderFailure / `859f7f43-dd01-560c-a42e-f77ea1439683` | Replaces >2 failed model attempts with >0 terminal provider/rate-limit review-delivery failures. New retry rule separately observes >20 attempts over 30 minutes for 10 minutes; this is a deliberate change in sensitivity, not exact coverage equivalence. |
+| `buildit-runner-failure` | BuildIT runner failure | BuildITRunnerFailure / `b21aebde-0589-59ce-913d-230beae6dcd6` | Excludes capacity_exhausted from pages; the added capacity rule handles those as tickets. SDK capacity code allowlist gap found during this assessment prevents claiming equivalent deployed coverage. |
+| `buildit-artifact-backlog` | BuildIT artifact deletion backlog | BuildITArtifactDeletionBacklog / `9534bcc7-3d5a-5e86-9c9a-13d5a8281bb3` | Business predicate, threshold and pending duration match; current evaluation query is delayed by 60 seconds. |
+| `buildit-webhook-signature` | BuildIT webhook signature spike | BuildITWebhookSignatureSpike / `a542f9b4-2f2f-5038-a00e-ce69e9c45ad1` | Business predicate, threshold and pending duration match; current evaluation query is delayed by 60 seconds. |
+| `buildit-loop-guard` | BuildIT loop guard trip | BuildITLoopGuardTrip / `5bc2f8b6-20bb-51a2-b1eb-acbfda69751d` | Business predicate, threshold and pending duration match; current evaluation query is delayed by 60 seconds. |
+| `buildit-stale-check` | BuildIT stale check | BuildITStaleCheck / `ab2241ca-678e-5b45-bad0-cb412c516183` | Business predicate, threshold and pending duration match; current evaluation query is delayed by 60 seconds. |
+| `buildit-budget-exhaustion` | BuildIT budget exhaustion spike | BuildITBudgetExhaustionSpike / `90ac7cae-4fd6-580a-8f74-bdee00f3228f` | Business predicate, threshold and pending duration match; current evaluation query is delayed by 60 seconds. |
+
+No legacy rules are omitted or inferred by similar names: all 12 exact UID/title pairs are listed. Current-only additions are `BuildITProviderRetryRateHigh` and `BuildITRunnerCapacityExhausted`.
+
+After live recipient delivery, current Error handling, and fresh scheduled snapshot evidence are confirmed, pausing the eight equivalent business predicates is a reasonable reversible correction. Their exact UIDs are `dfwt2f4rivshsb`, `efwt2f5a94dtsb`, `buildit-queue-depth-high`, `buildit-artifact-backlog`, `buildit-webhook-signature`, `buildit-loop-guard`, `buildit-stale-check`, and `buildit-budget-exhaustion`. The telemetry rule `afwt2cuzwjf9cd` is intentionally excluded because its activity-dependent predicate was replaced by an unconditional snapshot heartbeat. No additional writer gap was found for the eight equivalent predicates; record the existing one-minute current query delay. Keep `afwt2cuzwjf9cd`, `ffwt2e95zmfpcc`, `buildit-provider-failure`, and `buildit-runner-failure` active until their changed predicates and deployed writer coverage are accepted and verified.
+
+For a UI pause, open the exact rule UID, confirm the complete folder/group/title breadcrumb and current state, retain a fresh native export, pause that rule only, and reload. Re-export and compare: only `isPaused` should change. Independently reload the current replacement and require it still active/healthy with its approved recipient; confirm no other rule changed. Record time, before/after screenshots and exports, and the exact restore action. To undo, resume the same UID and restore its prior paused state. Do not use a folder-wide bulk action or delete anything.
+
+A pause can produce a resolved notification with reason Paused. That is administrative closure, not evidence that a failing metric recovered. The strict native API gate remains unverified while API access is blocked; UI evidence is described as UI evidence.
+
+Sources: [Grafana Error and No Data behavior](https://grafana.com/docs/grafana/latest/alerting/fundamentals/alert-rule-evaluation/nodata-and-error-states/), [notification configuration](https://grafana.com/docs/grafana/latest/alerting/configure-notifications/), and the saved native current/legacy exports.

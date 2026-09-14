@@ -1,0 +1,3998 @@
+{
+  "date": "2026-09-14",
+  "baseline": "e9dc368b4f4919e9377d73c744680c731643a6fa",
+  "method": "TypeScript exported-call AST inventory plus route/cron/package discovery. A test reference is a search lead, not proof of execution or coverage. Dynamic routes and delegated authorization are detailed in the human matrix.",
+  "sourceFileCount": 613,
+  "sourceFiles": [
+    ".github/dependabot.yml",
+    "observability/prometheus.yml",
+    "scripts/build-social-card.mjs",
+    "scripts/track-record.mjs",
+    "scripts/deploy-buildit-web.mjs",
+    "scripts/check-tracked-files.mjs",
+    "scripts/audit-dependencies.mjs",
+    "scripts/deploy-buildit-broker.mjs",
+    "scripts/run-local-audit.mjs",
+    "scripts/apply-grafana-ist-template.sh",
+    "observability/docker-compose.yml",
+    "observability/alerts.yml",
+    "infra/aws/artifacts.yaml",
+    "infra/aws/README.md",
+    ".github/workflows/ci.yml",
+    ".github/workflows/security.yml",
+    ".github/workflows/release.yml",
+    "tests/e2e-local/api-proof.mjs",
+    "tests/e2e-local/http-proof.mjs",
+    "tests/e2e-local/workspaces.spec.ts",
+    "tests/e2e-local/seed.fixture.txt",
+    "tests/e2e-local/fixtures.ts",
+    "convex/notificationOutbox.ts",
+    "convex/reviewAutofixWorker.ts",
+    "convex/repositorySync.test.ts",
+    "convex/auth.ts",
+    "convex/automaticReview.test.ts",
+    "convex/githubInstallations.ts",
+    "convex/configApproval.test.ts",
+    "convex/metrics.ts",
+    "convex/notificationSchema.ts",
+    "convex/findings.ts",
+    "convex/dashboardReviews.ts",
+    "convex/runStateData.ts",
+    "convex/reviews.ts",
+    "convex/durableReview.ts",
+    "convex/reviewAskData.ts",
+    "convex/audit.ts",
+    "convex/tenantIsolation.test.ts",
+    "convex/publicProof.test.ts",
+    "convex/accounting.test.ts",
+    "convex/users.ts",
+    "convex/repositoryConnections.ts",
+    "convex/changelogWorker.ts",
+    "convex/permissionReceipts.ts",
+    "convex/tsconfig.json",
+    "convex/askRateLimit.test.ts",
+    "convex/reviewHistory.ts",
+    "tests/reliability/bounds-load.test.ts",
+    "tests/e2e-production/two-user-isolation.spec.ts",
+    "packages/orchestrator/src/reviewPlan.ts",
+    "packages/orchestrator/src/findings.ts",
+    "packages/orchestrator/src/contextIndex.ts",
+    "packages/orchestrator/src/index.ts",
+    "packages/orchestrator/src/patchPolicy.ts",
+    "packages/orchestrator/src/changelog.ts",
+    "packages/orchestrator/src/requirements.ts",
+    "packages/orchestrator/src/modelChain.ts",
+    "packages/orchestrator/src/learning.ts",
+    "packages/orchestrator/src/repositoryConfig.ts",
+    "packages/orchestrator/src/promptChain.ts",
+    "packages/orchestrator/src/report.ts",
+    "packages/orchestrator/tsconfig.json",
+    "packages/orchestrator/package.json",
+    "scripts/lib/email-capture.mjs",
+    "scripts/lib/audit-decisions.mjs",
+    "scripts/lib/grafana-verification.mjs",
+    "scripts/lib/convex-production-target.mjs",
+    "scripts/lib/local-audit-web.mjs",
+    "scripts/queue-judging-prs.sh",
+    "scripts/provision-buildit-grafana-alerts.mjs",
+    "scripts/buildit-production.env",
+    "scripts/verify-cli-journeys.mjs",
+    "scripts/provision-buildit-grafana-template.mjs",
+    "scripts/verify-aws-boundary.mjs",
+    "scripts/deploy-buildit-production.mjs",
+    "scripts/verify-production-wiring.mjs",
+    "scripts/provision-buildit-grafana-dashboard.mjs",
+    "scripts/report-buildit-grafana-exports.mjs",
+    "scripts/capture-buildit-email.mjs",
+    "convex/metricReconciliation.ts",
+    "convex/auth.config.ts",
+    "convex/trackerOAuth.ts",
+    "convex/repositoryMemory.ts",
+    "convex/workspaceSummaries.test.ts",
+    "convex/notifications.test.ts",
+    "convex/reviewContextWorker.test.ts",
+    "convex/reviewAskWorker.ts",
+    "convex/crons.ts",
+    "convex/reconcileWorker.ts",
+    "convex/reviewEvidenceActions.test.ts",
+    "convex/telemetryWorker.ts",
+    "convex/webhookRetention.test.ts",
+    "convex/activation.test.ts",
+    "convex/telemetryWorker.test.ts",
+    "convex/automaticReviewData.ts",
+    "convex/integrations.ts",
+    "convex/reviewCommandData.ts",
+    "convex/usage.ts",
+    "convex/credentialRevocation.test.ts",
+    "convex/notificationWorker.ts",
+    "convex/artifactCleanupData.ts",
+    "convex/reviewEvidenceActions.ts",
+    "convex/telemetrySnapshotData.ts",
+    "convex/modelAccounting.ts",
+    "convex/findingFeedbackData.ts",
+    "convex/reviewLifecycleRecovery.test.ts",
+    "convex/telemetrySnapshotWorker.ts",
+    "convex/reviewReportWorker.ts",
+    "convex/memberships.ts",
+    "convex/githubInstallationsData.ts",
+    "convex/schema.ts",
+    "convex/tablePolicy.ts",
+    "convex/dashboardReviews.test.ts",
+    "convex/activation.ts",
+    "convex/trackerOAuthSchema.ts",
+    "convex/historySummaries.test.ts",
+    "convex/reviewAnalysisWorker.test.ts",
+    "convex/reviewCommandWorker.ts",
+    "convex/convex.config.ts",
+    "convex/reviewArtifactData.ts",
+    "convex/organizations.ts",
+    "convex/githubWebhookProcessor.ts",
+    "convex/trackerOAuthData.ts",
+    "convex/http.ts",
+    "convex/connectedJourney.test.ts",
+    "convex/executionRecordIntegrity.test.ts",
+    "convex/accountingSchema.ts",
+    "convex/publicProof.ts",
+    "convex/reviewAnalysisWorker.ts",
+    "convex/artifactErasure.test.ts",
+    "convex/workflowManager.ts",
+    "convex/notifications.ts",
+    "convex/reviewPublicationWorker.ts",
+    "convex/reviewContextWorker.ts",
+    "convex/artifacts.ts",
+    "convex/dashboardReviewData.ts",
+    "convex/changelogData.ts",
+    "convex/reviewAnalysisBounds.test.ts",
+    "convex/reviewAutofixWorker.test.ts",
+    "convex/reviewValidationWorker.ts",
+    "convex/durableReviewPolicy.test.ts",
+    "convex/publicFunctionPolicy.ts",
+    "convex/runtimeReadiness.test.ts",
+    "observability/grafana/notification-templates/buildit-operator-v1.tmpl",
+    "tests/fixtures/grafana-current-group-2026-09-14.json",
+    "tests/fixtures/grafana-legacy-group-2026-09-14.json",
+    "convex/reviewPublicationWorker.test.ts",
+    "convex/reviewState.ts",
+    "convex/reviewModelData.ts",
+    "convex/reviewPublicationData.ts",
+    "convex/artifactCleanupWorker.ts",
+    "convex/dataClassification.ts",
+    "convex/policyReauthentication.test.ts",
+    "convex/notificationOutbox.test.ts",
+    "convex/validators.ts",
+    "convex/runtimeReadiness.ts",
+    "convex/findingFeedbackWorker.ts",
+    "convex/reviewAutofixData.ts",
+    "convex/reviewValidationData.ts",
+    "convex/reviewEvidenceData.ts",
+    "convex/reviewReportWorker.test.ts",
+    "convex/githubWebhookData.ts",
+    "convex/evalLoop.ts",
+    "convex/reviewReportData.ts",
+    "convex/trackerOAuth.test.ts",
+    "packages/orchestrator/test/review-profile.test.ts",
+    "packages/orchestrator/test/changelog.test.ts",
+    "packages/orchestrator/test/reviewPlan.test.ts",
+    "packages/orchestrator/test/path-instructions.test.ts",
+    "apps/cli/src/doctor.test.ts",
+    "apps/cli/src/index.ts",
+    "apps/cli/src/credential-store.test.ts",
+    "apps/cli/src/remote-review.test.ts",
+    "apps/cli/src/remote-review.ts",
+    "apps/cli/src/local-review.test.ts",
+    "apps/cli/src/local-review.ts",
+    "apps/cli/src/doctor.ts",
+    "apps/cli/src/credential-store.ts",
+    "apps/cli/tsconfig.json",
+    "apps/cli/package.json",
+    "apps/cli/README.md",
+    "observability/otel-collector.yaml",
+    "tests/architecture/lint-coverage.test.ts",
+    "tests/architecture/local-audit-web.test.ts",
+    "tests/architecture/one-review-entry.test.ts",
+    "tests/architecture/broker-deployment-boundary.test.ts",
+    "tests/architecture/interface-accessibility.test.ts",
+    "tests/architecture/instruction-limits.test.ts",
+    "tests/architecture/vercel-upload-boundary.test.ts",
+    "tests/architecture/aws-inventory-policy.test.ts",
+    "tests/architecture/deployment-command.test.ts",
+    "tests/architecture/grafana-verification.test.ts",
+    "tests/architecture/sample-fixture-consistency.test.ts",
+    "tests/architecture/observability-snapshot.test.ts",
+    "tests/architecture/changelog-boundary.test.ts",
+    "tests/architecture/style-hook-coverage.test.ts",
+    "tests/architecture/aws-boundary.test.ts",
+    "tests/architecture/aws-verifier-credentials.test.ts",
+    "tests/architecture/audit-database-refresh.test.ts",
+    "tests/architecture/webhook-events.test.ts",
+    "tests/architecture/tenant-proof-assertions.test.ts",
+    "tests/architecture/evaluation-cli-entrypoint.test.ts",
+    "tests/architecture/convex-production-target.test.ts",
+    "tests/architecture/data-classification.test.ts",
+    "tests/architecture/workflow-supply-chain.test.ts",
+    "tests/architecture/dependency-audit-gate.test.ts",
+    "tests/architecture/health-wiring.test.ts",
+    "tests/architecture/merge-boundary.test.ts",
+    "tests/architecture/observability.test.ts",
+    "tests/architecture/context-selection-boundary.test.ts",
+    "tests/architecture/production-wiring.test.ts",
+    "tests/architecture/review-status-contract.test.ts",
+    "tests/architecture/capability-inventory.test.ts",
+    "tests/architecture/social-preview.test.ts",
+    "tests/architecture/verdict-single-source.test.ts",
+    "tests/architecture/public-function-inventory.test.ts",
+    "tests/architecture/required-live-gates.test.ts",
+    "tests/architecture/two-user-browser-harness.test.ts",
+    "tests/architecture/query-bounds.test.ts",
+    "tests/architecture/path-filter-safety.test.ts",
+    "tests/architecture/track-record.test.ts",
+    "tests/architecture/identity-only-access.test.ts",
+    "tests/architecture/autofix-cancellation-boundary.test.ts",
+    "tests/architecture/autofix-side-effect-keys.test.ts",
+    "tests/architecture/durable-workflow.test.ts",
+    "tests/architecture/incident-runbooks.test.ts",
+    "tests/architecture/asvs-control-matrix.test.ts",
+    "tests/architecture/public-function-reachability.test.ts",
+    "tests/architecture/execution-release-gate.test.ts",
+    "tests/architecture/release-claim.test.ts",
+    "tests/architecture/launch-guides.test.ts",
+    "tests/architecture/convex-runtime-boundary.test.ts",
+    "tests/architecture/model-grant-per-attempt.test.ts",
+    "tests/architecture/design-fixture-boundary.test.ts",
+    "tests/architecture/config-trust.test.ts",
+    "tests/architecture/review-comment-identity.test.ts",
+    "tests/architecture/review-feedback-routing.test.ts",
+    "tests/architecture/model-stage-contract.test.ts",
+    "observability/grafana/provisioning/dashboards/default.yml",
+    "packages/core/src/store.ts",
+    "packages/core/src/index.ts",
+    "packages/core/tsconfig.json",
+    "packages/core/package.json",
+    "packages/core/test/store.test.ts",
+    "packages/runner/src/vercelSandbox.ts",
+    "packages/runner/src/index.ts",
+    "packages/runner/tsconfig.json",
+    "packages/runner/test/runner.test.ts",
+    "packages/runner/test/missing-script.test.ts",
+    "packages/runner/test/vercelSandbox.test.ts",
+    "observability/grafana/provisioning/alerting/notification-templates.yml",
+    "observability/grafana/provisioning/datasources/default.yml",
+    "packages/orchestrator/test/report.test.ts",
+    "packages/orchestrator/test/patchPolicy.test.ts",
+    "packages/orchestrator/test/report-noise.test.ts",
+    "packages/orchestrator/test/pre-existing-failures.test.ts",
+    "packages/orchestrator/test/promptChain.test.ts",
+    "packages/orchestrator/test/findings.test.ts",
+    "packages/orchestrator/test/orchestrator.test.ts",
+    "packages/orchestrator/test/unreadable-sources.test.ts",
+    "packages/orchestrator/test/requirements.test.ts",
+    "packages/orchestrator/test/modelChain.test.ts",
+    "packages/orchestrator/test/change-summary.test.ts",
+    "packages/orchestrator/test/learning.test.ts",
+    "packages/orchestrator/test/repository-config.test.ts",
+    "packages/orchestrator/test/contextIndex.test.ts",
+    "convex/testing/summaryFixture.ts",
+    "packages/runner/package.json",
+    "observability/grafana/dashboards/buildit-overview.json",
+    "packages/contracts/src/check-conclusions.ts",
+    "packages/contracts/src/index.ts",
+    "packages/contracts/src/reviewDecision.ts",
+    "packages/contracts/src/review.ts",
+    "packages/contracts/tsconfig.json",
+    "packages/contracts/package.json",
+    "packages/runner/scripts/sandbox-smoke.mjs",
+    "packages/security/src/aws-kms.ts",
+    "packages/security/src/index.ts",
+    "packages/security/src/execution-grant.ts",
+    "packages/security/src/model-grant.ts",
+    "packages/security/src/tracker-grant.ts",
+    "packages/security/src/tracker-oauth-grant.ts",
+    "packages/security/src/artifact-grant.ts",
+    "packages/security/tsconfig.json",
+    "packages/security/package.json",
+    "packages/contracts/test/reviewDecision.test.ts",
+    "packages/contracts/test/contracts.test.ts",
+    "packages/security/test/model-grant.test.ts",
+    "packages/security/test/artifact-grant.test.ts",
+    "packages/security/test/aws-kms.test.ts",
+    "packages/security/test/execution-grant.test.ts",
+    "packages/security/test/redaction.test.ts",
+    "packages/security/test/tracker-grant.test.ts",
+    "packages/security/test/security.test.ts",
+    "tests/e2e/onboarding.spec.ts",
+    "tests/e2e/email-template.spec.ts",
+    "tests/e2e/email-template.spec.ts-snapshots/decision-email-changes-requested-mobile.png",
+    "tests/e2e/email-template.spec.ts-snapshots/decision-email-changes-requested-desktop.png",
+    "tests/e2e/convex-backend.ts",
+    "tests/e2e/sample-consistency.spec.ts",
+    "tests/e2e/product.spec.ts",
+    "tests/e2e/touch-targets.spec.ts",
+    "tests/e2e/accessibility.spec.ts",
+    "tests/e2e/__screenshots__README.md",
+    "packages/github/src/repository-writer.ts",
+    "packages/github/src/pull-request-context.ts",
+    "packages/github/src/index.ts",
+    "packages/github/src/repository-chunks.ts",
+    "packages/github/src/issue-context.ts",
+    "packages/github/src/request.ts",
+    "packages/github/src/repository-content.ts",
+    "packages/github/src/tracker-context.ts",
+    "packages/github/tsconfig.json",
+    "packages/github/package.json",
+    "packages/github/test/repository-content.test.ts",
+    "packages/github/test/repository-chunks.test.ts",
+    "packages/github/test/repository-writer.test.ts",
+    "packages/github/test/omission-coverage.test.ts",
+    "packages/github/test/pull-request-context.test.ts",
+    "packages/github/test/config-approval.test.ts",
+    "packages/github/test/ask-command.test.ts",
+    "packages/github/test/path-filters.test.ts",
+    "packages/github/test/github.test.ts",
+    "packages/github/test/tracker-context.test.ts",
+    "packages/github/test/request.test.ts",
+    "packages/github/test/one-comment-per-pr.test.ts",
+    "packages/github/test/commands.test.ts",
+    "packages/github/test/issue-context.test.ts",
+    "packages/github/test/inline-comments.test.ts",
+    "packages/providers/package.json",
+    "convex/lib/queueNotification.ts",
+    "convex/lib/providerFallback.ts",
+    "convex/lib/lifecycle.test.ts",
+    "convex/lib/validationEvidence.ts",
+    "convex/lib/monthlySpend.ts",
+    "convex/lib/githubProfile.ts",
+    "convex/lib/executionPlanSelection.test.ts",
+    "convex/lib/audit.ts",
+    "convex/lib/executionGate.ts",
+    "convex/lib/githubProfile.test.ts",
+    "convex/lib/blockingFindings.ts",
+    "convex/lib/providerRetry.ts",
+    "convex/lib/usageCost.ts",
+    "convex/lib/providerRetry.test.ts",
+    "convex/lib/parentConsistency.test.ts",
+    "convex/lib/budgetAccounting.ts",
+    "convex/lib/notificationRecipient.ts",
+    "convex/lib/webhookSignature.test.ts",
+    "convex/lib/monthlySpend.test.ts",
+    "convex/lib/workspaceFigureTypes.ts",
+    "convex/lib/platformFailureReport.ts",
+    "convex/lib/coverageGate.test.ts",
+    "convex/lib/parentScope.ts",
+    "convex/lib/parentConsistency.ts",
+    "convex/lib/accountedModel.ts",
+    "convex/lib/validationEvidence.test.ts",
+    "convex/lib/recordMetric.ts",
+    "convex/lib/findingOpinions.ts",
+    "convex/lib/executionGate.test.ts",
+    "convex/lib/lifecycle.ts",
+    "convex/lib/providerFallback.test.ts",
+    "convex/lib/tenantLimits.ts",
+    "convex/lib/platformFailureReport.test.ts",
+    "convex/lib/tenantLimits.test.ts",
+    "convex/lib/usageCost.test.ts",
+    "convex/lib/durableStages.ts",
+    "convex/lib/authz.ts",
+    "convex/lib/trackerCredential.ts",
+    "convex/lib/reportingPeriod.ts",
+    "convex/lib/runtimeVersion.ts",
+    "convex/lib/runIdentity.ts",
+    "convex/lib/coverageGate.ts",
+    "convex/lib/webhookSignature.ts",
+    "convex/lib/credentialRevocation.ts",
+    "packages/providers/tsconfig.json",
+    "packages/scanners/package.json",
+    "packages/telemetry/src/register.ts",
+    "packages/telemetry/src/index.ts",
+    "packages/telemetry/src/scrub.ts",
+    "packages/telemetry/tsconfig.json",
+    "packages/telemetry/package.json",
+    "packages/operations/src/effectiveLoc.ts",
+    "packages/operations/src/index.ts",
+    "packages/operations/src/email.ts",
+    "packages/operations/src/emailCaptureConfig.ts",
+    "packages/operations/src/emailCapture.ts",
+    "packages/operations/tsconfig.json",
+    "packages/operations/package.json",
+    "packages/telemetry/test/scrub.test.ts",
+    "packages/telemetry/test/telemetry.test.ts",
+    "packages/scanners/tsconfig.json",
+    "packages/operations/test/operations.test.ts",
+    "packages/operations/test/email-capture.test.ts",
+    "packages/operations/test/email.test.ts",
+    "packages/operations/test/effectiveLoc.test.ts",
+    "apps/web/src/instrumentation.ts",
+    "apps/web/src/proxy.test.ts",
+    "apps/web/src/route-map.ts",
+    "apps/web/src/proxy.ts",
+    "apps/web/src/security-policy.ts",
+    "apps/web/src/public-assets.ts",
+    "packages/runner/image/README.md",
+    "packages/runner/image/Dockerfile",
+    "apps/web/tsconfig.json",
+    "apps/web/package.json",
+    "packages/scanners/src/index.ts",
+    "apps/web/next-env.d.ts",
+    "apps/web/CLAUDE.md",
+    "apps/web/AGENTS.md",
+    "apps/web/next.config.ts",
+    "packages/evaluations/package.json",
+    "packages/providers/src/index.ts",
+    "packages/evaluations/tsconfig.json",
+    "packages/providers/test/accounting.test.ts",
+    "packages/providers/test/providers.test.ts",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-tour-1-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-91-tour-1-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-empty-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-running-desktop.png",
+    "packages/scanners/test/scanners.test.ts",
+    "packages/scanners/test/rule-corpus.test.ts",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-running-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/landing-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/setup-model-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-22-tour-1-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-populated-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/setup-model-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-91-tour-1-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-22-tour-1-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-cancelled-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-420-tour-1-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-passed-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-changes-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/landing-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/repositories-connected-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-changes-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-420-tour-1-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-tour-1-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-empty-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/repositories-connected-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-cancelled-mobile.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-populated-desktop.png",
+    "tests/e2e/accessibility.spec.ts-snapshots/reviews-418-tour-1-state-passed-mobile.png",
+    "packages/evaluations/test/historicalCases.test.ts",
+    "apps/web/public/robots.txt",
+    "packages/evaluations/src/designPartnerEvidence.ts",
+    "packages/evaluations/src/historicalCases.ts",
+    "packages/evaluations/src/detection.ts",
+    "packages/evaluations/src/detectionCli.ts",
+    "packages/evaluations/src/releaseEvidenceCli.ts",
+    "packages/evaluations/src/executableFixtures.ts",
+    "packages/evaluations/src/grader.ts",
+    "packages/evaluations/src/benchmarkAdapters.ts",
+    "packages/evaluations/src/metamorphic.ts",
+    "packages/evaluations/src/versionComparison.ts",
+    "packages/evaluations/src/designPartnerEvidenceCli.ts",
+    "packages/evaluations/src/populationAuditCli.ts",
+    "packages/evaluations/src/versionComparisonCli.ts",
+    "packages/evaluations/src/detectionRunner.ts",
+    "packages/evaluations/src/releaseEvidence.ts",
+    "packages/evaluations/src/cli.ts",
+    "packages/evaluations/src/humanLabels.ts",
+    "packages/evaluations/src/executableGold.ts",
+    "packages/evaluations/src/detectionCases.ts",
+    "packages/evaluations/src/score.ts",
+    "packages/evaluations/test/benchmarkAdapters.test.ts",
+    "packages/evaluations/test/executableFixtures.test.ts",
+    "packages/evaluations/test/designPartnerEvidence.test.ts",
+    "packages/evaluations/test/releaseEvidence.test.ts",
+    "packages/evaluations/test/detection.test.ts",
+    "packages/evaluations/test/grader.test.ts",
+    "packages/evaluations/test/metamorphic.test.ts",
+    "packages/evaluations/test/detectionRunner.test.ts",
+    "packages/evaluations/test/score.test.ts",
+    "packages/evaluations/test/humanLabels.test.ts",
+    "apps/web/public/icon.svg",
+    "apps/web/public/social-card.png",
+    "apps/web/public/favicon.ico",
+    "apps/web/public/mark.svg",
+    "apps/web/public/sitemap.xml",
+    "apps/web/src/app/live-connections.tsx",
+    "apps/web/src/app/reviews/review-row-groups.ts",
+    "apps/web/src/app/reviews/page.tsx",
+    "apps/web/src/app/reviews/[id]/live-review-detail.component.test.tsx",
+    "apps/web/src/app/reviews/[id]/page.tsx",
+    "apps/web/src/app/reviews/[id]/live-review-detail.tsx",
+    "apps/web/src/app/reviews/[id]/review-presentation.test.ts",
+    "apps/web/src/app/reviews/[id]/review-presentation.ts",
+    "apps/web/src/app/reviews/dashboard-review-start.test.ts",
+    "apps/web/src/app/reviews/activation-path.component.test.tsx",
+    "apps/web/src/app/reviews/activation-path.tsx",
+    "apps/web/src/app/reviews/dashboard-review-start.tsx",
+    "apps/web/src/app/reviews/review-row-groups.test.ts",
+    "apps/web/src/app/not-found.tsx",
+    "apps/web/src/app/mobile.css",
+    "apps/web/src/app/notification-preferences.component.test.tsx",
+    "apps/web/src/app/globals.css",
+    "packages/broker/src/tracker-http.ts",
+    "packages/broker/src/execution-http.ts",
+    "packages/broker/src/instrumentation.ts",
+    "packages/broker/src/index.ts",
+    "packages/broker/src/tracker-credentials.ts",
+    "packages/broker/src/model-http.ts",
+    "packages/broker/src/telemetry-ingest.ts",
+    "packages/broker/src/http.ts",
+    "packages/broker/src/artifact-http.ts",
+    "packages/broker/src/artifacts.ts",
+    "packages/broker/src/convex-gateway.ts",
+    "packages/broker/src/tracker-credential-http.ts",
+    "packages/broker/src/tracker-oauth-http.ts",
+    "packages/broker/src/tracker-oauth.ts",
+    "packages/broker/tsconfig.json",
+    "apps/web/src/app/public-routes.ts",
+    "apps/web/src/app/icon.svg",
+    "apps/web/src/app/workspace-route-boundary.tsx",
+    "apps/web/src/app/notification-email-state.test.ts",
+    "apps/web/src/app/sample-tour-boundary.test.ts",
+    "apps/web/src/app/model-key-state.ts",
+    "apps/web/src/app/track-record.json",
+    "apps/web/src/app/account.css",
+    "apps/web/src/app/model-key-state.test.ts",
+    "apps/web/src/app/action.tsx",
+    "apps/web/src/app/no-active-workspace.component.test.tsx",
+    "apps/web/src/app/error.tsx",
+    "apps/web/src/app/live-history.component.test.tsx",
+    "apps/web/src/app/pricing/page.tsx",
+    "apps/web/src/app/brand-glyph.tsx",
+    "apps/web/src/app/app-shell.tsx",
+    "apps/web/src/app/page.tsx",
+    "apps/web/src/app/execution-readiness.component.test.tsx",
+    "apps/web/src/app/model-key-form.component.test.tsx",
+    "apps/web/src/app/model-key-form.tsx",
+    "apps/web/src/app/history/page.tsx",
+    "apps/web/src/app/layout.tsx",
+    "apps/web/src/app/model-integration-state.component.test.tsx",
+    "apps/web/src/app/proof/page.tsx",
+    "apps/web/src/app/proof/error.tsx",
+    "apps/web/src/app/proof/layout.tsx",
+    "apps/web/src/app/proof/page.component.test.tsx",
+    "apps/web/src/app/public-shell.component.test.tsx",
+    "apps/web/src/app/notification-email-state.ts",
+    "apps/web/src/app/sample-data.ts",
+    "apps/web/src/app/live-metrics-usage.tsx",
+    "apps/web/src/app/live-history.tsx",
+    "apps/web/src/app/installation-claim.tsx",
+    "apps/web/src/app/installation-claim-message.ts",
+    "apps/web/src/app/permission-receipt.component.test.tsx",
+    "apps/web/src/app/workspace-sections.ts",
+    "apps/web/src/app/sandbox/scan-error-state.ts",
+    "apps/web/src/app/sandbox/page.tsx",
+    "apps/web/src/app/sandbox/layout.tsx",
+    "apps/web/src/app/sandbox/scan-error-state.test.ts",
+    "apps/web/src/app/account-status.component.test.tsx",
+    "apps/web/src/app/repository-connection-view.component.test.tsx",
+    "apps/web/src/app/public-shell.tsx",
+    "apps/web/src/app/installation-claim-message.test.ts",
+    "apps/web/src/app/convex-client-provider.tsx",
+    "apps/web/src/app/no-active-workspace.tsx",
+    "apps/web/src/app/live-audit.tsx",
+    "apps/web/src/app/notification-preferences.tsx",
+    "apps/web/src/app/workspace-switcher.tsx",
+    "apps/web/src/app/tracker-connections.component.test.tsx",
+    "apps/web/src/app/security-headers.test.ts",
+    "apps/web/src/app/tracker-oauth.component.test.tsx",
+    "apps/web/src/app/live-metrics-usage.component.test.tsx",
+    "apps/web/src/app/tracker-oauth.tsx",
+    "apps/web/src/app/account/page.tsx",
+    "apps/web/src/app/flows.css",
+    "apps/web/src/app/account-status.tsx",
+    "apps/web/src/app/setup/[step]/page.tsx",
+    "apps/web/src/app/setup/review/page.tsx",
+    "apps/web/src/app/setup/first-review.component.test.tsx",
+    "apps/web/src/app/data-handling/page.tsx",
+    "apps/web/src/app/execution-readiness.ts",
+    "packages/broker/package.json",
+    "packages/broker/api/credentials.ts",
+    "packages/broker/api/tracker-credentials.ts",
+    "packages/broker/api/health.ts",
+    "packages/broker/api/execute.ts",
+    "packages/broker/api/telemetry.ts",
+    "packages/broker/api/model.ts",
+    "packages/broker/api/tracker.ts",
+    "packages/broker/api/artifacts.ts",
+    "packages/broker/api/tracker-oauth.ts",
+    "apps/web/src/app/setup/first-review.tsx",
+    "packages/broker/vercel.json",
+    "apps/web/src/app/[section]/page.tsx",
+    "apps/web/src/app/sign-in/layout.tsx",
+    "apps/web/src/app/sign-in/page.tsx",
+    "packages/broker/test/tracker-oauth-http.test.ts",
+    "packages/broker/test/artifact-http.test.ts",
+    "packages/broker/test/execution-failure-modes.test.ts",
+    "packages/broker/test/execution-http.test.ts",
+    "packages/broker/test/tracker-http.test.ts",
+    "packages/broker/test/instrumentation.test.ts",
+    "packages/broker/test/execution-diagnostic.test.ts",
+    "packages/broker/test/model-http.test.ts",
+    "packages/broker/test/tracker-oauth.test.ts",
+    "packages/broker/test/credential-broker.test.ts",
+    "packages/broker/test/telemetry-ingest.test.ts",
+    "packages/broker/test/artifacts.test.ts",
+    "packages/broker/test/http.test.ts",
+    "packages/broker/test/origin-allowlist.test.ts",
+    "packages/broker/test/tracker-credentials.test.ts",
+    "packages/broker/test/convex-gateway.test.ts",
+    "apps/web/src/app/features/page.tsx",
+    "apps/web/src/app/setup/tracker/page.tsx",
+    "packages/broker/public/health.json",
+    "apps/web/src/app/api/github/webhooks/route.ts",
+    "apps/web/src/app/api/scan/route.ts",
+    "apps/web/src/app/api/scan/route.test.ts",
+    "apps/web/src/app/api/health/route.ts"
+  ],
+  "pages": [
+    {
+      "file": "apps/web/src/app/reviews/page.tsx",
+      "route": "/reviews",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/reviews/[id]/page.tsx",
+      "route": "/reviews/[id]",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/pricing/page.tsx",
+      "route": "/pricing",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/page.tsx",
+      "route": "/",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/history/page.tsx",
+      "route": "/history",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/proof/page.tsx",
+      "route": "/proof",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/sandbox/page.tsx",
+      "route": "/sandbox",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/account/page.tsx",
+      "route": "/account",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/setup/[step]/page.tsx",
+      "route": "/setup/[step]",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/setup/review/page.tsx",
+      "route": "/setup/review",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/data-handling/page.tsx",
+      "route": "/data-handling",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/[section]/page.tsx",
+      "route": "/[section]",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/sign-in/page.tsx",
+      "route": "/sign-in",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/features/page.tsx",
+      "route": "/features",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/setup/tracker/page.tsx",
+      "route": "/setup/tracker",
+      "kind": "page"
+    },
+    {
+      "file": "apps/web/src/app/api/github/webhooks/route.ts",
+      "route": "/api/github/webhooks",
+      "kind": "HTTP"
+    },
+    {
+      "file": "apps/web/src/app/api/scan/route.ts",
+      "route": "/api/scan",
+      "kind": "HTTP"
+    },
+    {
+      "file": "apps/web/src/app/api/health/route.ts",
+      "route": "/api/health",
+      "kind": "HTTP"
+    }
+  ],
+  "broker": [
+    {
+      "file": "packages/broker/api/credentials.ts",
+      "route": "/api/credentials"
+    },
+    {
+      "file": "packages/broker/api/tracker-credentials.ts",
+      "route": "/api/tracker-credentials"
+    },
+    {
+      "file": "packages/broker/api/health.ts",
+      "route": "/api/health"
+    },
+    {
+      "file": "packages/broker/api/execute.ts",
+      "route": "/api/execute"
+    },
+    {
+      "file": "packages/broker/api/telemetry.ts",
+      "route": "/api/telemetry"
+    },
+    {
+      "file": "packages/broker/api/model.ts",
+      "route": "/api/model"
+    },
+    {
+      "file": "packages/broker/api/tracker.ts",
+      "route": "/api/tracker"
+    },
+    {
+      "file": "packages/broker/api/artifacts.ts",
+      "route": "/api/artifacts"
+    },
+    {
+      "file": "packages/broker/api/tracker-oauth.ts",
+      "route": "/api/tracker-oauth"
+    }
+  ],
+  "procedures": [
+    {
+      "reference": "notificationOutbox:fanout",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/notificationOutbox.ts",
+      "line": 18,
+      "roles": [],
+      "tables": [
+        "memberships",
+        "notificationPreferences",
+        "notifications"
+      ],
+      "directTestReferences": [
+        "convex/notificationOutbox.test.ts"
+      ]
+    },
+    {
+      "reference": "notificationOutbox:start",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/notificationOutbox.ts",
+      "line": 47,
+      "roles": [],
+      "tables": [
+        "notifications",
+        "emailBatches"
+      ],
+      "directTestReferences": [
+        "convex/notificationOutbox.test.ts"
+      ]
+    },
+    {
+      "reference": "notificationOutbox:prepare",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/notificationOutbox.ts",
+      "line": 80,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/notificationOutbox.test.ts"
+      ]
+    },
+    {
+      "reference": "notificationOutbox:finish",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/notificationOutbox.ts",
+      "line": 104,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "notificationOutbox:purgeDeletedOrganization",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/notificationOutbox.ts",
+      "line": 121,
+      "roles": [],
+      "tables": [
+        "notifications",
+        "notificationFanouts",
+        "emailBatches",
+        "notificationPreferences"
+      ],
+      "directTestReferences": [
+        "convex/notificationOutbox.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewAutofixWorker:runConvergence",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewAutofixWorker.ts",
+      "line": 239,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewAutofixWorker:deliverPassed",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewAutofixWorker.ts",
+      "line": 699,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewAutofixWorker:publishFailure",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewAutofixWorker.ts",
+      "line": 987,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "githubInstallations:claim",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/githubInstallations.ts",
+      "line": 11,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "githubInstallations:syncRepositories",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/githubInstallations.ts",
+      "line": 50,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "metrics:summarize",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/metrics.ts",
+      "line": 8,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "metricEvents"
+      ],
+      "directTestReferences": [
+        "tests/e2e-local/workspaces.spec.ts",
+        "convex/tenantIsolation.test.ts",
+        "convex/workspaceSummaries.test.ts",
+        "apps/web/src/app/no-active-workspace.component.test.tsx",
+        "apps/web/src/app/live-metrics-usage.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "findings:dismiss",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/findings.ts",
+      "line": 14,
+      "roles": [
+        "developer"
+      ],
+      "tables": [
+        "findings",
+        "findingSuppressions",
+        "userProfiles"
+      ],
+      "directTestReferences": [
+        "convex/historySummaries.test.ts",
+        "convex/connectedJourney.test.ts",
+        "tests/architecture/public-function-reachability.test.ts",
+        "apps/web/src/app/reviews/[id]/live-review-detail.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "dashboardReviews:prepare",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/dashboardReviews.ts",
+      "line": 51,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "apps/web/src/app/execution-readiness.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "dashboardReviews:start",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/dashboardReviews.ts",
+      "line": 69,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "dashboardReviews:cancel",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/dashboardReviews.ts",
+      "line": 84,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "runStateData:record",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/runStateData.ts",
+      "line": 25,
+      "roles": [],
+      "tables": [
+        "runState"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "runStateData:forRun",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/runStateData.ts",
+      "line": 105,
+      "roles": [],
+      "tables": [
+        "runState"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviews:list",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/reviews.ts",
+      "line": 32,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "reviews"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/historySummaries.test.ts"
+      ]
+    },
+    {
+      "reference": "reviews:get",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/reviews.ts",
+      "line": 49,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/historySummaries.test.ts",
+        "convex/connectedJourney.test.ts",
+        "tests/architecture/public-function-reachability.test.ts",
+        "apps/web/src/app/reviews/[id]/live-review-detail.component.test.tsx",
+        "apps/web/src/app/reviews/[id]/review-presentation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviews:getEvidence",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/reviews.ts",
+      "line": 59,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "requirements",
+        "findings",
+        "checkRuns",
+        "autofixRounds",
+        "reviewEvents",
+        "modelStageRuns",
+        "usageLedger",
+        "runState"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/historySummaries.test.ts",
+        "convex/connectedJourney.test.ts",
+        "tests/architecture/public-function-reachability.test.ts",
+        "apps/web/src/app/reviews/[id]/live-review-detail.component.test.tsx",
+        "apps/web/src/app/reviews/[id]/review-presentation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviews:runHistory",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/reviews.ts",
+      "line": 144,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "reviews",
+        "modelStageRuns",
+        "usageLedger",
+        "findings"
+      ],
+      "directTestReferences": [
+        "convex/historySummaries.test.ts",
+        "convex/connectedJourney.test.ts",
+        "apps/web/src/app/reviews/[id]/live-review-detail.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "reviews:compareRuns",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/reviews.ts",
+      "line": 186,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "modelStageRuns",
+        "usageLedger",
+        "findings"
+      ],
+      "directTestReferences": [
+        "convex/historySummaries.test.ts",
+        "convex/connectedJourney.test.ts",
+        "apps/web/src/app/reviews/[id]/live-review-detail.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "durableReview:assertActive",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/durableReview.ts",
+      "line": 30,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "tests/architecture/autofix-cancellation-boundary.test.ts"
+      ]
+    },
+    {
+      "reference": "durableReview:checkpoint",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/durableReview.ts",
+      "line": 52,
+      "roles": [],
+      "tables": [
+        "reviewEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/reviewLifecycleRecovery.test.ts",
+        "tests/architecture/durable-workflow.test.ts"
+      ]
+    },
+    {
+      "reference": "durableReview:start",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/durableReview.ts",
+      "line": 169,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/accounting.test.ts"
+      ]
+    },
+    {
+      "reference": "durableReview:publicationCompleted",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/durableReview.ts",
+      "line": 230,
+      "roles": [],
+      "tables": [
+        "reviewEvents"
+      ],
+      "directTestReferences": [
+        "convex/reviewLifecycleRecovery.test.ts",
+        "tests/architecture/durable-workflow.test.ts"
+      ]
+    },
+    {
+      "reference": "durableReview:fallbackOrReport",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/durableReview.ts",
+      "line": 371,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/accounting.test.ts",
+        "convex/reviewLifecycleRecovery.test.ts"
+      ]
+    },
+    {
+      "reference": "durableReview:workflowCompleted",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/durableReview.ts",
+      "line": 390,
+      "roles": [],
+      "tables": [
+        "reviewEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "durableReview:cancel",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/durableReview.ts",
+      "line": 522,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "durableReview:restart",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/durableReview.ts",
+      "line": 552,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "durableReview:workflowRuntimeStatus",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/durableReview.ts",
+      "line": 560,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "durableReview:reconcileStuck",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/durableReview.ts",
+      "line": 579,
+      "roles": [],
+      "tables": [
+        "reviews"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewAskData:askScope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewAskData.ts",
+      "line": 13,
+      "roles": [],
+      "tables": [
+        "reviews",
+        "providerCredentials",
+        "artifacts"
+      ],
+      "directTestReferences": [
+        "convex/executionRecordIntegrity.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewAskData:recordAsk",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewAskData.ts",
+      "line": 62,
+      "roles": [],
+      "tables": [
+        "usageLedger"
+      ],
+      "directTestReferences": [
+        "convex/accounting.test.ts"
+      ]
+    },
+    {
+      "reference": "audit:list",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/audit.ts",
+      "line": 15,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "auditEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "apps/web/src/app/no-active-workspace.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "audit:verifyChain",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/audit.ts",
+      "line": 43,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "auditEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "tests/architecture/public-function-reachability.test.ts"
+      ]
+    },
+    {
+      "reference": "users:viewer",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/users.ts",
+      "line": 4,
+      "roles": [],
+      "tables": [
+        "userProfiles"
+      ],
+      "directTestReferences": [
+        "apps/web/src/app/account-status.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "users:installationIdentity",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/users.ts",
+      "line": 16,
+      "roles": [],
+      "tables": [
+        "userProfiles"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "users:sessions",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/users.ts",
+      "line": 18,
+      "roles": [],
+      "tables": [
+        "authSessions"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "users:revokeOtherSessions",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/users.ts",
+      "line": 33,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "repositoryConnections:current",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/repositoryConnections.ts",
+      "line": 7,
+      "roles": [],
+      "tables": [
+        "userPreferences",
+        "memberships",
+        "githubInstallations",
+        "repositories",
+        "userProfiles"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/connectedJourney.test.ts",
+        "tests/e2e/accessibility.spec.ts",
+        "apps/web/src/app/notification-preferences.component.test.tsx",
+        "apps/web/src/app/no-active-workspace.component.test.tsx",
+        "apps/web/src/app/execution-readiness.component.test.tsx",
+        "apps/web/src/app/model-key-form.component.test.tsx",
+        "apps/web/src/app/model-integration-state.component.test.tsx",
+        "apps/web/src/app/permission-receipt.component.test.tsx",
+        "apps/web/src/app/repository-connection-view.component.test.tsx",
+        "apps/web/src/app/tracker-connections.component.test.tsx",
+        "apps/web/src/app/live-metrics-usage.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "repositoryConnections:setReviewPolicy",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/repositoryConnections.ts",
+      "line": 33,
+      "roles": [
+        "admin"
+      ],
+      "tables": [],
+      "directTestReferences": [
+        "convex/policyReauthentication.test.ts"
+      ]
+    },
+    {
+      "reference": "changelogWorker:record",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/changelogWorker.ts",
+      "line": 14,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "permissionReceipts:current",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/permissionReceipts.ts",
+      "line": 4,
+      "roles": [],
+      "tables": [
+        "userPreferences",
+        "userProfiles",
+        "memberships",
+        "githubInstallations",
+        "repositories",
+        "providerCredentials"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "apps/web/src/app/no-active-workspace.component.test.tsx",
+        "apps/web/src/app/permission-receipt.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "reviewHistory:summary",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/reviewHistory.ts",
+      "line": 12,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "reviews",
+        "usageLedger",
+        "findings",
+        "findingFeedback"
+      ],
+      "directTestReferences": [
+        "tests/e2e-local/workspaces.spec.ts",
+        "convex/historySummaries.test.ts"
+      ]
+    },
+    {
+      "reference": "metricReconciliation:backfill",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/metricReconciliation.ts",
+      "line": 8,
+      "roles": [],
+      "tables": [
+        "reviews",
+        "checkRuns",
+        "modelStageRuns",
+        "metricEvents"
+      ],
+      "directTestReferences": [
+        "convex/workspaceSummaries.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuth:availability",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/trackerOAuth.ts",
+      "line": 29,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "apps/web/src/app/tracker-oauth.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "trackerOAuth:begin",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/trackerOAuth.ts",
+      "line": 34,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "apps/web/src/app/tracker-oauth.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "trackerOAuth:complete",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/trackerOAuth.ts",
+      "line": 41,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "apps/web/src/app/tracker-oauth.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "trackerOAuth:projects",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/trackerOAuth.ts",
+      "line": 51,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "apps/web/src/app/tracker-oauth.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "trackerOAuth:connect",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/trackerOAuth.ts",
+      "line": 55,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "apps/web/src/app/tracker-oauth.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "trackerOAuth:disconnect",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/trackerOAuth.ts",
+      "line": 60,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "apps/web/src/app/tracker-oauth.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "trackerOAuth:refreshForReview",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/trackerOAuth.ts",
+      "line": 66,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "repositoryMemory:forRepository",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/repositoryMemory.ts",
+      "line": 52,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/connectedJourney.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewAskWorker:answer",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewAskWorker.ts",
+      "line": 48,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/accounting.test.ts"
+      ]
+    },
+    {
+      "reference": "reconcileWorker:sweep",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reconcileWorker.ts",
+      "line": 43,
+      "roles": [],
+      "tables": [
+        "webhookDeliveries",
+        "reviews"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/webhookRetention.test.ts",
+        "convex/reviewLifecycleRecovery.test.ts"
+      ]
+    },
+    {
+      "reference": "telemetryWorker:emit",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/telemetryWorker.ts",
+      "line": 29,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "automaticReviewData:automaticEligibility",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/automaticReviewData.ts",
+      "line": 7,
+      "roles": [],
+      "tables": [
+        "repositories",
+        "pullRequestPauses",
+        "reviews"
+      ],
+      "directTestReferences": [
+        "convex/automaticReview.test.ts"
+      ]
+    },
+    {
+      "reference": "automaticReviewData:setPause",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/automaticReviewData.ts",
+      "line": 30,
+      "roles": [],
+      "tables": [
+        "pullRequestPauses"
+      ],
+      "directTestReferences": [
+        "convex/automaticReview.test.ts"
+      ]
+    },
+    {
+      "reference": "automaticReviewData:setReviewTrigger",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/automaticReviewData.ts",
+      "line": 48,
+      "roles": [],
+      "tables": [
+        "repositories"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "automaticReviewData:setApprovedConfigHash",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/automaticReviewData.ts",
+      "line": 62,
+      "roles": [],
+      "tables": [
+        "repositories"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "automaticReviewData:recordPendingConfig",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/automaticReviewData.ts",
+      "line": 76,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/configApproval.test.ts"
+      ]
+    },
+    {
+      "reference": "integrations:listTrackerConnections",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/integrations.ts",
+      "line": 9,
+      "roles": [
+        "admin"
+      ],
+      "tables": [
+        "trackerConnections"
+      ],
+      "directTestReferences": [
+        "apps/web/src/app/tracker-connections.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "integrations:storeEncryptedTrackerConnection",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/integrations.ts",
+      "line": 10,
+      "roles": [
+        "admin"
+      ],
+      "tables": [
+        "trackerConnections"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "integrations:revokeTrackerConnection",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/integrations.ts",
+      "line": 11,
+      "roles": [
+        "admin"
+      ],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "integrations:listProviderCredentials",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/integrations.ts",
+      "line": 13,
+      "roles": [
+        "admin"
+      ],
+      "tables": [
+        "providerCredentials"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "apps/web/src/app/model-integration-state.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "integrations:authorizeCredentialWrite",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/integrations.ts",
+      "line": 29,
+      "roles": [
+        "admin"
+      ],
+      "tables": [
+        "credentialRateLimits"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "integrations:storeEncryptedCredential",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/integrations.ts",
+      "line": 48,
+      "roles": [
+        "admin"
+      ],
+      "tables": [
+        "providerCredentials"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "integrations:revokeProviderCredential",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/integrations.ts",
+      "line": 91,
+      "roles": [
+        "admin"
+      ],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewCommandData:commandScope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewCommandData.ts",
+      "line": 4,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "usage:prepare",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/usage.ts",
+      "line": 12,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [],
+      "directTestReferences": [
+        "tests/e2e-local/workspaces.spec.ts",
+        "convex/workspaceSummaries.test.ts"
+      ]
+    },
+    {
+      "reference": "usage:summarize",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/usage.ts",
+      "line": 21,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "usageLedger"
+      ],
+      "directTestReferences": [
+        "tests/e2e-local/workspaces.spec.ts",
+        "convex/tenantIsolation.test.ts",
+        "convex/workspaceSummaries.test.ts",
+        "apps/web/src/app/no-active-workspace.component.test.tsx",
+        "apps/web/src/app/live-metrics-usage.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "notificationWorker:captureBatch",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/notificationWorker.ts",
+      "line": 8,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/notificationOutbox.test.ts"
+      ]
+    },
+    {
+      "reference": "artifactCleanupData:claimExpired",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/artifactCleanupData.ts",
+      "line": 6,
+      "roles": [],
+      "tables": [
+        "artifacts"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/artifactErasure.test.ts"
+      ]
+    },
+    {
+      "reference": "artifactCleanupData:eraseReviewEvidence",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/artifactCleanupData.ts",
+      "line": 38,
+      "roles": [],
+      "tables": [
+        "artifacts"
+      ],
+      "directTestReferences": [
+        "convex/artifactErasure.test.ts"
+      ]
+    },
+    {
+      "reference": "artifactCleanupData:completeDeletion",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/artifactCleanupData.ts",
+      "line": 54,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "artifactCleanupData:failDeletion",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/artifactCleanupData.ts",
+      "line": 65,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "artifactCleanupData:listTerminal",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/artifactCleanupData.ts",
+      "line": 75,
+      "roles": [],
+      "tables": [
+        "artifacts"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "artifactCleanupData:retryTerminal",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/artifactCleanupData.ts",
+      "line": 84,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewEvidenceActions:getFindingDetails",
+      "kind": "action",
+      "access": "public",
+      "file": "convex/reviewEvidenceActions.ts",
+      "line": 58,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "apps/web/src/app/reviews/[id]/live-review-detail.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "telemetrySnapshotData:snapshot",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/telemetrySnapshotData.ts",
+      "line": 9,
+      "roles": [],
+      "tables": [
+        "reviews",
+        "organizations",
+        "artifacts",
+        "usageLedger",
+        "metricEvents"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "modelAccounting:reconcile",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/modelAccounting.ts",
+      "line": 12,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/accounting.test.ts"
+      ]
+    },
+    {
+      "reference": "modelAccounting:snapshot",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/modelAccounting.ts",
+      "line": 18,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "tests/e2e-local/workspaces.spec.ts",
+        "convex/accounting.test.ts"
+      ]
+    },
+    {
+      "reference": "modelAccounting:reviewSnapshot",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/modelAccounting.ts",
+      "line": 21,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/accounting.test.ts"
+      ]
+    },
+    {
+      "reference": "modelAccounting:reserve",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/modelAccounting.ts",
+      "line": 30,
+      "roles": [],
+      "tables": [
+        "modelInvocations",
+        "reviewEvents",
+        "usageLedger"
+      ],
+      "directTestReferences": [
+        "tests/e2e-local/workspaces.spec.ts",
+        "convex/accounting.test.ts",
+        "convex/askRateLimit.test.ts"
+      ]
+    },
+    {
+      "reference": "modelAccounting:settle",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/modelAccounting.ts",
+      "line": 82,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "tests/e2e-local/workspaces.spec.ts",
+        "convex/accounting.test.ts"
+      ]
+    },
+    {
+      "reference": "findingFeedbackData:record",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/findingFeedbackData.ts",
+      "line": 7,
+      "roles": [],
+      "tables": [
+        "findings"
+      ],
+      "directTestReferences": [
+        "convex/historySummaries.test.ts"
+      ]
+    },
+    {
+      "reference": "findingFeedbackData:feedbackForRepository",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/findingFeedbackData.ts",
+      "line": 37,
+      "roles": [],
+      "tables": [
+        "findingFeedback"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "findingFeedbackData:repositoryByGithubId",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/findingFeedbackData.ts",
+      "line": 46,
+      "roles": [],
+      "tables": [
+        "repositories"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "findingFeedbackData:recordByIndex",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/findingFeedbackData.ts",
+      "line": 57,
+      "roles": [],
+      "tables": [
+        "reviews",
+        "findings"
+      ],
+      "directTestReferences": [
+        "convex/historySummaries.test.ts"
+      ]
+    },
+    {
+      "reference": "telemetrySnapshotWorker:emit",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/telemetrySnapshotWorker.ts",
+      "line": 12,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewReportWorker:compose",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewReportWorker.ts",
+      "line": 65,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "memberships:list",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/memberships.ts",
+      "line": 21,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "memberships",
+        "userProfiles"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "memberships:invite",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/memberships.ts",
+      "line": 34,
+      "roles": [
+        "admin"
+      ],
+      "tables": [
+        "memberships"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "tests/architecture/public-function-reachability.test.ts"
+      ]
+    },
+    {
+      "reference": "memberships:inviteByGitHubLogin",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/memberships.ts",
+      "line": 56,
+      "roles": [
+        "admin"
+      ],
+      "tables": [
+        "userProfiles",
+        "memberships"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "tests/architecture/public-function-reachability.test.ts"
+      ]
+    },
+    {
+      "reference": "memberships:listInvitations",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/memberships.ts",
+      "line": 88,
+      "roles": [],
+      "tables": [
+        "memberships"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "memberships:accept",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/memberships.ts",
+      "line": 116,
+      "roles": [],
+      "tables": [
+        "memberships",
+        "userPreferences"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "tests/architecture/public-function-reachability.test.ts"
+      ]
+    },
+    {
+      "reference": "memberships:changeRole",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/memberships.ts",
+      "line": 139,
+      "roles": [
+        "admin"
+      ],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "memberships:remove",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/memberships.ts",
+      "line": 153,
+      "roles": [
+        "admin"
+      ],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "githubInstallationsData:attachInstallation",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/githubInstallationsData.ts",
+      "line": 56,
+      "roles": [],
+      "tables": [
+        "organizations",
+        "memberships",
+        "githubInstallations",
+        "userPreferences"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "githubInstallationsData:syncInstallationRepositories",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/githubInstallationsData.ts",
+      "line": 82,
+      "roles": [],
+      "tables": [
+        "githubInstallations"
+      ],
+      "directTestReferences": [
+        "convex/repositorySync.test.ts"
+      ]
+    },
+    {
+      "reference": "activation:funnel",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/activation.ts",
+      "line": 20,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "memberships",
+        "repositories",
+        "providerCredentials",
+        "reviews",
+        "auditEvents",
+        "reviewEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/historySummaries.test.ts",
+        "tests/architecture/query-bounds.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewCommandWorker:respond",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewCommandWorker.ts",
+      "line": 25,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewArtifactData:contextScope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewArtifactData.ts",
+      "line": 8,
+      "roles": [],
+      "tables": [
+        "trackerConnections"
+      ],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewArtifactData:markTrackerUsed",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewArtifactData.ts",
+      "line": 27,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewArtifactData:reserve",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewArtifactData.ts",
+      "line": 29,
+      "roles": [],
+      "tables": [
+        "artifacts"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewArtifactData:complete",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewArtifactData.ts",
+      "line": 51,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "organizations:listMine",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/organizations.ts",
+      "line": 7,
+      "roles": [],
+      "tables": [
+        "memberships"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "organizations:active",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/organizations.ts",
+      "line": 25,
+      "roles": [],
+      "tables": [
+        "userPreferences",
+        "memberships"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "organizations:selectActive",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/organizations.ts",
+      "line": 41,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "userPreferences"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "organizations:clearActive",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/organizations.ts",
+      "line": 52,
+      "roles": [],
+      "tables": [
+        "userPreferences"
+      ],
+      "directTestReferences": [
+        "tests/architecture/public-function-reachability.test.ts"
+      ]
+    },
+    {
+      "reference": "organizations:updateCapacity",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/organizations.ts",
+      "line": 65,
+      "roles": [
+        "owner"
+      ],
+      "tables": [],
+      "directTestReferences": [
+        "tests/e2e-local/workspaces.spec.ts",
+        "convex/tenantIsolation.test.ts",
+        "tests/architecture/public-function-reachability.test.ts"
+      ]
+    },
+    {
+      "reference": "organizations:setCapacityLimits",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/organizations.ts",
+      "line": 95,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "githubWebhookProcessor:processWebhook",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/githubWebhookProcessor.ts",
+      "line": 166,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "githubWebhookProcessor:processPullRequestWebhook",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/githubWebhookProcessor.ts",
+      "line": 346,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "githubWebhookProcessor:processPushWebhook",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/githubWebhookProcessor.ts",
+      "line": 399,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "trackerOAuthData:authorize",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 28,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "trackerOAuthData:prepare",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 29,
+      "roles": [],
+      "tables": [
+        "trackerOAuthStates"
+      ],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:consume",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 39,
+      "roles": [],
+      "tables": [
+        "trackerOAuthStates"
+      ],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:saveDraft",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 48,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:getDraft",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 55,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "trackerOAuthData:pending",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 56,
+      "roles": [],
+      "tables": [
+        "trackerOAuthStates"
+      ],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts",
+        "apps/web/src/app/tracker-oauth.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:finish",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 64,
+      "roles": [],
+      "tables": [
+        "trackerConnections"
+      ],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:fail",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 74,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:expire",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 75,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:disconnect",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 76,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:claimRefresh",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 90,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:finishRefresh",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 98,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:failRefresh",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 105,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:purgeOrganization",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 114,
+      "roles": [],
+      "tables": [
+        "trackerOAuthStates",
+        "trackerConnections"
+      ],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "trackerOAuthData:sweepDeletedOrganizations",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/trackerOAuthData.ts",
+      "line": 128,
+      "roles": [],
+      "tables": [
+        "organizations"
+      ],
+      "directTestReferences": [
+        "convex/trackerOAuth.test.ts"
+      ]
+    },
+    {
+      "reference": "publicProof:summary",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/publicProof.ts",
+      "line": 34,
+      "roles": [],
+      "tables": [
+        "reviews",
+        "findings",
+        "usageLedger"
+      ],
+      "directTestReferences": [
+        "convex/publicProof.test.ts",
+        "convex/historySummaries.test.ts",
+        "tests/e2e/onboarding.spec.ts",
+        "apps/web/src/app/proof/page.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "publicProof:recentPublicReviews",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/publicProof.ts",
+      "line": 109,
+      "roles": [],
+      "tables": [
+        "repositories",
+        "reviews"
+      ],
+      "directTestReferences": [
+        "convex/historySummaries.test.ts",
+        "apps/web/src/app/proof/page.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "reviewAnalysisWorker:analyze",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewAnalysisWorker.ts",
+      "line": 212,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "tests/architecture/durable-workflow.test.ts"
+      ]
+    },
+    {
+      "reference": "notifications:preferences",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/notifications.ts",
+      "line": 17,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "notificationPreferences"
+      ],
+      "directTestReferences": [
+        "convex/notifications.test.ts",
+        "convex/notificationOutbox.test.ts",
+        "apps/web/src/app/no-active-workspace.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "notifications:updatePreferences",
+      "kind": "mutation",
+      "access": "public",
+      "file": "convex/notifications.ts",
+      "line": 38,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "notificationPreferences"
+      ],
+      "directTestReferences": [
+        "convex/notifications.test.ts",
+        "convex/notificationOutbox.test.ts",
+        "tests/architecture/public-function-reachability.test.ts"
+      ]
+    },
+    {
+      "reference": "notifications:resolveDecisionRecipient",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/notifications.ts",
+      "line": 60,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/notifications.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewPublicationWorker:publish",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewPublicationWorker.ts",
+      "line": 81,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "tests/architecture/durable-workflow.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewPublicationWorker:publishPlatformFailure",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewPublicationWorker.ts",
+      "line": 131,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "tests/architecture/durable-workflow.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewPublicationWorker:acknowledge",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewPublicationWorker.ts",
+      "line": 232,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewContextWorker:gather",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewContextWorker.ts",
+      "line": 52,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "tests/architecture/durable-workflow.test.ts"
+      ]
+    },
+    {
+      "reference": "artifacts:getMetadata",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/artifacts.ts",
+      "line": 5,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "tests/architecture/public-function-reachability.test.ts"
+      ]
+    },
+    {
+      "reference": "dashboardReviewData:scope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/dashboardReviewData.ts",
+      "line": 17,
+      "roles": [
+        "developer"
+      ],
+      "tables": [
+        "providerCredentials"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "dashboardReviewData:availableProviders",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/dashboardReviewData.ts",
+      "line": 34,
+      "roles": [
+        "developer"
+      ],
+      "tables": [
+        "providerCredentials"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "apps/web/src/app/execution-readiness.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "dashboardReviewData:cancellationScope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/dashboardReviewData.ts",
+      "line": 49,
+      "roles": [
+        "developer"
+      ],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "dashboardReviewData:create",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/dashboardReviewData.ts",
+      "line": 69,
+      "roles": [],
+      "tables": [
+        "memberships",
+        "reviews",
+        "configRevisions",
+        "providerCredentials",
+        "reviewLocks",
+        "reviewEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "dashboardReviewData:recordPreview",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/dashboardReviewData.ts",
+      "line": 123,
+      "roles": [],
+      "tables": [
+        "memberships",
+        "auditEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "changelogData:changelogScope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/changelogData.ts",
+      "line": 6,
+      "roles": [],
+      "tables": [
+        "repositories",
+        "reviews",
+        "findings"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewValidationWorker:validate",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/reviewValidationWorker.ts",
+      "line": 14,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "tests/architecture/durable-workflow.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewState:baseAdvance",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewState.ts",
+      "line": 58,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/reviewLifecycleRecovery.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewState:transition",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewState.ts",
+      "line": 67,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/workspaceSummaries.test.ts",
+        "convex/notificationOutbox.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewState:markStale",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewState.ts",
+      "line": 99,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/workspaceSummaries.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewState:appendEvent",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewState.ts",
+      "line": 110,
+      "roles": [],
+      "tables": [
+        "reviewEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewState:acquireLease",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewState.ts",
+      "line": 127,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewState:requestCancellation",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewState.ts",
+      "line": 138,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/reviewLifecycleRecovery.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewState:expireBlocked",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewState.ts",
+      "line": 159,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewState:claimActiveReview",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewState.ts",
+      "line": 174,
+      "roles": [],
+      "tables": [
+        "reviewLocks"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewState:reserveSideEffect",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewState.ts",
+      "line": 192,
+      "roles": [],
+      "tables": [
+        "githubSideEffects"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "tests/architecture/autofix-side-effect-keys.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewState:recordAutofixAttempt",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewState.ts",
+      "line": 220,
+      "roles": [],
+      "tables": [
+        "autofixAttempts"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewState:recordAutofixRound",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewState.ts",
+      "line": 239,
+      "roles": [],
+      "tables": [
+        "autofixRounds"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewModelData:recordStageRun",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewModelData.ts",
+      "line": 19,
+      "roles": [],
+      "tables": [
+        "modelStageRuns",
+        "usageLedger"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/accounting.test.ts",
+        "convex/executionRecordIntegrity.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewModelData:recordProviderRetry",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewModelData.ts",
+      "line": 65,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewModelData:preflightStageSpend",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewModelData.ts",
+      "line": 83,
+      "roles": [],
+      "tables": [
+        "reviewEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/accounting.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewModelData:analysisScope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewModelData.ts",
+      "line": 114,
+      "roles": [],
+      "tables": [
+        "artifacts",
+        "providerCredentials"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewModelData:reserveOutput",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewModelData.ts",
+      "line": 143,
+      "roles": [],
+      "tables": [
+        "artifacts"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewModelData:completeAnalysis",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewModelData.ts",
+      "line": 160,
+      "roles": [],
+      "tables": [
+        "requirements",
+        "findings"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewPublicationData:publicationScope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewPublicationData.ts",
+      "line": 19,
+      "roles": [],
+      "tables": [
+        "artifacts",
+        "reviewEvents"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewPublicationData:platformFailureScope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewPublicationData.ts",
+      "line": 39,
+      "roles": [],
+      "tables": [
+        "providerCredentials"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewPublicationData:completeSideEffect",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewPublicationData.ts",
+      "line": 95,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "artifactCleanupWorker:cleanup",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/artifactCleanupWorker.ts",
+      "line": 9,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "artifactCleanupWorker:sweepTerminal",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/artifactCleanupWorker.ts",
+      "line": 26,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "runtimeReadiness:current",
+      "kind": "query",
+      "access": "public",
+      "file": "convex/runtimeReadiness.ts",
+      "line": 10,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/runtimeReadiness.test.ts",
+        "tests/architecture/execution-release-gate.test.ts",
+        "apps/web/src/app/execution-readiness.component.test.tsx",
+        "apps/web/src/app/setup/first-review.component.test.tsx"
+      ]
+    },
+    {
+      "reference": "findingFeedbackWorker:observe",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/findingFeedbackWorker.ts",
+      "line": 12,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "findingFeedbackWorker:dismissByIndex",
+      "kind": "internalAction",
+      "access": "internal",
+      "file": "convex/findingFeedbackWorker.ts",
+      "line": 40,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewAutofixData:mode",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewAutofixData.ts",
+      "line": 12,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewAutofixData:assertActive",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewAutofixData.ts",
+      "line": 13,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewAutofixData:scope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewAutofixData.ts",
+      "line": 15,
+      "roles": [],
+      "tables": [
+        "artifacts",
+        "autofixRounds",
+        "autofixAttempts",
+        "providerCredentials"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewAutofixData:reserveArtifact",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewAutofixData.ts",
+      "line": 36,
+      "roles": [],
+      "tables": [
+        "artifacts"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewAutofixData:completeArtifact",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewAutofixData.ts",
+      "line": 50,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewAutofixData:completeRound",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewAutofixData.ts",
+      "line": 56,
+      "roles": [],
+      "tables": [
+        "autofixRounds",
+        "autofixAttempts",
+        "checkRuns"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewAutofixData:completeDelivery",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewAutofixData.ts",
+      "line": 71,
+      "roles": [],
+      "tables": [
+        "autofixRounds",
+        "checkRuns",
+        "githubSideEffects",
+        "reviewEvents",
+        "metricEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewAutofixData:completeFailure",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewAutofixData.ts",
+      "line": 94,
+      "roles": [],
+      "tables": [
+        "autofixRounds",
+        "githubSideEffects",
+        "reviewEvents"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewAutofixData:failPlatform",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewAutofixData.ts",
+      "line": 100,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/reviewLifecycleRecovery.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewValidationData:validationScope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewValidationData.ts",
+      "line": 14,
+      "roles": [],
+      "tables": [
+        "artifacts"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewValidationData:reserveOutput",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewValidationData.ts",
+      "line": 30,
+      "roles": [],
+      "tables": [
+        "artifacts"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewValidationData:completeValidation",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewValidationData.ts",
+      "line": 51,
+      "roles": [],
+      "tables": [
+        "checkRuns",
+        "baseResults",
+        "usageLedger"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts",
+        "convex/workspaceSummaries.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewValidationData:finalizeDecision",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewValidationData.ts",
+      "line": 99,
+      "roles": [],
+      "tables": [
+        "checkRuns",
+        "findings",
+        "reviewEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewEvidenceData:findingDetailScope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewEvidenceData.ts",
+      "line": 5,
+      "roles": [
+        "viewer"
+      ],
+      "tables": [
+        "artifacts"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "githubWebhookData:reserve",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/githubWebhookData.ts",
+      "line": 24,
+      "roles": [],
+      "tables": [
+        "webhookDeliveries"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "githubWebhookData:scope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/githubWebhookData.ts",
+      "line": 74,
+      "roles": [],
+      "tables": [
+        "githubInstallations",
+        "repositories"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "githubWebhookData:cancellationTargets",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/githubWebhookData.ts",
+      "line": 108,
+      "roles": [],
+      "tables": [
+        "reviews"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "githubWebhookData:recordPinnedSnapshot",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/githubWebhookData.ts",
+      "line": 144,
+      "roles": [],
+      "tables": [
+        "webhookDeliveries"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "githubWebhookData:materializeReview",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/githubWebhookData.ts",
+      "line": 184,
+      "roles": [],
+      "tables": [
+        "webhookDeliveries",
+        "reviews",
+        "configRevisions",
+        "providerCredentials",
+        "reviewLocks",
+        "reviewEvents"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "githubWebhookData:complete",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/githubWebhookData.ts",
+      "line": 426,
+      "roles": [],
+      "tables": [
+        "webhookDeliveries"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "githubWebhookData:reconcilePullRequestHead",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/githubWebhookData.ts",
+      "line": 458,
+      "roles": [],
+      "tables": [
+        "githubInstallations",
+        "repositories",
+        "reviews"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "githubWebhookData:reconcileDefaultBranchPush",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/githubWebhookData.ts",
+      "line": 533,
+      "roles": [],
+      "tables": [
+        "githubInstallations",
+        "repositories"
+      ],
+      "directTestReferences": [
+        "convex/tenantIsolation.test.ts"
+      ]
+    },
+    {
+      "reference": "evalLoop:recordMissedVerdict",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/evalLoop.ts",
+      "line": 10,
+      "roles": [],
+      "tables": [
+        "evalCandidates"
+      ],
+      "directTestReferences": [
+        "convex/connectedJourney.test.ts"
+      ]
+    },
+    {
+      "reference": "evalLoop:recordDismissedFinding",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/evalLoop.ts",
+      "line": 25,
+      "roles": [],
+      "tables": [
+        "evalCandidates"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "evalLoop:pendingCandidates",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/evalLoop.ts",
+      "line": 45,
+      "roles": [],
+      "tables": [
+        "evalCandidates"
+      ],
+      "directTestReferences": [
+        "convex/connectedJourney.test.ts"
+      ]
+    },
+    {
+      "reference": "evalLoop:markCurated",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/evalLoop.ts",
+      "line": 59,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": [
+        "convex/connectedJourney.test.ts"
+      ]
+    },
+    {
+      "reference": "reviewReportData:reportScope",
+      "kind": "internalQuery",
+      "access": "internal",
+      "file": "convex/reviewReportData.ts",
+      "line": 9,
+      "roles": [],
+      "tables": [
+        "artifacts",
+        "usageLedger"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewReportData:reserveOutput",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewReportData.ts",
+      "line": 31,
+      "roles": [],
+      "tables": [
+        "artifacts"
+      ],
+      "directTestReferences": []
+    },
+    {
+      "reference": "reviewReportData:completeOutput",
+      "kind": "internalMutation",
+      "access": "internal",
+      "file": "convex/reviewReportData.ts",
+      "line": 47,
+      "roles": [],
+      "tables": [],
+      "directTestReferences": []
+    }
+  ],
+  "crons": [
+    {
+      "name": "delete expired encrypted artifacts",
+      "interval": "{minutes:15}",
+      "handler": "artifactCleanupWorker.cleanup"
+    },
+    {
+      "name": "requeue stuck artifact deletions",
+      "interval": "{hours:1}",
+      "handler": "artifactCleanupWorker.sweepTerminal"
+    },
+    {
+      "name": "reconcile stuck and expired reviews",
+      "interval": "{minutes:10}",
+      "handler": "reconcileWorker.sweep"
+    },
+    {
+      "name": "emit source-free operational snapshot",
+      "interval": "{minutes:5}",
+      "handler": "telemetrySnapshotWorker.emit"
+    },
+    {
+      "name": "purge deleted workspace connection metadata",
+      "interval": "{hours:1}",
+      "handler": "trackerOAuthData.sweepDeletedOrganizations"
+    }
+  ],
+  "packages": [
+    {
+      "file": "packages/orchestrator/package.json",
+      "name": "@buildit/orchestrator",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": [
+        "@buildit/contracts",
+        "@buildit/providers",
+        "@buildit/runner",
+        "@buildit/security",
+        "js-yaml"
+      ]
+    },
+    {
+      "file": "apps/cli/package.json",
+      "name": "@buildit/cli",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": []
+    },
+    {
+      "file": "packages/core/package.json",
+      "name": "@buildit/core",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": [
+        "@buildit/contracts"
+      ]
+    },
+    {
+      "file": "packages/runner/package.json",
+      "name": "@buildit/runner",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "smoke:sandbox": "node scripts/sandbox-smoke.mjs",
+        "lint": "eslint ."
+      },
+      "dependencies": [
+        "@vercel/sandbox"
+      ]
+    },
+    {
+      "file": "packages/contracts/package.json",
+      "name": "@buildit/contracts",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": [
+        "zod"
+      ]
+    },
+    {
+      "file": "packages/security/package.json",
+      "name": "@buildit/security",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": [
+        "@aws-sdk/client-kms"
+      ]
+    },
+    {
+      "file": "packages/github/package.json",
+      "name": "@buildit/github",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": []
+    },
+    {
+      "file": "packages/providers/package.json",
+      "name": "@buildit/providers",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": []
+    },
+    {
+      "file": "packages/scanners/package.json",
+      "name": "@buildit/scanners",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": []
+    },
+    {
+      "file": "packages/telemetry/package.json",
+      "name": "@buildit/telemetry",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": [
+        "@opentelemetry/api",
+        "@opentelemetry/api-logs",
+        "@opentelemetry/exporter-logs-otlp-http",
+        "@opentelemetry/exporter-metrics-otlp-http",
+        "@opentelemetry/resources",
+        "@opentelemetry/sdk-logs",
+        "@opentelemetry/sdk-metrics",
+        "@opentelemetry/semantic-conventions"
+      ]
+    },
+    {
+      "file": "packages/operations/package.json",
+      "name": "@buildit/operations",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": []
+    },
+    {
+      "file": "apps/web/package.json",
+      "name": "@buildit/web",
+      "scripts": {
+        "dev": "next dev",
+        "prebuild": "pnpm --filter @buildit/telemetry --filter @buildit/scanners --filter @buildit/security build",
+        "build": "next build",
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": [
+        "@buildit/telemetry",
+        "@convex-dev/auth",
+        "@fontsource-variable/jetbrains-mono",
+        "@fontsource-variable/manrope",
+        "@vercel/otel",
+        "convex",
+        "next",
+        "react",
+        "react-dom",
+        "@buildit/scanners",
+        "@buildit/security"
+      ]
+    },
+    {
+      "file": "packages/evaluations/package.json",
+      "name": "@buildit/evaluations",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": [
+        "hyparquet",
+        "@buildit/cli"
+      ]
+    },
+    {
+      "file": "packages/broker/package.json",
+      "name": "@buildit/broker",
+      "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "lint": "eslint ."
+      },
+      "dependencies": [
+        "@aws-sdk/client-s3",
+        "@buildit/github",
+        "@buildit/providers",
+        "@buildit/runner",
+        "@buildit/scanners",
+        "@buildit/security",
+        "@buildit/telemetry",
+        "@vercel/oidc-aws-credentials-provider",
+        "@vercel/otel"
+      ]
+    }
+  ],
+  "testFiles": [
+    "tests/e2e-local/workspaces.spec.ts",
+    "convex/repositorySync.test.ts",
+    "convex/automaticReview.test.ts",
+    "convex/configApproval.test.ts",
+    "convex/tenantIsolation.test.ts",
+    "convex/publicProof.test.ts",
+    "convex/accounting.test.ts",
+    "convex/askRateLimit.test.ts",
+    "tests/reliability/bounds-load.test.ts",
+    "tests/e2e-production/two-user-isolation.spec.ts",
+    "convex/workspaceSummaries.test.ts",
+    "convex/notifications.test.ts",
+    "convex/reviewContextWorker.test.ts",
+    "convex/reviewEvidenceActions.test.ts",
+    "convex/webhookRetention.test.ts",
+    "convex/activation.test.ts",
+    "convex/telemetryWorker.test.ts",
+    "convex/credentialRevocation.test.ts",
+    "convex/reviewLifecycleRecovery.test.ts",
+    "convex/dashboardReviews.test.ts",
+    "convex/historySummaries.test.ts",
+    "convex/reviewAnalysisWorker.test.ts",
+    "convex/connectedJourney.test.ts",
+    "convex/executionRecordIntegrity.test.ts",
+    "convex/artifactErasure.test.ts",
+    "convex/reviewAnalysisBounds.test.ts",
+    "convex/reviewAutofixWorker.test.ts",
+    "convex/durableReviewPolicy.test.ts",
+    "convex/runtimeReadiness.test.ts",
+    "convex/reviewPublicationWorker.test.ts",
+    "convex/policyReauthentication.test.ts",
+    "convex/notificationOutbox.test.ts",
+    "convex/reviewReportWorker.test.ts",
+    "convex/trackerOAuth.test.ts",
+    "packages/orchestrator/test/review-profile.test.ts",
+    "packages/orchestrator/test/changelog.test.ts",
+    "packages/orchestrator/test/reviewPlan.test.ts",
+    "packages/orchestrator/test/path-instructions.test.ts",
+    "apps/cli/src/doctor.test.ts",
+    "apps/cli/src/credential-store.test.ts",
+    "apps/cli/src/remote-review.test.ts",
+    "apps/cli/src/local-review.test.ts",
+    "tests/architecture/lint-coverage.test.ts",
+    "tests/architecture/local-audit-web.test.ts",
+    "tests/architecture/one-review-entry.test.ts",
+    "tests/architecture/broker-deployment-boundary.test.ts",
+    "tests/architecture/interface-accessibility.test.ts",
+    "tests/architecture/instruction-limits.test.ts",
+    "tests/architecture/vercel-upload-boundary.test.ts",
+    "tests/architecture/aws-inventory-policy.test.ts",
+    "tests/architecture/deployment-command.test.ts",
+    "tests/architecture/grafana-verification.test.ts",
+    "tests/architecture/sample-fixture-consistency.test.ts",
+    "tests/architecture/observability-snapshot.test.ts",
+    "tests/architecture/changelog-boundary.test.ts",
+    "tests/architecture/style-hook-coverage.test.ts",
+    "tests/architecture/aws-boundary.test.ts",
+    "tests/architecture/aws-verifier-credentials.test.ts",
+    "tests/architecture/audit-database-refresh.test.ts",
+    "tests/architecture/webhook-events.test.ts",
+    "tests/architecture/tenant-proof-assertions.test.ts",
+    "tests/architecture/evaluation-cli-entrypoint.test.ts",
+    "tests/architecture/convex-production-target.test.ts",
+    "tests/architecture/data-classification.test.ts",
+    "tests/architecture/workflow-supply-chain.test.ts",
+    "tests/architecture/dependency-audit-gate.test.ts",
+    "tests/architecture/health-wiring.test.ts",
+    "tests/architecture/merge-boundary.test.ts",
+    "tests/architecture/observability.test.ts",
+    "tests/architecture/context-selection-boundary.test.ts",
+    "tests/architecture/production-wiring.test.ts",
+    "tests/architecture/review-status-contract.test.ts",
+    "tests/architecture/capability-inventory.test.ts",
+    "tests/architecture/social-preview.test.ts",
+    "tests/architecture/verdict-single-source.test.ts",
+    "tests/architecture/public-function-inventory.test.ts",
+    "tests/architecture/required-live-gates.test.ts",
+    "tests/architecture/two-user-browser-harness.test.ts",
+    "tests/architecture/query-bounds.test.ts",
+    "tests/architecture/path-filter-safety.test.ts",
+    "tests/architecture/track-record.test.ts",
+    "tests/architecture/identity-only-access.test.ts",
+    "tests/architecture/autofix-cancellation-boundary.test.ts",
+    "tests/architecture/autofix-side-effect-keys.test.ts",
+    "tests/architecture/durable-workflow.test.ts",
+    "tests/architecture/incident-runbooks.test.ts",
+    "tests/architecture/asvs-control-matrix.test.ts",
+    "tests/architecture/public-function-reachability.test.ts",
+    "tests/architecture/execution-release-gate.test.ts",
+    "tests/architecture/release-claim.test.ts",
+    "tests/architecture/launch-guides.test.ts",
+    "tests/architecture/convex-runtime-boundary.test.ts",
+    "tests/architecture/model-grant-per-attempt.test.ts",
+    "tests/architecture/design-fixture-boundary.test.ts",
+    "tests/architecture/config-trust.test.ts",
+    "tests/architecture/review-comment-identity.test.ts",
+    "tests/architecture/review-feedback-routing.test.ts",
+    "tests/architecture/model-stage-contract.test.ts",
+    "packages/core/test/store.test.ts",
+    "packages/runner/test/runner.test.ts",
+    "packages/runner/test/missing-script.test.ts",
+    "packages/runner/test/vercelSandbox.test.ts",
+    "packages/orchestrator/test/report.test.ts",
+    "packages/orchestrator/test/patchPolicy.test.ts",
+    "packages/orchestrator/test/report-noise.test.ts",
+    "packages/orchestrator/test/pre-existing-failures.test.ts",
+    "packages/orchestrator/test/promptChain.test.ts",
+    "packages/orchestrator/test/findings.test.ts",
+    "packages/orchestrator/test/orchestrator.test.ts",
+    "packages/orchestrator/test/unreadable-sources.test.ts",
+    "packages/orchestrator/test/requirements.test.ts",
+    "packages/orchestrator/test/modelChain.test.ts",
+    "packages/orchestrator/test/change-summary.test.ts",
+    "packages/orchestrator/test/learning.test.ts",
+    "packages/orchestrator/test/repository-config.test.ts",
+    "packages/orchestrator/test/contextIndex.test.ts",
+    "packages/contracts/test/reviewDecision.test.ts",
+    "packages/contracts/test/contracts.test.ts",
+    "packages/security/test/model-grant.test.ts",
+    "packages/security/test/artifact-grant.test.ts",
+    "packages/security/test/aws-kms.test.ts",
+    "packages/security/test/execution-grant.test.ts",
+    "packages/security/test/redaction.test.ts",
+    "packages/security/test/tracker-grant.test.ts",
+    "packages/security/test/security.test.ts",
+    "tests/e2e/onboarding.spec.ts",
+    "tests/e2e/email-template.spec.ts",
+    "tests/e2e/sample-consistency.spec.ts",
+    "tests/e2e/product.spec.ts",
+    "tests/e2e/touch-targets.spec.ts",
+    "tests/e2e/accessibility.spec.ts",
+    "packages/github/test/repository-content.test.ts",
+    "packages/github/test/repository-chunks.test.ts",
+    "packages/github/test/repository-writer.test.ts",
+    "packages/github/test/omission-coverage.test.ts",
+    "packages/github/test/pull-request-context.test.ts",
+    "packages/github/test/config-approval.test.ts",
+    "packages/github/test/ask-command.test.ts",
+    "packages/github/test/path-filters.test.ts",
+    "packages/github/test/github.test.ts",
+    "packages/github/test/tracker-context.test.ts",
+    "packages/github/test/request.test.ts",
+    "packages/github/test/one-comment-per-pr.test.ts",
+    "packages/github/test/commands.test.ts",
+    "packages/github/test/issue-context.test.ts",
+    "packages/github/test/inline-comments.test.ts",
+    "convex/lib/lifecycle.test.ts",
+    "convex/lib/executionPlanSelection.test.ts",
+    "convex/lib/githubProfile.test.ts",
+    "convex/lib/providerRetry.test.ts",
+    "convex/lib/parentConsistency.test.ts",
+    "convex/lib/webhookSignature.test.ts",
+    "convex/lib/monthlySpend.test.ts",
+    "convex/lib/coverageGate.test.ts",
+    "convex/lib/validationEvidence.test.ts",
+    "convex/lib/executionGate.test.ts",
+    "convex/lib/providerFallback.test.ts",
+    "convex/lib/platformFailureReport.test.ts",
+    "convex/lib/tenantLimits.test.ts",
+    "convex/lib/usageCost.test.ts",
+    "packages/telemetry/test/scrub.test.ts",
+    "packages/telemetry/test/telemetry.test.ts",
+    "packages/operations/test/operations.test.ts",
+    "packages/operations/test/email-capture.test.ts",
+    "packages/operations/test/email.test.ts",
+    "packages/operations/test/effectiveLoc.test.ts",
+    "apps/web/src/proxy.test.ts",
+    "packages/providers/test/accounting.test.ts",
+    "packages/providers/test/providers.test.ts",
+    "packages/scanners/test/scanners.test.ts",
+    "packages/scanners/test/rule-corpus.test.ts",
+    "packages/evaluations/test/historicalCases.test.ts",
+    "packages/evaluations/test/benchmarkAdapters.test.ts",
+    "packages/evaluations/test/executableFixtures.test.ts",
+    "packages/evaluations/test/designPartnerEvidence.test.ts",
+    "packages/evaluations/test/releaseEvidence.test.ts",
+    "packages/evaluations/test/detection.test.ts",
+    "packages/evaluations/test/grader.test.ts",
+    "packages/evaluations/test/metamorphic.test.ts",
+    "packages/evaluations/test/detectionRunner.test.ts",
+    "packages/evaluations/test/score.test.ts",
+    "packages/evaluations/test/humanLabels.test.ts",
+    "apps/web/src/app/reviews/[id]/live-review-detail.component.test.tsx",
+    "apps/web/src/app/reviews/[id]/review-presentation.test.ts",
+    "apps/web/src/app/reviews/dashboard-review-start.test.ts",
+    "apps/web/src/app/reviews/activation-path.component.test.tsx",
+    "apps/web/src/app/reviews/review-row-groups.test.ts",
+    "apps/web/src/app/notification-preferences.component.test.tsx",
+    "apps/web/src/app/notification-email-state.test.ts",
+    "apps/web/src/app/sample-tour-boundary.test.ts",
+    "apps/web/src/app/model-key-state.test.ts",
+    "apps/web/src/app/no-active-workspace.component.test.tsx",
+    "apps/web/src/app/live-history.component.test.tsx",
+    "apps/web/src/app/execution-readiness.component.test.tsx",
+    "apps/web/src/app/model-key-form.component.test.tsx",
+    "apps/web/src/app/model-integration-state.component.test.tsx",
+    "apps/web/src/app/proof/page.component.test.tsx",
+    "apps/web/src/app/public-shell.component.test.tsx",
+    "apps/web/src/app/permission-receipt.component.test.tsx",
+    "apps/web/src/app/sandbox/scan-error-state.test.ts",
+    "apps/web/src/app/account-status.component.test.tsx",
+    "apps/web/src/app/repository-connection-view.component.test.tsx",
+    "apps/web/src/app/installation-claim-message.test.ts",
+    "apps/web/src/app/tracker-connections.component.test.tsx",
+    "apps/web/src/app/security-headers.test.ts",
+    "apps/web/src/app/tracker-oauth.component.test.tsx",
+    "apps/web/src/app/live-metrics-usage.component.test.tsx",
+    "apps/web/src/app/setup/first-review.component.test.tsx",
+    "packages/broker/test/tracker-oauth-http.test.ts",
+    "packages/broker/test/artifact-http.test.ts",
+    "packages/broker/test/execution-failure-modes.test.ts",
+    "packages/broker/test/execution-http.test.ts",
+    "packages/broker/test/tracker-http.test.ts",
+    "packages/broker/test/instrumentation.test.ts",
+    "packages/broker/test/execution-diagnostic.test.ts",
+    "packages/broker/test/model-http.test.ts",
+    "packages/broker/test/tracker-oauth.test.ts",
+    "packages/broker/test/credential-broker.test.ts",
+    "packages/broker/test/telemetry-ingest.test.ts",
+    "packages/broker/test/artifacts.test.ts",
+    "packages/broker/test/http.test.ts",
+    "packages/broker/test/origin-allowlist.test.ts",
+    "packages/broker/test/tracker-credentials.test.ts",
+    "packages/broker/test/convex-gateway.test.ts",
+    "apps/web/src/app/api/scan/route.test.ts"
+  ]
+}

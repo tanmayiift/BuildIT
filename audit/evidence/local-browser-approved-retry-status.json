@@ -1,0 +1,38 @@
+{
+  "recordedAt": "2026-09-14T05:15:56.517848+00:00",
+  "status": "blocked_before_page_creation",
+  "approvalContext": "User authorized prepared BuildIT repairs and browser E2E retry; OS capability still pending.",
+  "runtime": "Node24.21.0; standard Playwright Chromium",
+  "attemptedTests": 1,
+  "completedBrowserAssertions": 0,
+  "screenshotsCreated": 0,
+  "paidCalls": 0,
+  "newSyntheticCharges": 0,
+  "playwrightFailure": "bootstrap_check_in org.chromium.Chromium.MachPortRendezvousServer: Permission denied (1100); Chromium SIGTRAP before page creation",
+  "cuaFallback": {
+    "inventoryBrowsers": 0,
+    "app": "com.google.Chrome",
+    "attempts": 2,
+    "result": "Accessibility and Screen Recording permissions still pending in ChatGPT Computer Use window; no native UI action occurred."
+  },
+  "permissionBoundary": "Filesystem/network permissions are granted. request_permissions cannot express the missing Mach process/Accessibility/Screen Recording capability. No aliases, proxy, host-policy bypass, or custom browser security flags were attempted.",
+  "services": {
+    "backend": 80169,
+    "web": 21975,
+    "bind": "127.0.0.1",
+    "keptRunningForPermissionResume": true
+  },
+  "playwrightStats": {
+    "startTime": "2026-09-14T05:09:02.577Z",
+    "duration": 901.454,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  },
+  "logs": [
+    "local-browser-approved-retry.log",
+    "local-browser-results.json",
+    "local-browser-retry-renew-auth.log"
+  ]
+}

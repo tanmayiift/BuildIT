@@ -9,4 +9,35 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+      day: monday
+      time: "10:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 2
+    groups:
+      routine-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      security-actions:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  # pnpm uses the npm ecosystem and the shared root lockfile. A zero version-update
+  # limit avoids a routine upgrade backlog; it does not restrict security updates.
+  # Repository vulnerability alerts and Dependabot security updates must also be enabled.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "10:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 0
+    groups:
+      security-packages:
+        applies-to: security-updates
+        patterns:
+          - "*"

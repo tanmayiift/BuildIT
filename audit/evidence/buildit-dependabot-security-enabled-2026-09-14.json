@@ -1,0 +1,49 @@
+{
+  "observedAt": "2026-09-14T06:00:06.849321+00:00",
+  "repository": "tanmayiift/BuildIT",
+  "admin": true,
+  "before": {
+    "vulnerability-alerts": {
+      "status": 404,
+      "data": {
+        "message": "Vulnerability alerts are disabled.",
+        "documentation_url": "https://docs.github.com/rest/repos/repos#check-if-vulnerability-alerts-are-enabled-for-a-repository",
+        "status": "404"
+      },
+      "ok": false
+    },
+    "automated-security-fixes": {
+      "status": 200,
+      "data": {
+        "enabled": false,
+        "paused": false
+      },
+      "ok": true
+    }
+  },
+  "writes": {
+    "vulnerability-alerts": {
+      "status": 204,
+      "ok": true
+    },
+    "automated-security-fixes": {
+      "status": 204,
+      "ok": true
+    }
+  },
+  "after": {
+    "vulnerability-alerts": {
+      "status": 204,
+      "data": null,
+      "ok": true
+    },
+    "automated-security-fixes": {
+      "status": 200,
+      "data": {
+        "enabled": true,
+        "paused": false
+      },
+      "ok": true
+    }
+  }
+}

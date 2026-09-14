@@ -34,7 +34,7 @@ export function safeExecutionError(error: unknown) {
   if (["execution_grant_expired", "execution_grant_replayed"].includes(code)) return { status: 410, code };
   if (code.startsWith("invalid_") || code.includes("command_not_allowed") || code.includes("untrusted_command")) return { status: 400, code: "invalid_execution_request" };
   // Only stable operational categories cross this API boundary. Raw sandbox
-  // failures can include provider request context and must stay server-side.
+  // failures can include provider request context and must not enter logs either.
   if (code.includes("credential_teardown") || code.includes("sandbox_")) return { status: 503, code: "runner_safety_failed" };
   if (code.includes("gitleaks") || code.includes("osv_")) return { status: 503, code: "scanner_unavailable" };
   // An exhausted plan reached this only because the provider happened to mention "Sandbox" later in
@@ -48,16 +48,27 @@ export function safeExecutionError(error: unknown) {
   return { status: 503, code: "execution_failed" };
 }
 
-// Server-side only, and never returned to a caller. An Error message can carry sandbox, artifact or
-// provider context, so this bounds it hard: the error's type, and a short message with anything
-// token-shaped, URL-shaped or path-shaped removed. Enough to tell a quota refusal from a missing
-// image; not enough to leak what was being executed.
-const secretShaped = /\b(?:[A-Za-z0-9_-]{24,}|https?:\/\/\S+|\/[\w./-]{12,})\b/g;
+// Error messages and names are untrusted. Pattern redaction missed short credentials, S3 URLs,
+// and source fragments. Emit only fixed codes while keeping actionable operational distinctions.
+const knownExecutionDiagnostics = new Set([
+  "artifact_integrity_failed", "artifact_revision_mismatch", "artifact_file_conflict", "base_head_context_incomplete",
+  "credential_teardown_failed", "sandbox_unsafe_path", "sandbox_untrusted_install_control", "sandbox_oidc_unavailable",
+  "sandbox_install_plan_required", "sandbox_checks_without_install", "sandbox_check_network_must_be_denied",
+  "sandbox_execution_budget_exceeded", "sandbox_image_must_be_digest_pinned", "sandbox_image_unavailable",
+  "execution_image_mismatch", "execution_environment_invalid", "paired_execution_incomplete",
+  "gitleaks_execution_failed", "osv_report_invalid",
+]);
 export function executionFailureDiagnostic(error: unknown) {
   if (!(error instanceof Error)) return "non_error_thrown";
-  const name = error.name || "Error";
-  const message = String(error.message ?? "").replace(secretShaped, "[redacted]").replace(/\s+/g, " ").trim();
-  return `${name}: ${message}`.slice(0, 200);
+  const message = error.message;
+  if (knownExecutionDiagnostics.has(message)) return message;
+  if (capacityExhausted(message)) return "capacity_exhausted";
+  if (unreachable(error)) return "sandbox_network_unavailable";
+  if (/sandbox.*image.*(?:not found|missing|unavailable)/i.test(message)) return "sandbox_image_unavailable";
+  if (/sandbox.*(?:concurrency limit|no capacity)/i.test(message)) return "sandbox_capacity_unavailable";
+  if (/sandbox.*(?:failed to start|creation refused|creation failed)/i.test(message)) return "sandbox_start_failed";
+  if (/sandbox.*(?:terminated|died)/i.test(message)) return "sandbox_terminated";
+  return safeExecutionError(error).code;
 }
 
 // This is deliberately a closed list. It is safe to emit to operations logs,
@@ -123,11 +134,7 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     return json(200, { base: bounded(baseResult), head: bounded(headResult), diagnostics:{base:baseDiagnostics,head:headDiagnostics}, scanners: { base: scanner("base", body.baseSha, baseResult), head: scanner("head", body.headSha, headResult) } });
   } catch (error) {
     const mapped = safeExecutionError(error);
-    // The mapped code is what crosses the API boundary, deliberately: a raw sandbox error can carry
-    // provider and request context. But the operator log was only ever recording the same mapped
-    // code, so `sandbox_unavailable` was indistinguishable from out-of-quota, image-missing, or
-    // genuinely-down - three problems with three different responses and one message between them.
-    // This keeps the raw reason server-side and bounded, which is what makes the class diagnosable.
+    // Keep quota, image, network and safety distinctions without copying exception text or names.
     console.error("buildit_execute_failure", { category: safeExecutionErrorCategory(error), code: mapped.code,
       reason: executionFailureDiagnostic(error) });
     // The body is unchanged. The header only tells BuildIT's own telemetry which 503 this was, so a

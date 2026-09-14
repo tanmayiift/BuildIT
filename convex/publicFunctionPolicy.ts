@@ -64,5 +64,13 @@ export const publicFunctionPolicies = {
   "users:viewer": { authorization: "authenticated_user", response: "personal_identity" },
   "users:sessions": { authorization: "authenticated_user", response: "metadata" },
   "users:revokeOtherSessions": { authorization: "authenticated_user", response: "metadata" },
+  "trackerOAuth:availability": { authorization: "active_organization_admin", response: "metadata" },
+  "trackerOAuth:begin": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
+  "trackerOAuth:complete": { authorization: "authenticated_user", response: "metadata" },
+  "trackerOAuth:projects": { authorization: "active_organization_admin", response: "metadata" },
+  "trackerOAuth:connect": { authorization: "active_organization_admin", response: "metadata" },
+  "trackerOAuth:disconnect": { authorization: "active_organization_admin_recent_auth", response: "metadata" },
+  "trackerOAuthData:pending": { authorization: "active_organization_admin", response: "metadata" },
   "usage:summarize": { authorization: "active_organization_viewer", response: "metadata" },
+  "usage:prepare": { authorization: "active_organization_viewer", response: "none" },
 } as const satisfies Record<string, { authorization: AuthorizationPolicy; response: ResponseClassification }>;

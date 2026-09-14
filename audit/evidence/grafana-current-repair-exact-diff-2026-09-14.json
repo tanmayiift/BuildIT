@@ -1,0 +1,222 @@
+{
+  "generatedAt": "2026-09-14T06:17:07.509Z",
+  "sources": {
+    "before": {
+      "path": "audit/evidence/grafana-current-group-2026-09-14.json",
+      "sha256": "6ca96d13f75f1e85ab337ec405146a05fbce0de8a5a5c3e3edc7f901e19cd19a"
+    },
+    "after": {
+      "path": "audit/evidence/grafana-current-group-after-repair-2026-09-14.json",
+      "sha256": "21a1b2bab7fc55d00228d4e59ad1a11531cb283628a76e7a28e4b96dca458834"
+    }
+  },
+  "readOnly": true,
+  "evidenceKind": "native_ui_export_diff",
+  "ruleCount": 14,
+  "repairMatches": true,
+  "structuralFailures": [],
+  "requirementFailures": [],
+  "actualDifferences": [
+    {
+      "path": "/groups/0/rules/3323ba18-b9a2-5bdd-9c3b-1a1b2110afb2/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/3323ba18-b9a2-5bdd-9c3b-1a1b2110afb2/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/5bc2f8b6-20bb-51a2-b1eb-acbfda69751d/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/5bc2f8b6-20bb-51a2-b1eb-acbfda69751d/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/600995c2-5186-5d4e-85ed-a313ee7aa699/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/600995c2-5186-5d4e-85ed-a313ee7aa699/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/859f7f43-dd01-560c-a42e-f77ea1439683/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/859f7f43-dd01-560c-a42e-f77ea1439683/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/90ac7cae-4fd6-580a-8f74-bdee00f3228f/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/90ac7cae-4fd6-580a-8f74-bdee00f3228f/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/9534bcc7-3d5a-5e86-9c9a-13d5a8281bb3/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/9534bcc7-3d5a-5e86-9c9a-13d5a8281bb3/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/99a89aa8-cc0b-57c5-bc40-03f1afd54bc4/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/99a89aa8-cc0b-57c5-bc40-03f1afd54bc4/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/a542f9b4-2f2f-5038-a00e-ce69e9c45ad1/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/a542f9b4-2f2f-5038-a00e-ce69e9c45ad1/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/a621fb37-6110-5a9b-81e8-6fcd05bbaf7d/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/a621fb37-6110-5a9b-81e8-6fcd05bbaf7d/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/ab2241ca-678e-5b45-bad0-cb412c516183/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/ab2241ca-678e-5b45-bad0-cb412c516183/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/b21aebde-0589-59ce-913d-230beae6dcd6/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/b21aebde-0589-59ce-913d-230beae6dcd6/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/b9897bbc-554d-5acd-90d4-54fae80b68d3/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/b9897bbc-554d-5acd-90d4-54fae80b68d3/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/e8ce7a9b-5f06-58cb-bc90-52d3a1972668/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/e8ce7a9b-5f06-58cb-bc90-52d3a1972668/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/fc3a8532-0ef0-5842-86fa-0660a1879afe/execErrState",
+      "before": "OK",
+      "after": "Error",
+      "expected": true
+    },
+    {
+      "path": "/groups/0/rules/fc3a8532-0ef0-5842-86fa-0660a1879afe/notification_settings/receiver",
+      "before": {
+        "absent": true
+      },
+      "after": "BuildIT alerts (Tanmay)",
+      "expected": true
+    }
+  ],
+  "unexpectedDifferences": [],
+  "folderUIDsVerified": false,
+  "fullStackInventoryVerified": false,
+  "deliveryTested": false,
+  "limits": "Only these two exported current groups are compared. Cosmetic changes are reported; no live firing or receiver delivery is inferred."
+}

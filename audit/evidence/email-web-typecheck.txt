@@ -1,0 +1,6 @@
+apps/web/.next/types/validator.ts(25,44): error TS2344: Type 'Route' does not satisfy the constraint 'never'.
+  Type 'LayoutRoutes' is not assignable to type 'never'.
+    Type '"/"' is not assignable to type 'never'.
+apps/web/.next/types/validator.ts(25,75): error TS2344: Type 'Route' does not satisfy the constraint 'never'.
+  Type 'LayoutRoutes' is not assignable to type 'never'.
+    Type '"/"' is not assignable to type 'never'.

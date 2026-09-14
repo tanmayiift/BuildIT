@@ -1,0 +1,2 @@
+convex/historySummaries.test.ts(221,302): error TS2322: Type 'string' is not assignable to type 'Id<"modelInvocations">'.
+  Type 'string' is not assignable to type '{ __tableName: "modelInvocations"; }'.

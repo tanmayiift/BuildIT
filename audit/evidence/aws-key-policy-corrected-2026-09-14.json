@@ -1,0 +1,14 @@
+{
+  "completedAt": "2026-09-14T05:27:38.839118+00:00",
+  "accountId": "882820282590",
+  "region": "eu-west-1",
+  "keyId": "db912055-b566-46ed-bfa7-561999d7e4cf",
+  "action": "Remove unused kms:DescribeKey from BrokerEnvelopeOperations and BrokerS3ArtifactEncryption; use StringLike for the exact existing S3 encryption-context paths",
+  "sourceRegression": "2 failures before correction; 29 focused AWS checks pass afterward",
+  "editorValidationBefore": "4 errors, 1 warning",
+  "editorValidationAfter": "0 errors, 0 warnings",
+  "savedPolicySemanticComparison": "exact match",
+  "preserved": "All principals, encryption operations, conditions and exact path patterns except the documented condition operator type; inventory grant unchanged",
+  "otherResourcesChanged": false,
+  "inventoryRecovery": "pending next scheduled export"
+}

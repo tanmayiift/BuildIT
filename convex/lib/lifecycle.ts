@@ -35,8 +35,8 @@ export function cancellationNotice(input: { headSha: string; reasonCode?: string
     ? ["A newer commit replaced the one this review was reading, so BuildIT stopped it.",
       "No code decision was reached and no code was changed. The review of the new commit answers on its own check."]
     : input.reasonCode === "blocked_expired"
-      ? ["This review waited for a free slot longer than BuildIT holds one, so it never started.",
-        "No code decision was reached and nothing was charged.",
+      ? ["This review waited for capacity beyond the allowed time and was stopped.",
+        "No code decision was reached. Usage shows any recorded model spend from earlier work.",
         "Comment `@buildit review` to start a new one."]
       : ["This review was cancelled before it finished.",
         "No code decision was reached and no code was changed.",
@@ -45,7 +45,7 @@ export function cancellationNotice(input: { headSha: string; reasonCode?: string
     title: input.reasonCode === "superseded_by_new_commit"
       ? "BuildIT: superseded by a newer commit"
       : input.reasonCode === "blocked_expired"
-        ? "BuildIT: review expired before it could start"
+        ? "BuildIT: review expired while waiting for capacity"
         : "BuildIT: review cancelled",
     summary: [
       `Head: \`${input.headSha.toLowerCase()}\``,

@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-09-14T11:40:45Z",
+  "scope": "BuildIT Grafana legacy duplicate evaluation request",
+  "folder": "BuildIT",
+  "group": "BuildIT release",
+  "requestedRules": [
+    "BuildIT p95 latency high",
+    "BuildIT critical boundary failure",
+    "BuildIT queue depth high",
+    "BuildIT artifact deletion backlog",
+    "BuildIT webhook signature spike",
+    "BuildIT loop guard trip",
+    "BuildIT stale check",
+    "BuildIT budget exhaustion spike"
+  ],
+  "observedRuleState": "provisioned",
+  "availableDetailMenuActions": ["Manage enrichments", "Silence notifications", "Analyze rule", "Duplicate", "Copy link", "Export"],
+  "pauseApplied": false,
+  "reason": "Grafana's provisioned-rule UI exposed no pause-evaluation action. Silence notifications is a different operation and was not substituted."
+}

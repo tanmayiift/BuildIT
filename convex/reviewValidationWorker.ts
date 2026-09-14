@@ -7,15 +7,34 @@ import type { Id } from "./_generated/dataModel";
 import { BROKER_REQUEST_TIMEOUT_MS, defaultExecutionPlans, type PackageManager } from "@buildit/runner";
 import { issueArtifactGrant, issueExecutionGrant } from "@buildit/security";
 import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, sha256Json, type ExecutionResponse } from "./lib/validationEvidence";
+import { runIdFor } from "./lib/runIdentity";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
+function validationFailureCode(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (/timeout|abort|timed out/i.test(message)) return "validation_timeout";
+  if (/artifact|checksum|integrity|revision/i.test(message)) return "validation_artifact_failed";
+  if (/stale|cancel|replaced/i.test(message)) return "validation_scope_changed";
+  if (/broker|fetch|network|sandbox|runner/i.test(message)) return "validation_runner_failed";
+  return "validation_failed";
+}
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; headSha: string; baseSha: string; configRevisionId: Id<"configRevisions">; runnerImageVersion: string; expiresAt: number; completedArtifactId?: Id<"artifacts">; contexts: Array<{ id: Id<"artifacts">; storageKey: string; checksum: string; size: number }> };
 
 export const validate = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
   handler: async (ctx, args): Promise<{ artifactId: string; checks: number; manager: PackageManager | "none"; reused: boolean }> => {
+    let executionJobId: Id<"executionJobs"> | undefined;
+    try {
     const scope: Scope = await ctx.runQuery(internal.reviewValidationData.validationScope, args);
     if (scope.completedArtifactId) return { artifactId: String(scope.completedArtifactId), checks: 0, manager: "npm", reused: true };
+    const runId = runIdFor(String(args.reviewId), args.expectedGeneration);
+    const jobStartedAt = Date.now();
+    const jobKey = `validation:${String(args.reviewId)}:${args.expectedGeneration}:${scope.headSha}`;
+    executionJobId = await ctx.runMutation(internal.executionJobsData.create, {
+      organizationId: args.organizationId, reviewId: args.reviewId, expectedHeadSha: args.expectedHeadSha,
+      expectedGeneration: args.expectedGeneration, jobKey, runId, baseSha: scope.baseSha, now: Date.now(),
+    });
+    await ctx.runMutation(internal.executionJobsData.claim, { jobId: executionJobId, workerId: `validation:${runId}`, now: Date.now() });
     const brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""), artifactSecret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url"), executionSecret = Buffer.from(required("EXECUTION_GRANT_SECRET"), "base64url");
     const paths = { base: new Set<string>(), head: new Set<string>() };
     const revisions = scope.contexts.map(context => ({ context, revision: revisionFromStorageKey(context.storageKey) }));
@@ -70,6 +89,16 @@ export const validate = internalAction({
     const upload = await fetch(`${brokerUrl}/api/artifacts`, { method: "PUT", headers: { authorization: `Bearer ${writeGrant}`, "content-type": "application/octet-stream", "x-buildit-sha256": checksum }, body: outputBody });
     if (!upload.ok) throw new Error(`validation_artifact_upload_${upload.status}`);
     await ctx.runMutation(internal.reviewValidationData.completeValidation, { ...args, artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, summaries, manager: manager ?? "none" as const, now: Date.now() });
+    await ctx.runMutation(internal.executionJobsData.checkpoint, {
+      jobId: executionJobId, requestKey: `validation-complete:${runId}:${checksum}`, expectedVersion: 1, expectedStage: "prepare", nextStage: "complete",
+      cursor: `validation-artifact:${String(reserved.artifactId)}`, artifactIds: [reserved.artifactId], durationMs: Math.max(0, Date.now() - jobStartedAt), now: Date.now(),
+    });
     return { artifactId: String(reserved.artifactId), checks: summaries.length, manager: manager ?? "none", reused: false };
+    } catch (error) {
+      if (executionJobId) {
+        await ctx.runMutation(internal.executionJobsData.fail, { jobId: executionJobId, failureCode: validationFailureCode(error), now: Date.now() }).catch(() => undefined);
+      }
+      throw error;
+    }
   },
 });

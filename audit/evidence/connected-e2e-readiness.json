@@ -1,0 +1,154 @@
+{
+  "observedAt": "2026-09-14T05:15:35.144089+00:00",
+  "mode": "read_only_preflight_no_paid_requests_no_production_mutations",
+  "deployment": {
+    "production": "judicious-barracuda-968",
+    "localConfiguredDevelopment": "tacit-coyote-455",
+    "localWebPointsToDevelopment": true,
+    "newReviewsByRepoCreatedIndexAvailable": false,
+    "newUsageMonthsSeptemberRowPresent": false
+  },
+  "github": {
+    "repository": "tanmayiift/BuildIT",
+    "githubRepositoryId": 1350694820,
+    "installationId": 157557707,
+    "appId": 4762718,
+    "appSlug": "buildit-agentic-review",
+    "freshGetInstallationStatus": 200,
+    "freshGetRepositoryInstallationStatus": 200,
+    "suspended": false,
+    "repositorySelection": "selected",
+    "permissions": {
+      "checks": "write",
+      "contents": "write",
+      "metadata": "read",
+      "issues": "read",
+      "pull_requests": "write"
+    }
+  },
+  "buildit": {
+    "organizationId": "n57d05n4jcqcg7648he7wj4ae58dgwvr",
+    "repositoryId": "nd7cf3e0retp5170jbcpqpz7dh8djy59",
+    "installationRowId": "m97ddsfrxeht36r97vqebdp52n8dgfzk",
+    "enabled": true,
+    "paused": false,
+    "reviewTrigger": "manual (default; field absent)",
+    "autofixMode": "stacked",
+    "repositoryConcurrencyLimit": 1,
+    "workspaceConcurrencyLimit": 14,
+    "activeWorkspaceReviewsObserved": 0,
+    "executionFlag": true,
+    "requiredRuntimeVariableNamesPresent": true,
+    "indexState": "not_started"
+  },
+  "providers": [
+    {
+      "provider": "openai",
+      "status": "valid",
+      "scope": "workspace",
+      "availableModels": [
+        "gpt-5.4",
+        "gpt-5",
+        "gpt-5.4-mini"
+      ],
+      "lastValidatedAt": "2026-09-01T08:58:47.086Z",
+      "lastUsedAt": "2026-09-05T14:11:11.900Z",
+      "currentProviderCreditAndKeyValidity": "not revalidated"
+    },
+    {
+      "provider": "gemini",
+      "status": "valid",
+      "scope": "workspace",
+      "availableModels": [
+        "gemini-2.5-pro",
+        "gemini-3.1-pro-preview",
+        "gemini-2.5-flash"
+      ],
+      "lastValidatedAt": "2026-08-31T17:41:38.561Z",
+      "currentProviderCreditAndKeyValidity": "not revalidated"
+    },
+    {
+      "provider": "anthropic",
+      "status": "revoked",
+      "usable": false
+    }
+  ],
+  "budget": {
+    "month": "2026-09",
+    "monthlyCapUsd": 50,
+    "legacyAggregateUsd": 30.241761,
+    "recordedLedgerEstimateUsd": 30.241760812500008,
+    "ledgerRowsRead": 866,
+    "ledgerTruncated": false,
+    "modelRows": 710,
+    "modelEstimateUsd": 30.240801812500006,
+    "askRows": 1,
+    "askEstimateUsd": 0.000959,
+    "sandboxRows": 155,
+    "sandboxRecordedCostUsd": 0,
+    "legacyEstimateHeadroomUsd": 19.758239187499992,
+    "headroomIsCompleteBill": false,
+    "newAccountingSnapshotNeedsReconciliation": true
+  },
+  "pullRequests": {
+    "openCount": 1,
+    "openControlledDefectPrFound": false,
+    "openPr": {
+      "number": 53,
+      "url": "https://github.com/tanmayiift/BuildIT/pull/53",
+      "author": "dependabot[bot]",
+      "headSha": "b5bb9a2455906cb5a676032e6c9e05a601081948",
+      "baseSha": "e9dc368b4f4919e9377d73c744680c731643a6fa",
+      "files": [
+        ".github/workflows/ci.yml"
+      ],
+      "additions": 1,
+      "deletions": 1,
+      "builditCheckOrCommentObserved": false
+    }
+  },
+  "recentBuilditOnlyEvidence": [
+    {
+      "reviewId": "nx74b2damz131va67qq8fesh698drfcb",
+      "prNumber": 46,
+      "createdAt": "2026-09-04T05:41:26.621Z",
+      "status": "platform_failed",
+      "terminalEvent": "workflow_failed",
+      "modelStageCount": 0,
+      "checkCount": 0,
+      "historicalNotCurrentReproduction": true
+    },
+    {
+      "reviewId": "nx7cnwdpz92qnk34h380mpzch18dqcwd",
+      "prNumber": 31,
+      "createdAt": "2026-09-03T06:33:43.405Z",
+      "status": "inconclusive",
+      "terminalEvent": "decision_required_check_missing",
+      "modelStages": [
+        "review_plan",
+        "findings",
+        "critic",
+        "arbitration",
+        "report"
+      ],
+      "recordedEstimateUsd": 0.44334843749999997,
+      "historicalNotCurrentReproduction": true
+    }
+  ],
+  "blockers": [
+    "Production schema/code and broker accounting protocol must be deployed and verified before paid run",
+    "September usage reconciliation must complete before trusting budget gates",
+    "Current sandbox entitlement/billing not verified; monitoring worker reports expired Vercel token and failed renewal",
+    "No existing open controlled defect PR; create approved BuildIT-only test PR after repaired base release",
+    "Saved provider status is historical, not proof of current credit",
+    "Sandbox ledger records zero cost, so provider budget is not an all-services dollar cap"
+  ],
+  "sources": [
+    "supported convex CLI read-only inline queries, explicitly pinned production deployment",
+    "supported convex env names-only list and nonsecret execution flag get",
+    "GitHub REST read-only BuildIT repository/App endpoints",
+    "https://vercel.com/docs/sandbox/pricing",
+    "https://vercel.com/docs/functions/usage-and-pricing"
+  ],
+  "sanitization": "No keys, JWTs, credential ciphertext, masked suffixes, personal emails, source diffs, prompts or report text are persisted here."
+}

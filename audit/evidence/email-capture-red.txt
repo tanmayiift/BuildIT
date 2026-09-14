@@ -1,0 +1,33 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ❯ apps/web/src/app/notification-email-state.test.ts (3 tests | 1 failed) 4ms
+   ✓ notification email presentation > states that deferred email sends nothing and never uses the installation owner 1ms
+   ✓ notification email presentation > names only the masked signed-in member address 0ms
+   × distinguishes a local capture from a sent email 3ms
+     → expected 'Not connected' to be 'Local capture' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/app/notification-email-state.test.ts > distinguishes a local capture from a sent email
+AssertionError: expected 'Not connected' to be 'Local capture' // Object.is equality
+
+Expected: "Local capture"
+Received: "Not connected"
+
+ ❯ apps/web/src/app/notification-email-state.test.ts:21:24
+     19|   const state = notificationEmailState({ emailEnabled: true, deliveryA…
+     20|     recipient: { state: "verified", maskedEmail: "m•••@example.com" } …
+     21|   expect(state.status).toBe("Local capture");
+       |                        ^
+     22|   expect(state.summary).toContain("No email is sent");
+     23| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  08:51:30
+   Duration  187ms (transform 23ms, setup 0ms, collect 17ms, tests 4ms, environment 0ms, prepare 40ms)
+

@@ -116,10 +116,14 @@ export function assertProbeOk({ status, url }) {
 
 function vercel(args, cwd, env) {
   const result = spawnSync("vercel", args, { cwd, encoding: "utf8", shell: false, ...(env ? { env } : {}) });
-  if (result.error) throw result.error;
+  // Keep the error contract bounded like the broker helper; do not echo CLI diagnostics or
+  // spawn messages that can contain credential-bearing arguments.
+  if (result.error) {
+    const code = ["ENOENT", "EACCES", "ETIMEDOUT", "ENOBUFS"].includes(result.error.code) ? result.error.code : "unknown";
+    throw new Error(`buildit_web_deploy_spawn_failed:${code}`);
+  }
   if (result.status !== 0) {
-    process.stderr.write(`${result.stderr ?? ""}\n`);
-    throw new Error(`buildit_web_deploy_failed:${result.status ?? "unknown"}`);
+    throw new Error(`buildit_web_deploy_failed:${Number.isInteger(result.status) ? result.status : "unknown"}`);
   }
   return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", combined: `${result.stdout ?? ""}\n${result.stderr ?? ""}` };
 }
@@ -129,7 +133,10 @@ async function main() {
   const link = resolveDeployLink({ repoRoot });
   const contract = assertBuildITWebDeployContext({ cwd: process.cwd(), repoRoot, link });
   if (process.argv.includes("--dry-run")) {
-    const build = spawnSync("npx", ["pnpm@10.15.0", "--filter", "@buildit/web", "build"], {
+    // The repository's packageManager and CI setup already pin pnpm 10.15.0. Calling it
+    // directly avoids routing a local release check through npm's cache, which can be
+    // unavailable even when pnpm itself is healthy.
+    const build = spawnSync("pnpm", ["--filter", "@buildit/web", "build"], {
       cwd: repoRoot, encoding: "utf8", shell: false,
       env: { ...process.env, NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL ?? "https://judicious-barracuda-968.convex.cloud" },
     });

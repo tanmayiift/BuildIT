@@ -9,6 +9,12 @@ node_modules/
 .local/
 .agents/
 test-results/
+audit/
+*.log
+coverage/
+playwright-report/
+.pnpm-store/
+.claude/
 docs/
 apps/web/.next/
 **/dist/

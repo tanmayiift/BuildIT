@@ -1,0 +1,13 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+stderr | convex/accounting.test.ts > Ask accounts before presentation side effects > keeps the charge after empty
+buildit_ask_unanswered { reason: 'model_answer_empty' }
+
+ ✓ convex/accounting.test.ts (19 tests) 161ms
+
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+   Start at  08:38:48
+   Duration  554ms (transform 136ms, setup 0ms, collect 205ms, tests 161ms, environment 0ms, prepare 40ms)
+

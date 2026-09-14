@@ -1,0 +1,134 @@
+{
+  "generatedAt": "2026-09-14T05:19:28.598582+00:00",
+  "readOnly": true,
+  "deployment": "judicious-barracuda-968",
+  "method": "Convex CLI sandboxed inline read-only query",
+  "limitPerTable": 2000,
+  "checks": {
+    "application": {
+      "exitCode": 0,
+      "result": {
+        "organizations": {
+          "count": 2,
+          "truncated": false
+        },
+        "repositories": {
+          "count": 16,
+          "enabledCount": 16,
+          "pausedCount": 0,
+          "truncated": false
+        },
+        "reviews": {
+          "count": 193,
+          "statusCounts": {
+            "blocked": 1,
+            "budget_exhausted": 2,
+            "cancelled": 2,
+            "changes_requested": 64,
+            "checks_passed": 40,
+            "delivered": 4,
+            "inconclusive": 13,
+            "platform_failed": 67
+          },
+          "truncated": false
+        },
+        "usageLedger": {
+          "count": 872,
+          "truncated": false
+        }
+      }
+    },
+    "scheduled": {
+      "exitCode": 0,
+      "result": {
+        "count": 114,
+        "stateCounts": {
+          "success": 114
+        },
+        "truncated": false
+      }
+    },
+    "workflow": {
+      "exitCode": 0,
+      "result": {
+        "inProgressSteps": {
+          "count": 0,
+          "truncated": false
+        },
+        "workflows": {
+          "count": 191,
+          "stateCounts": {
+            "failed": 73,
+            "success": 118
+          },
+          "truncated": false
+        }
+      }
+    },
+    "reviewWorkpool": {
+      "exitCode": 0,
+      "result": {
+        "pendingCancelation": {
+          "count": 0,
+          "truncated": false
+        },
+        "pendingCompletion": {
+          "count": 0,
+          "truncated": false
+        },
+        "pendingStart": {
+          "count": 0,
+          "truncated": false
+        },
+        "runningCount": 0,
+        "work": {
+          "count": 0,
+          "truncated": false
+        }
+      }
+    },
+    "workflow/workpool": {
+      "exitCode": 0,
+      "result": {
+        "pendingCancelation": {
+          "count": 0,
+          "truncated": false
+        },
+        "pendingCompletion": {
+          "count": 0,
+          "truncated": false
+        },
+        "pendingStart": {
+          "count": 0,
+          "truncated": false
+        },
+        "runningCount": 0,
+        "work": {
+          "count": 0,
+          "truncated": false
+        }
+      }
+    }
+  },
+  "environment": {
+    "exitCode": 0,
+    "names": [
+      "ARTIFACT_GRANT_SECRET",
+      "AUTH_GITHUB_ID",
+      "AUTH_GITHUB_SECRET",
+      "BUILDIT_BROKER_URL",
+      "BUILDIT_UNTRUSTED_EXECUTION_ENABLED",
+      "EXECUTION_GRANT_SECRET",
+      "FINDING_FINGERPRINT_SECRET",
+      "GITHUB_APP_ID",
+      "GITHUB_APP_PRIVATE_KEY",
+      "GITHUB_WEBHOOK_SECRET",
+      "JWKS",
+      "JWT_PRIVATE_KEY",
+      "MODEL_GRANT_SECRET",
+      "SITE_URL",
+      "TELEMETRY_INGEST_SECRET",
+      "TRACKER_GRANT_SECRET"
+    ]
+  }
+}

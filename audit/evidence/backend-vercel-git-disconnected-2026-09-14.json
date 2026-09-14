@@ -1,0 +1,26 @@
+{
+  "observedAt": "2026-09-14T06:02:15.070379+00:00",
+  "scope": "pulsetrade/backend-vercel connected to tanmayiift/BuildIT only",
+  "failure": {
+    "deployment": "dpl_4kLwALDZ4ym9KF6SG6L1RV69NL33",
+    "commit": "e9dc368b4f4919e9377d73c744680c731643a6fa",
+    "error": "No Output Directory named dist found after the Build completed",
+    "webBuildCompleted": true
+  },
+  "before": {
+    "gitRepository": "tanmayiift/BuildIT",
+    "connectedDate": "2026-09-05",
+    "deployHooks": 0,
+    "existingProductionDeployment": "Fht1wTvR16qnoMk4LkF3NdiM49Vq",
+    "productionDeploymentCreated": "2025-08-11",
+    "functionInvocationsLast6Hours": 0,
+    "edgeRequestsLast6Hours": 0
+  },
+  "action": "Removed Git connection only through Vercel Settings / Git",
+  "after": {
+    "gitNotConnectedTextVisible": true,
+    "connectionButtonsVisible": true,
+    "projectAndConfigurationPreserved": true
+  },
+  "limits": "Historical failed commit statuses remain; future GitHub event required to verify no new duplicate deployment. No project deletion or subscription change."
+}

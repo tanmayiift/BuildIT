@@ -1,0 +1,203 @@
+{
+  "config": {
+    "argv": [
+      "/Users/tanmay/.hermes/node/bin/node",
+      "/Users/tanmay/Desktop/Lets Roll/BuildIT/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config=playwright.audit.config.ts",
+      "--list"
+    ],
+    "configFile": "/Users/tanmay/Desktop/Lets Roll/BuildIT/playwright.audit.config.ts",
+    "rootDir": "/Users/tanmay/Desktop/Lets Roll/BuildIT/tests/e2e-local",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {},
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/tanmay/Desktop/Lets Roll/BuildIT/.local/audit-runtime/browser-artifacts",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {},
+        "id": "local-desktop",
+        "name": "local-desktop",
+        "testDir": "/Users/tanmay/Desktop/Lets Roll/BuildIT/tests/e2e-local",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "audit/evidence/local-browser-test-inventory.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "workspaces.spec.ts",
+      "file": "workspaces.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "owner sees real provider costs and can save or remove the monthly limit",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "local-desktop",
+              "projectName": "local-desktop",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "0b3020e30ee1e091bcf5-f7840af2c821aaaf56c7",
+          "file": "workspaces.spec.ts",
+          "line": 5,
+          "column": 5
+        },
+        {
+          "title": "new metric records update the already-open page",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "local-desktop",
+              "projectName": "local-desktop",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "0b3020e30ee1e091bcf5-987d29b70010e3fd7fa0",
+          "file": "workspaces.spec.ts",
+          "line": 25,
+          "column": 5
+        },
+        {
+          "title": "a reserved and settled model invocation updates the open budget bar",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "local-desktop",
+              "projectName": "local-desktop",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "0b3020e30ee1e091bcf5-c33ce35f61360cd9eed8",
+          "file": "workspaces.spec.ts",
+          "line": 39,
+          "column": 5
+        },
+        {
+          "title": "repository controls persist through real Convex mutations",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "local-desktop",
+              "projectName": "local-desktop",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "0b3020e30ee1e091bcf5-72384ea6548d72e2ce16",
+          "file": "workspaces.spec.ts",
+          "line": 59,
+          "column": 5
+        },
+        {
+          "title": "authenticated history, reviews, workspace settings and onboarding render the selected workspace",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "local-desktop",
+              "projectName": "local-desktop",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "0b3020e30ee1e091bcf5-f858e90e90abb1d7f48a",
+          "file": "workspaces.spec.ts",
+          "line": 72,
+          "column": 5
+        },
+        {
+          "title": "viewer sees only its own figures and cannot change either workspace budget",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "local-desktop",
+              "projectName": "local-desktop",
+              "results": [],
+              "status": "skipped"
+            }
+          ],
+          "id": "0b3020e30ee1e091bcf5-d1ffb45e945d86d852af",
+          "file": "workspaces.spec.ts",
+          "line": 85,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-14T03:38:12.681Z",
+    "duration": 28.714999999999975,
+    "expected": 0,
+    "skipped": 6,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

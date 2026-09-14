@@ -1,0 +1,56 @@
+{
+  "startedAt": "2026-09-14T07:05:09.305Z",
+  "runtime": "v26.8.1",
+  "environment": "loopback-only Convex with simulated identities",
+  "checks": [
+    "A: authenticated workspace and role",
+    "B: authenticated workspace and role",
+    "usage and enforcement share exact budget snapshot",
+    "provider cost appears in budget",
+    "initial USD limit is 100",
+    "legacy reconstruction remains explicitly incomplete",
+    "Ask tokens retained in quantities",
+    "WebSocket metric subscription includes event inserted after subscription",
+    "local synthetic invocation obtains atomic reservation",
+    "pending reservation updates subscription without adding trusted spend",
+    "settled synthetic charge updates existing subscription and releases reservation",
+    "post-settlement budget page and gate snapshots match",
+    "duplicate settlement does not add charge",
+    "usage:summarize: cross-workspace query denied",
+    "metrics:summarize: cross-workspace query denied",
+    "reviewHistory:summary: cross-workspace query denied",
+    "reviews:list: cross-workspace query denied",
+    "viewer budget write denied (other workspace)",
+    "viewer budget write denied (own workspace)",
+    "owner can remove limit; unlimited allowance has no fake remaining number",
+    "owner can restore USD limit without resetting spend",
+    "other tenant spend unaffected",
+    "owner repository pause persists",
+    "owner repository resume persists",
+    "owner inline comment level persists",
+    "viewer repository policy write denied"
+  ],
+  "figures": {
+    "before": {
+      "spendUsd": 12.68,
+      "limitUsd": 100,
+      "percent": 12.68,
+      "measuredTokens": 49200
+    },
+    "metricRuns": [
+      8,
+      9
+    ],
+    "after": {
+      "spendUsd": 12.71,
+      "limitUsd": 100,
+      "percent": 12.71,
+      "settledFakeChargeUsd": 0.03,
+      "reservedUsd": 0
+    }
+  },
+  "externalPaidCalls": 0,
+  "browserChecks": 0,
+  "completedAt": "2026-09-14T07:05:09.745Z",
+  "status": "passed"
+}

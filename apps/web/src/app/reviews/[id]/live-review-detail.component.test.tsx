@@ -29,7 +29,7 @@ vi.mock("convex/react", () => ({
       if (state.evidenceError) throw state.evidenceError;
       return state.evidence;
     }
-    if (reference === "reviews:runHistory") return state.runs;
+    if (reference === "reviews:runHistory") return state.runs === undefined ? undefined : { rows: state.runs, truncated: false, limit: 50 };
     // Convex's useQuery throws a failed query's error out of render rather than returning it.
     if (reference === "reviews:compareRuns") {
       if (state.comparisonError) throw state.comparisonError;
@@ -49,7 +49,7 @@ const evidence = {
     id: "run-current", prNumber: 41, headSha: "c".repeat(40), baseSha: "b".repeat(40), baseRef: "main",
     status: "checks_passed", isStale: false, coverageLevel: "full", currentStage: "complete",
     nextActionCode: "none", mode: "review", provider: "anthropic", model: "claude-sonnet-4-5",
-    budgetLimit: 5, budgetConsumed: 0.4, updatedAt: 1_700_000_200_000,
+    budgetLimit: 5, budgetConsumed: 0.4, createdAt: 1_700_000_100_000, updatedAt: 1_700_000_200_000,
   },
   repository: { owner: "acme", name: "public-api" },
   requirements: [], findings: [], checks: [], rounds: [], events: [], stages: [],
@@ -141,6 +141,15 @@ describe("comparing two runs of one pull request", () => {
     }
   });
 
+  it("does not call missing evidence a lost or new finding", async () => {
+    state.comparison = { ...comparison, partial: true };
+    render(<LiveReviewDetail id="run-current" />);
+    fireEvent.change(await screen.findByLabelText("Compare against"), { target: { value: "run-earlier" } });
+    expect(await screen.findByText(/Comparison is incomplete/)).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /Lost ·/ })).toBeNull();
+    expect(screen.queryByRole("heading", { name: /New ·/ })).toBeNull();
+  });
+
   it("says in a sentence when the two runs cannot be compared", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     state.comparisonError = new Error("[Request ID: 8f2] Server Error\nUncaught Error: not_found_or_forbidden");
@@ -152,6 +161,14 @@ describe("comparing two runs of one pull request", () => {
     expect(document.body.textContent).not.toContain("not_found_or_forbidden");
     expect(document.body.textContent).not.toContain("Server Error");
     logged.mockRestore();
+  });
+
+  it("does not offer newer runs as earlier when the current run is outside the window", async () => {
+    state.evidence = { ...evidence, review: { ...evidence.review, createdAt: 1_600_000_000_000 } };
+    state.runs = [run("run-newer", 1_700_000_100_000)];
+    render(<LiveReviewDetail id="run-current" />);
+    await screen.findByText("acme/public-api");
+    expect(screen.queryByLabelText("Compare against")).toBeNull();
   });
 
   it("offers no comparison at all when the pull request has been reviewed once", async () => {

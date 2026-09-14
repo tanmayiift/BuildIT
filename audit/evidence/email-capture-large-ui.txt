@@ -1,0 +1,11 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ convex/notificationOutbox.test.ts (21 tests) 468ms
+ ✓ apps/web/src/app/notification-preferences.component.test.tsx (4 tests) 134ms
+
+ Test Files  2 passed (2)
+      Tests  25 passed (25)
+   Start at  09:14:05
+   Duration  2.04s (transform 286ms, setup 0ms, collect 771ms, tests 601ms, environment 1.18s, prepare 258ms)
+

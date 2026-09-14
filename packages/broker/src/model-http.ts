@@ -9,6 +9,7 @@ type InvocationBody = {
   organizationId: string; repositoryId: string; reviewId: string; stage: ModelStage;
   credential: StoredCredential;
   request: ProviderRequest;
+  invocationId?: string;
 };
 
 function json(status: number, body: Record<string, unknown>) { return Response.json(body, { status, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } }); }
@@ -19,8 +20,9 @@ function safe(error: unknown) {
   if (code === "invalid_request") return { status: 400, code };
   if (["model_grant_invalid", "model_grant_scope_invalid"].includes(code)) return { status: 403, code: "model_grant_invalid" };
   if (["model_grant_expired", "model_grant_replayed"].includes(code)) return { status: 410, code };
-  if (["invalid_key", "refused", "truncated", "malformed_response"].includes(code)) return { status: 422, code, ...(error instanceof ProviderError && typeof error.status === "number" ? { providerStatus: error.status } : {}) };
+  if (["invalid_key", "model_unavailable", "refused", "truncated", "malformed_response"].includes(code)) return { status: 422, code, ...(error instanceof ProviderError && typeof error.status === "number" ? { providerStatus: error.status } : {}) };
   if (code === "rate_limited") return { status: 429, code };
+  if (code === "provider_unavailable") return { status: 503, code };
   return { status: 503, code: "model_invocation_failed" };
 }
 function validCredential(value: unknown): value is StoredCredential {
@@ -41,8 +43,9 @@ function validRequest(value: unknown): value is ProviderRequest {
 function parse(raw: string): InvocationBody {
   let value: Record<string, unknown>;
   try { value = JSON.parse(raw) as Record<string, unknown>; } catch { throw new Error("invalid_request"); }
-  const allowed = new Set(["organizationId", "repositoryId", "reviewId", "stage", "credential", "request"]);
+  const allowed = new Set(["organizationId", "repositoryId", "reviewId", "stage", "credential", "request", "invocationId"]);
   if (Object.keys(value).some(key => !allowed.has(key)) || typeof value.organizationId !== "string" || typeof value.repositoryId !== "string" || typeof value.reviewId !== "string"
+    || (value.invocationId !== undefined && (typeof value.invocationId !== "string" || value.invocationId.length < 1 || value.invocationId.length > 100))
     || typeof value.stage !== "string" || !validCredential(value.credential) || !validRequest(value.request)) throw new Error("invalid_request");
   return value as unknown as InvocationBody;
 }
@@ -54,13 +57,16 @@ export async function handleModelInvocation(request: Request, input: {
   providers?: ProviderClient;
   now?: number;
 }) {
+  let invocationId: string | undefined, availableModels: string[] | undefined;
   try {
     if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
     const token = bearer(request), declared = Number(request.headers.get("content-length") ?? 0);
     if (declared > maxBodyBytes) return json(413, { error: "request_too_large" });
     const raw = await request.text();
     if (new TextEncoder().encode(raw).byteLength > maxBodyBytes) return json(413, { error: "request_too_large" });
-    const body = parse(raw), requestHash = createHash("sha256").update(raw).digest("hex");
+    const body = parse(raw);
+    invocationId = body.invocationId;
+    const requestHash = createHash("sha256").update(raw).digest("hex");
     const grant = await verifyModelInvocationGrant(token, input.grantSecret, { ...(input.now === undefined ? {} : { now: input.now }), consume: input.consume });
     if (grant.organizationId !== body.organizationId || grant.repositoryId !== body.repositoryId || grant.reviewId !== body.reviewId
       || grant.stage !== body.stage || grant.credentialScopeId !== body.credential.id || grant.provider !== body.credential.provider
@@ -69,6 +75,15 @@ export async function handleModelInvocation(request: Request, input: {
     const providers = input.providers ?? new ProviderClient();
     const result = await broker.withCredential(body.credential.id, { actorId: "review-worker", organizationId: body.organizationId, repositoryId: body.repositoryId },
       async (provider, apiKey) => {
+        if (body.invocationId) {
+          try { return await providers.generate(provider, apiKey, body.request, approvedProviderModels[provider]); }
+          catch (error) {
+            if (provider === "gemini" && error instanceof ProviderError && error.status === 404) {
+              try { availableModels = (await providers.validateKey(provider, apiKey)).availableModels; } catch { /* The original rejected call remains the accounting outcome. */ }
+            }
+            throw error;
+          }
+        }
         const generate = (request: ProviderRequest) => providers.generateWithRetry(provider, apiKey, request, approvedProviderModels[provider]);
         try {
           return await generate(body.request);
@@ -91,13 +106,18 @@ export async function handleModelInvocation(request: Request, input: {
           throw error;
         }
       });
-    return json(200, { result });
+    return json(200, { result, ...(invocationId ? { invocationId } : {}) });
   } catch (error) {
     const mapped = safe(error);
     // Production diagnostics deliberately contain only stable categories. Model
     // responses, prompts, repository data, grants, and credentials must never
     // be written to function logs.
     console.info(JSON.stringify({ component: "model_broker", event: "invocation_failed", category: mapped.code, providerStatus: mapped.providerStatus ?? null }));
-    return json(mapped.status, { error: mapped.code, ...(mapped.providerStatus === undefined ? {} : { providerStatus: mapped.providerStatus }) });
+    return json(mapped.status, { error: mapped.code, ...(invocationId ? { invocationId } : {}),
+      ...(error instanceof ProviderError && error.usage ? { usage: error.usage } : {}),
+      ...(invocationId && error instanceof ProviderError && [401, 403, 404, 429].includes(error.status ?? 0) && !error.usage ? { notCharged: true } : {}),
+      ...(error instanceof ProviderError && error.retryAfterMs !== undefined ? { retryAfterSeconds: error.retryAfterMs / 1_000 } : {}),
+      ...(availableModels ? { availableModels } : {}),
+      ...(error instanceof ProviderError && error.status !== undefined ? { providerStatus: error.status } : mapped.providerStatus === undefined ? {} : { providerStatus: mapped.providerStatus }) });
   }
 }

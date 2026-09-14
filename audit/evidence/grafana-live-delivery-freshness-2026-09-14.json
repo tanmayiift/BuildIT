@@ -1,0 +1,33 @@
+{
+  "observedAt": "2026-09-14T06:22:23.275Z",
+  "contactPoint": "BuildIT alerts (Tanmay)",
+  "deliveryTest": {
+    "alertName": "BuildITAuditDeliveryTest20260914",
+    "summary": "TEST ONLY: BuildIT alert delivery audit 2026-09-14",
+    "uiResult": "Test notification sent successfully",
+    "gmailReceived": true,
+    "gmailDisplayedTime": "2026-09-14 11:48 IST",
+    "startedAt": "2026-09-14 11:48:39 IST",
+    "recipient": "Existing BuildIT institutional email contact",
+    "newRecipientAdded": false
+  },
+  "freshness": {
+    "query": "max(timestamp(buildit_snapshot))",
+    "datasource": "grafanacloud-prom",
+    "numberOfQueries": 1,
+    "rows": 62,
+    "snapshotTimestamps": [
+      1789365639.095,
+      1789365691.632,
+      1789365862.423,
+      1789365939.24,
+      1789366162.646,
+      1789366239.848,
+      1789366462.81,
+      1789366763.593
+    ],
+    "latestSnapshotUtc": "2026-09-14T06:19:23.593Z",
+    "ageAtObservationSeconds": 179.682
+  },
+  "limitations": "Contact-point test proves actual production email transport; it does not simulate a production telemetry outage. Separate isolated actual SDK and DatasourceError firing/recovery drills provide evaluation-path evidence."
+}

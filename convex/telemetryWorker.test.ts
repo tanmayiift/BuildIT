@@ -9,6 +9,7 @@ describe("durable telemetry error boundary", () => {
     expect(safeTelemetryError(new Error("stale_head"))).toBe("stale_head");
     expect(safeTelemetryError(new Error("autofix_repeated_patch"))).toBe("loop_guard");
     expect(safeTelemetryError(new Error("validation_execution_503"))).toBe("runner_error");
+    expect(safeTelemetryError(new Error("sandbox capacity limit exceeded"))).toBe("capacity_exhausted");
   });
 });
 

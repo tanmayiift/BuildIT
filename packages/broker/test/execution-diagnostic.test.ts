@@ -6,21 +6,31 @@ import { capacityExhausted, executionFailureDiagnostic, safeExecutionError, safe
 // out-of-quota, image-missing and genuinely-down were three different problems wearing one message.
 // Two real reviews failed this way and the log could not say which it was.
 //
-// The reason now stays server-side, bounded and redacted. These tests are mostly about the second
-// half of that sentence: a diagnostic that leaks what was being executed is worse than none.
+// The reason is a fixed operational code. Raw exception text is unsafe even in server logs.
 
 describe("what an operator gets to see", () => {
-  it("names the error type and its message", () => {
+  it("names the capacity problem without copying the error type or its message", () => {
     expect(executionFailureDiagnostic(new TypeError("Sandbox creation refused: concurrency limit"))).
-      toBe("TypeError: Sandbox creation refused: concurrency limit");
+      toBe("sandbox_capacity_unavailable");
   });
 
   it("tells a quota refusal apart from a missing image", () => {
     const quota = executionFailureDiagnostic(new Error("Sandbox quota exceeded for team"));
     const image = executionFailureDiagnostic(new Error("Sandbox image not found"));
     expect(quota).not.toBe(image);
-    expect(quota).toContain("quota");
-    expect(image).toContain("image");
+    expect(quota).toBe("capacity_exhausted");
+    expect(image).toBe("sandbox_image_unavailable");
+  });
+
+  it.each([
+    [new Error("Sandbox failed to start for customer-repo"), "sandbox_start_failed"],
+    [new Error("Sandbox terminated unexpectedly for customer-repo"), "sandbox_terminated"],
+    [new TypeError("fetch failed for private-host"), "sandbox_network_unavailable"],
+    [new Error("credential_teardown_failed"), "credential_teardown_failed"],
+    [new Error("artifact_revision_mismatch"), "artifact_revision_mismatch"],
+    [new Error("osv_report_invalid"), "osv_report_invalid"],
+  ])("retains a known operational distinction without provider context", (error, code) => {
+    expect(executionFailureDiagnostic(error)).toBe(code);
   });
 
   it("survives something that is not an Error at all", () => {
@@ -38,7 +48,7 @@ describe("what it must never leak", () => {
     const keyShaped = ["sk", "live", "9f3ba21c8e77d4a0b5c6e1f2"].join("_");
     const diagnostic = executionFailureDiagnostic(new Error(`auth failed for ${keyShaped}`));
     expect(diagnostic).not.toContain(keyShaped);
-    expect(diagnostic).toContain("[redacted]");
+    expect(diagnostic).toBe("execution_failed");
   });
 
   it("removes URLs, which carry request context", () => {
@@ -57,8 +67,14 @@ describe("what it must never leak", () => {
     expect(executionFailureDiagnostic(new Error("x".repeat(5_000))).length).toBeLessThanOrEqual(200);
   });
 
-  it("collapses newlines, so one failure stays one log line", () => {
-    expect(executionFailureDiagnostic(new Error("first\nsecond\n\tthird"))).toBe("Error: first second third");
+  it("discards free text and newlines rather than rewriting them into a log message", () => {
+    expect(executionFailureDiagnostic(new Error("first\nsecond\n\tthird"))).toBe("execution_failed");
+  });
+
+  it("never emits a custom error name or an internal code with appended secrets", () => {
+    const error = new Error("osv_report_invalid: password=tiny source=/a.ts");
+    error.name = "Authorization: Bearer tiny";
+    expect(executionFailureDiagnostic(error)).toBe("scanner_unavailable");
   });
 });
 
@@ -100,7 +116,7 @@ describe("a spent plan is a bill, not an incident", () => {
     expect(safeExecutionError(new Error(real))).toEqual({ status: 503, code: "sandbox_unavailable" });
   });
 
-  it("keeps the reset date in the operator log, which is the actionable part", () => {
-    expect(executionFailureDiagnostic(new Error(real))).toContain("2026-10-01");
+  it("keeps a capacity code while excluding the provider's free-form reset message", () => {
+    expect(executionFailureDiagnostic(new Error(real))).toBe("capacity_exhausted");
   });
 });

@@ -110,9 +110,10 @@ describe("what counts as an advisory", () => {
     expect(advisories.map((item: { id: string }) => item.id)).toEqual(["GHSA-1", "GHSA-2", "GHSA-3"]);
   });
 
-  it("reads an empty or malformed report as no advisories rather than throwing", () => {
-    for (const value of [{}, { results: [] }, { results: [{}] }, { results: [{ packages: [{}] }] }, null]) {
-      expect(advisoriesFromReport(value)).toEqual([]);
+  it("accepts a valid empty report but refuses malformed reports as evidence of a clean scan", () => {
+    expect(advisoriesFromReport({ results: [] })).toEqual([]);
+    for (const value of [{}, { results: [{}] }, { results: [{ packages: [{}] }] }, null]) {
+      expect(() => advisoriesFromReport(value)).toThrow("buildit_audit_report_invalid");
     }
   });
 });

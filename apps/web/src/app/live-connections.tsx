@@ -23,7 +23,7 @@ const receiptQuery = makeFunctionReference<"query", Record<string, never>, null 
 // access requested", so an admin whose workspace held a live tracker token was told on screen that
 // no such access existed, and had no way to revoke it. That is a credential with no kill switch,
 // and the first sign of it would have been a leak.
-type TrackerConnection = { id: string; provider: string; workspaceId: string | null; scopes: string[]; status: string; maskedSuffix: string | null; lastUsedAt: number | null; createdAt: number };
+type TrackerConnection = { credentialFormat?: string; id: string; provider: string; workspaceId: string | null; scopes: string[]; status: string; maskedSuffix: string | null; lastUsedAt: number | null; createdAt: number };
 const trackerConnectionsQuery = makeFunctionReference<"query", { organizationId: string }, TrackerConnection[]>("integrations:listTrackerConnections");
 const revokeTracker = makeFunctionReference<"mutation", { organizationId: string; connectionId: string; requestId: string }, { id: string; status: "revoked" }>("integrations:revokeTrackerConnection");
 const readinessQuery = makeFunctionReference<"query", Record<string, never>, RuntimeReadiness>("runtimeReadiness:current");
@@ -373,7 +373,7 @@ export function SetupProgress() {
   const connection = useConnection();
   if (!connection) return <span className="setup-state" aria-live="polite"><span className="setup-dot" />Checking access</span>;
   const connected = connection?.state === "connected";
-  return <a className="setup-state" href={connected ? "/setup/repository" : "/setup/install"}><span className={`setup-dot${connected ? " ready" : ""}`} />{connected ? "GitHub connected" : "Setup 1 of 4"}</a>;
+  return <a className="setup-state" href={connected ? "/setup/review" : "/setup/install"}><span className={`setup-dot${connected ? " ready" : ""}`} />{connected ? "GitHub connected" : "Setup 1 of 3"}</a>;
 }
 
 export function OverviewReadiness() {
@@ -410,7 +410,7 @@ export function SetupAccessSummary({ stepIndex }: { stepIndex: number }) {
   const credential = useCredentialReadiness(connection);
   const signedIn = Boolean(connection && connection.state !== "signed_out");
   const connected = connection?.state === "connected";
-  const providerDetail = credential.ready ? "Encrypted and valid" : signedIn && !credential.canManage ? "Managed by Admin" : stepIndex > 1 ? "Optional" : "Not requested";
+  const providerDetail = credential.ready ? "Encrypted and valid" : signedIn && !credential.canManage ? "Managed by Admin" : stepIndex >= 1 ? "Needed for AI review" : "Not requested";
   const execution = executionReadiness(readiness);
   return <><p className="eyebrow">Access at this step</p><AccessRow label="GitHub identity" active={signedIn} detail={signedIn ? "Verified" : "Required"} /><AccessRow label="Selected repositories" active={connected} detail={connection === undefined ? "Checking" : connected ? `${connection.repositories.length} connected` : "Not connected"} /><AccessRow label="Provider API key" active={credential.ready} detail={providerDetail} /><AccessRow label="Repository execution" active={execution === "ready"} detail={signedIn && readiness === undefined ? "Checking" : execution === "ready" ? "Release gate passed" : execution === "service_unconfigured" ? "BuildIT configuration incomplete" : "Safety blocked"} /><p className="aside-note">These states come from your active workspace. A check mark means the connection is verified now.</p></>;
 }
@@ -492,7 +492,7 @@ export function TrackerConnections() {
   // Nothing to say when there is nothing connected - the two "Not available" cards beside this
   // already cover the not-set-up story, and an empty panel would just repeat them.
   if (!rows?.length) return null;
-  const live = rows.filter(row => row.status !== "revoked");
+  const live = rows.filter(row => row.status !== "revoked" && row.credentialFormat !== "oauth_bundle_v1");
   if (!live.length) return null;
   return <section className="settings-list" aria-label="Connected trackers">
     <article className="setting-row"><div><strong>Connected trackers</strong><p>These hold live credentials for your workspace. Revoking one stops BuildIT reading that tracker immediately; linked context is then reported as unavailable rather than guessed.</p></div><span className="status warning">{live.length} active</span></article>

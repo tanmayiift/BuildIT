@@ -33,17 +33,21 @@ export function assertBuildITBrokerDeployContext({ cwd, repoRoot, link }) {
 }
 
 function vercel(args, cwd, env) {
-  const result = spawnSync("vercel", args, { cwd, encoding: "utf8", shell: false, env });
+  let result = spawnSync("vercel", args, { cwd, encoding: "utf8", shell: false, env });
   // "Not authorized" happened mid-run on a real deploy and left the broker a commit behind while
   // convex and web moved on - the drift that costs an hour to notice. One retry, because a
   // token that is genuinely wrong fails the same way twice.
-  if (result.status !== 0 && /not authoriz/i.test(`${result.stdout ?? ""}${result.stderr ?? ""}`)) {
-    return spawnSync("vercel", args, { cwd, encoding: "utf8", shell: false, env });
+  if (!result.error && result.status !== 0 && /not authoriz/i.test(`${result.stdout ?? ""}${result.stderr ?? ""}`)) {
+    result = spawnSync("vercel", args, { cwd, encoding: "utf8", shell: false, env });
   }
-  if (result.error) throw result.error;
+  // Both attempts must pass the same checks and normalization. CLI diagnostics and spawn
+  // messages can contain credential-bearing arguments; expose only closed failure categories.
+  if (result.error) {
+    const code = ["ENOENT", "EACCES", "ETIMEDOUT", "ENOBUFS"].includes(result.error.code) ? result.error.code : "unknown";
+    throw new Error(`buildit_broker_deploy_spawn_failed:${code}`);
+  }
   if (result.status !== 0) {
-    process.stderr.write(`${result.stderr ?? ""}\n`);
-    throw new Error(`buildit_broker_deploy_failed:${result.status ?? "unknown"}`);
+    throw new Error(`buildit_broker_deploy_failed:${Number.isInteger(result.status) ? result.status : "unknown"}`);
   }
   return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", combined: `${result.stdout ?? ""}\n${result.stderr ?? ""}` };
 }

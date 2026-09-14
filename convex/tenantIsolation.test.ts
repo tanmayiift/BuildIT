@@ -8,14 +8,68 @@ const uuid = (prefix: string) => `${prefix}23e4567-e89b-12d3-a456-426614174000`;
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import workpoolComponent from "@convex-dev/workpool/test";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import { terminalStatuses } from "./lib/lifecycle";
 import schema from "./schema";
 import { normalizeGitHubProfile } from "./lib/githubProfile";
 import { makeFunctionReference } from "convex/server";
+import { GitHubAppClient } from "@buildit/github";
 
 const modules = import.meta.glob("./**/*.ts");
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+function captureAcknowledgmentGitHub() {
+  vi.useFakeTimers();
+  vi.stubEnv("GITHUB_APP_ID", "123");
+  vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "test-only");
+  const token = vi.spyOn(GitHubAppClient.prototype, "tokenFor").mockResolvedValue("local-test-token");
+  const revoke = vi.spyOn(GitHubAppClient.prototype, "revoke").mockResolvedValue(true);
+  const http = vi.fn(async (input: string | URL, init?: RequestInit) => {
+    if (String(input).includes("/commits/") && !init?.method) return Response.json({ check_runs: [{ id: 321, name: "BuildIT / review", app: { slug: "buildit-agentic-review" } }] });
+    if (String(input).endsWith("/check-runs/321") && init?.method === "PATCH") return Response.json({ id: 321, html_url: "https://github.com/test-only/checks/321" });
+    throw new Error(`unexpected_mock_github_request:${init?.method ?? "GET"}:${String(input)}`);
+  });
+  vi.stubGlobal("fetch", http);
+  return { token, revoke, http };
+}
+
+// Wait for the exact queued publication in the test that caused it. A database-only
+// assertion previously passed while this action failed later in an unrelated test.
+async function assertCancellationAcknowledgment(t: ReturnType<typeof convexTest>, reviewId: Awaited<ReturnType<typeof seedTenant>>["reviewId"], title: string, github: ReturnType<typeof captureAcknowledgmentGitHub>, tokenFailure?: Error) {
+  const scope = await t.run(async ctx => {
+    const review = await ctx.db.get(reviewId);
+    const repository = await ctx.db.get(review!.repositoryId);
+    const installation = await ctx.db.get(repository!.installationId);
+    return { review: review!, repository: repository!, installation: installation! };
+  });
+  const scheduled = await t.run(ctx => ctx.db.system.query("_scheduled_functions").collect());
+  const notices = scheduled.filter(job => job.name === "reviewPublicationWorker:acknowledge");
+  expect(notices).toHaveLength(1);
+  expect(notices[0]!.args[0]).toMatchObject({ installationId: scope.installation.installationId, githubRepositoryId: scope.repository.githubRepositoryId, headSha: scope.review.headSha, conclusion: "neutral", title });
+  expect(notices[0]!.args[0].summary).toContain(scope.review.headSha);
+  expect(notices[0]!.args[0].summary).toContain("BuildIT did not merge this pull request.");
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  const finished = await t.run(ctx => ctx.db.system.get(notices[0]!._id));
+  expect(finished?.state, "scheduled cancellation publication must finish in its originating test").toEqual({ kind: "success" });
+  const tokenScope = { installationId: scope.installation.installationId, repositoryId: scope.repository.githubRepositoryId, stage: "review" };
+  expect(github.token).toHaveBeenCalledExactlyOnceWith(tokenScope);
+  expect(github.revoke).toHaveBeenCalledExactlyOnceWith(tokenScope);
+  if (tokenFailure) {
+    await expect(github.token.mock.results[0]!.value).rejects.toBe(tokenFailure);
+    expect(github.http).not.toHaveBeenCalled();
+  } else {
+    const root = `https://api.github.com/repositories/${scope.repository.githubRepositoryId}`;
+    expect(github.http).toHaveBeenCalledTimes(2);
+    expect(github.http.mock.calls[0]![0]).toBe(`${root}/commits/${scope.review.headSha}/check-runs?check_name=BuildIT%20%2F%20review&filter=latest&per_page=100`);
+    expect(github.http.mock.calls[1]![0]).toBe(`${root}/check-runs/321`);
+    const update = github.http.mock.calls[1]![1]!;
+    expect(update.method).toBe("PATCH");
+    expect(update.headers).toMatchObject({ Authorization: "Bearer local-test-token" });
+    expect(JSON.parse(String(update.body))).toEqual({ name: "BuildIT / review", head_sha: scope.review.headSha, status: "completed", conclusion: "neutral", output: { title, summary: notices[0]!.args[0].summary } });
+  }
+}
+
 const activationFunnel = makeFunctionReference<"query", { organizationId: string }, { repositoryConnected: boolean; modelKeyReady: boolean; pullRequestPreviewed: boolean; reviewStarted: boolean; firstEvidenceReady: boolean }>("activation:funnel");
 const recordPreview = makeFunctionReference<"mutation", { repositoryId: string; actorId: string; headSha: string; now: number }, string>("dashboardReviewData:recordPreview");
 const cancellationScope = makeFunctionReference<"query", { reviewId: string }, { actorId: string; workflowId?: string; terminal: boolean }>("dashboardReviewData:cancellationScope");
@@ -247,7 +301,7 @@ describe("Convex tenant isolation", () => {
     expect(
       organizations.map((organization: { slug: string }) => organization.slug),
     ).toEqual(["alpha"]);
-    expect(reviews.map((review) => review.id)).toEqual([alpha.reviewId]);
+    expect(reviews.rows.map((review) => review.id)).toEqual([alpha.reviewId]);
   });
 
   it("treats an active organization as a preference and rechecks membership", async () => {
@@ -331,8 +385,8 @@ describe("Convex tenant isolation", () => {
     const betaReviews = await asAlice.query(api.reviews.list, {
       organizationId: beta.organizationId,
     });
-    expect(alphaReviews.map((review) => review.id)).toEqual([alpha.reviewId]);
-    expect(betaReviews.map((review) => review.id)).toEqual([beta.reviewId]);
+    expect(alphaReviews.rows.map((review) => review.id)).toEqual([alpha.reviewId]);
+    expect(betaReviews.rows.map((review) => review.id)).toEqual([beta.reviewId]);
   });
 
   it("returns only organizations belonging to the authenticated user", async () => {
@@ -1573,8 +1627,8 @@ describe("Convex tenant isolation", () => {
       organizationId: alpha.organizationId,
       repositoryId: second.repositoryId,
     });
-    expect(first.map((review) => review.id)).toEqual([alpha.reviewId]);
-    expect(secondOnly.map((review) => review.id)).toEqual([second.reviewId]);
+    expect(first.rows.map((review) => review.id)).toEqual([alpha.reviewId]);
+    expect(secondOnly.rows.map((review) => review.id)).toEqual([second.reviewId]);
   });
 
   it("rejects a repository attached to an installation from another organization", async () => {
@@ -1663,7 +1717,7 @@ describe("Convex tenant isolation", () => {
         organizationId: alpha.organizationId,
         since: 0,
       }),
-    ).toEqual({ review_completed: 1 });
+    ).toMatchObject({ totals: { review_completed: 1 }, recordCount: 1, truncated: false, since: 0 });
     await expect(
       asAlice.query(api.metrics.summarize, {
         organizationId: beta.organizationId,
@@ -1961,6 +2015,7 @@ describe("Convex review state integrity", () => {
   });
 
   it("fences a worker immediately when cancellation is requested", async () => {
+    const github = captureAcknowledgmentGitHub();
     const t = convexTest(schema, modules);
     const seeded = await seedTenant(t, "alpha", "alice");
     const lease = await t.mutation(internal.reviewState.acquireLease, {
@@ -2003,6 +2058,26 @@ describe("Convex review state integrity", () => {
     await expect(
       t.query(internal.durableReview.assertActive, execution),
     ).rejects.toThrow("review_cancelled_or_replaced");
+    await assertCancellationAcknowledgment(t, seeded.reviewId, "BuildIT: review cancelled", github);
+  });
+
+  it("keeps cancellation terminal and releases the token scope when GitHub rejects the notice", async () => {
+    const github = captureAcknowledgmentGitHub();
+    const unavailable = new Error("github_token_503");
+    github.token.mockRejectedValueOnce(unavailable);
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "cancel-notice-unavailable", "alice");
+    await t.mutation(internal.reviewState.requestCancellation, { reviewId: tenant.reviewId, actorId: "alice", now: 2 });
+    await assertCancellationAcknowledgment(t, tenant.reviewId, "BuildIT: review cancelled", github, unavailable);
+    expect(await t.run(ctx => ctx.db.get(tenant.reviewId))).toMatchObject({ status: "cancelled", statusReasonCode: "user_cancelled", executionGeneration: 1 });
+  });
+
+  it("reports missing GitHub configuration before attempting an acknowledgment request", async () => {
+    vi.stubEnv("GITHUB_APP_ID", "");
+    const http = vi.fn(); vi.stubGlobal("fetch", http);
+    const t = convexTest(schema, modules);
+    await expect(t.action(internal.reviewPublicationWorker.acknowledge, { installationId: 1, githubRepositoryId: 2, headSha: "a".repeat(40), conclusion: "neutral", title: "BuildIT: review cancelled", summary: "Test cancellation" })).rejects.toThrow("missing_github_app_id");
+    expect(http).not.toHaveBeenCalled();
   });
 
   it("resolves cancellation targets only inside the verified repository and pull request", async () => {
@@ -2557,6 +2632,7 @@ describe("durable validation evidence", () => {
 
 describe("durable Autofix evidence", () => {
   it("rejects every cached Autofix generation after cancellation", async () => {
+    const github = captureAcknowledgmentGitHub();
     const t = convexTest(schema, modules);
     const tenant = await seedTenant(t, "autofix-cancel", "alice");
     await t.run((ctx) =>
@@ -2594,6 +2670,7 @@ describe("durable Autofix evidence", () => {
         now: 3,
       }),
     ).rejects.toThrow("side_effect_cancelled_or_replaced");
+    await assertCancellationAcknowledgment(t, tenant.reviewId, "BuildIT: review cancelled", github);
   });
 
   it("records one exact candidate round idempotently and rejects foreign artifacts", async () => {
@@ -3039,6 +3116,7 @@ describe("GitHub webhook durability", () => {
   // start any review at all, while the queue promised it would start "when an earlier review
   // finishes". The sweeper already cancels an expired blocked review; it needed an expiry to act on.
   it("gives a review blocked on a missing model key an expiry the sweeper can act on", async () => {
+    const github = captureAcknowledgmentGitHub();
     const t = convexTest(schema, modules);
     const tenant = await seedTenant(t, "blocked-ttl", "user-blocked-ttl");
     const repository = await t.run(ctx => ctx.db.get(tenant.repositoryId));
@@ -3070,6 +3148,7 @@ describe("GitHub webhook durability", () => {
     const swept = await t.run(ctx => ctx.db.get(review!._id));
     expect(swept?.status).toBe("cancelled");
     expect(swept?.statusReasonCode).toBe("blocked_expired");
+    await assertCancellationAcknowledgment(t, review!._id, "BuildIT: review expired while waiting for capacity", github);
   });
 
   it("pins one exact PR snapshot on a reserved command delivery", async () => {
@@ -3331,6 +3410,7 @@ describe("GitHub webhook durability", () => {
     ).rejects.toThrow("repository_unavailable");
   });
   it("marks old PR heads stale and fences active work", async () => {
+    const github = captureAcknowledgmentGitHub();
     const t = convexTest(schema, modules),
       tenant = await seedTenant(t, "alpha", "alice"),
       before = await t.run(async (ctx) => ({
@@ -3358,6 +3438,7 @@ describe("GitHub webhook durability", () => {
       executionGeneration: 1,
     });
     expect(after?.leaseOwner).toBeUndefined();
+    await assertCancellationAcknowledgment(t, tenant.reviewId, "BuildIT: superseded by a newer commit", github);
   });
   // Rewritten deliberately, not weakened: this asserted that a push to the default branch cancels
   // every in-flight review whose base is that branch. It does not any more. One routine merge was
@@ -3917,6 +3998,7 @@ describe("failures reach the person waiting for them", () => {
   });
 
   it("makes a review terminal when a newer commit supersedes it", async () => {
+    const github = captureAcknowledgmentGitHub();
     const t = convexTest(schema, modules);
     const tenant = await seedTenant(t, "stale-head-terminal", "alice");
     const now = Date.now();
@@ -3933,6 +4015,7 @@ describe("failures reach the person waiting for them", () => {
       nextActionCode: "start_new_review", githubCheckConclusion: "neutral",
     });
     expect((await t.run(ctx => ctx.db.get(tenant.reviewId)))?.completedAt).toBe(now);
+    await assertCancellationAcknowledgment(t, tenant.reviewId, "BuildIT: superseded by a newer commit", github);
   });
 });
 

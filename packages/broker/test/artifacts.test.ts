@@ -7,7 +7,7 @@ import { ArtifactBroker, S3GrantConsumer } from "../src/artifacts";
 const secret = new Uint8Array(32).fill(5), now = 1_000;
 type Command = DeleteObjectCommand | GetObjectCommand | HeadObjectCommand | PutObjectCommand;
 const base = { organizationId: "org-a", repositoryId: "repo-a", reviewId: "review-a", artifactId: "artifact-a", storageKey: "artifacts/org-a/repo-a/review-a/artifact-a/content.bin" };
-function broker(send: ReturnType<typeof vi.fn>, consume = vi.fn(async () => true)) { return { value: new ArtifactBroker({ bucket: "bucket", kmsKeyId: "kms-key", grantSecret: secret, consumeGrant: consume, now: () => 2_000, s3: { send } }), consume }; }
+function broker(send: (command: Command) => Promise<Record<string, unknown>>, consume = vi.fn(async () => true)) { return { value: new ArtifactBroker({ bucket: "bucket", kmsKeyId: "kms-key", grantSecret: secret, consumeGrant: consume, now: () => 2_000, s3: { send } }), consume }; }
 
 describe("artifact broker", () => {
   it("writes only with the configured KMS key and verified checksum", async () => {

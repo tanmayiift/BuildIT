@@ -194,3 +194,9 @@ describe("classifying an already-classified reason", () => {
     expect(roundTripped.summary).not.toContain("Check the model connection in BuildIT");
   });
 });
+
+it("does not promise that a later model rejection erased earlier charges", () => {
+  const report = platformFailureReport({ headSha: "b".repeat(40), reason: "model_unavailable" });
+  expect(report.summary).not.toContain("nothing was charged");
+  expect(report.summary).toContain("Earlier model attempts may have incurred charges");
+});

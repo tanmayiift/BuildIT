@@ -1,0 +1,15 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ tests/architecture/social-preview.test.ts (7 tests) 7ms
+ ✓ apps/web/src/proxy.test.ts (50 tests) 12ms
+stderr | apps/web/src/app/proof/page.component.test.tsx > the public proof page > fails in front of a stranger without telling them to check a workspace they do not have
+BuildIT proof page failed { digest: undefined }
+
+ ✓ apps/web/src/app/proof/page.component.test.tsx (19 tests) 106ms
+
+ Test Files  3 passed (3)
+      Tests  76 passed (76)
+   Start at  09:26:52
+   Duration  1.33s (transform 161ms, setup 0ms, collect 343ms, tests 124ms, environment 766ms, prepare 247ms)
+

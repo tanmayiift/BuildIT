@@ -25,14 +25,14 @@ function summary(overrides: Partial<ProofSummary> = {}): ProofSummary {
     generatedAt: Date.UTC(2026, 8, 5, 11, 30, 0),
     rowCeiling: 2_000,
     reviews: {
-      counted: 134, truncated: false, repositoriesReviewed: 7,
+      distinctCompletedPullRequests: 61, counted: 134, truncated: false, repositoriesReviewed: 7,
       byStatus: {
         checks_passed: 41, changes_requested: 30, delivered: 7, inconclusive: 9,
         platform_failed: 42, failed_after_bounds: 3, cancelled: 1, analyzing: 1,
       },
     },
     findings: { counted: 318, truncated: false },
-    spend: { modelSpendUsd: 12.4137, modelTokens: 4_812_663, counted: 940, truncated: false },
+    spend: { costPending: false, modelSpendUsd: 12.4137, modelTokens: 4_812_663, counted: 940, truncated: false },
     ...overrides,
   };
 }
@@ -60,6 +60,13 @@ describe("the public proof page", () => {
     // Seconds under a minute and a half, minutes above it - both formats, from the real fields.
   });
 
+  it("shows pending costs instead of presenting an unknown bill as zero", () => {
+    state.proof = summary({ spend: { ...summary().spend, costPending: true, modelSpendUsd: 0 } });
+    render(<Proof />);
+    expect(screen.getByText("Pending")).toBeTruthy();
+    expect(screen.getByText("Some provider costs are still pending")).toBeTruthy();
+  });
+
   it("shows the unflattering numbers, not only the flattering ones", () => {
     state.proof = summary();
     render(<Proof />);
@@ -75,13 +82,13 @@ describe("the public proof page", () => {
   });
 
   it("does not drop a status the server adds but the page has no label for", () => {
-    state.proof = summary({ reviews: { counted: 2, truncated: false, repositoriesReviewed: 1, byStatus: { checks_passed: 1, some_new_status: 1 } } });
+    state.proof = summary({ reviews: { distinctCompletedPullRequests: 1, counted: 2, truncated: false, repositoriesReviewed: 1, byStatus: { checks_passed: 1, some_new_status: 1 } } });
     render(<Proof />);
     expect(screen.getByText("some_new_status")).toBeTruthy();
   });
 
   it("reports an empty database as empty instead of inventing an example", () => {
-    state.proof = summary({ reviews: { counted: 0, truncated: false, repositoriesReviewed: 0, byStatus: {} }, findings: { counted: 0, truncated: false } });
+    state.proof = summary({ reviews: { distinctCompletedPullRequests: 0, counted: 0, truncated: false, repositoriesReviewed: 0, byStatus: {} }, findings: { counted: 0, truncated: false } });
     render(<Proof />);
     expect(screen.getByText("No reviews recorded in this deployment")).toBeTruthy();
     expect(screen.queryByText("Pull requests reviewed")).toBeNull();
@@ -91,7 +98,7 @@ describe("the public proof page", () => {
   it("says so when the bound is in effect rather than passing a window off as a total", () => {
     state.proof = summary({ reviews: { ...summary().reviews, counted: 2_000, truncated: true } });
     render(<Proof />);
-    expect(screen.getByText("Most recent 2,000")).toBeTruthy();
+    expect(screen.getByText("Distinct PRs in the latest 2,000 attempts")).toBeTruthy();
     expect(document.body.textContent).toContain("a recent window rather than all time");
   });
 
@@ -138,9 +145,10 @@ describe("what the query is allowed to return", () => {
 
   it("bounds every read, because it feeds a live subscription", () => {
     expect(whole).not.toContain(".collect()");
-    expect([...code.matchAll(/\.take\(rowCeiling\)/g)]).toHaveLength(3);
+    expect([...code.matchAll(/\.take\(rowCeiling \+ 1\)/g)]).toHaveLength(3);
     // The list query subscribes the same way and has to be bounded the same way.
-    expect([...listCode.matchAll(/\.take\(rowCeiling\)/g)]).toHaveLength(2);
+    expect(listCode).toContain(".take(repositoryLimit + 1)");
+    expect(listCode).toContain(".take(reviewsPerRepository + 1)");
   });
 });
 
@@ -158,8 +166,8 @@ describe("what the pull request list is allowed to name", () => {
   it("names a repository only when it is public AND an account BuildIT publishes evidence from", () => {
     // Both halves matter. Public alone would put a customer's open-source repository on this page
     // because someone noticed it was world-readable, which is a disclosure they never agreed to.
-    expect(listCode).toContain('visibility === "public"');
-    expect(listCode).toContain("evidenceOwners.has(item.owner)");
+    expect(listCode).toContain('q.eq("owner", owner).eq("visibility", "public")');
+    expect(listCode).toContain("[...evidenceOwners].map(owner");
   });
 
   it("returns nothing derived from source, and no tenant or commit identifier", () => {

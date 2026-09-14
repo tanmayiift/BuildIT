@@ -1,0 +1,52 @@
+{
+  "startedAt": "2026-09-14T03:32:32.293Z",
+  "runtime": "v26.8.1",
+  "environment": "loopback-only Convex with simulated identities",
+  "checks": [
+    "A: authenticated workspace and role",
+    "B: authenticated workspace and role",
+    "usage and enforcement share exact budget snapshot",
+    "provider cost appears in budget",
+    "initial USD limit is 100",
+    "legacy reconstruction remains explicitly incomplete",
+    "Ask tokens retained in quantities",
+    "WebSocket metric subscription includes event inserted after subscription",
+    "local synthetic invocation obtains atomic reservation",
+    "pending reservation updates subscription without adding trusted spend",
+    "settled synthetic charge updates existing subscription and releases reservation",
+    "post-settlement budget page and gate snapshots match",
+    "duplicate settlement does not add charge",
+    "usage:summarize: cross-workspace query denied",
+    "metrics:summarize: cross-workspace query denied",
+    "reviewHistory:summary: cross-workspace query denied",
+    "reviews:list: cross-workspace query denied",
+    "viewer budget write denied (other workspace)",
+    "viewer budget write denied (own workspace)",
+    "owner can remove limit; unlimited allowance has no fake remaining number",
+    "owner can restore USD limit without resetting spend",
+    "other tenant spend unaffected"
+  ],
+  "figures": {
+    "before": {
+      "spendUsd": 12.5,
+      "limitUsd": 100,
+      "percent": 12.5,
+      "measuredTokens": 42000
+    },
+    "metricRuns": [
+      2,
+      3
+    ],
+    "after": {
+      "spendUsd": 12.53,
+      "limitUsd": 100,
+      "percent": 12.53,
+      "settledFakeChargeUsd": 0.03,
+      "reservedUsd": 0
+    }
+  },
+  "externalPaidCalls": 0,
+  "browserChecks": 0,
+  "completedAt": "2026-09-14T03:32:32.579Z",
+  "status": "passed"
+}

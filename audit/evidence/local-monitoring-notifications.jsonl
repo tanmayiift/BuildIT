@@ -1,0 +1,2 @@
+{"receivedAt": 1789365211.050989, "status": "firing", "alerts": [{"status": "firing", "labels": {"alertname": "BuildITTelemetrySilent", "grafana_folder": "buildit", "service": "buildit", "severity": "ticket"}, "startsAt": "2026-09-14T05:53:30Z", "endsAt": "0001-01-01T00:00:00Z"}]}
+{"receivedAt": 1789365511.1636124, "status": "resolved", "alerts": [{"status": "resolved", "labels": {"alertname": "BuildITTelemetrySilent", "grafana_folder": "buildit", "service": "buildit", "severity": "ticket"}, "startsAt": "2026-09-14T05:53:30Z", "endsAt": "2026-09-14T05:58:30Z"}]}

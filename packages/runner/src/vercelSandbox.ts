@@ -70,6 +70,12 @@ function resourceKilled(exitCode: number | undefined, durationMs: number | undef
   return exitCode === sigkillExit && !timedOut(exitCode, durationMs, timeoutMs);
 }
 
+// Scanner output can quote untrusted source, dependency URLs or secrets. Operational logs accept
+// only closed categories and numeric exit codes. Source evidence uses the separate artifact path.
+function logScannerUnavailable(scanner: "gitleaks" | "osv", reason: "unexpected_exit" | "report_missing" | "report_too_large" | "manifest_missing" | "manifest_limit", exitCode: number) {
+  console.warn(`buildit_${scanner}_unavailable`, { reason, exitCode: Number.isSafeInteger(exitCode) ? exitCode : null });
+}
+
 async function output(result: Finished, limit: number) {
   const [stdout, stderr] = await Promise.all([result.stdout(), result.stderr()]);
   const combined = `${stdout}${stderr ? `\n${stderr}` : ""}`;
@@ -130,7 +136,7 @@ export class VercelSandboxRunner {
       const gitleaksUnavailable = gitleaks.exitCode !== 0 ? `gitleaks exit ${gitleaks.exitCode}`
         : !gitleaksFile ? "gitleaks wrote no report"
         : gitleaksFile.byteLength > 2_000_000 ? `gitleaks report ${gitleaksFile.byteLength} bytes` : undefined;
-      if (gitleaksUnavailable) console.warn(`buildit_gitleaks_unavailable reason=${gitleaksUnavailable}`);
+      if (gitleaksUnavailable) logScannerUnavailable("gitleaks", gitleaks.exitCode !== 0 ? "unexpected_exit" : !gitleaksFile ? "report_missing" : "report_too_large", gitleaks.exitCode);
       // An empty findings list is what the parser needs; unavailableScanners below is what stops it
       // being read as a clean secret scan.
       const gitleaksReport = gitleaksFile && !gitleaksUnavailable ? gitleaksFile : Buffer.from("[]");
@@ -179,7 +185,7 @@ export class VercelSandboxRunner {
       const osvUnavailable = !lockfiles.length ? "no dependency manifest reached the sandbox"
         : manifests.length > lockfiles.length ? `${manifests.length} manifests exceed the ${osvManifestLimit} one scan can take`
         : ![0, 1].includes(osv.exitCode) && !emptyLockfile ? `osv-scanner exit ${osv.exitCode}` : undefined;
-      if (osvUnavailable) console.warn(`buildit_osv_unavailable reason=${osvUnavailable} exit=${osv.exitCode} output=${osvOutput.text.slice(0, 400)}`);
+      if (osvUnavailable) logScannerUnavailable("osv", !lockfiles.length ? "manifest_missing" : manifests.length > lockfiles.length ? "manifest_limit" : "unexpected_exit", osv.exitCode);
       // A truncated scan still keeps whatever it did find: the manifests it opened were opened, and
       // a vulnerability among them is real however incomplete the audit. Everything else has no
       // report on disk to read.

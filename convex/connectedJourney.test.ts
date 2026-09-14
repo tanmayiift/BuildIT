@@ -216,9 +216,9 @@ describe("two runs of the same pull request can be compared", () => {
     const first = await seedRun(t, organizationId, userId, { headSha: "a".repeat(40), status: "changes_requested", stages: ["findings"], findings: [] });
     await seedRun(t, organizationId, userId, { headSha: "c".repeat(40), status: "checks_passed", stages: ["findings"], findings: [] });
     const history = await t.withIdentity({ subject: `${userId}|session` }).query(api.reviews.runHistory, { reviewId: first });
-    expect(history).toHaveLength(2);
-    expect(history.filter(run => run.isCurrent)).toHaveLength(1);
-    expect(history.every(run => typeof run.costUsd === "number")).toBe(true);
+    expect(history.rows).toHaveLength(2);
+    expect(history.rows.filter(run => run.isCurrent)).toHaveLength(1);
+    expect(history.rows.every(run => typeof run.costUsd === "number")).toBe(true);
   });
 
   it("refuses to compare across a repository boundary", async () => {

@@ -14,9 +14,9 @@ import { makeFunctionReference } from "convex/server";
 export type ProofSummary = {
   generatedAt: number;
   rowCeiling: number;
-  reviews: { counted: number; truncated: boolean; byStatus: Record<string, number>; repositoriesReviewed: number };
+  reviews: { counted: number; truncated: boolean; byStatus: Record<string, number>; repositoriesReviewed: number; distinctCompletedPullRequests: number };
   findings: { counted: number; truncated: boolean };
-  spend: { modelSpendUsd: number; modelTokens: number; counted: number; truncated: boolean };
+  spend: { costPending: boolean; modelSpendUsd: number; modelTokens: number; counted: number; truncated: boolean };
 };
 
 const proofQuery = makeFunctionReference<"query", Record<string, never>, ProofSummary>("publicProof:summary");
@@ -24,7 +24,7 @@ const proofQuery = makeFunctionReference<"query", Record<string, never>, ProofSu
 // thing to want and the reason this list exists: ten links a stranger can open, each to a pull
 // request carrying BuildIT's own comment and check run.
 type PublicReview = { owner: string; name: string; prNumber: number; status: string; completedAt: number };
-type PublicReviews = { generatedAt: number; repositoriesListed: number; reviews: PublicReview[] };
+type PublicReviews = { generatedAt: number; repositoriesListed: number; truncated: boolean; reviews: PublicReview[] };
 const publicReviewsQuery = makeFunctionReference<"query", Record<string, never>, PublicReviews>("publicProof:recentPublicReviews");
 
 // The stored status is BuildIT's own enum from convex/validators.ts. An unmapped one falls back to
@@ -108,14 +108,14 @@ function Numbers({ data, reviewed }: { data: ProofSummary; reviewed: PublicRevie
 
   return <>
     <div className="metric-line">
-      <Metric hero title="Pull requests reviewed" value={data.reviews.counted.toLocaleString()}
-        detail={data.reviews.truncated ? `Most recent ${data.rowCeiling.toLocaleString()}` : "Every review ever recorded"} />
+      <Metric hero title="Pull requests with a verdict" value={data.reviews.distinctCompletedPullRequests.toLocaleString()}
+        detail={data.reviews.truncated ? `Distinct PRs in the latest ${data.rowCeiling.toLocaleString()} attempts` : `Distinct PRs across ${data.reviews.counted.toLocaleString()} review attempts`} />
       <Metric title="Repositories" value={data.reviews.repositoriesReviewed.toLocaleString()}
         detail="Distinct repositories, never named" />
       <Metric title="Findings raised" value={data.findings.counted.toLocaleString()}
         detail="Cited to a file, line and commit" />
-      <Metric title="Model spend" value={money(data.spend.modelSpendUsd)}
-        detail={`${data.spend.modelTokens.toLocaleString()} tokens, billed to each customer's own key`} />
+      <Metric title="Recorded model spend" value={data.spend.costPending && data.spend.modelSpendUsd === 0 ? "Pending" : money(data.spend.modelSpendUsd)}
+        detail={data.spend.costPending ? "Some provider costs are still pending" : `${data.spend.modelTokens.toLocaleString()} tokens recorded against customer provider keys`} />
     </div>
 
     <div className="metric-line">
@@ -125,8 +125,8 @@ function Numbers({ data, reviewed }: { data: ProofSummary; reviewed: PublicRevie
         detail="BuildIT's own fault. Never reported as a pass" />
       <Metric title="Model tokens" value={data.spend.modelTokens.toLocaleString()}
         detail="Billed to each customer's own provider key, never to BuildIT" />
-      <Metric title="Statuses recorded" value={Object.keys(data.reviews.byStatus).length.toLocaleString()}
-        detail="Every outcome below, none of them rounded away" />
+      <Metric title="Review attempts" value={data.reviews.counted.toLocaleString()}
+        detail="Includes retries, failures and work in progress" />
     </div>
 
     <section className="metric-explainer">
@@ -199,12 +199,12 @@ function Numbers({ data, reviewed }: { data: ProofSummary; reviewed: PublicRevie
 // public.
 function ReviewedPullRequests({ data }: { data: PublicReviews }) {
   return <section className="proof-links">
-    <h2>Every pull request, openable</h2>
+    <h2>Recent public pull requests</h2>
     <p className="lede">
       {data.reviews.length} pull {data.reviews.length === 1 ? "request" : "requests"} across {data.repositoriesListed} public
-      {data.repositoriesListed === 1 ? " repository" : " repositories"}, newest first. Each link opens a real pull request with
-      BuildIT&rsquo;s comment and check run on it. A pull request reviewed more than once appears once, with its latest verdict.
+      {data.repositoriesListed === 1 ? " repository" : " repositories"}, newest first. Each link opens the pull request, where you can check whether BuildIT published its comment and check run. A pull request reviewed more than once appears once, with its latest verdict.
     </p>
+    {data.truncated ? <p role="status">This is a bounded recent list. Older attempts or repositories may be omitted.</p> : null}
     <div className="stage-table-scroll" tabIndex={0} role="region" aria-label="Reviewed pull requests, scrolls horizontally">
       <table className="stage-table">
         <thead>

@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+
+ Test Files  4 passed (4)
+      Tests  64 passed (64)
+   Start at  11:05:27
+   Duration  567ms (transform 462ms, setup 0ms, import 575ms, tests 112ms, environment 0ms)
+

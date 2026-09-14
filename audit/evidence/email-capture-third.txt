@@ -1,0 +1,85 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ❯ tests/architecture/data-classification.test.ts (3 tests | 1 failed) 5ms
+   × database data classification > requires an approved classification for every free-text field 4ms
+     → expected [ 'availableModels', 'plannedStages' ] to deeply equal []
+   ✓ database data classification > does not keep source-derived prose, paths, commands, logs, diffs, patches, or prompts inline 0ms
+   ✓ database data classification > requires every source-content relation to use an artifact ID 1ms
+ ✓ packages/operations/test/email-capture.test.ts (4 tests) 9ms
+ ✓ tests/architecture/public-function-inventory.test.ts (5 tests) 12ms
+ ❯ convex/notificationOutbox.test.ts (19 tests | 1 failed) 116ms
+   ✓ local notification outbox > runs an actual review transition through queue, fanout and capture once 55ms
+   × local notification outbox > runs scheduled work through the real worker into a durable local capture file 17ms
+     → expected { …(16) } to match object { deliveryStatus: 'captured' }
+(15 matching properties omitted from actual)
+   ✓ local notification outbox > deduplicates repeated review events and member fanout 3ms
+   ✓ local notification outbox > rechecks consent after queueing and suppresses the capture 4ms
+   ✓ local notification outbox > rechecks membership after queueing and suppresses the capture 3ms
+   ✓ local notification outbox > rechecks address after queueing and suppresses the capture 3ms
+   ✓ local notification outbox > rechecks verification after queueing and suppresses the capture 2ms
+   ✓ local notification outbox > rechecks expiry after queueing and suppresses the capture 2ms
+   ✓ local notification outbox > rechecks mute after queueing and suppresses the capture 2ms
+   ✓ local notification outbox > rechecks repository after queueing and suppresses the capture 2ms
+   ✓ local notification outbox > rechecks installation after queueing and suppresses the capture 2ms
+   ✓ local notification outbox > rechecks organization after queueing and suppresses the capture 2ms
+   ✓ local notification outbox > rechecks generation after queueing and suppresses the capture 2ms
+   ✓ local notification outbox > rejects wrong-tenant notification parents without resolving another recipient 2ms
+   ✓ local notification outbox > groups daily updates at the next UTC midnight and keeps critical failures immediate 5ms
+   ✓ local notification outbox > retries transport failures a bounded number of times without storing error bodies 3ms
+   ✓ local notification outbox > uses a stable capture identity when a worker loses its receipt 3ms
+   ✓ local notification outbox > never activates capture on a hosted backend 1ms
+   ✓ local notification outbox > purges only deleted-workspace metadata and tolerates queued work after erasure 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  convex/notificationOutbox.test.ts > local notification outbox > runs scheduled work through the real worker into a durable local capture file
+AssertionError: expected { …(16) } to match object { deliveryStatus: 'captured' }
+(15 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "deliveryStatus": "captured",
++   "deliveryStatus": "failed",
+  }
+
+ ❯ convex/notificationOutbox.test.ts:67:82
+     65|       await s.t.finishAllScheduledFunctions(vi.runAllTimers);
+     66|       expect(await readdir(directory)).toHaveLength(1);
+     67|       expect((await s.t.run(ctx => ctx.db.query("notifications").colle…
+       |                                                                                  ^
+     68|     } finally { await rm(directory, { recursive: true, force: true });…
+     69|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/architecture/data-classification.test.ts > database data classification > requires an approved classification for every free-text field
+AssertionError: expected [ 'availableModels', 'plannedStages' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "availableModels",
++   "plannedStages",
++ ]
+
+ ❯ tests/architecture/data-classification.test.ts:12:26
+     10|   it("requires an approved classification for every free-text field", …
+     11|     const unclassified = [...new Set(stringFields)].filter((field) => …
+     12|     expect(unclassified).toEqual([]);
+       |                          ^
+     13|   });
+     14| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 2 passed (4)
+      Tests  2 failed | 29 passed (31)
+   Start at  09:11:21
+   Duration  522ms (transform 176ms, setup 0ms, collect 457ms, tests 142ms, environment 0ms, prepare 203ms)
+

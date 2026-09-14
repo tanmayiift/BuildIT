@@ -1,6 +1,7 @@
 export type ResolvedEmailRecipient = { email: string; organizationId: string; userId: string; verifiedAt: number; consentedAt: number };
-export type DecisionEmailStatus = "changes_requested" | "awaiting_human_approval" | "failed_after_three_rounds" | "budget_exhausted" | "inconclusive" | "platform_failed" | "cancelled";
-export type DecisionEmail = { recipient: ResolvedEmailRecipient; status: DecisionEmailStatus; repository: string; prNumber: number; commit: string; url: string; githubUrl?: string; dedupeKey: string };
+import { loopbackHttpUrl } from "./emailCaptureConfig.js";
+export type DecisionEmailStatus = "changes_requested" | "awaiting_human_approval" | "failed_after_three_rounds" | "autofix_stopped" | "budget_exhausted" | "inconclusive" | "platform_failed" | "cancelled";
+export type DecisionEmail = { localCapture?: boolean; recipient: ResolvedEmailRecipient; status: DecisionEmailStatus; repository: string; prNumber: number; commit: string; url: string; githubUrl?: string; dedupeKey: string };
 export type EmailTransport = (message: { to: string; subject: string; text: string; html: string; idempotencyKey: string }) => Promise<void>;
 
 type DecisionCopy = { title: string; summary: string; nextAction: string; tone: "danger" | "success" | "warning" | "neutral" };
@@ -9,7 +10,8 @@ const copy: Record<DecisionEmailStatus, DecisionCopy> = {
   changes_requested: { title: "Changes need review", summary: "BuildIT found evidence that needs a human decision.", nextAction: "Inspect the evidence and decide whether the pull request should change.", tone: "danger" },
   awaiting_human_approval: { title: "Ready for human review", summary: "The required evidence is ready for a human merge decision.", nextAction: "Review the evidence and merge only if you agree with it.", tone: "success" },
   failed_after_three_rounds: { title: "Autofix stopped safely", summary: "BuildIT reached the three-round limit and did not merge anything.", nextAction: "Inspect the remaining failures and the delivered partial changes.", tone: "warning" },
-  budget_exhausted: { title: "Review stopped at its budget", summary: "BuildIT stopped before the next provider call could cross the approved ceiling.", nextAction: "Inspect the partial evidence, then raise the ceiling only if another run is justified.", tone: "warning" },
+  autofix_stopped: { title: "Autofix stopped safely", summary: "BuildIT stopped before it could deliver a verified fix. It did not merge anything.", nextAction: "Inspect the review receipt and remaining checks before starting another run.", tone: "warning" },
+  budget_exhausted: { title: "Review stopped at its budget", summary: "BuildIT reached its approved spending limit and stopped further model work.", nextAction: "Inspect recorded estimates and pending calls in Usage, then raise the ceiling only if another run is justified.", tone: "warning" },
   inconclusive: { title: "Review needs attention", summary: "BuildIT could not collect enough complete evidence to make a safe decision.", nextAction: "Inspect the missing checks or context before relying on this review.", tone: "warning" },
   platform_failed: { title: "Review could not complete", summary: "A BuildIT service failed before a trustworthy code decision was available.", nextAction: "Open the review receipt, resolve the service problem, and retry once.", tone: "danger" },
   cancelled: { title: "Review cancelled", summary: "The review stopped without a code decision or merge.", nextAction: "Start a new review only when you are ready.", tone: "neutral" },
@@ -24,10 +26,10 @@ const tones = {
 
 const safe = (value: string, pattern: RegExp, code: string) => { if (!pattern.test(value)) throw new Error(code); return value; };
 const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-function secureUrl(value: string, code: string) {
+function secureUrl(value: string, code: string, localCapture = false) {
   if (value.length > 2048) throw new Error(code);
   const url = new URL(value);
-  if (url.protocol !== "https:" || url.username || url.password || url.hash) throw new Error(code);
+  if ((url.protocol !== "https:" && !(localCapture && loopbackHttpUrl(value))) || url.username || url.password || url.hash) throw new Error(code);
   return url;
 }
 
@@ -39,8 +41,8 @@ export function decisionEmail(input: DecisionEmail) {
   if (!Number.isSafeInteger(input.prNumber) || input.prNumber < 1) throw new Error("email_pr_number_invalid");
   const repository = safe(input.repository, /^[A-Za-z\d_.-]+\/[A-Za-z\d_.-]+$/, "email_repository_invalid");
   const commit = safe(input.commit, /^[0-9a-f]{40}$/i, "email_commit_invalid");
-  const status = safe(input.status, /^(changes_requested|awaiting_human_approval|failed_after_three_rounds|budget_exhausted|inconclusive|platform_failed|cancelled)$/, "email_status_invalid") as DecisionEmailStatus;
-  const builditUrl = secureUrl(input.url, "email_url_invalid");
+  const status = safe(input.status, /^(changes_requested|awaiting_human_approval|failed_after_three_rounds|autofix_stopped|budget_exhausted|inconclusive|platform_failed|cancelled)$/, "email_status_invalid") as DecisionEmailStatus;
+  const builditUrl = secureUrl(input.url, "email_url_invalid", input.localCapture);
   const githubUrl = input.githubUrl ? secureUrl(input.githubUrl, "email_github_url_invalid") : undefined;
   if (githubUrl && (githubUrl.hostname !== "github.com" || githubUrl.pathname !== `/${repository}/pull/${input.prNumber}`)) throw new Error("email_github_url_invalid");
   const recipient = safe(input.recipient.email, /^[^\s@]+@[^\s@]+\.[^\s@]+$/, "email_recipient_invalid");
@@ -48,7 +50,7 @@ export function decisionEmail(input: DecisionEmail) {
   const decision = copy[status], tone = tones[decision.tone], escapedRepository = escapeHtml(repository), escapedCommit = escapeHtml(commit), escapedBuilditUrl = escapeHtml(builditUrl.toString()), escapedGithubUrl = githubUrl ? escapeHtml(githubUrl.toString()) : null;
   const githubText = githubUrl ? `\nOpen on GitHub: ${githubUrl.toString()}` : "";
   const githubButton = escapedGithubUrl ? `<a href="${escapedGithubUrl}" style="display:inline-block;margin:8px 0 0;padding:12px 16px;color:#0b315f;background:#ffffff;border:1px solid #b8c0cc;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none" aria-label="Open ${escapedRepository} pull request ${input.prNumber} on GitHub">Open on GitHub</a>` : "";
-  const text = `BuildIT review: ${decision.title}\n${repository} · PR #${input.prNumber}\n\n${decision.summary}\n\nNext action\n${decision.nextAction}\n\nExact commit: ${commit}\nOpen evidence: ${builditUrl.toString()}${githubText}\n\nSecurity: This source-free message contains no code, diff, logs, findings, prompts, or credentials. It was addressed only to the verified person who enabled review email for this workspace. BuildIT cannot merge this pull request; a human owns the decision.`;
+  const text = `BuildIT review: ${decision.title}\n${repository} · PR #${input.prNumber}\n\n${decision.summary}\n\nNext action\n${decision.nextAction}\n\nExact commit: ${commit}\nOpen evidence: ${builditUrl.toString()}${githubText}\n\nSecurity: This source-free message contains no code, diff, logs, findings, prompts, or credentials. ${input.localCapture ? "Captured locally for testing. No email was sent." : "It was addressed only to the verified person who enabled review email for this workspace."} BuildIT cannot merge this pull request; a human owns the decision.`;
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(decision.title)}</title></head>
 <body style="margin:0;padding:0;background:#f4f6f8;color:#151a22;font-family:Arial,Helvetica,sans-serif">
@@ -80,11 +82,23 @@ export function decisionEmail(input: DecisionEmail) {
       <div role="group" aria-label="Review actions">
         <a href="${escapedBuilditUrl}" style="display:inline-block;margin:0 8px 8px 0;padding:12px 16px;color:#ffffff;background:#0b315f;border:1px solid #0b315f;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none" aria-label="Open BuildIT review for ${escapedRepository} pull request ${input.prNumber}">Open review evidence</a>${githubButton}
       </div>
-      <p style="margin:18px 0 0;padding-top:15px;color:#5f6978;border-top:1px solid #d8dde5;font-size:11px;line-height:1.55">No code, diff, logs, findings, prompts, or credentials are in this email. It was sent only to the verified person who enabled review email for this workspace. BuildIT cannot merge this pull request; a human owns the decision.</p>
+      <p style="margin:18px 0 0;padding-top:15px;color:#5f6978;border-top:1px solid #d8dde5;font-size:11px;line-height:1.55">No code, diff, logs, findings, prompts, or credentials are in this email. ${input.localCapture ? "Captured locally for testing. No email was sent." : "It was sent only to the verified person who enabled review email for this workspace."} BuildIT cannot merge this pull request; a human owns the decision.</p>
     </div>
   </div>
 </main></body></html>`;
-  return { to: recipient, subject: `[BuildIT] ${decision.title} · ${repository} #${input.prNumber}`, text, html, idempotencyKey };
+  return { to: recipient, subject: `[BuildIT${input.localCapture ? " local capture" : ""}] ${decision.title} · ${repository} #${input.prNumber}`, text, html, idempotencyKey };
 }
 
 export async function sendDecisionEmail(input: DecisionEmail, transport: EmailTransport) { await transport(decisionEmail(input)); }
+
+
+export function decisionDigestEmail(inputs: DecisionEmail[], dedupeKey: string) {
+  if (!inputs.length || inputs.length > 25) throw new Error("email_digest_size_invalid");
+  const first = inputs[0]!, messages = inputs.map(input => decisionEmail({ ...input, dedupeKey }));
+  if (inputs.some(input => input.recipient.organizationId !== first.recipient.organizationId || input.recipient.userId !== first.recipient.userId || input.recipient.email !== first.recipient.email)) throw new Error("email_digest_recipient_mismatch");
+  const subject = `[BuildIT${first.localCapture ? " local capture" : ""}] Daily review digest · ${inputs.length} updates`;
+  const text = subject + "\n\n" + messages.map(message => message.text).join("\n\n---\n\n");
+  const entries = inputs.map(input => `<li><h2>${escapeHtml(input.repository)} #${input.prNumber}: ${escapeHtml(copy[input.status].title)}</h2><p>${escapeHtml(copy[input.status].summary)}</p><p>${escapeHtml(copy[input.status].nextAction)}</p><a href="${escapeHtml(input.url)}">Open review evidence</a></li>`).join("");
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(subject)}</title></head><body style="font-family:Arial,sans-serif;color:#151a22"><main style="max-width:620px;margin:auto;padding:24px"><h1>BuildIT daily review digest</h1><ol>${entries}</ol><p>${first.localCapture ? "Captured locally for testing. No email was sent." : "Only the verified member who opted in receives this digest."} No source code, findings, logs, or credentials are included.</p></main></body></html>`;
+  return { to: messages[0]!.to, subject, text, html, idempotencyKey: messages[0]!.idempotencyKey };
+}

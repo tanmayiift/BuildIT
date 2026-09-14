@@ -1,0 +1,157 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ❯ apps/web/src/proxy.test.ts (50 tests | 11 failed) 14ms
+   × unknown route responses finish at the proxy > returns a complete 404 without rewriting /settings into the internal not-found route 4ms
+     → expected 'http://localhost:3107/_not-found' to be null
+   × unknown route responses finish at the proxy > returns a complete 404 without rewriting /setup/github into the internal not-found route 1ms
+     → expected 'http://localhost:3107/_not-found' to be null
+   × unknown route responses finish at the proxy > returns a complete 404 without rewriting /setup/run into the internal not-found route 0ms
+     → expected 'http://localhost:3107/_not-found' to be null
+   × unknown route responses finish at the proxy > returns a complete 404 without rewriting /audit-nonexistent-route into the internal not-found route 0ms
+     → expected 'http://localhost:3107/_not-found' to be null
+   × unknown route responses finish at the proxy > returns a complete 404 without rewriting /_not-found into the internal not-found route 0ms
+     → expected 'http://localhost:3107/_not-found' to be null
+   × unknown route responses finish at the proxy > returns a complete 404 without rewriting /audit-nonexistent-route/child into the internal not-found route 2ms
+     → expected 200 to be 404 // Object.is equality
+   × unknown route responses finish at the proxy > returns a complete 404 without rewriting /reviews/123/extra into the internal not-found route 1ms
+     → expected 'http://localhost:3107/_not-found' to be null
+   × unknown route responses finish at the proxy > returns a complete 404 without rewriting /setup into the internal not-found route 0ms
+     → expected 200 to be 404 // Object.is equality
+   × unknown route responses finish at the proxy > answers HEAD without a body or a rewrite 1ms
+     → expected 'http://localhost:3107/_not-found' to be null
+   ✓ unknown route responses finish at the proxy > does not echo an untrusted URL into the error page 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route / 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /features 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /pricing 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /proof 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /sandbox 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /data-handling 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /sign-in 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /repositories 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /history 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /metrics 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /usage 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /integrations 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /policies 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /members 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /notifications 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /audit 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /social-card.png 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /mark.svg 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /icon.svg 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /favicon.ico 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /robots.txt 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /sitemap.xml 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /reviews 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /reviews/review_123 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /account 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /setup/install 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /setup/repository 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /setup/model 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /setup/health 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /setup/tracker 0ms
+   ✓ route inventory and existing security forwarding > continues to allow the existing route /setup/review 0ms
+   ✓ route inventory and existing security forwarding > does not claim a nonexistent route exists: /settings 0ms
+   ✓ route inventory and existing security forwarding > does not claim a nonexistent route exists: /setup/github 0ms
+   ✓ route inventory and existing security forwarding > does not claim a nonexistent route exists: /setup/run 0ms
+   ✓ route inventory and existing security forwarding > does not claim a nonexistent route exists: /audit-nonexistent-route 0ms
+   ✓ route inventory and existing security forwarding > does not claim a nonexistent route exists: /_not-found 0ms
+   × route inventory and existing security forwarding > does not claim a nonexistent route exists: /audit-nonexistent-route/child 0ms
+     → expected true to be false // Object.is equality
+   ✓ route inventory and existing security forwarding > does not claim a nonexistent route exists: /reviews/123/extra 0ms
+   × route inventory and existing security forwarding > does not claim a nonexistent route exists: /setup 0ms
+     → expected true to be false // Object.is equality
+   ✓ route inventory and existing security forwarding > replaces a forged nonce and creates a new nonce for each request 0ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/proxy.test.ts > unknown route responses finish at the proxy > returns a complete 404 without rewriting /settings into the internal not-found route
+ FAIL  apps/web/src/proxy.test.ts > unknown route responses finish at the proxy > returns a complete 404 without rewriting /setup/github into the internal not-found route
+ FAIL  apps/web/src/proxy.test.ts > unknown route responses finish at the proxy > returns a complete 404 without rewriting /setup/run into the internal not-found route
+ FAIL  apps/web/src/proxy.test.ts > unknown route responses finish at the proxy > returns a complete 404 without rewriting /audit-nonexistent-route into the internal not-found route
+ FAIL  apps/web/src/proxy.test.ts > unknown route responses finish at the proxy > returns a complete 404 without rewriting /_not-found into the internal not-found route
+ FAIL  apps/web/src/proxy.test.ts > unknown route responses finish at the proxy > returns a complete 404 without rewriting /reviews/123/extra into the internal not-found route
+AssertionError: expected 'http://localhost:3107/_not-found' to be null
+
+- Expected: 
+null
+
++ Received: 
+"http://localhost:3107/_not-found"
+
+ ❯ apps/web/src/proxy.test.ts:14:58
+     12|     const response = proxy(new NextRequest(`http://127.0.0.1:3107${pat…
+     13|     expect(response.status).toBe(404);
+     14|     expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+       |                                                          ^
+     15|     expect(response.headers.get("x-middleware-next")).toBeNull();
+     16|     expect(response.headers.get("content-type")).toContain("text/html"…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  apps/web/src/proxy.test.ts > unknown route responses finish at the proxy > returns a complete 404 without rewriting /audit-nonexistent-route/child into the internal not-found route
+ FAIL  apps/web/src/proxy.test.ts > unknown route responses finish at the proxy > returns a complete 404 without rewriting /setup into the internal not-found route
+AssertionError: expected 200 to be 404 // Object.is equality
+
+- Expected
++ Received
+
+- 404
++ 200
+
+ ❯ apps/web/src/proxy.test.ts:13:29
+     11|   it.each(unknownPaths)("returns a complete 404 without rewriting %s i…
+     12|     const response = proxy(new NextRequest(`http://127.0.0.1:3107${pat…
+     13|     expect(response.status).toBe(404);
+       |                             ^
+     14|     expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+     15|     expect(response.headers.get("x-middleware-next")).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  apps/web/src/proxy.test.ts > unknown route responses finish at the proxy > answers HEAD without a body or a rewrite
+AssertionError: expected 'http://localhost:3107/_not-found' to be null
+
+- Expected: 
+null
+
++ Received: 
+"http://localhost:3107/_not-found"
+
+ ❯ apps/web/src/proxy.test.ts:25:93
+     23|   it("answers HEAD without a body or a rewrite", async () => {
+     24|     const response = proxy(new NextRequest("http://127.0.0.1:3107/sett…
+     25|     expect(response.status).toBe(404); expect(response.headers.get("x-…
+       |                                                                                             ^
+     26|   });
+     27|   it("does not echo an untrusted URL into the error page", async () =>…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  apps/web/src/proxy.test.ts > route inventory and existing security forwarding > does not claim a nonexistent route exists: /audit-nonexistent-route/child
+ FAIL  apps/web/src/proxy.test.ts > route inventory and existing security forwarding > does not claim a nonexistent route exists: /setup
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ apps/web/src/proxy.test.ts:46:110
+     44|     expect(response.headers.get("x-middleware-request-content-security…
+     45|   });
+     46|   it.each(unknownPaths)("does not claim a nonexistent route exists: %s…
+       |                                                                                                              ^
+     47|   it("replaces a forged nonce and creates a new nonce for each request…
+     48|     const request = new NextRequest("http://127.0.0.1:3107/account", {…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  11 failed | 39 passed (50)
+   Start at  09:26:02
+   Duration  338ms (transform 36ms, setup 0ms, collect 84ms, tests 14ms, environment 0ms, prepare 53ms)
+

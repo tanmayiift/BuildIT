@@ -1,0 +1,17 @@
+{
+  "Sid": "S3InventoryEncryption",
+  "Effect": "Allow",
+  "Principal": {
+    "Service": "s3.amazonaws.com"
+  },
+  "Action": "kms:GenerateDataKey",
+  "Resource": "*",
+  "Condition": {
+    "StringEquals": {
+      "aws:SourceAccount": "882820282590"
+    },
+    "ArnLike": {
+      "aws:SourceArn": "arn:aws:s3:::buildit-production-882820282590-artifacts-eu-west-1"
+    }
+  }
+}

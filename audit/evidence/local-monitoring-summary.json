@@ -1,0 +1,59 @@
+{
+  "completedAt": "2026-09-14T06:00:43.202820+00:00",
+  "result": "passed",
+  "scope": "isolated BuildIT application telemetry SDK to collector, Prometheus, Grafana, and local webhook capture",
+  "productionChanges": false,
+  "paidCalls": 0,
+  "loadedCurrentRules": 14,
+  "firingRecoveryRulesTested": [
+    "BuildITTelemetrySilent"
+  ],
+  "otherRules": "13 loaded and healthy; firing/recovery not tested",
+  "originalRulesIdentical": true,
+  "originalPendingDurationSeconds": 300,
+  "originalEvaluationIntervalSeconds": 60,
+  "originalQueryEvaluationLagSeconds": 60,
+  "pendingAt": "2026-09-14T05:48:30Z",
+  "firingAt": "2026-09-14T05:53:30Z",
+  "firingNotificationAt": "2026-09-14T05:53:31.050989+00:00",
+  "appExportAt": "2026-09-14T05:56:50.011Z",
+  "normalAt": "2026-09-14T05:58:30Z",
+  "normalState": "Normal (NoData)",
+  "resolvedNotificationAt": "2026-09-14T05:58:31.163612+00:00",
+  "heartbeatSeriesAfterRecovery": [
+    {
+      "metric": {
+        "__name__": "buildit_snapshot",
+        "buildit_measurement": "queue_depth",
+        "exported_job": "buildit-content-broker",
+        "instance": "collector:9464",
+        "job": "buildit-audit-collector",
+        "otel_scope_name": "buildit"
+      },
+      "value": [
+        1789365538.647,
+        "0"
+      ]
+    }
+  ],
+  "versions": {
+    "grafana": "12.1.1",
+    "prometheus": "3.6.0",
+    "collector": "0.135.0",
+    "node": "v24.21.0"
+  },
+  "limitations": [
+    "Active notification policy routes only to local capture, confirmed from live local Grafana API; Grafana default email contact remains unused and the internal network has no external egress",
+    "No production Grafana rule changed or deleted",
+    "No real Convex cron, broker authentication ingress, provider call, or customer email tested",
+    "Normal (NoData) is expected from the unchanged Prometheus warning query filtering out healthy data; heartbeat presence independently verified",
+    "Exporter transport bridge forwards exact SDK bytes via docker exec to preserve internal network isolation; actual SDK and collector responses used"
+  ],
+  "evidence": [
+    "local-monitoring-state.jsonl",
+    "local-monitoring-notifications.jsonl",
+    "local-monitoring-emitter.json",
+    "local-monitoring-isolation.json",
+    "local-monitoring-runtime.json"
+  ]
+}

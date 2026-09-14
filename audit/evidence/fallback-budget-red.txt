@@ -1,0 +1,312 @@
+
+ RUN  v4.1.11 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ❯ convex/accounting.test.ts (49 tests | 22 failed) 492ms
+     × does not grant a fallback a second budget after a paid parent failure 11ms
+     × holds the parent's reserved call against the fallback allowance 3ms
+     × holds the parent's unknown call against the fallback allowance 3ms
+     × counts a descendant's paid work when Ask uses the original review 3ms
+     × reserves the family's last allowance atomically across simultaneous siblings 4ms
+     × keeps late parent charges after cancelled and prevents more child spending 5ms
+     × keeps late parent charges after platform_failed and prevents more child spending 7ms
+     × rejects a cross-workspace parent link without touching either allowance 4ms
+     × enforces the same family allowance in the legacy preflight during rollout 3ms
+     × fails closed for a cycle mismatch 3ms
+     × fails closed for a head mismatch 3ms
+     × fails closed for a repository mismatch 3ms
+     × fails closed for a pull_request mismatch 3ms
+     × fails closed for a mode mismatch 5ms
+     × fails closed for a missing_parent mismatch 3ms
+     × does not spend through a stale ancestor 3ms
+     × does not spend through a cancelled ancestor 3ms
+     × does not spend through a cancelling ancestor 6ms
+     × does not spend through a cancellation_requested ancestor 3ms
+     × does not spend through a expired ancestor 2ms
+     × refuses an oversized family instead of pricing a truncated subset 9ms
+     × does not create or schedule a second fallback when failure handling replays 88ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 22 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  convex/accounting.test.ts > one allowance across a review and provider fallback > does not grant a fallback a second budget after a paid parent failure
+AssertionError: expected { allowed: true, …(2) } to match object { allowed: false, …(1) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "allowed": false,
+-   "reason": "budget_exhausted",
++   "allowed": true,
+  }
+
+ ❯ convex/accounting.test.ts:285:88
+    283|     await t.run(ctx => ctx.db.patch(root.reviewId, { status: "platform…
+    284|     const child = await fallbackScope(t, root);
+    285|     expect(await t.mutation(reserveCall, fallbackReservation(child, "f…
+       |                                                                                        ^
+    286|     expect(await t.run(ctx => ctx.db.get(child.reviewId))).toMatchObje…
+    287|     expect(await t.query(snapshotCall, { organizationId: root.organiza…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/22]⎯
+
+ FAIL  convex/accounting.test.ts > one allowance across a review and provider fallback > holds the parent's reserved call against the fallback allowance
+ FAIL  convex/accounting.test.ts > one allowance across a review and provider fallback > holds the parent's unknown call against the fallback allowance
+AssertionError: expected { allowed: true, …(2) } to match object { allowed: false, …(1) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "allowed": false,
+-   "reason": "budget_exhausted",
++   "allowed": true,
+  }
+
+ ❯ convex/accounting.test.ts:296:91
+    294|     if (status === "unknown") await t.mutation(settleCall, { organizat…
+    295|     const child = await fallbackScope(t, root);
+    296|     expect(await t.mutation(reserveCall, fallbackReservation(child, "f…
+       |                                                                                           ^
+    297|     expect(await t.query(snapshotCall, { organizationId: root.organiza…
+    298|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/22]⎯
+
+ FAIL  convex/accounting.test.ts > one allowance across a review and provider fallback > counts a descendant's paid work when Ask uses the original review
+AssertionError: expected { allowed: true, …(2) } to match object { allowed: false, …(1) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "allowed": false,
+-   "reason": "budget_exhausted",
++   "allowed": true,
+  }
+
+ ❯ convex/accounting.test.ts:305:92
+    303|     await t.mutation(settleCall, payment(root.organizationId, paid.inv…
+    304|     await t.run(ctx => ctx.db.patch(root.reviewId, { status: "checks_p…
+    305|     expect(await t.mutation(reserveCall, reservation(root, "root-ask",…
+       |                                                                                            ^
+    306|     expect(await t.run(ctx => ctx.db.get(root.reviewId))).toMatchObjec…
+    307|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/22]⎯
+
+ FAIL  convex/accounting.test.ts > one allowance across a review and provider fallback > reserves the family's last allowance atomically across simultaneous siblings
+AssertionError: expected [ { allowed: true, …(2) }, …(1) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ convex/accounting.test.ts:313:48
+    311|     const first = await fallbackScope(t, root), second = await fallbac…
+    312|     const calls = await Promise.all([t.mutation(reserveCall, fallbackR…
+    313|     expect(calls.filter(call => call.allowed)).toHaveLength(1);
+       |                                                ^
+    314|     expect(calls.filter(call => !call.allowed)).toMatchObject([{ reaso…
+    315|     expect(await t.query(snapshotCall, { organizationId: root.organiza…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/22]⎯
+
+ FAIL  convex/accounting.test.ts > one allowance across a review and provider fallback > keeps late parent charges after cancelled and prevents more child spending
+AssertionError: promise resolved "{ allowed: true, …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "allowed": true,
++   "invocationId": "0000000000010012modelInvocations",
++   "reservedUsd": 0.06894,
+  }
+
+ ❯ convex/accounting.test.ts:329:50
+    327|     expect(await t.query(snapshotCall, { organizationId: root.organiza…
+    328|     const next = t.mutation(reserveCall, fallbackReservation(child, "c…
+    329|     if (status === "cancelled") await expect(next).rejects.toThrow("mo…
+       |                                                  ^
+    330|     else expect(await next).toMatchObject({ allowed: false, reason: "b…
+    331|     expect(await t.run(ctx => ctx.db.query("usageLedger").collect())).…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/22]⎯
+
+ FAIL  convex/accounting.test.ts > one allowance across a review and provider fallback > keeps late parent charges after platform_failed and prevents more child spending
+AssertionError: expected { allowed: true, …(2) } to match object { allowed: false, …(1) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "allowed": false,
+-   "reason": "budget_exhausted",
++   "allowed": true,
+  }
+
+ ❯ convex/accounting.test.ts:330:29
+    328|     const next = t.mutation(reserveCall, fallbackReservation(child, "c…
+    329|     if (status === "cancelled") await expect(next).rejects.toThrow("mo…
+    330|     else expect(await next).toMatchObject({ allowed: false, reason: "b…
+       |                             ^
+    331|     expect(await t.run(ctx => ctx.db.query("usageLedger").collect())).…
+    332|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/22]⎯
+
+ FAIL  convex/accounting.test.ts > one allowance across a review and provider fallback > rejects a cross-workspace parent link without touching either allowance
+AssertionError: promise resolved "{ allowed: true, …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "allowed": true,
++   "invocationId": "0000000000010014modelInvocations",
++   "reservedUsd": 0.06894,
+  }
+
+ ❯ convex/accounting.test.ts:353:87
+    351|     const t = convexTest(schema, modules), root = await seed(t), forei…
+    352|     await t.run(ctx => ctx.db.patch(child.reviewId, { parentReviewId: …
+    353|     await expect(t.mutation(reserveCall, fallbackReservation(child, "f…
+       |                                                                                       ^
+    354|     expect(await t.run(ctx => ctx.db.query("modelInvocations").collect…
+    355|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/22]⎯
+
+ FAIL  convex/accounting.test.ts > one allowance across a review and provider fallback > enforces the same family allowance in the legacy preflight during rollout
+AssertionError: expected { allowed: true, upperBound: 0.06894 } to match object { allowed: false }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "allowed": false,
++   "allowed": true,
+  }
+
+ ❯ convex/accounting.test.ts:361:177
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/22]⎯
+
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > fails closed for a cycle mismatch
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > fails closed for a head mismatch
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > fails closed for a repository mismatch
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > fails closed for a pull_request mismatch
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > fails closed for a mode mismatch
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > fails closed for a missing_parent mismatch
+AssertionError: promise resolved "{ allowed: true, …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "allowed": true,
++   "invocationId": "0000000000010014modelInvocations",
++   "reservedUsd": 0.06894,
+  }
+
+ ❯ convex/accounting.test.ts:377:87
+    375|       if (mismatch === "missing_parent") await ctx.db.delete(root.revi…
+    376|     });
+    377|     await expect(t.mutation(reserveCall, fallbackReservation(child, "i…
+       |                                                                                       ^
+    378|     expect(await t.run(ctx => ctx.db.query("modelInvocations").collect…
+    379|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/22]⎯
+
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > does not spend through a stale ancestor
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > does not spend through a cancelled ancestor
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > does not spend through a cancelling ancestor
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > does not spend through a cancellation_requested ancestor
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > does not spend through a expired ancestor
+AssertionError: promise resolved "{ allowed: true, …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "allowed": true,
++   "invocationId": "0000000000010008modelInvocations",
++   "reservedUsd": 0.06894,
+  }
+
+ ❯ convex/accounting.test.ts:385:89
+    383|     await t.run(ctx => ctx.db.patch(root.reviewId, stopped === "stale"…
+    384|       : stopped === "cancellation_requested" ? { cancellationRequested…
+    385|     await expect(t.mutation(reserveCall, fallbackReservation(child, "s…
+       |                                                                                         ^
+    386|     expect(await t.run(ctx => ctx.db.query("modelInvocations").collect…
+    387|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/22]⎯
+
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > refuses an oversized family instead of pricing a truncated subset
+AssertionError: promise resolved "{ allowed: true, …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "allowed": true,
++   "invocationId": "0000000000010023modelInvocations",
++   "reservedUsd": 0.06894,
+  }
+
+ ❯ convex/accounting.test.ts:392:80
+    390|     const t = convexTest(schema, modules), root = await seed(t);
+    391|     for (let i = 0; i < 16; i += 1) await fallbackScope(t, root);
+    392|     await expect(t.mutation(reserveCall, reservation(root, "oversized-…
+       |                                                                                ^
+    393|     expect(await t.run(ctx => ctx.db.query("modelInvocations").collect…
+    394|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/22]⎯
+
+ FAIL  convex/accounting.test.ts > fallback budget graph integrity > does not create or schedule a second fallback when failure handling replays
+AssertionError: expected [ { …(45) }, { …(44) }, { …(44) } ] to have a length of 2 but got 3
+
+- Expected
++ Received
+
+- 2
++ 3
+
+ ❯ convex/accounting.test.ts:410:69
+    408|       expect(await t.mutation(internal.durableReview.fallbackOrReport,…
+    409|       expect(await t.mutation(internal.durableReview.fallbackOrReport,…
+    410|       expect(await t.run(ctx => ctx.db.query("reviews").collect())).to…
+       |                                                                     ^
+    411|       const jobs = await t.run(ctx => ctx.db.system.query("_scheduled_…
+    412|       expect(jobs.filter(job => job.name.includes("durableReview:start…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/22]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  22 failed | 27 passed (49)
+   Start at  10:50:38
+   Duration  1.05s (transform 357ms, setup 0ms, import 430ms, tests 492ms, environment 0ms)
+

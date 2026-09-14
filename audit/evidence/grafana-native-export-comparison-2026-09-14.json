@@ -1,0 +1,178 @@
+{
+  "generatedAt": "2026-09-14T04:23:27.740Z",
+  "sources": {
+    "current": {
+      "path": "audit/evidence/grafana-current-group-2026-09-14.json",
+      "sha256": "6ca96d13f75f1e85ab337ec405146a05fbce0de8a5a5c3e3edc7f901e19cd19a"
+    },
+    "legacy": {
+      "path": "audit/evidence/grafana-legacy-group-2026-09-14.json",
+      "sha256": "28f10331d6ada0e714487b13b455d8bd6e0ecc367fc1862cc596300ce422bcda"
+    },
+    "desired": {
+      "path": "observability/alerts.yml",
+      "sha256": "ebd3a326b44e1e607e915de1af691d70f77e787544824f5909f9b03cf2427d61"
+    }
+  },
+  "readOnly": true,
+  "evidenceKind": "native_ui_group_exports",
+  "managedRuleCount": 14,
+  "drift": [],
+  "currentDefinitionsMatch": true,
+  "telemetry": {
+    "status": "not_queried",
+    "fresh": null,
+    "ageSeconds": null
+  },
+  "folderUIDsVerified": false,
+  "fullStackInventoryVerified": false,
+  "legacyCandidates": [
+    {
+      "uid": "afwt2cuzwjf9cd",
+      "title": "BuildIT telemetry silent",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITTelemetrySilent",
+      "replacementUid": "a621fb37-6110-5a9b-81e8-6fcd05bbaf7d",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "50231bde981763cbec903cbd49568469547f5724349673e3931d3ce1da36722c",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    },
+    {
+      "uid": "ffwt2e95zmfpcc",
+      "title": "BuildIT high failure rate",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITHighFailureRate",
+      "replacementUid": "e8ce7a9b-5f06-58cb-bc90-52d3a1972668",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "60d823bc9658243e61e2c6929c5056fc24bff10c7792ef0a24eab3c1f034b3b2",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    },
+    {
+      "uid": "dfwt2f4rivshsb",
+      "title": "BuildIT p95 latency high",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITP95LatencyHigh",
+      "replacementUid": "3323ba18-b9a2-5bdd-9c3b-1a1b2110afb2",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "b5ccca9dd62da99da3ff5cb462b77577601927e52563dd0d42f873126ed1d5c6",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    },
+    {
+      "uid": "efwt2f5a94dtsb",
+      "title": "BuildIT critical boundary failure",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITCriticalBoundaryFailure",
+      "replacementUid": "600995c2-5186-5d4e-85ed-a313ee7aa699",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "fbe1b78e01f61fcc9d076e4b549118549a918c0735893373f908dca1810374d7",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    },
+    {
+      "uid": "buildit-queue-depth-high",
+      "title": "BuildIT queue depth high",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITQueueDepthHigh",
+      "replacementUid": "99a89aa8-cc0b-57c5-bc40-03f1afd54bc4",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "1643ee804fdba0718285c0940465e15eeef39cd137316374199060f82d74004c",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    },
+    {
+      "uid": "buildit-provider-failure",
+      "title": "BuildIT provider failure",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITProviderFailure",
+      "replacementUid": "859f7f43-dd01-560c-a42e-f77ea1439683",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "ed1c8cfb083c141168994feaf2bd442b08da510d8f34514e965228c3de9639e4",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    },
+    {
+      "uid": "buildit-runner-failure",
+      "title": "BuildIT runner failure",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITRunnerFailure",
+      "replacementUid": "b21aebde-0589-59ce-913d-230beae6dcd6",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "ca6b1c14c0c22cb79875a6d453de618050338057d812efc17a946ca528551de3",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    },
+    {
+      "uid": "buildit-artifact-backlog",
+      "title": "BuildIT artifact deletion backlog",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITArtifactDeletionBacklog",
+      "replacementUid": "9534bcc7-3d5a-5e86-9c9a-13d5a8281bb3",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "978137b1adac4a9664a1fbaf5fc311bd51352219c333c3b423bce06f66b3c4eb",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    },
+    {
+      "uid": "buildit-webhook-signature",
+      "title": "BuildIT webhook signature spike",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITWebhookSignatureSpike",
+      "replacementUid": "a542f9b4-2f2f-5038-a00e-ce69e9c45ad1",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "aed9147fb9b3fa555b5b4058c164527bd96696b4c77d921cf650d4563f1d455b",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    },
+    {
+      "uid": "buildit-loop-guard",
+      "title": "BuildIT loop guard trip",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITLoopGuardTrip",
+      "replacementUid": "5bc2f8b6-20bb-51a2-b1eb-acbfda69751d",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "d5731d3af5e3819b0104308bf3111580c83dfab8e54a93c7023f87add68f213d",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    },
+    {
+      "uid": "buildit-stale-check",
+      "title": "BuildIT stale check",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITStaleCheck",
+      "replacementUid": "ab2241ca-678e-5b45-bad0-cb412c516183",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "9b92f5d5b4886be237435491cc14104e77e666277f624357654715f58e7e593f",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    },
+    {
+      "uid": "buildit-budget-exhaustion",
+      "title": "BuildIT budget exhaustion spike",
+      "folderTitle": "BuildIT",
+      "ruleGroup": "BuildIT release",
+      "replacementTitle": "BuildITBudgetExhaustionSpike",
+      "replacementUid": "90ac7cae-4fd6-580a-8f74-bdee00f3228f",
+      "replacementDefinitionMatchesExport": true,
+      "exportFingerprint": "a9e1a41b43d9f0f254e79a12bf2950226fc07cce79985615fb34930fdba95055",
+      "fingerprintFormat": "sha256-canonical-grafana-ui-export-rule-v1",
+      "approvalRequired": true
+    }
+  ],
+  "unrecognizedLegacyCount": 0,
+  "readyForReviewedCleanup": false,
+  "verified": false
+}

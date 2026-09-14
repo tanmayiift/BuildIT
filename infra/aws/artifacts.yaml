@@ -90,7 +90,6 @@ Resources:
               - kms:GenerateDataKey
               - kms:ReEncryptFrom
               - kms:ReEncryptTo
-              - kms:DescribeKey
             Resource: "*"
             Condition:
               StringEquals:
@@ -107,16 +106,26 @@ Resources:
               - kms:Decrypt
               - kms:Encrypt
               - kms:GenerateDataKey
-              - kms:DescribeKey
             Resource: "*"
             Condition:
               StringEquals:
                 "aws:RequestedRegion": eu-west-1
                 "kms:ViaService": s3.eu-west-1.amazonaws.com
-              ArnLike:
+              StringLike:
                 "kms:EncryptionContext:aws:s3:arn":
                   - !Sub arn:${AWS::Partition}:s3:::buildit-${Environment}-${AWS::AccountId}-artifacts-eu-west-1
                   - !Sub arn:${AWS::Partition}:s3:::buildit-${Environment}-${AWS::AccountId}-artifacts-eu-west-1/*
+          - Sid: S3InventoryEncryption
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: kms:GenerateDataKey
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "aws:SourceAccount": !Ref AWS::AccountId
+              ArnLike:
+                "aws:SourceArn": !Sub arn:${AWS::Partition}:s3:::buildit-${Environment}-${AWS::AccountId}-artifacts-eu-west-1
   BuildITKeyAlias:
     Type: AWS::KMS::Alias
     Properties:

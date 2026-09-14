@@ -1,0 +1,42 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ✓ tests/architecture/autofix-cancellation-boundary.test.ts (5 tests) 4ms
+ ✓ tests/architecture/data-classification.test.ts (3 tests) 2ms
+ ✓ packages/providers/test/accounting.test.ts (3 tests) 3ms
+ ✓ packages/providers/test/providers.test.ts (12 tests) 6ms
+ ✓ convex/lib/platformFailureReport.test.ts (27 tests) 12ms
+ ✓ tests/architecture/model-grant-per-attempt.test.ts (5 tests) 4ms
+ ✓ tests/architecture/public-function-inventory.test.ts (5 tests) 14ms
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects tenant swaps and request changes before decrypting
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects tenant swaps and request changes before decrypting
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects replay and unsupported models with redacted errors
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_replayed","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > rejects replay and unsupported models with redacted errors
+{"component":"model_broker","event":"invocation_failed","category":"model_grant_invalid","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > returns only a provider HTTP status for a malformed structured response
+{"component":"model_broker","event":"invocation_failed","category":"malformed_response","providerStatus":400}
+
+stdout | packages/broker/test/model-http.test.ts > model broker HTTP boundary > does not retry a retired Gemini alias when the same key exposes no alternative
+{"component":"model_broker","event":"invocation_failed","category":"malformed_response","providerStatus":404}
+
+stdout | packages/broker/test/model-http.test.ts > accounted invocation protocol > performs exactly one provider attempt and returns paid failure usage
+{"component":"model_broker","event":"invocation_failed","category":"truncated","providerStatus":null}
+
+stdout | packages/broker/test/model-http.test.ts > accounted invocation protocol > returns a verified Gemini fallback to the worker for a separate reservation
+{"component":"model_broker","event":"invocation_failed","category":"model_unavailable","providerStatus":404}
+
+ ✓ packages/broker/test/model-http.test.ts (8 tests) 9ms
+ ✓ convex/accounting.test.ts (17 tests) 118ms
+
+ Test Files  9 passed (9)
+      Tests  85 passed (85)
+   Start at  08:36:09
+   Duration  549ms (transform 465ms, setup 0ms, collect 1.11s, tests 172ms, environment 1ms, prepare 491ms)
+

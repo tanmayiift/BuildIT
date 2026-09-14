@@ -1,20 +1,66 @@
 import { ConvexError, v } from "convex/values";
-import { addToMonth, monthKey } from "./lib/monthlySpend";
+import { addEstimatedCharge, getReviewBudgetSnapshot, reconcileMonthPage } from "./lib/budgetAccounting";
 import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
 import { runIdFor } from "./lib/runIdentity";
-import { monthlyBudgetExceeded, monthStart, noLimit } from "./lib/tenantLimits";
+import { monthlyBudgetExceeded, noLimit } from "./lib/tenantLimits";
 import { findingCategory, findingResolution, injectionSurface, modelStage, modelStageOutcome, provider, requirementStatus, severity, sourceType } from "./validators";
 import type { Doc, Id } from "./_generated/dataModel";
 import { approvedProviderModels, conservativeProviderModelCost, conservativeProviderStageCost } from "@buildit/providers";
-import { toMicros, totalCostUsd } from "./lib/usageCost";
+import { toMicros } from "./lib/usageCost";
+import { terminalStatuses } from "./lib/lifecycle";
+import { queueReviewNotification } from "./lib/queueNotification";
 
 // A review may retry a provider a few times per stage, not without bound across the whole run.
 const maxProviderRetriesPerReview = 12;
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
 
-export const recordStageRun=internalMutation({args:{...executionArgs,roundNumber:v.optional(v.number()),stage:modelStage,provider,model:v.string(),promptVersion:v.string(),schemaVersion:v.string(),finishReason:v.string(),requestHash:v.string(),requestId:v.optional(v.string()),attempt:v.number(),outcome:modelStageOutcome,inputTokens:v.number(),outputTokens:v.number(),durationMs:v.optional(v.number()),now:v.number()},handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||!/^\w[\w.:/-]{0,199}$/.test(args.model)||!approvedProviderModels[args.provider].has(args.model)||!args.promptVersion||!args.schemaVersion||args.finishReason.length>100||!/^[0-9a-f]{64}$/.test(args.requestHash)||!Number.isInteger(args.attempt)||args.attempt<1||args.attempt>2||![args.inputTokens,args.outputTokens].every(value=>Number.isSafeInteger(value)&&value>=0)||args.provider!==review.provider)throw new ConvexError("model_stage_run_invalid");const prior=(await ctx.db.query("modelStageRuns").withIndex("by_review",q=>q.eq("reviewId",review._id)).collect()).find(item=>item.requestHash===args.requestHash&&item.attempt===args.attempt);if(prior)return;const cost=conservativeProviderModelCost(args.provider,args.model,args.inputTokens,args.outputTokens),consumed=review.budgetConsumed+cost;if(consumed>review.budgetLimit){await ctx.db.patch(review._id,{status:"budget_exhausted",statusReasonCode:"spend_ceiling_reached",budgetCeilingId:"actual-model-usage",nextActionCode:"increase_budget",currentStage:"complete",completedAt:args.now,budgetConsumed:consumed,updatedAt:args.now});throw new ConvexError("budget_exhausted")};await ctx.db.insert("modelStageRuns",{organizationId:args.organizationId,repositoryId:review.repositoryId,reviewId:review._id,...(args.roundNumber===undefined?{}:{roundNumber:args.roundNumber}),stage:args.stage,provider:args.provider,model:args.model,promptVersion:args.promptVersion,schemaVersion:args.schemaVersion,finishReason:args.finishReason,requestHash:args.requestHash,...(args.requestId?{requestId:args.requestId.slice(0,200)}:{}),attempt:args.attempt,outcome:args.outcome,inputTokens:args.inputTokens,outputTokens:args.outputTokens,...(args.durationMs===undefined||!Number.isFinite(args.durationMs)||args.durationMs<0?{}:{durationMs:Math.round(args.durationMs)}),costMicros:toMicros(cost),runId:runIdFor(review._id,review.executionGeneration),createdAt:args.now});await ctx.db.insert("usageLedger",{organizationId:args.organizationId,repositoryId:review.repositoryId,reviewId:review._id,kind:"model_tokens",quantity:args.inputTokens+args.outputTokens,unitCost:cost/Math.max(1,args.inputTokens+args.outputTokens),totalCostMicros:toMicros(cost),currency:"provider_billed",occurredAt:args.now});const organizationRow=await ctx.db.get(args.organizationId);if(organizationRow)await ctx.db.patch(args.organizationId,addToMonth(organizationRow,toMicros(cost),args.now));await ctx.db.patch(review._id,{budgetConsumed:consumed,updatedAt:args.now})}});
+export const recordStageRun = internalMutation({
+  args: { ...executionArgs, invocationId: v.optional(v.id("modelInvocations")), roundNumber: v.optional(v.number()), stage: modelStage, provider, model: v.string(), promptVersion: v.string(), schemaVersion: v.string(), finishReason: v.string(), requestHash: v.string(), requestId: v.optional(v.string()), attempt: v.number(), outcome: modelStageOutcome, inputTokens: v.number(), outputTokens: v.number(), durationMs: v.optional(v.number()), now: v.number() },
+  handler: async (ctx, args) => {
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
+    if (!Number.isSafeInteger(args.expectedGeneration) || args.expectedGeneration < 0 || args.expectedGeneration > review.executionGeneration
+      || !/^[0-9a-f]{40}$/i.test(args.expectedHeadSha)
+      || !approvedProviderModels[args.provider].has(args.model) || !args.promptVersion || !args.schemaVersion || args.finishReason.length > 100
+      || !/^[0-9a-f]{64}$/.test(args.requestHash) || !Number.isInteger(args.attempt) || args.attempt < 1 || args.attempt > 2
+      || ![args.inputTokens, args.outputTokens].every(value => Number.isSafeInteger(value) && value >= 0)
+      || (args.expectedGeneration === review.executionGeneration && args.provider !== review.provider)) throw new ConvexError("model_stage_run_invalid");
+    const invocation = args.invocationId ? await ctx.db.get(args.invocationId) : null;
+    if (args.invocationId && (!invocation || invocation.organizationId !== args.organizationId || invocation.reviewId !== review._id
+      || invocation.provider !== args.provider || invocation.model !== args.model || invocation.stage !== args.stage || invocation.generation !== args.expectedGeneration || invocation.status === "reserved"
+      || (invocation.status === "estimated" && (invocation.inputTokens !== args.inputTokens || invocation.outputTokens !== args.outputTokens)))) throw new ConvexError("model_stage_invocation_invalid");
+    const prior = args.invocationId
+      ? await ctx.db.query("modelStageRuns").withIndex("by_invocation", q => q.eq("invocationId", args.invocationId)).unique()
+      : await ctx.db.query("modelStageRuns").withIndex("by_legacy_receipt", q => q.eq("reviewId", review._id).eq("invocationId", undefined)
+        .eq("requestHash", args.requestHash).eq("attempt", args.attempt).eq("model", args.model).eq("requestId", args.requestId)).first();
+    if (prior) return;
+    const cost = conservativeProviderModelCost(args.provider, args.model, args.inputTokens, args.outputTokens);
+    const costMicros = invocation ? invocation.costMicros : args.inputTokens + args.outputTokens > 0 ? toMicros(cost) : undefined;
+    await ctx.db.insert("modelStageRuns", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id,
+      ...(args.invocationId ? { invocationId: args.invocationId } : {}), ...(args.roundNumber === undefined ? {} : { roundNumber: args.roundNumber }),
+      stage: args.stage, provider: args.provider, model: args.model, promptVersion: args.promptVersion, schemaVersion: args.schemaVersion,
+      finishReason: args.finishReason, requestHash: args.requestHash, ...(args.requestId ? { requestId: args.requestId.slice(0, 200) } : {}),
+      attempt: args.attempt, outcome: args.outcome, inputTokens: args.inputTokens, outputTokens: args.outputTokens,
+      ...(args.durationMs === undefined || !Number.isFinite(args.durationMs) || args.durationMs < 0 ? {} : { durationMs: Math.round(args.durationMs) }),
+      ...(costMicros === undefined ? {} : { costMicros }), runId: runIdFor(review._id, args.expectedGeneration), createdAt: args.now });
+    if (invocation) return; // The durable invocation settled before any output validation or publishing.
+    // Compatibility for an in-flight worker from before invocation accounting deployed. Retain
+    // its already-incurred charge, including an over-limit response; never throw after writing.
+    await ctx.db.insert("usageLedger", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id,
+      kind: "model_tokens", quantity: args.inputTokens + args.outputTokens, unitCost: cost / Math.max(1, args.inputTokens + args.outputTokens),
+      totalCostMicros: toMicros(cost), currency: "provider_billed", occurredAt: args.now, accountingVersion: 1,
+      costStatus: args.inputTokens + args.outputTokens ? "estimated" : "unknown" });
+    await addEstimatedCharge(ctx, args.organizationId, toMicros(cost), args.now, args.inputTokens + args.outputTokens > 0);
+    const consumed = (toMicros(review.budgetConsumed) + toMicros(cost)) / 1_000_000;
+    const currentActive = review.headSha === args.expectedHeadSha && review.executionGeneration === args.expectedGeneration
+      && !review.isStale && !terminalStatuses.has(review.status) && review.status !== "cancelling";
+    await ctx.db.patch(review._id, { budgetConsumed: consumed, ...(currentActive ? { updatedAt: args.now } : {}), ...(currentActive && consumed > review.budgetLimit ? {
+      status: "budget_exhausted" as const, statusReasonCode: "spend_ceiling_reached", budgetCeilingId: "actual-model-usage", nextActionCode: "increase_budget" as const,
+      currentStage: "complete" as const, completedAt: args.now } : {}) });
+    if (currentActive && consumed > review.budgetLimit) await queueReviewNotification(ctx, review._id, args.now);
+  },
+});
 
 export const recordProviderRetry=internalMutation({args:{...executionArgs,now:v.number()},handler:async(ctx,args)=>{
   const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);
@@ -30,14 +76,40 @@ export const recordProviderRetry=internalMutation({args:{...executionArgs,now:v.
 // from the ledger once - the query the preflight used to run on every stage - and then stamped, so
 // the scan costs one read per organization per month instead of seven per review.
 async function monthToDateSpend(ctx: MutationCtx, organization: Doc<"organizations">, now: number) {
-  if (organization.monthlySpendMonth === monthKey(now)) return (organization.monthlySpendMicros ?? 0) / 1_000_000;
-  const rows = await ctx.db.query("usageLedger").withIndex("by_org_time", q => q.eq("organizationId", organization._id).gte("occurredAt", monthStart(now))).collect();
-  const spend = totalCostUsd(rows);
-  await ctx.db.patch(organization._id, { monthlySpendMicros: Math.round(spend * 1_000_000), monthlySpendMonth: monthKey(now) });
-  return spend;
+  const row = await reconcileMonthPage(ctx, organization._id, now);
+  return row.reconciliationComplete ? (row.estimatedMicros + row.legacyEstimatedMicros + row.reservedMicros) / 1_000_000 : Infinity;
 }
 
-export const preflightStageSpend=internalMutation({args:{...executionArgs,provider,model:v.string(),inputBytes:v.number(),maxOutputTokens:v.number(),now:v.number()},handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||args.provider!==review.provider||!approvedProviderModels[args.provider].has(args.model)||!Number.isSafeInteger(args.inputBytes)||args.inputBytes<0||!Number.isSafeInteger(args.maxOutputTokens)||args.maxOutputTokens<1)throw new ConvexError("model_stage_budget_invalid");const upperBound=conservativeProviderStageCost(args.provider,args.model,args.inputBytes,args.maxOutputTokens);const organization=await ctx.db.get(args.organizationId);const monthlySpend=organization&&organization.monthlyBudget>noLimit?await monthToDateSpend(ctx,organization,args.now):0;const overMonthly=Boolean(organization)&&monthlyBudgetExceeded(monthlySpend,upperBound,organization!.monthlyBudget);if(!overMonthly&&review.budgetConsumed+upperBound<=review.budgetLimit)return{allowed:true as const,upperBound};const previous=await ctx.db.query("reviewEvents").withIndex("by_review",q=>q.eq("reviewId",review._id)).order("desc").first();await ctx.db.patch(review._id,{status:"budget_exhausted",statusReasonCode:"spend_ceiling_reached",budgetCeilingId:"conservative-stage-preflight",nextActionCode:"increase_budget",currentStage:"complete",completedAt:args.now,updatedAt:args.now});await ctx.db.insert("reviewEvents",{organizationId:review.organizationId,reviewId:review._id,sequence:(previous?.sequence??0)+1,type:"status_changed",stage:"complete",internalCode:"model_stage_budget_preflight",metadata:{},createdAt:args.now});return{allowed:false as const,upperBound}}});
+export const preflightStageSpend = internalMutation({
+  args: { ...executionArgs, provider, model: v.string(), inputBytes: v.number(), maxOutputTokens: v.number(), now: v.number() },
+  handler: async (ctx, args) => {
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
+    if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale
+      || review.status === "cancelled" || review.status === "cancelling" || review.cancellationRequestedAt !== undefined || review.expiresAt <= args.now
+      || args.provider !== review.provider || !approvedProviderModels[args.provider].has(args.model)
+      || !Number.isSafeInteger(args.inputBytes) || args.inputBytes < 0 || !Number.isSafeInteger(args.maxOutputTokens) || args.maxOutputTokens < 1)
+      throw new ConvexError("model_stage_budget_invalid");
+    const family = await getReviewBudgetSnapshot(ctx, review);
+    if (family.ancestors.some(parent => parent.isStale || parent.status === "cancelled" || parent.status === "cancelling"
+      || parent.cancellationRequestedAt !== undefined || parent.expiresAt <= args.now)) throw new ConvexError("model_stage_budget_invalid");
+    const upperBound = conservativeProviderStageCost(args.provider, args.model, args.inputBytes, args.maxOutputTokens);
+    const organization = await ctx.db.get(args.organizationId);
+    const monthlySpend = organization && organization.monthlyBudget > noLimit ? await monthToDateSpend(ctx, organization, args.now) : 0;
+    const overMonthly = Boolean(organization) && monthlyBudgetExceeded(monthlySpend, upperBound, organization!.monthlyBudget);
+    if (!overMonthly && family.consumedMicros + family.reservedMicros + toMicros(upperBound) <= family.limitMicros
+      && toMicros(review.budgetConsumed) + family.currentReservedMicros + toMicros(upperBound) <= toMicros(review.budgetLimit))
+      return { allowed: true as const, upperBound };
+    if (!terminalStatuses.has(review.status)) {
+      const previous = await ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", review._id)).order("desc").first();
+      await ctx.db.patch(review._id, { status: "budget_exhausted", statusReasonCode: "spend_ceiling_reached", budgetCeilingId: "conservative-stage-preflight",
+        nextActionCode: "increase_budget", currentStage: "complete", completedAt: args.now, updatedAt: args.now });
+      await ctx.db.insert("reviewEvents", { organizationId: review.organizationId, reviewId: review._id, sequence: (previous?.sequence ?? 0) + 1,
+        type: "status_changed", stage: "complete", internalCode: "model_stage_budget_preflight", metadata: {}, createdAt: args.now });
+      await queueReviewNotification(ctx, review._id, args.now);
+    }
+    return { allowed: false as const, upperBound };
+  },
+});
 
 export const analysisScope = internalQuery({
   args: executionArgs,

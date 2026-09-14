@@ -1,7 +1,8 @@
 export type ProviderName = "anthropic" | "openai" | "gemini";
 export type JsonSchema = Record<string, unknown>;
 export type ProviderRequest = { model: string; system: string; input: string; schemaName: string; schema: JsonSchema; maxOutputTokens: number };
-export type ProviderResult = { value: unknown; provider: ProviderName; model: string; finishReason: string; inputTokens: number; outputTokens: number; requestId?: string | undefined };
+export type ProviderUsage = { inputTokens: number; outputTokens: number; usageKnown: boolean; requestId?: string | undefined };
+export type ProviderResult = { invocationId?: string | undefined; usageKnown?: boolean | undefined; value: unknown; provider: ProviderName; model: string; finishReason: string; inputTokens: number; outputTokens: number; requestId?: string | undefined };
 export const approvedProviderModels:Record<ProviderName,ReadonlySet<string>>={anthropic:new Set(["claude-sonnet-4-5","claude-sonnet-4-6","claude-opus-4-6"]),openai:new Set(["gpt-5","gpt-5.4","gpt-5.4-mini"]),gemini:new Set(["gemini-2.5-pro","gemini-2.5-flash","gemini-3.1-pro-preview"])};
 const preferredProviderModels: Record<ProviderName, readonly string[]> = {
   anthropic: ["claude-sonnet-4-6", "claude-sonnet-4-5", "claude-opus-4-6"],
@@ -38,7 +39,7 @@ export function conservativeProviderStageCost(provider: ProviderName, model: str
 type Http = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export class ProviderError extends Error {
-  constructor(public readonly code: "invalid_key" | "model_unavailable" | "rate_limited" | "provider_unavailable" | "refused" | "truncated" | "malformed_response", public readonly status?: number, public readonly retryAfterMs?: number) { super(code); this.name = "ProviderError"; }
+  constructor(public readonly code: "invalid_key" | "model_unavailable" | "rate_limited" | "provider_unavailable" | "refused" | "truncated" | "malformed_response", public readonly status?: number, public readonly retryAfterMs?: number, public readonly usage?: ProviderUsage) { super(code); this.name = "ProviderError"; }
 }
 
 const generateTimeoutMs = 90_000;
@@ -60,7 +61,14 @@ async function checked(response: Response) {
   try { return await response.json() as Record<string, unknown>; } catch { throw new ProviderError("malformed_response", response.status); }
 }
 function parseJson(value: unknown) { if (typeof value !== "string") throw new ProviderError("malformed_response"); try { return JSON.parse(value) as unknown; } catch { throw new ProviderError("malformed_response"); } }
-function usageNumber(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? value : 0; }
+function usageNumber(value: unknown) { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0; }
+function usageCounts(input: unknown, output: unknown, requestId: string | null, thinking?: unknown): ProviderUsage {
+  const valid = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  return { inputTokens: usageNumber(input), outputTokens: usageNumber(output) + usageNumber(thinking),
+    usageKnown: valid(input) && valid(output) && (thinking === undefined || valid(thinking)), ...(requestId ? { requestId } : {}) };
+}
+function paidError(code: ProviderError["code"], usage: ProviderUsage): never { throw new ProviderError(code, undefined, undefined, usage); }
+function parsePaidJson(value: unknown, usage: ProviderUsage) { try { return parseJson(value); } catch { return paidError("malformed_response", usage); } }
 
 export class ProviderClient {
   constructor(private readonly http: Http = fetch) {}
@@ -107,32 +115,35 @@ export class ProviderClient {
   private async anthropic(apiKey: string, request: ProviderRequest): Promise<ProviderResult> {
     const response = await this.http("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model: request.model, max_tokens: request.maxOutputTokens, temperature:0, system: request.system, messages: [{ role: "user", content: request.input }], tools: [{ name: request.schemaName, description: "Return the validated stage result", input_schema: request.schema, strict: true }], tool_choice: { type: "tool", name: request.schemaName } }), signal: AbortSignal.timeout(generateTimeoutMs) });
     const body = await checked(response), stop = String(body.stop_reason ?? "unknown");
-    if (stop === "max_tokens") throw new ProviderError("truncated");
+    const rawUsage = body.usage as Record<string, unknown> | undefined;
+    const usage = usageCounts(rawUsage?.input_tokens, rawUsage?.output_tokens, response.headers.get("request-id"));
+    if (stop === "max_tokens") paidError("truncated", usage);
     const content = Array.isArray(body.content) ? body.content : [], tool = content.find((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && (item as Record<string, unknown>).type === "tool_use" && (item as Record<string, unknown>).name === request.schemaName));
-    if (!tool || !("input" in tool)) throw new ProviderError("malformed_response");
-    const usage = body.usage as Record<string, unknown> | undefined;
-    return { value: tool.input, provider: "anthropic", model: request.model, finishReason: stop, inputTokens: usageNumber(usage?.input_tokens), outputTokens: usageNumber(usage?.output_tokens), requestId: response.headers.get("request-id") ?? undefined };
+    if (!tool || !("input" in tool)) paidError("malformed_response", usage);
+    return { value: tool.input, provider: "anthropic", model: request.model, finishReason: stop, ...usage };
   }
 
   private async openai(apiKey: string, request: ProviderRequest): Promise<ProviderResult> {
     const response = await this.http("https://api.openai.com/v1/responses", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model: request.model, instructions: request.system, input: request.input, max_output_tokens: request.maxOutputTokens, text: { format: { type: "json_schema", name: request.schemaName, strict: true, schema: request.schema } } }), signal: AbortSignal.timeout(generateTimeoutMs) });
     const body = await checked(response);
-    if (body.status === "incomplete") throw new ProviderError("truncated");
+    const rawUsage = body.usage as Record<string, unknown> | undefined;
+    const usage = usageCounts(rawUsage?.input_tokens, rawUsage?.output_tokens, response.headers.get("x-request-id"));
+    if (body.status === "incomplete") paidError("truncated", usage);
     const output = Array.isArray(body.output) ? body.output : [], message = output.find((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && (item as Record<string, unknown>).type === "message")), content = Array.isArray(message?.content) ? message.content : [], refusal = content.find(item => item && typeof item === "object" && (item as Record<string, unknown>).type === "refusal"), text = content.find((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && (item as Record<string, unknown>).type === "output_text"));
-    if (refusal) throw new ProviderError("refused");
-    const usage = body.usage as Record<string, unknown> | undefined;
-    return { value: parseJson(text?.text), provider: "openai", model: request.model, finishReason: String(body.status ?? "unknown"), inputTokens: usageNumber(usage?.input_tokens), outputTokens: usageNumber(usage?.output_tokens), requestId: response.headers.get("x-request-id") ?? undefined };
+    if (refusal) paidError("refused", usage);
+    return { value: parsePaidJson(text?.text, usage), provider: "openai", model: request.model, finishReason: String(body.status ?? "unknown"), ...usage };
   }
 
   private async gemini(apiKey: string, request: ProviderRequest): Promise<ProviderResult> {
     const response = await this.http(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": apiKey }, body: JSON.stringify({ systemInstruction: { parts: [{ text: request.system }] }, contents: [{ role: "user", parts: [{ text: request.input }] }], generationConfig: { temperature:0,maxOutputTokens: request.maxOutputTokens, responseMimeType: "application/json", responseJsonSchema: request.schema } }), signal: AbortSignal.timeout(generateTimeoutMs) });
     const body = await checked(response), feedback = body.promptFeedback as Record<string, unknown> | undefined;
-    if (feedback?.blockReason) throw new ProviderError("refused");
+    const rawUsage = body.usageMetadata as Record<string, unknown> | undefined;
+    const usage = usageCounts(rawUsage?.promptTokenCount, rawUsage?.candidatesTokenCount, response.headers.get("x-request-id"), rawUsage?.thoughtsTokenCount);
+    if (feedback?.blockReason) paidError("refused", usage);
     const candidates = Array.isArray(body.candidates) ? body.candidates : [], candidate = candidates[0] as Record<string, unknown> | undefined, finish = String(candidate?.finishReason ?? "unknown");
-    if (finish === "MAX_TOKENS") throw new ProviderError("truncated");
-    if (finish === "SAFETY" || finish === "BLOCKLIST" || finish === "PROHIBITED_CONTENT") throw new ProviderError("refused");
+    if (finish === "MAX_TOKENS") paidError("truncated", usage);
+    if (finish === "SAFETY" || finish === "BLOCKLIST" || finish === "PROHIBITED_CONTENT") paidError("refused", usage);
     const content = candidate?.content as Record<string, unknown> | undefined, parts = Array.isArray(content?.parts) ? content.parts : [], text = (parts.find(part => part && typeof part === "object" && (part as Record<string, unknown>).thought !== true && typeof (part as Record<string, unknown>).text === "string") as Record<string, unknown> | undefined)?.text;
-    const usage = body.usageMetadata as Record<string, unknown> | undefined;
-    return { value: parseJson(text), provider: "gemini", model: request.model, finishReason: finish, inputTokens: usageNumber(usage?.promptTokenCount), outputTokens: usageNumber(usage?.candidatesTokenCount), requestId: response.headers.get("x-request-id") ?? undefined };
+    return { value: parsePaidJson(text, usage), provider: "gemini", model: request.model, finishReason: finish, ...usage };
   }
 }

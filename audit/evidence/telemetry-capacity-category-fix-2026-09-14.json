@@ -1,0 +1,14 @@
+{
+  "observedAt": "2026-09-14T12:08:42Z",
+  "defect": "safe telemetry attributes converted capacity_exhausted to other, hiding the runner capacity alert category",
+  "changes": [
+    "packages/telemetry/src/index.ts allowlists capacity_exhausted",
+    "convex/telemetryWorker.ts accepts and derives capacity_exhausted"
+  ],
+  "regressions": {
+    "before": "capacity_exhausted was not retained by the shared telemetry attribute sanitizer",
+    "after": "capacity_exhausted is retained and the durable worker maps capacity and limit-exceeded failures to it"
+  },
+  "focusedChecks": "50 tests passed across telemetry, durable telemetry, runner, Grafana readback/export, and Dependabot policy suites; lint passed",
+  "limitations": "A production capacity-exhaustion event was not generated; this is a source and test contract fix."
+}

@@ -1,0 +1,18 @@
+{
+  "completedAt": "2026-09-14T05:11:42.243902+00:00",
+  "action": "AWS console Save changes on exact reviewed KMS policy",
+  "accountId": "882820282590",
+  "region": "eu-west-1",
+  "keyId": "db912055-b566-46ed-bfa7-561999d7e4cf",
+  "approval": "User next-turn approval of all prepared repairs after exact KMS candidate was shown",
+  "baselineFreshComparison": true,
+  "candidateFileSha256": "1ad7e69d491224e8e365f9085ba7ed22d05119e5ec3fe967a4f225d91b93ba79",
+  "savedPolicySemanticComparison": "exact match",
+  "preservedStatements": 3,
+  "addedStatements": [
+    "S3InventoryEncryption"
+  ],
+  "inventoryRecovery": "pending next scheduled export",
+  "otherResourcesChanged": false,
+  "preexistingEditorDiagnostics": "Four kms:DescribeKey encryption-context condition errors; present before edit and retained for separate review. No new policy diagnostic from inventory addition."
+}

@@ -1,4 +1,5 @@
 "use node";
+import { invokeAccountedModel } from "./lib/accountedModel";
 import { createHash } from "node:crypto";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
@@ -12,11 +13,10 @@ import { BROKER_REQUEST_TIMEOUT_MS, defaultExecutionPlans } from "@buildit/runne
 import {
   issueArtifactGrant,
   issueExecutionGrant,
-  issueModelInvocationGrant,
   redact,
   redactForModel,
 } from "@buildit/security";
-import { conservativeProviderModelCost, type ProviderResult } from "@buildit/providers";
+import { conservativeProviderModelCost } from "@buildit/providers";
 import { calculateEffectiveLoc } from "@buildit/operations";
 import {
   detectPackageManager,
@@ -401,35 +401,12 @@ export const runConvergence = internalAction({
               pinned: { headSha: parentSha, baseSha: scope.baseSha, configRevision: String(scope.configRevisionId) },
               untrusted: buildAutofixPromptContext({ originalHeadSha: scope.headSha, parentCandidateSha: parentSha, acceptedFindings, files: relevant, latestChecks }),
               invoke: async request => {
-                const requestBody = JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), stage: "patch", credential: scope.credential,
-                  request: { model: scope.model, system: request.system, input: request.input, schemaName: request.schemaName, schema: stageSchemas.patch, maxOutputTokens: request.maxOutputTokens } });
-                const grant = issueModelInvocationGrant(
-              {
-                organizationId: String(scope.organizationId),
-                repositoryId: String(scope.repositoryId),
-                reviewId: String(scope.reviewId),
-                credentialScopeId: scope.credential.id,
-                provider: scope.provider,
-                model: scope.model,
-                stage: "patch",
-                requestHash: createHash("sha256").update(requestBody).digest("hex"),
-              },
-              modelSecret,
-                );
                 await assertActive(ctx, args);
-                const response = await fetch(`${brokerUrl}/api/model`, {
-              method: "POST",
-              headers: {
-                authorization: `Bearer ${grant}`,
-                "content-type": "application/json",
+                return invokeAccountedModel(ctx, { scope: args, repositoryId: scope.repositoryId, stage: "patch", provider: scope.provider,
+                  credential: scope.credential, request: { model: scope.model, system: request.system, input: request.input,
+                    schemaName: request.schemaName, schema: stageSchemas.patch, maxOutputTokens: request.maxOutputTokens }, brokerUrl, modelSecret });
               },
-              body: requestBody,
-                });
-                const result = await response.json() as { result?: ProviderResult; error?: string };
-                if (!response.ok || !result.result){await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,roundNumber,stage:"patch",provider:scope.provider,model:scope.model,promptVersion:"patch-v1",schemaVersion:"patch-schema-v1",finishReason:(result.error??`http_${response.status}`).slice(0,100),requestHash:createHash("sha256").update(request.system).update("\0").update(request.input).update("\0").update(JSON.stringify(stageSchemas.patch)).digest("hex"),attempt:request.repairOf===undefined?1:2,outcome:"provider_error",inputTokens:0,outputTokens:0,now:Date.now()});throw new Error(result.error ?? `autofix_model_${response.status}`)}
-                return result.result;
-              },
-              onUsage: async result => { await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,roundNumber,stage:result.stage,provider:result.provider,model:result.model,promptVersion:result.promptVersion,schemaVersion:result.schemaVersion,finishReason:result.finishReason,requestHash:result.requestFingerprint,durationMs:result.durationMs,...(result.requestId?{requestId:result.requestId}:{}),attempt:result.attempt,outcome:result.outcome,inputTokens:result.inputTokens,outputTokens:result.outputTokens,now:Date.now()});// recordStageRun owns the single durable ledger write.
+              onUsage: async result => { await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,...(result.invocationId?{invocationId:result.invocationId as Id<"modelInvocations">}:{}),roundNumber,stage:result.stage,provider:result.provider,model:result.model,promptVersion:result.promptVersion,schemaVersion:result.schemaVersion,finishReason:result.finishReason,requestHash:result.requestFingerprint,durationMs:result.durationMs,...(result.requestId?{requestId:result.requestId}:{}),attempt:result.attempt,outcome:result.outcome,inputTokens:result.inputTokens,outputTokens:result.outputTokens,now:Date.now()});// Invocation settlement already owns the ledger; this writes stage evidence only.
                 budgetConsumed+=conservativeProviderModelCost(result.provider,result.model,result.inputTokens,result.outputTokens); },
             }),
             proposals = (patchRecords[0]?.value.patches as PatchProposal[] | undefined);

@@ -14,3 +14,10 @@ describe("notification email presentation", () => {
     expect(JSON.stringify(state)).not.toContain("tanmayiift");
   });
 });
+
+it("distinguishes a local capture from a sent email", () => {
+  const state = notificationEmailState({ emailEnabled: true, deliveryAvailable: false, captureAvailable: true,
+    recipient: { state: "verified", maskedEmail: "m•••@example.com" } } as Parameters<typeof notificationEmailState>[0]);
+  expect(state.status).toBe("Local capture");
+  expect(state.summary).toContain("No email is sent");
+});

@@ -1,0 +1,49 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ❯ convex/accounting.test.ts (2 tests | 2 failed) 51ms
+   × charges already incurred remain accountable > records an over-limit response and preserves the stop, instead of rolling both back 44ms
+     → expected [] to have a length of 1 but got +0
+   × charges already incurred remain accountable > does not stamp away pre-existing spend when an Ask is the first new writer 7ms
+     → expected { _creationTime: 1789354003218, …(13) } to match object { monthlySpendMicros: 8090000 }
+(13 matching properties omitted from actual)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  convex/accounting.test.ts > charges already incurred remain accountable > records an over-limit response and preserves the stop, instead of rolling both back
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ convex/accounting.test.ts:27:71
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  convex/accounting.test.ts > charges already incurred remain accountable > does not stamp away pre-existing spend when an Ask is the first new writer
+AssertionError: expected { _creationTime: 1789354003218, …(13) } to match object { monthlySpendMicros: 8090000 }
+(13 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "monthlySpendMicros": 8090000,
++   "monthlySpendMicros": 90000,
+  }
+
+ ❯ convex/accounting.test.ts:34:65
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  08:16:42
+   Duration  352ms (transform 73ms, setup 0ms, collect 138ms, tests 51ms, environment 0ms, prepare 33ms)
+

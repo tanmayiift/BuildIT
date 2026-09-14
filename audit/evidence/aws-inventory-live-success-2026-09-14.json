@@ -1,0 +1,28 @@
+{
+  "checkedAt": "2026-09-14T11:50:00Z",
+  "scope": "BuildIT S3 Inventory delivery after KMS policy repair",
+  "account": "882820282590",
+  "region": "eu-west-1",
+  "sourceBucket": "buildit-production-882820282590-artifacts-eu-west-1",
+  "destinationBucket": "buildit-production-882820282590-artifact-inventory-eu-west-1",
+  "configuration": "DailyDeletionAudit",
+  "observedObjects": [
+    {
+      "key": "inventory/buildit-production-882820282590-artifacts-eu-west-1/DailyDeletionAudit/2026-09-13T01-00Z/manifest.json",
+      "sizeBytes": 544,
+      "lastModifiedLocal": "2026-09-14 12:55:28 UTC+05:30",
+      "observation": "AWS S3 object page opened successfully"
+    },
+    {
+      "key": "inventory/buildit-production-882820282590-artifacts-eu-west-1/DailyDeletionAudit/data/0d4e5791-2d55-4e39-8ca7-84e02584f675.csv.gz",
+      "sizeBytes": 130,
+      "lastModifiedLocal": "2026-09-14 12:50:17 UTC+05:30",
+      "observation": "AWS S3 destination listing shows the compressed CSV object"
+    }
+  ],
+  "deliveryObserved": true,
+  "contentParsed": false,
+  "contentReadLimitation": "The S3 console's signed object-download URL is blocked by the browser sandbox (ERR_BLOCKED_BY_CLIENT), so the compressed CSV could not be parsed here.",
+  "historicalFailure": "The source bucket management panel still reports the older 2026-09-13 export as Access denied. That status is retained as historical evidence and does not invalidate the fresh destination objects observed today.",
+  "nextCheck": "Parse the CSV through an approved AWS read path and verify the next scheduled export continues to arrive."
+}

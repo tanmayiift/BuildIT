@@ -1,0 +1,7 @@
+Isolated BuildIT audit backend shutdown
+Recorded UTC: 2026-09-14T04:48:21.738022+00:00
+Owned session: 84128
+Action: Ctrl-C sent using the session stdin tool.
+Result: process completed; exit code 0.
+Service scope: local audit backend on loopback ports 3218 and 3219.
+No unrelated process was stopped. No source files were changed.

@@ -21,7 +21,10 @@ describe("live query bounds", () => {
   it("scopes every tenant read at the index, not in JavaScript afterwards", () => {
     // A .filter over a whole table reads every tenant's rows before discarding them.
     expect(read("activation.ts")).not.toMatch(/query\("findings"\)\.filter/);
-    expect(read("reviewArtifactData.ts")).toContain('withIndex("by_org_provider"');
+    const trackerScope = read("reviewArtifactData.ts").split("export const markTrackerUsed")[0]!;
+    expect(trackerScope).toContain('withIndex("by_org_repo_status"');
+    expect(trackerScope).toContain('.eq("organizationId", args.organizationId).eq("repositoryId", repositoryId).eq("status", "active")');
+    expect(trackerScope).toContain('.take(51)');
     expect(read("reviewArtifactData.ts")).not.toMatch(/query\("trackerConnections"\)\.withIndex\("by_status"/);
   });
 

@@ -22,6 +22,7 @@ function formatDuration(durationMs: number) {
 }
 
 type Evidence = {
+  partial: boolean;
   review: {
     id: string;
     prNumber: number;
@@ -39,6 +40,7 @@ type Evidence = {
     model: string;
     budgetLimit: number;
     budgetConsumed: number;
+    createdAt: number;
     updatedAt: number;
   };
   repository: { owner: string; name: string };
@@ -113,7 +115,7 @@ type Evidence = {
     requestHash: string;
   }>;
   runId: string;
-  modelDurationMs: number;
+  modelDurationMs: number | null;
   stagesMissingDuration: number;
   handoffs?: Array<{
     stage: string;
@@ -131,7 +133,7 @@ type Evidence = {
     memoryReviewsSeen?: number;
     decisions?: Array<{ kind: string; reason: string; detail?: string }>;
   }>;
-  spend: { costUsd: number; inputTokens: number; outputTokens: number };
+  spend: { costPending: boolean; costUsd: number; inputTokens: number; outputTokens: number };
 };
 type FindingDetail = {
   id: string;
@@ -151,10 +153,11 @@ type RunSummary = {
   id: string; headSha: string; status: string; mode: string; statusReasonCode?: string;
   createdAt: number; completedAt?: number; promptVersion: string; model: string; provider: string;
   stageCount: number; repairedStages: number; inputTokens: number; outputTokens: number;
-  costUsd: number; blockingFindings: number; totalFindings: number; isCurrent: boolean;
+  partial: boolean; costPending: boolean; costUsd: number; blockingFindings: number; totalFindings: number; isCurrent: boolean;
 };
 type FindingShape = { severity: string; category: string; blocking: boolean; resolution: string; startLine: number; endLine: number };
 type RunComparison = {
+  partial: boolean;
   left: { id: string; headSha: string; status: string; costUsd: number; promptVersion: string; model: string };
   right: { id: string; headSha: string; status: string; costUsd: number; promptVersion: string; model: string };
   statusChanged: boolean; costDeltaUsd: number;
@@ -183,7 +186,7 @@ const evidenceQuery = makeFunctionReference<
   // Three runs over identical code once gave the correct finding, then nothing, then an unrelated
   // one - and there was no way to see that in the product at all. These make one run comparable to
   // another run of the same pull request.
-  runHistoryQuery = makeFunctionReference<"query", { reviewId: string }, RunSummary[]>("reviews:runHistory"),
+  runHistoryQuery = makeFunctionReference<"query", { reviewId: string }, { rows: RunSummary[]; truncated: boolean; limit: number }>("reviews:runHistory"),
   compareRunsQuery = makeFunctionReference<"query", { leftReviewId: string; rightReviewId: string }, RunComparison>("reviews:compareRuns"),
   tone = (value: string) =>
     ["passed", "checks_passed", "delivered", "accepted", "resolved"].includes(
@@ -279,8 +282,8 @@ function ReviewEvidence({ id }: { id: string }) {
   // Left is the older run, so "lost" reads as a defect the earlier run reported and this one did
   // not - the direction a person actually asks the question in. A run with nothing earlier to
   // compare against gets no section at all, rather than a menu with nothing in it.
-  const startedAt = runs?.find(run => run.id === id)?.createdAt ?? Infinity,
-    earlierRuns = (runs ?? []).filter(run => run.createdAt < startedAt);
+  const startedAt = runs?.rows.find(run => run.id === id)?.createdAt ?? review.createdAt,
+    earlierRuns = (runs?.rows ?? []).filter(run => run.createdAt < startedAt);
   // Mirrors terminalStatuses in convex/lib/lifecycle.ts and packages/contracts/src/review.ts.
   // tests/architecture/review-status-contract.test.ts fails if these drift apart.
   const canCancel = !terminalReviewStatuses.includes(review.status) && review.status !== "cancelling";
@@ -307,6 +310,7 @@ function ReviewEvidence({ id }: { id: string }) {
         </strong>
         <span className="status success">Live data</span>
       </div>
+      {evidence.partial ? <p role="status">Some evidence or provider costs are incomplete. Figures and findings below may omit rows or pending costs.</p> : null}
       <section className="verdict-card">
         <div className="verdict-message">
           <span className={`verdict-symbol ${verdict.tone}`} aria-hidden="true">{verdict.symbol}</span>
@@ -441,7 +445,7 @@ function ReviewEvidence({ id }: { id: string }) {
         <Section
           eyebrow={`Run trace · ${evidence.runId}`}
           title="What each stage did, cost, and how long it took"
-          detail={`$${evidence.spend.costUsd.toFixed(4)} · ${(evidence.spend.inputTokens + evidence.spend.outputTokens).toLocaleString()} tokens · ${formatDuration(evidence.modelDurationMs)} of measured model time`}
+          detail={`${evidence.spend.costPending ? "Cost pending; recorded " : ""}$${evidence.spend.costUsd.toFixed(4)} · ${(evidence.spend.inputTokens + evidence.spend.outputTokens).toLocaleString()} tokens · ${evidence.modelDurationMs === null ? "model time not measured" : `${formatDuration(evidence.modelDurationMs)} of measured model time`}`}
           foot={`${evidence.stagesMissingDuration ? `${evidence.stagesMissingDuration} of ${evidence.stages.length} stages predate duration recording and show no time. ` : ""}Measured model time is the sum of the provider calls, not wall clock: the review record re-stamps its start on every retry, so no honest end-to-end figure exists for it. No prompt or repository source is stored here.`}
         >
           <div className="stage-table-scroll" tabIndex={0} role="region" aria-label="Stage details, scrolls horizontally">
@@ -528,8 +532,9 @@ function ReviewEvidence({ id }: { id: string }) {
           </ul>
         </Section>
       ) : null}
+      {runs?.truncated ? <p role="status">Only the latest {runs.limit} runs are available here; older runs are omitted.</p> : null}
       {earlierRuns.length ? (
-        <RunDiff reviewId={id} prNumber={review.prNumber} runCount={(runs ?? []).length} earlierRuns={earlierRuns} />
+        <RunDiff reviewId={id} prNumber={review.prNumber} runCount={(runs?.rows ?? []).length} truncated={runs?.truncated ?? false} earlierRuns={earlierRuns} />
       ) : null}
       <Section
         eyebrow="History"
@@ -700,13 +705,13 @@ function FindingDismissal({ reviewId, finding }: { reviewId: string; finding: Ev
 // BuildIT reviews the same pull request again after every push. Three runs over identical code
 // once gave the correct finding, then nothing, then an unrelated one, and the product had no way
 // to show that. This is the only screen where one run can be read against another.
-function RunDiff({ reviewId, prNumber, runCount, earlierRuns }: { reviewId: string; prNumber: number; runCount: number; earlierRuns: RunSummary[] }) {
+function RunDiff({ reviewId, prNumber, runCount, earlierRuns, truncated }: { reviewId: string; prNumber: number; runCount: number; earlierRuns: RunSummary[]; truncated: boolean }) {
   const [comparedTo, setComparedTo] = useState("");
   return (
     <Section
       eyebrow="Run diff"
       title="Compare this run with another"
-      detail={`${runCount} runs of pull request #${prNumber}`}
+      detail={`${truncated ? "Latest " : ""}${runCount} runs of pull request #${prNumber}${truncated ? "; older runs omitted" : ""}`}
       foot="Findings are matched on their fingerprint, so the same defect is a fact rather than two titles that read alike."
     >
       <label className="run-select">
@@ -715,7 +720,7 @@ function RunDiff({ reviewId, prNumber, runCount, earlierRuns }: { reviewId: stri
           <option value="">Select an earlier run…</option>
           {earlierRuns.map(run => (
             <option key={run.id} value={run.id}>
-              {new Date(run.createdAt).toLocaleString()} · {run.headSha.slice(0, 7)} · {statusPresentation(run.status, false, run.statusReasonCode).label} · ${run.costUsd.toFixed(4)}
+              {new Date(run.createdAt).toLocaleString()} · {run.headSha.slice(0, 7)} · {statusPresentation(run.status, false, run.statusReasonCode).label} · {run.costPending ? "Cost pending; recorded " : ""}${run.costUsd.toFixed(4)}{run.partial ? " (partial evidence and cost)" : ""}
             </option>
           ))}
         </select>
@@ -734,6 +739,7 @@ function RunDiff({ reviewId, prNumber, runCount, earlierRuns }: { reviewId: stri
 function Comparison({ leftReviewId, rightReviewId }: { leftReviewId: string; rightReviewId: string }) {
   const comparison = useQuery(compareRunsQuery, { leftReviewId, rightReviewId });
   if (!comparison) return <p className="run-diff-empty">Loading the comparison…</p>;
+  if (comparison.partial) return <p role="status">Comparison is incomplete because some findings, stages or cost rows were omitted. Changes cannot be established from this subset.</p>;
   const { left, right } = comparison,
     change = (earlier: string, later: string) => (earlier === later ? later : `${earlier} → ${later}`);
   return (

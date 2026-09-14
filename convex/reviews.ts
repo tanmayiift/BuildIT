@@ -3,6 +3,7 @@ import { runIdFor } from "./lib/runIdentity";
 import { blockingFindingCount } from "./lib/blockingFindings";
 import { query } from "./_generated/server";
 import { requireOrganizationRole, requireRepositoryRole } from "./lib/authz";
+import { parentScopeChecker } from "./lib/parentScope";
 import { totalCostUsd } from "./lib/usageCost";
 
 // These feed live subscriptions that re-execute on every matching write, so an unbounded read
@@ -34,9 +35,14 @@ export const list = query({
     await requireOrganizationRole(ctx, args.organizationId, "viewer");
     if (args.repositoryId) await requireRepositoryRole(ctx, args.repositoryId, "viewer", args.organizationId);
     const reviews = args.repositoryId
-      ? await ctx.db.query("reviews").withIndex("by_repo_pr_head_mode", (q) => q.eq("repositoryId", args.repositoryId!)).order("desc").take(listCeiling)
-      : await ctx.db.query("reviews").withIndex("by_org_status", (q) => q.eq("organizationId", args.organizationId)).order("desc").take(listCeiling);
-    return reviews.map(publicReview);
+      ? await ctx.db.query("reviews").withIndex("by_repo_created", (q) => q.eq("repositoryId", args.repositoryId!)).order("desc").take(listCeiling + 1)
+      : await ctx.db.query("reviews").withIndex("by_org_created", (q) => q.eq("organizationId", args.organizationId)).order("desc").take(listCeiling + 1);
+    const scope = parentScopeChecker(ctx, args.organizationId);
+    for (const review of reviews.slice(0, listCeiling)) {
+      if (review.organizationId !== args.organizationId) throw new Error("not_found_or_forbidden");
+      await scope.repository(review.repositoryId);
+    }
+    return { rows: reviews.slice(0, listCeiling).map(publicReview), truncated: reviews.length > listCeiling, limit: listCeiling };
   },
 });
 
@@ -56,17 +62,23 @@ export const getEvidence = query({
     const review = await ctx.db.get(args.reviewId);
     if (!review) throw new Error("not_found_or_forbidden");
     const access = await requireRepositoryRole(ctx, review.repositoryId, "viewer", review.organizationId);
-    const [requirements, findings, checks, rounds, events, stageRuns, ledger, runStates] = await Promise.all([
-      ctx.db.query("requirements").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
-      ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
-      ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
-      ctx.db.query("autofixRounds").withIndex("by_review_round", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
-      ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
-      ctx.db.query("modelStageRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
-      ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling),
-      ctx.db.query("runState").withIndex("by_review", q => q.eq("reviewId", review._id)).take(50),
+    const collections = await Promise.all([
+      ctx.db.query("requirements").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling + 1),
+      ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).take(evidenceCeiling + 1),
+      ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling + 1),
+      ctx.db.query("autofixRounds").withIndex("by_review_round", q => q.eq("reviewId", review._id)).take(evidenceCeiling + 1),
+      ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling + 1),
+      ctx.db.query("modelStageRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling + 1),
+      ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", review._id)).take(evidenceCeiling + 1),
+      ctx.db.query("runState").withIndex("by_review", q => q.eq("reviewId", review._id)).take(51),
     ]);
-    return { review: { ...publicReview(review), baseSha: review.baseSha, baseRef: review.baseRef, mode: review.mode,
+    if (collections.some(rows => rows.some(row => row.organizationId !== review.organizationId))) throw new Error("not_found_or_forbidden");
+    const limits = [evidenceCeiling, evidenceCeiling, evidenceCeiling, evidenceCeiling, evidenceCeiling, evidenceCeiling, evidenceCeiling, 50];
+    const partial = collections.some((rows, index) => rows.length > limits[index]!) || collections[6].some(row => row.costStatus === "unknown");
+    const [requirements, findings, checks, rounds, events, stageRuns, ledger, runStates] = [
+      collections[0].slice(0, evidenceCeiling), collections[1].slice(0, evidenceCeiling), collections[2].slice(0, evidenceCeiling), collections[3].slice(0, evidenceCeiling), collections[4].slice(0, evidenceCeiling), collections[5].slice(0, evidenceCeiling), collections[6].slice(0, evidenceCeiling), collections[7].slice(0, 50),
+    ];
+    return { partial, review: { ...publicReview(review), baseSha: review.baseSha, baseRef: review.baseRef, mode: review.mode,
       statusReasonCode: review.statusReasonCode, trigger: review.trigger, provider: review.provider, model: review.model,
       budgetLimit: review.budgetLimit, budgetConsumed: review.budgetConsumed, completedAt: review.completedAt },
       repository: { owner: access.repository.owner, name: access.repository.name },
@@ -118,9 +130,9 @@ export const getEvidence = query({
       // Sum of measured provider time. Deliberately not review.completedAt - review.startedAt:
       // startedAt is re-stamped on every execution generation, which is why /proof publishes no
       // duration at all. This number is the part that was actually measured, and it says so.
-      modelDurationMs: stageRuns.reduce((sum, item) => sum + (item.durationMs ?? 0), 0),
+      modelDurationMs: stageRuns.some(item => item.durationMs !== undefined) ? stageRuns.reduce((sum, item) => sum + (item.durationMs ?? 0), 0) : null,
       stagesMissingDuration: stageRuns.filter(item => item.durationMs === undefined).length,
-      spend: { costUsd: totalCostUsd(ledger), inputTokens: stageRuns.reduce((sum, item) => sum + item.inputTokens, 0),
+      spend: { costPending: ledger.some(row => row.costStatus === "unknown"), costUsd: totalCostUsd(ledger), inputTokens: stageRuns.reduce((sum, item) => sum + item.inputTokens, 0),
         outputTokens: stageRuns.reduce((sum, item) => sum + item.outputTokens, 0) },
     };
   },
@@ -138,15 +150,20 @@ export const runHistory = query({
     // Every run of the same pull request, newest first, whatever commit it pinned - comparing runs
     // across commits is the point, since that is how a regression in the reviewer shows up.
     const runs = await ctx.db.query("reviews")
-      .withIndex("by_repo_pr_head_mode", q => q.eq("repositoryId", review.repositoryId).eq("prNumber", review.prNumber))
-      .take(historyCeiling);
-    const summaries = await Promise.all(runs.map(async run => {
-      const [stages, ledger, findings] = await Promise.all([
-        ctx.db.query("modelStageRuns").withIndex("by_review", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
-        ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
-        ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
+      .withIndex("by_repo_pr_created", q => q.eq("repositoryId", review.repositoryId).eq("prNumber", review.prNumber))
+      .order("desc").take(historyCeiling + 1);
+    if (runs.some(run => run.organizationId !== review.organizationId)) throw new Error("not_found_or_forbidden");
+    const summaries = await Promise.all(runs.slice(0, historyCeiling).map(async run => {
+      const [stageRows, ledgerRows, findingRows] = await Promise.all([
+        ctx.db.query("modelStageRuns").withIndex("by_review", q => q.eq("reviewId", run._id)).take(101),
+        ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", run._id)).take(101),
+        ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", run._id)).take(101),
       ]);
-      return {
+      if ([...stageRows, ...ledgerRows, ...findingRows].some(row => row.organizationId !== review.organizationId)) throw new Error("not_found_or_forbidden");
+      const costPending = ledgerRows.some(row => row.costStatus === "unknown");
+      const partial = stageRows.length > 100 || ledgerRows.length > 100 || findingRows.length > 100 || costPending;
+      const stages = stageRows.slice(0, 100), ledger = ledgerRows.slice(0, 100), findings = findingRows.slice(0, 100);
+      return { partial, costPending,
         id: run._id, headSha: run.headSha, status: run.status, mode: run.mode,
         statusReasonCode: run.statusReasonCode, createdAt: run.createdAt, completedAt: run.completedAt,
         promptVersion: run.promptVersion, model: run.model, provider: run.provider,
@@ -160,7 +177,7 @@ export const runHistory = query({
         isCurrent: run._id === review._id,
       };
     }));
-    return summaries.sort((left, right) => right.createdAt - left.createdAt);
+    return { rows: summaries, truncated: runs.length > historyCeiling, limit: historyCeiling };
   },
 });
 
@@ -179,11 +196,12 @@ export const compareRuns = query({
 
     const side = async (run: typeof left) => {
       const [stages, ledger, findings] = await Promise.all([
-        ctx.db.query("modelStageRuns").withIndex("by_review", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
-        ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
-        ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", run._id)).take(evidenceCeiling),
+        ctx.db.query("modelStageRuns").withIndex("by_review", q => q.eq("reviewId", run._id)).take(evidenceCeiling + 1),
+        ctx.db.query("usageLedger").withIndex("by_review", q => q.eq("reviewId", run._id)).take(evidenceCeiling + 1),
+        ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", run._id)).take(evidenceCeiling + 1),
       ]);
-      return { run, stages, costUsd: totalCostUsd(ledger), findings };
+      if ([...stages, ...ledger, ...findings].some(row => row.organizationId !== run.organizationId)) throw new Error("not_found_or_forbidden");
+      return { run, stages: stages.slice(0, evidenceCeiling), costUsd: totalCostUsd(ledger.slice(0, evidenceCeiling)), findings: findings.slice(0, evidenceCeiling), partial: stages.length > evidenceCeiling || ledger.length > evidenceCeiling || findings.length > evidenceCeiling || ledger.some(row => row.costStatus === "unknown") };
     };
     const [a, b] = await Promise.all([side(left), side(right)]);
 
@@ -208,6 +226,7 @@ export const compareRuns = query({
     return {
       left: { id: left._id, headSha: left.headSha, status: left.status, costUsd: a.costUsd, promptVersion: left.promptVersion, model: left.model },
       right: { id: right._id, headSha: right.headSha, status: right.status, costUsd: b.costUsd, promptVersion: right.promptVersion, model: right.model },
+      partial: a.partial || b.partial,
       statusChanged: left.status !== right.status,
       costDeltaUsd: b.costUsd - a.costUsd,
       stages: stageRows,

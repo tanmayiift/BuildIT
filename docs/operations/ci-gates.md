@@ -23,7 +23,7 @@ gh api repos/:owner/:repo/branches/main/protection
 
 | Gate | What it catches |
 | --- | --- |
-| `pnpm verify` | lint, typecheck, 1,465 tests, build |
+| `pnpm verify` | lint, typecheck, regression tests, build |
 | `pnpm security:release` | tenant isolation, authorization declarations, data classification |
 | `pnpm reliability:release` | durable workflow bounds, stale-commit handling |
 | `pnpm eval` | the graders, scorers and release-gate thresholds |
@@ -31,25 +31,25 @@ gh api repos/:owner/:repo/branches/main/protection
 | `pnpm dashboard:check` | the dashboard pins the served datasource and declares no template variables |
 | `pnpm test:e2e` | signed-out journeys and release screenshots at 375px and 1440px |
 
-## Gates that warn and pass when a credential is missing
+## Required live evidence
 
-Three checks compare this repository against live infrastructure. Each one **fails on drift** and
-**warns loudly, exit 0, when the credential that would let it look is absent**.
+These checks fail when credentials or required evidence are missing. Offline definition checks
+remain available, but their success does not certify deployed infrastructure.
 
-| Gate | Needs | Silent without it |
+| Gate | Needs | Evidence |
 | --- | --- | --- |
-| `pnpm alerts:verify` | `BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN` | whether the deployed alert rules match `observability/alerts.yml` |
-| `pnpm release:wiring` | `BUILDIT_{WEB,BROKER,EXPECTED}_CONVEX_URL` | whether web and broker point at the same Convex deployment |
-| `pnpm smoke:aws-boundary` | AWS credentials + `BUILDIT_AWS_STACK` | whether the live KMS key, OIDC trust scoping and 7-day retention match `infra/aws/artifacts.yaml` |
+| `pnpm alerts:verify` | `BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN` with alert/folder read and datasource query access | Matching current rules, no legacy duplicates, and a scheduled snapshot within 15 minutes |
+| `pnpm release:wiring` | `BUILDIT_EXPECTED_CONVEX_URL` | Pinned BuildIT web/broker health responses identify this deployment and its public query API responds |
+| `pnpm smoke:aws-boundary` | BuildIT AWS read credentials + `BUILDIT_AWS_STACK` | Observed encryption, public-access block, object versions, retention and key rotation |
 
-**Why they do not fail.** A missing credential is a setup task no commit can fix. A build that goes
-red for one stays red for every push by everyone, and people learn to stop reading red builds —
-the same habit the 54 alert emails from undeployed rules taught. Drift is the thing worth blocking
-a merge over, and drift still does.
+The AWS subprocess forwards a narrow authentication environment, including temporary session tokens
+and profile paths; it does not print credential values. This check does not yet verify every IAM
+trust-policy condition or the inventory bucket. Those remain separate deployment review items.
 
-**The cost of that choice** is that a warning is easy to miss, so the state each one cannot check is
-named in the table above. Setting any of those credentials converts that row from a warning into a
-gate, with no code change.
+`node scripts/provision-buildit-grafana-alerts.mjs --report` is read-only. It lists only recognized
+legacy BuildIT rules as cleanup candidates, with exact UIDs and content fingerprints. A report does
+not authorize deletion. Unknown rules are retained and reported. See
+[Grafana reconciliation](grafana-reconciliation.md) for the approval and verification sequence.
 
 ## The trap this file exists to prevent
 

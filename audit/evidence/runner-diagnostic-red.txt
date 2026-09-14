@@ -1,0 +1,219 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+stderr | packages/runner/test/vercelSandbox.test.ts > Vercel sandbox runner > reports the dependency audit as unavailable when no manifest reached the sandbox
+buildit_osv_unavailable reason=no dependency manifest reached the sandbox exit=0 output=ok
+
+stderr | packages/runner/test/vercelSandbox.test.ts > Vercel sandbox runner > reports the dependency audit as unavailable when there are more manifests than one scan takes
+buildit_osv_unavailable reason=33 manifests exceed the 32 one scan can take exit=0 output=ok
+
+stderr | packages/runner/test/vercelSandbox.test.ts > a secret scan that could not run > degrades to an unavailable scanner instead of losing the review
+buildit_gitleaks_unavailable reason=gitleaks exit 137
+
+stderr | packages/runner/test/vercelSandbox.test.ts > a secret scan that could not run > degrades the same way when the report is unreadable or too large
+buildit_gitleaks_unavailable reason=gitleaks wrote no report
+
+stderr | packages/runner/test/vercelSandbox.test.ts > a secret scan that could not run > degrades the same way when the report is unreadable or too large
+buildit_gitleaks_unavailable reason=gitleaks report 2000001 bytes
+
+stderr | packages/runner/test/vercelSandbox.test.ts > dependency scanning outside Node > reviews a repository that has no dependency manifest at all
+buildit_osv_unavailable reason=no dependency manifest reached the sandbox exit=0 output=ok
+
+ ❯ packages/runner/test/vercelSandbox.test.ts (30 tests | 4 failed) 30ms
+   ✓ Vercel sandbox runner > writes fetched files without a GitHub token, permits only install registries, then denies all network 5ms
+   ✓ Vercel sandbox runner > opens the network to package registries and nothing else 1ms
+   ✓ Vercel sandbox runner > reports a command killed at its ceiling as a timeout, not as a failure 1ms
+   ✓ Vercel sandbox runner > still calls a genuine non-zero exit a failure 1ms
+   ✓ Vercel sandbox runner > reports an install killed at its ceiling as a timeout too 1ms
+   ✓ Vercel sandbox runner > starts both read-only scanners before either scanner is allowed to finish 0ms
+   ✓ Vercel sandbox runner > stops before install when a secret-like environment name is reachable 1ms
+   ✓ Vercel sandbox runner > allows the runtime's public AWS certificate bundle path 0ms
+   ✓ Vercel sandbox runner > never runs checks after install failure and always stops 1ms
+   ✓ Vercel sandbox runner > reruns a failed required check inside the same sandbox and stops once it proves flakiness 0ms
+   ✓ Vercel sandbox runner > rejects unsafe file paths and network-enabled checks 0ms
+   ✓ Vercel sandbox runner > accepts only a digest-pinned custom image 1ms
+   ✓ Vercel sandbox runner > passes short-lived control-plane credentials to the sandbox API without placing them in sandbox env 0ms
+   ✓ Vercel sandbox runner > rejects repository-owned package-manager hooks and credential configuration 2ms
+   ✓ Vercel sandbox runner > reports the dependency audit as unavailable when no manifest reached the sandbox 1ms
+   ✓ Vercel sandbox runner > reports the dependency audit as unavailable when there are more manifests than one scan takes 0ms
+   ✓ Vercel sandbox runner > records a complete empty dependency scan for a valid lockfile with no packages 0ms
+   ✓ a secret scan that could not run > degrades to an unavailable scanner instead of losing the review 0ms
+   ✓ a secret scan that could not run > degrades the same way when the report is unreadable or too large 1ms
+   ✓ a secret scan that could not run > still reports a gitleaks that did run as a scan that happened 0ms
+   ✓ a check the operating system killed > is not attributed to the code under review when the duration denies a timeout 0ms
+   ✓ a check the operating system killed > is not attributed to it when the SDK reports no duration at all 0ms
+   ✓ a check the operating system killed > treats a killed install the same way, so no check is blamed on missing dependencies 0ms
+   ✓ an install failure leaves both revisions the same shape > records the checks that never ran instead of dropping them 0ms
+   ✓ dependency scanning outside Node > reviews a repository that has no dependency manifest at all 0ms
+   ✓ dependency scanning outside Node > scans a lockfile from an ecosystem osv-scanner supports 0ms
+   × scanner diagnostics never log repository content > logs only a safe category and exit code when OSV prints source and a secret 6ms
+     → expected '[[["buildit_osv_unavailable reason=os…' not to contain 'private/payroll.py'
+   × scanner diagnostics never log repository content > keeps gitleaks diagnostic categories closed for { gitleaksExit: 137 } 2ms
+     → expected "warn" to be called with arguments: [ Array(2) ]
+
+Received: 
+
+  1st warn call:
+
+  [
+-   "buildit_gitleaks_unavailable",
+-   {
+-     "exitCode": 137,
+-     "reason": "unexpected_exit",
+-   },
++   "buildit_gitleaks_unavailable reason=gitleaks exit 137",
+  ]
+
+
+Number of calls: 1
+
+   × scanner diagnostics never log repository content > keeps gitleaks diagnostic categories closed for { gitleaksReportMissing: true } 1ms
+     → expected "warn" to be called with arguments: [ Array(2) ]
+
+Received: 
+
+  1st warn call:
+
+  [
+-   "buildit_gitleaks_unavailable",
+-   {
+-     "exitCode": 0,
+-     "reason": "report_missing",
+-   },
++   "buildit_gitleaks_unavailable reason=gitleaks wrote no report",
+  ]
+
+
+Number of calls: 1
+
+   × scanner diagnostics never log repository content > keeps gitleaks diagnostic categories closed for { gitleaksReportBytes: 2000001 } 1ms
+     → expected "warn" to be called with arguments: [ Array(2) ]
+
+Received: 
+
+  1st warn call:
+
+  [
+-   "buildit_gitleaks_unavailable",
+-   {
+-     "exitCode": 0,
+-     "reason": "report_too_large",
+-   },
++   "buildit_gitleaks_unavailable reason=gitleaks report 2000001 bytes",
+  ]
+
+
+Number of calls: 1
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/runner/test/vercelSandbox.test.ts > scanner diagnostics never log repository content > logs only a safe category and exit code when OSV prints source and a secret
+AssertionError: expected '[[["buildit_osv_unavailable reason=os…' not to contain 'private/payroll.py'
+
+Expected: "private/payroll.py"
+Received: "[[["buildit_osv_unavailable reason=osv-scanner exit 2 exit=2 output=private/payroll.py: salary = confidential_source_fixture\nOPENAI_API_KEY=synthetic_secret_fixture"]],[],[]]"
+
+ ❯ packages/runner/test/vercelSandbox.test.ts:312:153
+    310|       const result = await new VercelSandboxRunner(f.create).run({ run…
+    311|       const captured = JSON.stringify([warnings.mock.calls, logs.mock.…
+    312|       for (const forbidden of ["private/payroll.py", "confidential_sou…
+       |                                                                                                                                                         ^
+    313|       expect(warnings).toHaveBeenCalledWith("buildit_osv_unavailable",…
+    314|       expect(result.unavailableScanners).toEqual(["osvScanner"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  packages/runner/test/vercelSandbox.test.ts > scanner diagnostics never log repository content > keeps gitleaks diagnostic categories closed for { gitleaksExit: 137 }
+AssertionError: expected "warn" to be called with arguments: [ Array(2) ]
+
+Received: 
+
+  1st warn call:
+
+  [
+-   "buildit_gitleaks_unavailable",
+-   {
+-     "exitCode": 137,
+-     "reason": "unexpected_exit",
+-   },
++   "buildit_gitleaks_unavailable reason=gitleaks exit 137",
+  ]
+
+
+Number of calls: 1
+
+ ❯ packages/runner/test/vercelSandbox.test.ts:329:24
+    327|       const f = fixture({ ...options, gitleaksOutput: "private-source …
+    328|       const result = await new VercelSandboxRunner(f.create).run({ run…
+    329|       expect(warnings).toHaveBeenCalledWith("buildit_gitleaks_unavaila…
+       |                        ^
+    330|       expect(JSON.stringify(warnings.mock.calls)).not.toContain("synth…
+    331|       expect(result.unavailableScanners).toEqual(["gitleaks"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  packages/runner/test/vercelSandbox.test.ts > scanner diagnostics never log repository content > keeps gitleaks diagnostic categories closed for { gitleaksReportMissing: true }
+AssertionError: expected "warn" to be called with arguments: [ Array(2) ]
+
+Received: 
+
+  1st warn call:
+
+  [
+-   "buildit_gitleaks_unavailable",
+-   {
+-     "exitCode": 0,
+-     "reason": "report_missing",
+-   },
++   "buildit_gitleaks_unavailable reason=gitleaks wrote no report",
+  ]
+
+
+Number of calls: 1
+
+ ❯ packages/runner/test/vercelSandbox.test.ts:329:24
+    327|       const f = fixture({ ...options, gitleaksOutput: "private-source …
+    328|       const result = await new VercelSandboxRunner(f.create).run({ run…
+    329|       expect(warnings).toHaveBeenCalledWith("buildit_gitleaks_unavaila…
+       |                        ^
+    330|       expect(JSON.stringify(warnings.mock.calls)).not.toContain("synth…
+    331|       expect(result.unavailableScanners).toEqual(["gitleaks"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  packages/runner/test/vercelSandbox.test.ts > scanner diagnostics never log repository content > keeps gitleaks diagnostic categories closed for { gitleaksReportBytes: 2000001 }
+AssertionError: expected "warn" to be called with arguments: [ Array(2) ]
+
+Received: 
+
+  1st warn call:
+
+  [
+-   "buildit_gitleaks_unavailable",
+-   {
+-     "exitCode": 0,
+-     "reason": "report_too_large",
+-   },
++   "buildit_gitleaks_unavailable reason=gitleaks report 2000001 bytes",
+  ]
+
+
+Number of calls: 1
+
+ ❯ packages/runner/test/vercelSandbox.test.ts:329:24
+    327|       const f = fixture({ ...options, gitleaksOutput: "private-source …
+    328|       const result = await new VercelSandboxRunner(f.create).run({ run…
+    329|       expect(warnings).toHaveBeenCalledWith("buildit_gitleaks_unavaila…
+       |                        ^
+    330|       expect(JSON.stringify(warnings.mock.calls)).not.toContain("synth…
+    331|       expect(result.unavailableScanners).toEqual(["gitleaks"]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 26 passed (30)
+   Start at  09:57:56
+   Duration  665ms (transform 55ms, setup 0ms, collect 246ms, tests 30ms, environment 0ms, prepare 63ms)
+

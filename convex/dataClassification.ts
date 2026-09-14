@@ -7,8 +7,13 @@ export type StoredTextClassification =
   | "operational_identifier";
 
 export const storedTextClassifications = {
+  availableModels: "metadata", plannedStages: "metadata", scopes: "metadata", projectKeys: "metadata",
+  cursor: "operational_identifier", leaseKey: "operational_identifier", captureId: "operational_identifier", failureCode: "metadata",
+  emailConsentedAddressHash: "hashed_metadata", stateHash: "hashed_metadata", refreshLeaseId: "operational_identifier", oauthResourceId: "operational_identifier",
+  ciphertext: "encrypted_secret", tag: "encrypted_secret", id: "operational_identifier",
+  month: "metadata", reconciliationCursor: "operational_identifier", invocationKey: "operational_identifier", providerRequestId: "operational_identifier", eventKey: "operational_identifier",
   aadDigest: "hashed_metadata", accountLogin: "metadata", action: "metadata",
-  actorId: "operational_identifier", approvedBy: "operational_identifier",
+  actorId: "operational_identifier", approvedBy: "operational_identifier", jobKey: "operational_identifier", lastRequestKey: "operational_identifier",
   architecture: "metadata", authTag: "encrypted_secret", baseRef: "metadata",
   baseSha: "operational_identifier", blockedReason: "metadata", branchNameHash: "hashed_metadata",
   budgetCeilingId: "operational_identifier", cancelledBy: "operational_identifier",
@@ -24,7 +29,7 @@ export const storedTextClassifications = {
   email: "personal_identity", fetchedVersion: "metadata", fingerprintHmac: "hashed_metadata",
   githubLogin: "personal_identity", headSha: "operational_identifier", headRefHash: "hashed_metadata", baseRefHash: "hashed_metadata", image: "personal_identity",
   internalCode: "metadata", leaseOwner: "operational_identifier", login: "personal_identity", maskedSuffix: "metadata", finishReason: "metadata", outcome: "metadata", stage: "metadata",
-  model: "metadata", modelVersion: "metadata", name: "metadata", nameHash: "hashed_metadata",
+  model: "metadata", modelVersion: "metadata", name: "metadata", nameHash: "hashed_metadata", expectedHeadSha: "operational_identifier",
   networkPolicyVersion: "metadata", nonce: "encrypted_secret", observedHeadSha: "operational_identifier", observedBaseSha: "operational_identifier", outputHash: "hashed_metadata",
   operationKey: "operational_identifier", organizationTimezone: "metadata", owner: "metadata", wrappedDataKey: "encrypted_secret", kmsKeyId: "operational_identifier", envelopeVersion: "metadata",
   patchFingerprint: "hashed_metadata", pathHmac: "hashed_metadata", planId: "metadata",

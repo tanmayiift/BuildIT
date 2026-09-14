@@ -1,0 +1,50 @@
+
+ RUN  v3.2.7 /Users/tanmay/Desktop/Lets Roll/BuildIT
+
+ ❯ tests/architecture/aws-inventory-policy.test.ts (17 tests | 1 failed) 31ms
+   ✓ S3 inventory encryption permission > lets only the source bucket/account request an inventory encryption key 12ms
+   ✓ S3 inventory encryption permission > accepts the complete verified fixture without needing role identity policies 3ms
+   ✓ S3 inventory encryption permission > fails the live verifier when the inventory service cannot use the key 3ms
+   × S3 inventory encryption permission > rejects a grant with an additional blocking condition or an explicit service denial 4ms
+     → expected [Function] to throw an error
+   ✓ S3 inventory encryption permission > checks the actual manifest encryption instead of relying only on the bucket default 1ms
+   ✓ S3 inventory encryption permission > refuses non-BuildIT output resources before reading their buckets 0ms
+   ✓ S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: encryption 1ms
+   ✓ S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: expiry 1ms
+   ✓ S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: destination 0ms
+   ✓ S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: source_scope 1ms
+   ✓ S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: stale_delivery 1ms
+   ✓ S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: missing_checksum 1ms
+   ✓ S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: region 0ms
+   ✓ S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: identity 1ms
+   ✓ S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: provider 1ms
+   ✓ S3 inventory encryption permission > rejects broken inventory or BuildIT identity evidence: stack_drift 1ms
+   ✓ S3 inventory encryption permission > only issues read operations to the scoped BuildIT resources 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/architecture/aws-inventory-policy.test.ts > S3 inventory encryption permission > rejects a grant with an additional blocking condition or an explicit service denial
+AssertionError: expected [Function] to throw an error
+
+- Expected: 
+null
+
++ Received: 
+undefined
+
+ ❯ tests/architecture/aws-inventory-policy.test.ts:96:41
+     94|     const contradictory = structuredClone(fixture());
+     95|     contradictory.inventoryKeyPolicy.Statement[0]!.Condition!.ArnEqual…
+     96|     expect(() => verify(contradictory)).toThrow("aws_boundary_inventor…
+       |                                         ^
+     97|     const denied = structuredClone(fixture());
+     98|     denied.inventoryKeyPolicy.Statement.push({ Effect: "Deny", Princip…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
+   Start at  09:50:46
+   Duration  289ms (transform 18ms, setup 0ms, collect 18ms, tests 31ms, environment 0ms, prepare 37ms)
+

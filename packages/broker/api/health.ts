@@ -9,9 +9,16 @@
 // exposed here.
 function route() {
   const commit = process.env.VERCEL_GIT_COMMIT_SHA ?? "unknown";
+  let convexHost: string | undefined;
+  try {
+    const url = new URL(process.env.CONVEX_URL ?? "");
+    if (url.protocol === "https:" && !url.username && !url.password && !url.port &&
+        url.pathname === "/" && !url.search && !url.hash &&
+        /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.convex\.cloud$/.test(url.hostname)) convexHost = url.hostname;
+  } catch {}
   return Response.json(
-    { service: "buildit-content-broker", status: "available", commit },
-    { headers: { "cache-control": "no-store" } },
+    { service: "buildit-content-broker", status: convexHost ? "available" : "misconfigured", commit, ...(convexHost ? { convexHost } : {}) },
+    { status: convexHost ? 200 : 503, headers: { "cache-control": "no-store" } },
   );
 }
 

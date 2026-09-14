@@ -1,0 +1,52 @@
+{
+  "checkedAt": "2026-09-14T13:00:00Z",
+  "scope": "BuildIT production artifact inventory only",
+  "source": "authenticated AWS S3 console in eu-west-1",
+  "sourceBucket": "buildit-production-882820282590-artifacts-eu-west-1",
+  "inventoryConfiguration": {
+    "id": "DailyDeletionAudit",
+    "enabled": true,
+    "frequency": "Daily",
+    "includedObjectVersions": "Current",
+    "destinationBucket": "buildit-production-882820282590-artifact-inventory-eu-west-1",
+    "prefix": "inventory",
+    "format": "CSV",
+    "lastExportObserved": "2026-09-14"
+  },
+  "latestRunObserved": {
+    "runPrefix": "inventory/buildit-production-882820282590-artifacts-eu-west-1/DailyDeletionAudit/2026-09-13T01-00Z/",
+    "manifest": {
+      "key": "inventory/buildit-production-882820282590-artifacts-eu-west-1/DailyDeletionAudit/2026-09-13T01-00Z/manifest.json",
+      "sizeBytes": 544,
+      "lastModified": "2026-09-14T07:25:28Z",
+      "etag": "168aff38c3199dd4633cf16e61d3a728",
+      "contentType": "application/octet-stream",
+      "sse": "aws:kms",
+      "kmsKeyArn": "arn:aws:kms:eu-west-1:882820282590:key/db912055-b566-46ed-bfa7-561999d7e4cf",
+      "bucketKeyEnabled": true
+    },
+    "checksum": {
+      "key": "inventory/buildit-production-882820282590-artifacts-eu-west-1/DailyDeletionAudit/2026-09-13T01-00Z/manifest.checksum",
+      "exists": true,
+      "sizeBytes": 33,
+      "lastModified": "2026-09-14T07:25:28Z"
+    },
+    "csv": {
+      "key": "inventory/buildit-production-882820282590-artifacts-eu-west-1/DailyDeletionAudit/data/0d4e5791-2d55-4e39-8ca7-84e02584f675.csv.gz",
+      "exists": true,
+      "sizeBytes": 130,
+      "lastModified": "2026-09-14T07:20:17Z"
+    }
+  },
+  "retention": {
+    "rule": "ExpireDeletionInventory",
+    "expirationDate": "2026-09-29T00:00:00Z",
+    "versioning": "disabled",
+    "objectLock": "disabled"
+  },
+  "contentRead": {
+    "status": "blocked",
+    "reason": "AWS console proved object existence and properties; direct signed-object content was blocked by the in-app browser, AWS CloudShell could not create an environment while account verification is in progress, and no AWS CLI credentials are available to the shell.",
+    "noContentWasInvented": true
+  }
+}

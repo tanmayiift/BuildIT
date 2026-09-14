@@ -1,0 +1,11 @@
+{
+  "recordedAt": "2026-09-14T05:48:46.194503+00:00",
+  "readOnly": true,
+  "browser": "native Chrome, ordinary new-tab navigation",
+  "url": "https://peacefulbumblebee2324.grafana.net/api/v1/provisioning/alert-rules",
+  "outcome": "net::ERR_BLOCKED_BY_CLIENT",
+  "toolWaitSeconds": 681.1842,
+  "credentialsExtracted": false,
+  "fallbackFetchUsed": false,
+  "productionChanges": false
+}

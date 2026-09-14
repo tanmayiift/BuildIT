@@ -1,0 +1,293 @@
+{
+  "checkedAt": "2026-09-14T07:05:09.504Z",
+  "runtime": "v26.8.1",
+  "scope": "Signed-out HTTP routing and complete responses; no browser hydration or layout verification",
+  "checks": [
+    {
+      "path": "/",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 12
+    },
+    {
+      "path": "/sign-in",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 5
+    },
+    {
+      "path": "/account",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 4
+    },
+    {
+      "path": "/data-handling",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 4
+    },
+    {
+      "path": "/pricing",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 4
+    },
+    {
+      "path": "/features",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 18
+    },
+    {
+      "path": "/proof",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 6
+    },
+    {
+      "path": "/sandbox",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 4
+    },
+    {
+      "path": "/usage",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 3
+    },
+    {
+      "path": "/metrics",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 4
+    },
+    {
+      "path": "/history",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 4
+    },
+    {
+      "path": "/reviews",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 3
+    },
+    {
+      "path": "/repositories",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 4
+    },
+    {
+      "path": "/policies",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 3
+    },
+    {
+      "path": "/members",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 3
+    },
+    {
+      "path": "/notifications",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 2
+    },
+    {
+      "path": "/audit",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 3
+    },
+    {
+      "path": "/integrations",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 10
+    },
+    {
+      "path": "/setup/install",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 6
+    },
+    {
+      "path": "/setup/repository",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 10
+    },
+    {
+      "path": "/setup/model",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 3
+    },
+    {
+      "path": "/setup/health",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 4
+    },
+    {
+      "path": "/setup/tracker",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 8
+    },
+    {
+      "path": "/setup/review",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 5
+    },
+    {
+      "path": "/settings",
+      "expectedStatus": 404,
+      "status": 404,
+      "ok": true,
+      "bodyCorrect": true,
+      "protectedResponse": true,
+      "bytes": 992,
+      "elapsedMs": 2
+    },
+    {
+      "path": "/setup",
+      "expectedStatus": 404,
+      "status": 404,
+      "ok": true,
+      "bodyCorrect": true,
+      "protectedResponse": true,
+      "bytes": 992,
+      "elapsedMs": 1
+    },
+    {
+      "path": "/setup/github",
+      "expectedStatus": 404,
+      "status": 404,
+      "ok": true,
+      "bodyCorrect": true,
+      "protectedResponse": true,
+      "bytes": 992,
+      "elapsedMs": 1
+    },
+    {
+      "path": "/setup/run",
+      "expectedStatus": 404,
+      "status": 404,
+      "ok": true,
+      "bodyCorrect": true,
+      "protectedResponse": true,
+      "bytes": 992,
+      "elapsedMs": 1
+    },
+    {
+      "path": "/audit-nonexistent-route",
+      "expectedStatus": 404,
+      "status": 404,
+      "ok": true,
+      "bodyCorrect": true,
+      "protectedResponse": true,
+      "bytes": 992,
+      "elapsedMs": 2
+    },
+    {
+      "path": "/audit-nonexistent-route/child",
+      "expectedStatus": 404,
+      "status": 404,
+      "ok": true,
+      "bodyCorrect": true,
+      "protectedResponse": true,
+      "bytes": 992,
+      "elapsedMs": 1
+    },
+    {
+      "path": "/_not-found",
+      "expectedStatus": 404,
+      "status": 404,
+      "ok": true,
+      "bodyCorrect": true,
+      "protectedResponse": true,
+      "bytes": 992,
+      "elapsedMs": 2
+    },
+    {
+      "path": "/setup/model/extra",
+      "expectedStatus": 404,
+      "status": 404,
+      "ok": true,
+      "bodyCorrect": true,
+      "protectedResponse": true,
+      "bytes": 992,
+      "elapsedMs": 2
+    },
+    {
+      "path": "/reviews/example/extra",
+      "expectedStatus": 404,
+      "status": 404,
+      "ok": true,
+      "bodyCorrect": true,
+      "protectedResponse": true,
+      "bytes": 992,
+      "elapsedMs": 1
+    },
+    {
+      "path": "/audit-nonexistent-route",
+      "method": "HEAD",
+      "expectedStatus": 404,
+      "status": 404,
+      "ok": true,
+      "bodyCorrect": true,
+      "protectedResponse": true,
+      "bytes": 0,
+      "elapsedMs": 1
+    },
+    {
+      "path": "/api/audit-auth?as=A",
+      "expectedStatus": 200,
+      "status": 200,
+      "ok": true,
+      "elapsedMs": 69
+    },
+    {
+      "path": "/api/audit-auth?as=A",
+      "host": "not-local.invalid",
+      "expectedStatus": 403,
+      "status": 403,
+      "ok": true,
+      "elapsedMs": 4
+    }
+  ],
+  "passed": 36,
+  "total": 36
+}
