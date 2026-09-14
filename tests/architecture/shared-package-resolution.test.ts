@@ -54,11 +54,19 @@ describe("shared packages resolve the same way in a deployed function as they do
   });
 
   it("builds every package the broker's bundle loads at runtime", () => {
+    // The list moved out of vercel.json when adding contracts crossed Vercel's 256-character cap on
+    // projectSettings.buildCommand - the deploy failed with that message while the identical command
+    // ran fine locally. Wherever it lives, these have to be in it.
     const vercel = JSON.parse(readFileSync(join(root, "broker/vercel.json"), "utf8")) as { buildCommand: string };
+    expect(vercel.buildCommand.length).toBeLessThanOrEqual(256);
+    const scripts = (JSON.parse(readFileSync(join(root, "../package.json"), "utf8")) as { scripts: Record<string, string> }).scripts;
+    const resolved = vercel.buildCommand.startsWith("pnpm ") && scripts[vercel.buildCommand.slice(5)]
+      ? scripts[vercel.buildCommand.slice(5)]!
+      : vercel.buildCommand;
     // @buildit/contracts is the one this test was written for: the runner imports it, so the
     // broker's bundle loads it, so the broker's build has to produce its dist.
     for (const name of ["@buildit/contracts", "@buildit/runner", "@buildit/security"]) {
-      expect(vercel.buildCommand).toContain(name);
+      expect(resolved).toContain(name);
     }
   });
 });

@@ -26,6 +26,7 @@
     "smoke:cli": "pnpm --filter @buildit/cli build && node scripts/verify-cli-journeys.mjs",
     "verify": "pnpm security:tracked-files && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "deploy:broker:check": "node scripts/deploy-buildit-broker.mjs --dry-run",
+    "build:broker": "pnpm --filter @buildit/contracts --filter @buildit/github --filter @buildit/providers --filter @buildit/security --filter @buildit/runner --filter @buildit/scanners --filter @buildit/telemetry build",
     "deploy:broker:production": "node scripts/deploy-buildit-broker.mjs",
     "deploy:check": "node scripts/deploy-buildit-production.mjs --dry-run",
     "deploy:production": "node scripts/deploy-buildit-production.mjs",
