@@ -64,3 +64,32 @@ that appeared after the KMS repair, and confirming the next scheduled export ran
 expired (`aws sts get-caller-identity` → *"Your session has expired"*), and the browser is refused
 navigation to the `eu-west-1` and `s3` console hosts. The stack is Ireland; a console session opened
 at `us-east-1` cannot see it.
+
+## `findingResolution: "fixed"` is never written, so the changelog always claims nothing was fixed
+
+**Where:** `convex/validators.ts` declares the value; `convex/changelogData.ts` filters on it and its
+comment says *"'fixed' is set when a delivered autofix resolved it"*. Nothing sets it. The filter
+matches zero rows on every run, so a changelog produced after a successful autofix delivery lists no
+fixed findings.
+
+**Why the obvious fix is wrong.** `reviewAutofixData.deliver` is the natural place: it already
+proves a great deal before it will mark a review `delivered` — every required check completed on the
+candidate commit, every GitHub side effect landed. Marking the review's `accepted` findings `fixed`
+there is a two-line change.
+
+It would also be an over-claim, and the specific kind BuildIT exists not to make. The patch stage is
+fed accepted findings; it is not required to address all of them, and "the candidate commit passes
+its checks" is not evidence that any particular finding was resolved. A review whose patch fixed one
+of four findings would report four.
+
+**What the honest version needs.** The candidate commit's scanner output, diffed against the
+review's. A scanner finding that no longer reproduces on the candidate is exactly, verifiably fixed;
+that subset can be marked without inference. Model-origin findings have no such test and should stay
+unmarked rather than be guessed at.
+
+The blocker is plumbing, not judgement: `autofixRounds` records `validationOutcome` and
+`completedValidation` but not the candidate's scanner findings, and `deliverPassed` never sees them.
+Persisting them on the round is the prerequisite.
+
+**Until then:** the changelog's fixed-findings list is always empty, which is wrong but not
+misleading — it under-claims. That is the correct direction to be wrong in.
