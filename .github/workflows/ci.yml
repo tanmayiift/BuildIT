@@ -72,7 +72,7 @@ jobs:
       # nine minutes of retries. The database is 222MB, so it is restored between runs; a miss
       # downloads it again, and a database too old to trust fails the gate rather than passing.
       - name: Cache the OSV vulnerability database
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/buildit-osv
           key: buildit-osv-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
