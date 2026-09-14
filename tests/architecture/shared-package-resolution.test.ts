@@ -64,7 +64,7 @@ describe("shared packages resolve the same way in a deployed function as they do
     // ran fine locally. Wherever it lives, these have to be in it.
     const vercel = JSON.parse(readFileSync(join(root, "broker/vercel.json"), "utf8")) as { buildCommand: string };
     expect(vercel.buildCommand.length).toBeLessThanOrEqual(256);
-    const scripts = (JSON.parse(readFileSync(join(root, "../package.json"), "utf8")) as { scripts: Record<string, string> }).scripts;
+    const scripts = (JSON.parse(readFileSync(join(root, "broker/package.json"), "utf8")) as { scripts: Record<string, string> }).scripts;
     const resolved = vercel.buildCommand.startsWith("pnpm ") && scripts[vercel.buildCommand.slice(5)]
       ? scripts[vercel.buildCommand.slice(5)]!
       : vercel.buildCommand;
