@@ -330,6 +330,10 @@ export default defineSchema({
     organizationId: v.id("organizations"), reviewId: v.id("reviews"), roundNumber: v.number(),
     attemptId: v.id("autofixAttempts"), candidateCommitSha: v.string(), validationScope: value.validationScope,
     validationOutcome: value.validationOutcome, completedValidation: v.boolean(),
+    // The candidate commit's scanner matches, hashed the same way findings are - rule plus pathHmac,
+    // never a path. This is what lets delivery say which findings it actually fixed instead of
+    // claiming every accepted one; see convex/lib/findingResolution.ts.
+    candidateScannerFindings: v.optional(v.array(v.object({ ruleId: v.string(), pathHmac: v.string() }))),
     startedAt: v.number(), completedAt: v.optional(v.number()),
   }).index("by_review_round", ["reviewId", "roundNumber"])
     .index("by_attempt", ["attemptId"]),

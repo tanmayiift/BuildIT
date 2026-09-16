@@ -65,34 +65,47 @@ expired (`aws sts get-caller-identity` → *"Your session has expired"*), and th
 navigation to the `eu-west-1` and `s3` console hosts. The stack is Ireland; a console session opened
 at `us-east-1` cannot see it.
 
-## `findingResolution: "fixed"` is never written, so the changelog always claims nothing was fixed
+## `findingResolution: "fixed"` now says which findings were fixed, and only those
 
-**Where:** `convex/validators.ts` declares the value; `convex/changelogData.ts` filters on it and its
-comment says *"'fixed' is set when a delivered autofix resolved it"*. Nothing sets it. The filter
-matches zero rows on every run, so a changelog produced after a successful autofix delivery lists no
-fixed findings.
+**Was:** `convex/validators.ts` declared the value and nothing wrote it, so `changelogData`'s filter
+matched zero rows and a changelog produced after a successful autofix delivery listed no fixed
+findings. **Fixed 17 September 2026.**
 
-**Why the obvious fix is wrong.** `reviewAutofixData.deliver` is the natural place: it already
-proves a great deal before it will mark a review `delivered` — every required check completed on the
-candidate commit, every GitHub side effect landed. Marking the review's `accepted` findings `fixed`
-there is a two-line change.
+**Why the obvious version stayed unwritten for so long, and was right to.** `reviewAutofixData`'s
+delivery path already proves a great deal before it will mark a review `delivered`, so marking the
+review's `accepted` findings `fixed` there was a two-line change - and an over-claim of exactly the
+kind BuildIT exists not to make. The patch stage is *fed* accepted findings; it is not required to
+address all of them, and "the candidate commit passes its checks" is not evidence that any
+particular finding was resolved. A review whose patch fixed one of four would have reported four.
 
-It would also be an over-claim, and the specific kind BuildIT exists not to make. The patch stage is
-fed accepted findings; it is not required to address all of them, and "the candidate commit passes
-its checks" is not evidence that any particular finding was resolved. A review whose patch fixed one
-of four findings would report four.
+**What made it checkable.** A scanner finding has a test that a model finding does not: run the same
+scanners on the candidate commit and see whether the rule still matches the file. If it does not,
+that finding is fixed - verified, not inferred. So `autofixRounds` now carries the candidate's
+scanner matches and `completeDelivery` marks exactly the subset that no longer reproduces.
+Model-origin findings have no rule to re-run and are left alone.
 
-**What the honest version needs.** The candidate commit's scanner output, diffed against the
-review's. A scanner finding that no longer reproduces on the candidate is exactly, verifiably fixed;
-that subset can be marked without inference. Model-origin findings have no such test and should stay
-unmarked rather than be guessed at.
+**Three details that carry the correctness.**
 
-The blocker is plumbing, not judgement: `autofixRounds` records `validationOutcome` and
-`completedValidation` but not the candidate's scanner findings, and `deliverPassed` never sees them.
-Persisting them on the round is the prerequisite.
+- **Identity is `ruleId` + `pathHmac`, not the stored `fingerprintHmac`.** That fingerprint is built
+  from `scanner-${index}-${ruleId}` and the line range, so removing an earlier finding or inserting a
+  line above it changes the fingerprint of a finding nobody touched - which is the same trap
+  `introducedScannerFindings` documents for base-vs-head. Rule-and-file is stable across exactly the
+  edits an autofix makes.
+- **Only `open` and `accepted` are eligible.** `uncertain` is excluded because the critic could not
+  confirm the finding was real, and "we could not tell, and now it is gone" is not "it was there and
+  we fixed it". `dismissed` is excluded because a person already said it was not a problem.
+- **The round stores hashes, never paths.** The raw path is hashed in the action with
+  `FINDING_FINGERPRINT_SECRET` and only `{ ruleId, pathHmac }` is persisted, so the round stays as
+  source-free as the finding rows it is compared against.
 
-**Until then:** the changelog's fixed-findings list is always empty, which is wrong but not
-misleading — it under-claims. That is the correct direction to be wrong in.
+**Where it still under-claims, deliberately.** Two matches of one rule in one file, one of them
+fixed, reads as still present. And a missing fingerprint secret records nothing rather than failing a
+delivery that otherwise succeeded. Both leave findings unmarked rather than wrongly marked, which is
+the direction to be wrong in.
+
+**Unproven against a real delivery.** Verified by unit tests on the diff and an integration test
+through `completeDelivery` - confirmed to fail when the marking is removed - but no autofix has
+delivered since, because the sandbox quota is spent.
 
 ## The model provider account is out of credit — and the fallback that should have covered it was off
 

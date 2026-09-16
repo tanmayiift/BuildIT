@@ -2,6 +2,7 @@ import { queueReviewNotification } from "./lib/queueNotification";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { assertReviewParent } from "./lib/parentConsistency";
+import { resolvedScannerFindings } from "./lib/findingResolution";
 import { checkConclusion, checkKind } from "./validators";
 import { recordRunnerFailure } from "./lib/recordMetric";
 import { classifyPlatformFailure } from "./lib/platformFailureReport";
@@ -54,14 +55,14 @@ export const completeArtifact = internalMutation({
 
 const summary = v.object({ commitSha: v.string(), planId: v.string(), kind: checkKind, required: v.boolean(), conclusion: checkConclusion, exitCode: v.optional(v.number()), durationMs: v.number(), commandFingerprint: hash, nameHash: hash, credentialTeardownProved: v.literal(true), sandboxStopped: v.literal(true) });
 export const completeRound = internalMutation({
-  args: { ...executionArgs, roundNumber: v.number(), candidateCommitSha: v.string(), patchFingerprint: hash, patchArtifactId: v.id("artifacts"), validationArtifactId: v.id("artifacts"), summaries: v.array(summary), outcome: v.union(v.literal("passed"), v.literal("failed"), v.literal("incomplete")), now: v.number() },
+  args: { ...executionArgs, roundNumber: v.number(), candidateCommitSha: v.string(), patchFingerprint: hash, patchArtifactId: v.id("artifacts"), validationArtifactId: v.id("artifacts"), summaries: v.array(summary), outcome: v.union(v.literal("passed"), v.literal("failed"), v.literal("incomplete")), candidateScannerFindings: v.optional(v.array(v.object({ ruleId: v.string(), pathHmac: v.string() }))), now: v.number() },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), patch = await ctx.db.get(args.patchArtifactId), validation = await ctx.db.get(args.validationArtifactId);
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale || review.mode !== "autofix" || !/^[0-9a-f]{40}$/.test(args.candidateCommitSha) || !/^[0-9a-f]{64}$/.test(args.patchFingerprint) || !patch || !validation || patch.organizationId !== args.organizationId || validation.organizationId !== args.organizationId || patch.repositoryId !== review.repositoryId || validation.repositoryId !== review.repositoryId || patch.reviewId !== review._id || validation.reviewId !== review._id || patch.type !== "patch" || validation.type !== "command_output" || patch.redactionStatus !== "redacted" || validation.redactionStatus !== "redacted") throw new ConvexError("autofix_round_mismatch");
     const existing = await ctx.db.query("autofixRounds").withIndex("by_review_round", q => q.eq("reviewId", review._id).eq("roundNumber", args.roundNumber)).unique();
     if (existing) { if (existing.candidateCommitSha !== args.candidateCommitSha || existing.validationOutcome !== args.outcome) throw new ConvexError("autofix_round_conflict"); return existing._id; }
     const attemptId = await ctx.db.insert("autofixAttempts", { organizationId: args.organizationId, reviewId: review._id, attemptNumber: args.roundNumber, patchFingerprint: args.patchFingerprint, patchArtifactId: patch._id, outcome: "applied", promptVersion: "patch-v1", startedAt: args.now, completedAt: args.now });
-    const roundId = await ctx.db.insert("autofixRounds", { organizationId: args.organizationId, reviewId: review._id, roundNumber: args.roundNumber, attemptId, candidateCommitSha: args.candidateCommitSha, validationScope: "final_validation", validationOutcome: args.outcome, completedValidation: true, startedAt: args.now, completedAt: args.now });
+    const roundId = await ctx.db.insert("autofixRounds", { organizationId: args.organizationId, reviewId: review._id, roundNumber: args.roundNumber, attemptId, candidateCommitSha: args.candidateCommitSha, validationScope: "final_validation", validationOutcome: args.outcome, completedValidation: true, ...(args.candidateScannerFindings ? { candidateScannerFindings: args.candidateScannerFindings } : {}), startedAt: args.now, completedAt: args.now });
     if (!args.summaries.length || (args.outcome === "passed" && args.summaries.some(item => item.required && item.conclusion !== "passed"))) throw new ConvexError("autofix_summary_invalid");
     for (const item of args.summaries) { if (item.commitSha !== args.candidateCommitSha || !/^[0-9a-f]{64}$/.test(item.commandFingerprint) || !/^[0-9a-f]{64}$/.test(item.nameHash)) throw new ConvexError("autofix_summary_invalid"); await ctx.db.insert("checkRuns", { organizationId: args.organizationId, reviewId: review._id, roundId, kind: item.kind, nameHash: item.nameHash, required: item.required, status: "completed", conclusion: item.conclusion, commandFingerprint: item.commandFingerprint, commitSha: item.commitSha, ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }), durationMs: item.durationMs, artifactId: validation._id, credentialTeardownProved: item.credentialTeardownProved, sandboxStopped: item.sandboxStopped, ...(item.conclusion === "failed" ? { failureClass: "code" as const } : {}), startedAt: Math.max(0, args.now - item.durationMs), completedAt: args.now }); }
     await ctx.db.patch(review._id, { status: "autofixing", currentStage: "autofix", patchAttemptCount: args.roundNumber, completedRoundCount: args.roundNumber, updatedAt: args.now }); return roundId;
@@ -79,6 +80,17 @@ export const completeDelivery = internalMutation({
     const effects = await ctx.db.query("githubSideEffects").withIndex("by_review", q => q.eq("reviewId", review._id)).collect(), required = ["branch_create", "stacked_pr_create", "check_update", "comment_update"];
     if (required.some(type => !effects.some(item => item.type === type && item.status === "completed" && item.externalId))) throw new ConvexError("autofix_delivery_incomplete");
     await ctx.db.patch(review._id, { status: "delivered", statusReasonCode: "delivery_complete", nextActionCode: "human_merge", githubCheckConclusion: "success", currentStage: "complete", completedAt: args.now, updatedAt: args.now });
+    // Exactly the scanner findings this candidate no longer reproduces - not every accepted finding,
+    // which is what "the candidate passed its checks" would have licensed and is the over-claim this
+    // was left unwritten to avoid. Model findings have no rule to re-run and stay as they are.
+    if (round.candidateScannerFindings?.length !== undefined) {
+      const findings = await ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).collect();
+      const fixed = new Set(resolvedScannerFindings(
+        findings.map(item => ({ id: String(item._id), ...(item.ruleId === undefined ? {} : { ruleId: item.ruleId }), pathHmac: item.pathHmac, resolution: item.resolution })),
+        round.candidateScannerFindings,
+      ));
+      for (const item of findings) if (fixed.has(String(item._id))) await ctx.db.patch(item._id, { resolution: "fixed", updatedAt: args.now });
+    }
     const existing = await ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", review._id).eq("sequence", 5)).unique();
     if (!existing) await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", publicMessageArtifactId: report._id, internalCode: "autofix_delivery_complete", metadata: { count: args.roundNumber }, createdAt: args.now });
     const organization = await ctx.db.get(args.organizationId); if (!organization) throw new ConvexError("organization_unavailable");

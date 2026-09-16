@@ -2967,6 +2967,24 @@ describe("durable Autofix evidence", () => {
     await expect(
       t.mutation(internal.reviewAutofixData.completeDelivery, deliveryArgs),
     ).rejects.toThrow("autofix_delivery_evidence_incomplete");
+    // Three findings and a candidate that still matches one of them. Delivery must mark the scanner
+    // finding the candidate no longer reproduces, leave the one it still reproduces, and never touch
+    // the model finding - which has no rule to re-run, so a passing candidate says nothing about it.
+    const seedFinding = (over: Record<string, unknown>) => t.run((ctx) => ctx.db.insert("findings", {
+      organizationId: tenant.organizationId, reviewId: tenant.reviewId, fingerprintHmac: `${String(over.ruleId ?? "model")}-fp`,
+      category: "security" as const, severity: "critical" as const, confidence: 1, blocking: true,
+      contentArtifactId: reportArtifactId, evidenceIds: [], pathHmac: "path-hmac-a",
+      startLine: 1, endLine: 1, resolution: "open" as const,
+      createdAt: now, updatedAt: now, expiresAt: now + 86_400_000, ...over,
+    }));
+    const goneFinding = await seedFinding({ ruleId: "buildit-tls-disabled" });
+    const remainsFinding = await seedFinding({ ruleId: "buildit-secret", fingerprintHmac: "remains-fp" });
+    const modelFinding = await seedFinding({ fingerprintHmac: "model-fp" });
+    await t.run(async (ctx) => {
+      const storedRound = await ctx.db.query("autofixRounds")
+        .withIndex("by_review_round", (q) => q.eq("reviewId", tenant.reviewId).eq("roundNumber", 1)).unique();
+      await ctx.db.patch(storedRound!._id, { candidateScannerFindings: [{ ruleId: "buildit-secret", pathHmac: "path-hmac-a" }] });
+    });
     await t.run((ctx) => ctx.db.patch(storedCheckId, { sandboxStopped: true }));
     await expect(
       t.mutation(internal.reviewAutofixData.completeDelivery, deliveryArgs),
@@ -2982,6 +3000,10 @@ describe("durable Autofix evidence", () => {
       nextActionCode: "human_merge",
       githubCheckConclusion: "success",
     });
+    const resolutionOf = async (id: typeof goneFinding) => (await t.run((ctx) => ctx.db.get(id)))!.resolution;
+    expect(await resolutionOf(goneFinding), "a scanner finding the candidate no longer reproduces").toBe("fixed");
+    expect(await resolutionOf(remainsFinding), "a scanner finding the candidate still reproduces").toBe("open");
+    expect(await resolutionOf(modelFinding), "a model finding, which nothing here can check").toBe("open");
     const metrics = await t.run((ctx) => ctx.db.query("metricEvents").collect());
     expect(metrics).toHaveLength(5);
     expect(Object.fromEntries(metrics.map(item => [item.name, item.value]))).toMatchObject({ autofix_applied: 1, effective_loc_added: 3, effective_loc_removed: 1, effective_loc_net: 2, effective_loc_reverted: 0 });

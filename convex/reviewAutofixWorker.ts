@@ -13,6 +13,7 @@ import { chunkRepositorySnapshot, GitHubAppClient, GitHubRepositoryWriter, isFor
 import { assertAutofixBounds, candidateWorsened, contentHash, neverMergedSentence, type PatchProposal, runModelPatchChain, stageSchemas, validatePatchProposals } from "@buildit/orchestrator";
 import { defaultExecutionPlans, stampCredentialTeardown, type ExecutionStage } from "@buildit/runner";
 import {
+  fingerprint,
   issueArtifactGrant,
   redact,
   redactForModel,
@@ -233,6 +234,20 @@ async function assertActive(
   },
 ) {
   await ctx.runQuery(internal.reviewAutofixData.assertActive, args);
+}
+
+// The broker's scanner findings carry ruleId and path; ScannerSummary only declares the two fields
+// its other readers use, so the shape is widened here the same way reviewAnalysisWorker does.
+type ScannerMatch = { ruleId?: string; path?: string };
+export function scannerIdentities(findings: ReadonlyArray<{ severity: string }>): Array<{ ruleId: string; pathHmac: string }> | undefined {
+  const secret = process.env.FINDING_FINGERPRINT_SECRET;
+  if (!secret) return undefined;
+  const key = Buffer.from(secret, "base64url");
+  if (key.byteLength < 32) return undefined;
+  return (findings as ReadonlyArray<ScannerMatch>).flatMap(item =>
+    typeof item.ruleId === "string" && item.ruleId.length > 0 && typeof item.path === "string" && item.path.length > 0
+      ? [{ ruleId: item.ruleId, pathHmac: fingerprint(item.path, key) }]
+      : []);
 }
 
 function throwUnsupportedEcosystem(): never { throw new Error("autofix_requires_supported_ecosystem"); }
@@ -633,10 +648,16 @@ export const runConvergence = internalAction({
             brokerUrl,
             artifactSecret,
           );
+        // Hashed here, not in the mutation: the raw path never leaves this action, and the round
+        // stores the same rule-and-pathHmac identity the finding rows carry. A missing fingerprint
+        // secret records nothing rather than failing a delivery that otherwise succeeded - the
+        // consequence is that this round marks no finding fixed, which under-claims.
+        const candidateScannerFindings = scannerIdentities(output.scanners.head.findings);
         await ctx.runMutation(internal.reviewAutofixData.completeRound, {
           ...args,
           roundNumber,
           candidateCommitSha,
+          ...(candidateScannerFindings ? { candidateScannerFindings } : {}),
           patchFingerprint,
           patchArtifactId: candidateArtifacts[0]!.id,
           validationArtifactId: validationArtifact.id,
