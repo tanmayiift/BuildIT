@@ -112,3 +112,31 @@ collapsing it to a generic 503, and the retry rule treating it as permanent rath
 **Everything up to the model call works.** The segmented 300-second execution completes, the
 repository's own checks run on both commits, and the failure is the provider refusing to answer.
 Adding credit to the provider account is the only remaining step, and it is not one BuildIT can take.
+
+## Hobby runs BuildIT, but 5 hours of Sandbox CPU a month is the binding limit
+
+The team was downgraded from Pro to Hobby on 2026-09-16 (refund $14.16 for 18 unused days).
+Deployments, the web app, the broker and Convex all work unchanged. Reviews then failed at the
+execution stage with `sandbox_unavailable` / `capacity_exhausted`.
+
+Measured on the Vercel usage page, this billing cycle:
+
+| Sandbox quota | Used | Hobby limit |
+| --- | ---: | ---: |
+| Creations | 434 | 5,000 |
+| **Active CPU** | **8h 12m** | **5h** |
+| Provisioned memory | 49.0 GB-Hrs | 420 GB-Hrs |
+| Data transfer | 5.68 GB | 20 GB |
+
+**Only Active CPU is over**, and it is over by a lot. Everything else has generous headroom. On Pro
+that overage was billable on demand; Hobby simply stops, which is what `capacity_exhausted` means.
+
+Two things follow. The cycle resets **4 October**, so the current block is this month's accrued
+usage — most of which was spent by the old single-call design that paid sandbox setup on every
+review. The segmented design pays setup once per job and should consume materially less CPU per
+review, but that is a prediction, not a measurement, and it cannot be measured until the quota
+resets or the plan changes.
+
+So: Hobby is viable in principle and unproven in practice. The honest statement is that the
+execution path fits the 300-second function ceiling — that part is proven — and whether it fits
+5 CPU-hours a month is an open question answerable only with a fresh cycle.
