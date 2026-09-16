@@ -14,6 +14,8 @@ export const publicFunctionPolicies = {
   "activation:funnel": { authorization: "active_organization_viewer", response: "metadata" },
   "audit:list": { authorization: "active_organization_viewer", response: "metadata" },
   "audit:verifyChain": { authorization: "active_organization_viewer", response: "metadata" },
+  "evalLoop:listPendingCandidates": { authorization: "active_organization_admin", response: "metadata" },
+  "evalLoop:curateCandidate": { authorization: "active_organization_admin", response: "metadata" },
   "findings:dismiss": { authorization: "active_organization_developer", response: "metadata" },
   "reviews:runHistory": { authorization: "active_organization_viewer", response: "metadata" },
   "reviews:compareRuns": { authorization: "active_organization_viewer", response: "metadata" },

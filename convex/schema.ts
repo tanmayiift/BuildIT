@@ -280,6 +280,9 @@ export default defineSchema({
     reviewedIntoEvalSet: v.optional(v.boolean()), createdAt: v.number(),
   }).index("by_org_created", ["organizationId", "createdAt"])
     .index("by_pending", ["reviewedIntoEvalSet", "createdAt"])
+    // by_pending spans every tenant, which is what the internal curation cron wants and exactly what
+    // a public reader must not have. This is the same question asked inside one organization.
+    .index("by_org_pending", ["organizationId", "reviewedIntoEvalSet", "createdAt"])
     .index("by_review", ["reviewId"]),
 
   findingSuppressions: defineTable({

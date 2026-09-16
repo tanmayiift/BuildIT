@@ -26,6 +26,7 @@ const settings = [
   { label: "Members", href: "/members" },
   { label: "Notifications", href: "/notifications" },
   { label: "Audit log", href: "/audit" },
+  { label: "Evaluation queue", href: "/quality" },
 ];
 
 function NavLink({ item, current, sampleTour }: { item: { label: string; href: string; mark?: string }; current: boolean; sampleTour: boolean }) {

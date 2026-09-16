@@ -2,6 +2,7 @@ import { TrackerOAuthCards } from "../tracker-oauth";
 import { GitHubIntegrationState, MembersWorkspaceState, ModelIntegrationState, RepositoryConnectionView, TrackerConnections } from "../live-connections";
 import { WorkspaceMetrics, WorkspaceUsage } from "../live-metrics-usage";
 import { WorkspaceAudit } from "../live-audit";
+import { WorkspaceQuality } from "../live-quality";
 import { NotificationPreferences } from "../notification-preferences";
 import { WorkspacePolicyState } from "../live-policies";
 import { notFound } from "next/navigation";
@@ -28,6 +29,7 @@ export default async function Section({ params }: { params: Promise<{ section: s
   if (section === "members") return <Members />;
   if (section === "notifications") return <Notifications />;
   if (section === "audit") return <Audit />;
+  if (section === "quality") return <Quality />;
   // "history" is the ninth section and has no branch here - the static /history route shadows this
   // dynamic segment, so it renders correctly and the gap is invisible. It was `return <Audit />`,
   // which meant any section without a branch silently served the audit log under that section's
@@ -86,3 +88,4 @@ function Members() { return <div className="content"><Header eyebrow="Organizati
 function Notifications() { return <div className="content"><Header eyebrow="Source-free communication" title="Notifications" description="See where review results appear today and who may receive future email. Customer messages never contain source, diffs, logs, findings, or secrets."/><NotificationPreferences/></div>; }
 
 function Audit() { return <div className="content"><Header eyebrow="Source-free evidence" title="Audit log" description="Security-relevant actions are append-only and contain identifiers, decisions, and hashes—not repository source." /><WorkspaceAudit/></div>; }
+function Quality() { return <div className="content"><Header eyebrow="Evaluation loop" title="Evaluation queue" description="Reviews that reached no verdict, and findings a person dismissed. Curating one folds it into the set BuildIT is measured against." /><WorkspaceQuality/></div>; }

@@ -70,6 +70,8 @@ async function assertCancellationAcknowledgment(t: ReturnType<typeof convexTest>
   }
 }
 
+const pendingCandidatesQuery = makeFunctionReference<"query", { organizationId: string }, { candidates: Array<{ id: string; kind: string; reasonCode: string }>; truncated: boolean }>("evalLoop:listPendingCandidates");
+const curateCandidateMutation = makeFunctionReference<"mutation", { organizationId: string; candidateId: string }, { id: string }>("evalLoop:curateCandidate");
 const activationFunnel = makeFunctionReference<"query", { organizationId: string }, { repositoryConnected: boolean; modelKeyReady: boolean; pullRequestPreviewed: boolean; reviewStarted: boolean; firstEvidenceReady: boolean }>("activation:funnel");
 const recordPreview = makeFunctionReference<"mutation", { repositoryId: string; actorId: string; headSha: string; now: number }, string>("dashboardReviewData:recordPreview");
 const cancellationScope = makeFunctionReference<"query", { reviewId: string }, { actorId: string; workflowId?: string; terminal: boolean }>("dashboardReviewData:cancellationScope");
@@ -251,6 +253,32 @@ describe("Convex tenant isolation", () => {
     const own = await asAlice.query(internal.reviewEvidenceData.findingDetailScope, { reviewId: alpha.reviewId });
     expect(own.artifact.id).toBe(analysisId);
     expect(JSON.stringify(own)).not.toContain("finding-beta");
+  });
+
+  // The public curation pair was added with an ownership check on the mutation, and nothing in this
+  // suite would have noticed if it had been left off: removing the check and running the whole
+  // security gate passed 482 tests. A public mutation that takes a document id and an organization
+  // id needs a test that the two are actually required to agree - an authorized caller passing a
+  // neighbour's id is the exact shape the internal markCurated cannot defend against, because it
+  // patches whatever id it is handed.
+  it("refuses to curate an evaluation candidate belonging to another organization", async () => {
+    const t = convexTest(schema, modules), alpha = await seedTenant(t, "eval-alpha", "alice"), beta = await seedTenant(t, "eval-beta", "bob"), asAlice = t.withIdentity({ subject: "alice" });
+    const candidate = async (tenant: Awaited<ReturnType<typeof seedTenant>>, reasonCode: string) => t.run(ctx => ctx.db.insert("evalCandidates", {
+      organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId,
+      kind: "missed", reasonCode, promptVersion: "v1", model: "test-model", headSha: "c".repeat(40), createdAt: Date.now(),
+    }));
+    const alphaCandidate = await candidate(alpha, "alpha-reason"), betaCandidate = await candidate(beta, "beta-reason");
+
+    await expect(asAlice.query(pendingCandidatesQuery, { organizationId: beta.organizationId })).rejects.toThrow("not_found_or_forbidden");
+    const listed = await asAlice.query(pendingCandidatesQuery, { organizationId: alpha.organizationId });
+    expect(listed.candidates.map(item => item.reasonCode)).toEqual(["alpha-reason"]);
+
+    // Authorized for her own organization, naming a candidate that is not hers.
+    await expect(asAlice.mutation(curateCandidateMutation, { organizationId: alpha.organizationId, candidateId: betaCandidate })).rejects.toThrow("not_found_or_forbidden");
+    expect((await t.run(ctx => ctx.db.get(betaCandidate)))?.reviewedIntoEvalSet).toBeUndefined();
+
+    await asAlice.mutation(curateCandidateMutation, { organizationId: alpha.organizationId, candidateId: alphaCandidate });
+    expect((await t.run(ctx => ctx.db.get(alphaCandidate)))?.reviewedIntoEvalSet).toBe(true);
   });
 
   it("derives source-free activation only inside the active organization", async () => {

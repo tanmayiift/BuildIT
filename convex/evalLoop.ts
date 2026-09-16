@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { requireOrganizationRole } from "./lib/authz";
 import { assertReviewParent } from "./lib/parentConsistency";
 
 // The eval set only ever grew by hand, so the runs most worth learning from were the ones nothing
@@ -63,5 +64,44 @@ export const markCurated = internalMutation({
     if (!candidate) throw new Error("not_found_or_forbidden");
     await ctx.db.patch(candidate._id, { reviewedIntoEvalSet: true });
     return { id: candidate._id, curatedAt: args.now };
+  },
+});
+
+// Curation had no screen. `pendingCandidates` and `markCurated` existed, were tested, and had no
+// caller outside those tests - so every missed verdict and every dismissed finding was recorded
+// into a queue nobody could see, and the corpus the evaluation loop exists to grow never grew.
+//
+// Past a hundred rows the queue has stopped being a queue and become a backlog, so the reader is
+// bounded and says when it truncated rather than implying the list is all of it.
+const candidateCeiling = 100;
+
+export const listPendingCandidates = query({
+  args: { organizationId: v.id("organizations") },
+  handler: async (ctx, args) => {
+    await requireOrganizationRole(ctx, args.organizationId, "admin");
+    const rows = await ctx.db.query("evalCandidates")
+      .withIndex("by_org_pending", q => q.eq("organizationId", args.organizationId).eq("reviewedIntoEvalSet", undefined))
+      .take(candidateCeiling + 1);
+    return {
+      candidates: rows.slice(0, candidateCeiling).map(row => ({
+        id: row._id, kind: row.kind, reasonCode: row.reasonCode,
+        promptVersion: row.promptVersion, model: row.model, createdAt: row.createdAt,
+      })),
+      truncated: rows.length > candidateCeiling,
+    };
+  },
+});
+
+export const curateCandidate = mutation({
+  args: { organizationId: v.id("organizations"), candidateId: v.id("evalCandidates") },
+  handler: async (ctx, args) => {
+    await requireOrganizationRole(ctx, args.organizationId, "admin");
+    const candidate = await ctx.db.get(args.candidateId);
+    // The internal markCurated patches whatever id it is handed. That is safe behind an internal
+    // boundary and would be a cross-tenant write from a public one, so the ownership check lives
+    // here rather than being inherited.
+    if (!candidate || candidate.organizationId !== args.organizationId) throw new Error("not_found_or_forbidden");
+    await ctx.db.patch(candidate._id, { reviewedIntoEvalSet: true });
+    return { id: candidate._id };
   },
 });
