@@ -290,12 +290,27 @@ export const publicationCompleted = internalMutation({
 // a dead end. This was written inline in workflowCompleted, which autofix never reaches, so an
 // autofix run killed by its provider could not fall back to a key that would have rescued the
 // identical `@buildit review`. Both paths call it here instead of keeping two copies.
+// Stamped before the guards below, not after. A review that cannot start a fallback - because it
+// is already one, or is stale, or is out of budget - still learned the same thing about the
+// account, and that is exactly the review whose successor should not pick the same dead key.
+async function recordQuotaExhaustion(ctx: MutationCtx, review: Doc<"reviews">, reason: PlatformFailureReason, now: number) {
+  if (reason !== "provider_quota_exhausted") return;
+  const credentials = await ctx.db
+    .query("providerCredentials")
+    .withIndex("by_org_status", q => q.eq("organizationId", review.organizationId).eq("status", "valid"))
+    .collect();
+  const used = credentials.filter(item => item.provider === review.provider
+    && (item.repositoryId === review.repositoryId || item.repositoryId === undefined));
+  for (const credential of used) await ctx.db.patch(credential._id, { quotaExhaustedAt: now });
+}
+
 async function startProviderFallback(
   ctx: MutationCtx,
   review: Doc<"reviews">,
   failureReason: PlatformFailureReason,
   now: number,
 ) {
+  await recordQuotaExhaustion(ctx, review, failureReason, now);
   if (review.parentReviewId || review.isStale || review.status === "cancelled" || review.status === "cancelling"
     || review.cancellationRequestedAt !== undefined || review.expiresAt <= now) return false;
   let family: Awaited<ReturnType<typeof getReviewBudgetSnapshot>>;

@@ -8,6 +8,7 @@ import { internal } from "./_generated/api";
 import { retentionMs, terminalStatuses, webhookDeliveryRetentionMs } from "./lib/lifecycle";
 import { activeReviewCount, concurrencyExceeded } from "./lib/tenantLimits";
 import { provider as providerValidator } from "./validators";
+import { orderCredentialsByHealth } from "./lib/providerFallback";
 
 // A blocked review is waiting on a person: connect a model key, or let an earlier review finish.
 // Two hours is long enough for either and short enough that a forgotten one frees its slot.
@@ -304,14 +305,15 @@ export const materializeReview = internalMutation({
           (!args.expectedProvider || item.provider === args.expectedProvider) &&
           (item.repositoryId === repository._id || item.repositoryId === undefined),
       )
-      .sort(
-        (left, right) =>
-          (right.lastValidatedAt ?? right.createdAt) -
-          (left.lastValidatedAt ?? left.createdAt),
-      );
+      ;
+    // Recency alone picked the most recently validated key, which in a workspace holding both a
+    // spent account and a working one is very often the spent one - the key you last touched is the
+    // key you last tried to fix. orderCredentialsByHealth keeps recency as the tie-break and only
+    // moves an account that has just reported no credit behind the others.
+    const ordered = orderCredentialsByHealth(eligible, args.now);
     const credential =
-      eligible.find((item) => item.repositoryId === repository._id) ??
-      eligible.find((item) => item.repositoryId === undefined);
+      ordered.find((item) => item.repositoryId === repository._id) ??
+      ordered.find((item) => item.repositoryId === undefined);
     const selectedProvider =
       credential?.provider ?? args.expectedProvider ?? "anthropic";
     const model = credential

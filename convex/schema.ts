@@ -103,6 +103,9 @@ export default defineSchema({
     keyVersion: v.number(), maskedSuffix: v.string(), availableModels: v.optional(v.array(v.string())), status: value.credentialStatus,
     createdBy: v.string(), createdAt: v.number(), lastValidatedAt: v.optional(v.number()),
     lastUsedAt: v.optional(v.number()), revokedAt: v.optional(v.number()),
+    // When this credential's account last reported no remaining credit. Deprioritises it for new
+    // reviews without making it unreachable; cleared when the credential is validated again.
+    quotaExhaustedAt: v.optional(v.number()),
   }).index("by_org_provider", ["organizationId", "provider"])
     .index("by_repository_provider", ["repositoryId", "provider"])
     .index("by_scope", ["credentialScopeId"])

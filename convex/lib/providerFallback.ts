@@ -32,3 +32,35 @@ export function fallbackWorthTrying(input: {
   // each time and makes the failure impossible to reproduce.
   return [...input.alternatives].sort()[0];
 }
+
+// How long a credential stays deprioritised after its account reported no credit.
+//
+// Not permanent, and not a hard skip. Permanent would need someone to notice and clear it; a hard
+// skip would leave a workspace whose only key is exhausted with no provider at all, which reports
+// "no credential" - a different and wrong diagnosis. Six hours is long enough that a dead key stops
+// being picked first, short enough that topping the account up fixes itself without anyone
+// re-entering a key. Re-validating a credential clears it immediately.
+export const providerQuotaCooldownMs = 6 * 60 * 60_000;
+
+export function providerQuotaSuppressed(quotaExhaustedAt: number | undefined, now: number) {
+  if (quotaExhaustedAt === undefined) return false;
+  return now - quotaExhaustedAt < providerQuotaCooldownMs;
+}
+
+/**
+ * Orders candidate credentials for a new review: anything that has not just reported an exhausted
+ * account first, then most recently validated. Deliberately a sort and not a filter - the last
+ * resort is still worth trying, because "the account had no credit six hours ago" is weaker
+ * evidence than "there is no key at all".
+ */
+export function orderCredentialsByHealth<T extends { quotaExhaustedAt?: number; lastValidatedAt?: number; createdAt: number }>(
+  credentials: readonly T[],
+  now: number,
+): T[] {
+  return [...credentials].sort((left, right) => {
+    const leftSuppressed = providerQuotaSuppressed(left.quotaExhaustedAt, now) ? 1 : 0;
+    const rightSuppressed = providerQuotaSuppressed(right.quotaExhaustedAt, now) ? 1 : 0;
+    if (leftSuppressed !== rightSuppressed) return leftSuppressed - rightSuppressed;
+    return (right.lastValidatedAt ?? right.createdAt) - (left.lastValidatedAt ?? left.createdAt);
+  });
+}

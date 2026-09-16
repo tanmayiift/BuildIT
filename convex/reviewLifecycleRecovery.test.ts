@@ -273,6 +273,31 @@ describe("an autofix run killed by its provider", () => {
     vi.useRealTimers();
   });
 
+  // The workspace that prompted this held a spent OpenAI key validated more recently than a working
+  // Gemini one, so every webhook-triggered review picked the spent one, spent a review discovering
+  // it, and only then fell back. Recording the exhaustion is what lets the next review skip it.
+  it("marks the credential whose account reported no credit", async () => {
+    vi.useFakeTimers();
+    const t = convexTest(schema, modules);
+    workpoolComponent.register(t, "reviewWorkpool");
+    const seeded = await seed(t);
+    const reviewId = await insertReview(t, seeded, { ...autofix, statusReasonCode: "provider_quota_exhausted", status: "platform_failed" });
+    const spent = await t.run(ctx => ctx.db.insert("providerCredentials", {
+      organizationId: seeded.organizationId, credentialScopeId: "scope-spent", provider: "anthropic",
+      encryptedCiphertext: "x", nonce: "n", authTag: "t", aadDigest: "d", wrappedDataKey: "w", kmsKeyId: "k",
+      envelopeVersion: 1, keyVersion: 1, maskedSuffix: "9999", availableModels: ["claude-sonnet-4-6"],
+      status: "valid", createdBy: "u", createdAt: 1, lastValidatedAt: 2,
+    }));
+
+    await t.mutation(internal.durableReview.fallbackOrReport, {
+      organizationId: seeded.organizationId, reviewId, expectedHeadSha: head, expectedGeneration: 0, now: 7_000,
+    });
+
+    // The review under test runs on "anthropic" (insertReview's default), so this is the key it used.
+    expect((await t.run(ctx => ctx.db.get(spent)))!.quotaExhaustedAt).toBe(7_000);
+    vi.useRealTimers();
+  });
+
   it("restarts on the workspace's second key instead of stopping", async () => {
     vi.useFakeTimers();
     const t = convexTest(schema, modules);
