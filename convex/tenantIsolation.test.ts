@@ -261,6 +261,35 @@ describe("Convex tenant isolation", () => {
   // id needs a test that the two are actually required to agree - an authorized caller passing a
   // neighbour's id is the exact shape the internal markCurated cannot defend against, because it
   // patches whatever id it is handed.
+  // The manual picker listed provider names with nothing to separate a working key from a spent one,
+  // so a reader could choose the account that had just reported no credit and find out by spending a
+  // review. The webhook path already avoided it; this makes the two agree.
+  it("tells the dashboard which provider accounts have reported no credit, healthiest first", async () => {
+    const t = convexTest(schema, modules), tenant = await seedTenant(t, "provider-health", "alice"), asAlice = t.withIdentity({ subject: "alice" });
+    const now = Date.now();
+    // The tenant is seeded with an Anthropic key; mark that one spent rather than inserting a second
+    // Anthropic row, which credentialForProvider would never reach. It is also the more recently
+    // validated of the two, which is the ordinary case - the key you last touched is the key you
+    // last tried to fix.
+    await t.run(async ctx => {
+      const seeded = await ctx.db.query("providerCredentials")
+        .withIndex("by_org_status", q => q.eq("organizationId", tenant.organizationId).eq("status", "valid")).first();
+      await ctx.db.patch(seeded!._id, { lastValidatedAt: now, quotaExhaustedAt: now });
+      await ctx.db.insert("providerCredentials", {
+        organizationId: tenant.organizationId, credentialScopeId: "scope-openai", provider: "openai",
+        encryptedCiphertext: "x", nonce: "n", authTag: "t", aadDigest: "d", wrappedDataKey: "w", kmsKeyId: "k",
+        envelopeVersion: 1, keyVersion: 1, maskedSuffix: "4321", availableModels: ["gpt-5.4-mini"],
+        status: "valid", createdBy: "u", createdAt: 1, lastValidatedAt: now - 500_000,
+      });
+    });
+
+    const listed = await asAlice.query(api.dashboardReviewData.availableProviders, { repositoryId: tenant.repositoryId });
+    expect(listed).toEqual([
+      { provider: "openai", quotaExhausted: false },
+      { provider: "anthropic", quotaExhausted: true },
+    ]);
+  });
+
   it("refuses to curate an evaluation candidate belonging to another organization", async () => {
     const t = convexTest(schema, modules), alpha = await seedTenant(t, "eval-alpha", "alice"), beta = await seedTenant(t, "eval-beta", "bob"), asAlice = t.withIdentity({ subject: "alice" });
     const candidate = async (tenant: Awaited<ReturnType<typeof seedTenant>>, reasonCode: string) => t.run(ctx => ctx.db.insert("evalCandidates", {
@@ -732,7 +761,7 @@ describe("Convex tenant isolation", () => {
     ).rejects.toThrow("not_found_or_forbidden");
     await expect(asAlice.query(api.dashboardReviewData.availableProviders, {
       repositoryId: alpha.repositoryId,
-    })).resolves.toEqual(["anthropic"]);
+    })).resolves.toEqual([{ provider: "anthropic", quotaExhausted: false }]);
     const created = await t.mutation(internal.dashboardReviewData.create, {
       repositoryId: alpha.repositoryId,
       prNumber: 2,
@@ -4195,7 +4224,7 @@ describe("a second tenant brings their own key", () => {
 
     // The stored key belongs to this organization and is selectable for its own repository.
     await expect(signedIn.query(api.dashboardReviewData.availableProviders, { repositoryId: tenant.repositoryId }))
-      .resolves.toEqual(["openai"]);
+      .resolves.toEqual([{ provider: "openai", quotaExhausted: false }]);
 
     const stored = await t.run(ctx => ctx.db.query("providerCredentials").collect());
     expect(stored).toHaveLength(1);

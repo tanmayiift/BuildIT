@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { requireRepositoryRole } from "./lib/authz";
+import { orderCredentialsByHealth, providerQuotaSuppressed } from "./lib/providerFallback";
 import { appendAuditEvent } from "./lib/audit";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { retentionMs, terminalStatuses } from "./lib/lifecycle";
@@ -39,10 +40,18 @@ export const availableProviders = query({
     const credentials = await ctx.db.query("providerCredentials")
       .withIndex("by_org_status", q => q.eq("organizationId", access.repository.organizationId).eq("status", "valid"))
       .collect();
-    return supportedProviders.filter(selectedProvider => {
+    // Ordered and labelled by the same health rule the webhook path selects with. Returning bare
+    // names left the manual picker unable to say what the rest of the system already knew - a
+    // reader choosing a provider whose account had just reported no credit got no warning, and
+    // spent a review finding out.
+    const now = Date.now();
+    const usable = supportedProviders.flatMap(selectedProvider => {
       const credential = credentialForProvider(credentials, access.repository._id, selectedProvider);
-      return Boolean(credential && selectProviderModel(credential.provider, credential.availableModels));
+      if (!credential || !selectProviderModel(credential.provider, credential.availableModels)) return [];
+      return [{ provider: selectedProvider, credential }];
     });
+    return orderCredentialsByHealth(usable.map(item => ({ ...item.credential, provider: item.provider })), now)
+      .map(item => ({ provider: item.provider, quotaExhausted: providerQuotaSuppressed(item.quotaExhaustedAt, now) }));
   },
 });
 

@@ -137,6 +137,34 @@ valid credential, and `selectProviderModel` returns `gemini-2.5-pro` from its th
 reaches a model at all. The path is fixed and untested against production, and those are different
 claims.
 
+## New reviews chose the key whose account had just said it was empty
+
+**Found and fixed:** 17 September 2026.
+
+Credentials for a new review were ordered by `lastValidatedAt` alone, most recent first. That is a
+reasonable-looking rule that reliably picks the wrong key, because the key you validated most
+recently is the key you last tried to fix. This workspace has held a valid Gemini credential since
+31 August and a spent OpenAI one validated 1 September, so every webhook-triggered review chose
+OpenAI, spent a review discovering the account had no credit, and only then fell back.
+
+A review that dies with `provider_quota_exhausted` now stamps `quotaExhaustedAt` on the credential
+it used, and `orderCredentialsByHealth` puts a stamped credential last.
+
+**Three decisions worth keeping.** It is a *sort*, not a filter: a workspace whose only key is
+exhausted still gets to try it, because "no credit six hours ago" is weaker evidence than "there is
+no key at all", and reporting the latter would be a wrong diagnosis rather than a cautious one. The
+suppression *expires* after six hours, so topping the account up recovers on its own; rotating a
+credential inserts a fresh row, so adding a key clears the stamp with no extra code. And the stamp is
+written *before* the fallback guards, because a review that cannot start a fallback - it is already
+one, or is stale, or is out of budget - learned the same thing about the account, and its successor
+is exactly who needs to know.
+
+**The dashboard had to learn it too.** `availableProviders` returned bare provider names, so once the
+webhook path started avoiding a spent key the manual picker was the only place left that would still
+choose it, with nothing on screen to say why that was a bad idea. It now returns
+`{ provider, quotaExhausted }` ordered by the same rule, and the picker labels an exhausted account
+and defaults to one that can answer.
+
 ## Autofix could not execute at all, and the symptom was a 400 nobody read
 
 **Found:** 16 September 2026, while closing the segmented-execution work. **Fixed the same day.**

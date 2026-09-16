@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ connection: undefined as unknown, prepare: vi.fn(), start: vi.fn() }));
 vi.mock("../live-connections", () => ({ useConnection: () => state.connection }));
 vi.mock("convex/server", () => ({ makeFunctionReference: (name: string) => name }));
-vi.mock("convex/react", () => ({ useAction: (name: string) => name.endsWith(":prepare") ? state.prepare : state.start, useQuery: (name: string) => name === "runtimeReadiness:current" ? { executionEnabled: true, runtimeConfigured: true } : ["anthropic"] }));
+vi.mock("convex/react", () => ({ useAction: (name: string) => name.endsWith(":prepare") ? state.prepare : state.start, useQuery: (name: string) => name === "runtimeReadiness:current" ? { executionEnabled: true, runtimeConfigured: true } : [{ provider: "anthropic", quotaExhausted: false }] }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 const { FirstReviewSetup } = await import("./first-review");
 const connection = { state: "connected", organization: { id: "org-a", role: "owner" }, repositories: [{ id: "repo-a", owner: "acme", name: "api" }] };

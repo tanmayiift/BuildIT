@@ -24,7 +24,7 @@ vi.mock("convex/react", () => ({
     if (args === "skip") return undefined;
     if (reference === "repositoryConnections:current") return state.connection;
     if (reference === "runtimeReadiness:current") return state.readiness;
-    if (reference === "dashboardReviewData:availableProviders") return ["anthropic"];
+    if (reference === "dashboardReviewData:availableProviders") return [{ provider: "anthropic", quotaExhausted: false }];
     return undefined;
   },
 }));
