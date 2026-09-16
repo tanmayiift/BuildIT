@@ -94,11 +94,12 @@ Persisting them on the round is the prerequisite.
 **Until then:** the changelog's fixed-findings list is always empty, which is wrong but not
 misleading — it under-claims. That is the correct direction to be wrong in.
 
-## The model provider account is out of credit (not a BuildIT defect)
+## The model provider account is out of credit — and the fallback that should have covered it was off
 
-Recorded because it explains days of failures that looked like product bugs.
+Recorded because it explains days of failures that looked like product bugs, and because the fix
+turned out to be in BuildIT after all.
 
-Every review reaching the analysis stage fails with HTTP 429 from OpenAI, and the 429 body carries
+Every review reaching the analysis stage failed with HTTP 429 from OpenAI, and the 429 body carried
 `insufficient_quota` — the account behind the key has no remaining balance. BuildIT reported this as
 *"model provider is busy — retry once the provider's limit resets"* for as long as it lasted, which
 is advice that could never work.
@@ -109,9 +110,32 @@ reach a pull request — the provider reading the 429 body, the broker preservin
 collapsing it to a generic 503, and the retry rule treating it as permanent rather than matching
 `http_429` and retrying three more times.
 
-**Everything up to the model call works.** The segmented 300-second execution completes, the
-repository's own checks run on both commits, and the failure is the provider refusing to answer.
-Adding credit to the provider account is the only remaining step, and it is not one BuildIT can take.
+**And that accuracy is what broke the recovery.** `convex/lib/providerFallback.ts` starts a fresh
+review on a second connected provider when the first one is the reason the review died. Its trigger
+set was written when the provider 429 was a single reason:
+
+```
+new Set(["provider_rate_limited", "model_unavailable"])
+```
+
+Splitting the 429 introduced `provider_quota_exhausted` and nothing added it to that set, so the
+newly-accurate classification became the one provider failure that could never reach a second key.
+The production evidence is exact: the 18:35–19:09 failures on 14 September are
+`provider_rate_limited` and the 19:41 one is `provider_quota_exhausted` — the same account, the same
+cause, on either side of the reclassification.
+
+Meanwhile this workspace has held a **valid Gemini credential since 31 August with `lastUsedAt`
+still null.** A key that could have answered was connected the whole time and was never asked.
+
+`provider_quota_exhausted` is now in the set, which is where it most belongs: a rate limit clears on
+its own, so falling back is a convenience; a spent account answers the same way until someone pays
+it, and waiting is the single thing that cannot help.
+
+**What is still unproven.** The fallback resolves on paper — `gemini` is the only alternative with a
+valid credential, and `selectProviderModel` returns `gemini-2.5-pro` from its three approved models
+— but no review has exercised it, because the sandbox quota below now fails the run before it
+reaches a model at all. The path is fixed and untested against production, and those are different
+claims.
 
 ## Hobby runs BuildIT, but 5 hours of Sandbox CPU a month is the binding limit
 
