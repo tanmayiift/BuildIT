@@ -43,6 +43,7 @@ import type * as lib_coverageGate from "../lib/coverageGate.js";
 import type * as lib_credentialRevocation from "../lib/credentialRevocation.js";
 import type * as lib_durableStages from "../lib/durableStages.js";
 import type * as lib_executionGate from "../lib/executionGate.js";
+import type * as lib_executionSegmentDriver from "../lib/executionSegmentDriver.js";
 import type * as lib_findingOpinions from "../lib/findingOpinions.js";
 import type * as lib_githubProfile from "../lib/githubProfile.js";
 import type * as lib_lifecycle from "../lib/lifecycle.js";
@@ -159,6 +160,7 @@ declare const fullApi: ApiFromModules<{
   "lib/credentialRevocation": typeof lib_credentialRevocation;
   "lib/durableStages": typeof lib_durableStages;
   "lib/executionGate": typeof lib_executionGate;
+  "lib/executionSegmentDriver": typeof lib_executionSegmentDriver;
   "lib/findingOpinions": typeof lib_findingOpinions;
   "lib/githubProfile": typeof lib_githubProfile;
   "lib/lifecycle": typeof lib_lifecycle;
