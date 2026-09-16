@@ -7,7 +7,17 @@ import type { PlatformFailureReason } from "./platformFailureReport";
 // Only failures that are about the provider qualify. A repository too large or a diff that will not
 // fit is going to fail the same way on any model, and retrying it elsewhere spends a second
 // review's money to reach the same answer.
-const providerFailures = new Set<PlatformFailureReason>(["provider_rate_limited", "model_unavailable"]);
+//
+// `provider_quota_exhausted` belongs here most of all. It was missed because it did not exist when
+// this set was written: the provider 429 was read as one reason, and splitting out "the account has
+// no credit" from "you are going too fast" left the new, permanent half outside the set. A rate
+// limit clears on its own, so falling back is a convenience. A spent account never clears, so
+// another key is the only thing that can produce a verdict at all.
+const providerFailures = new Set<PlatformFailureReason>([
+  "provider_rate_limited",
+  "provider_quota_exhausted",
+  "model_unavailable",
+]);
 
 export function fallbackWorthTrying(input: {
   reason: PlatformFailureReason;
