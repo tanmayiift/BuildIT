@@ -137,6 +137,36 @@ valid credential, and `selectProviderModel` returns `gemini-2.5-pro` from its th
 reaches a model at all. The path is fixed and untested against production, and those are different
 claims.
 
+## Autofix could not execute at all, and the symptom was a 400 nobody read
+
+**Found:** 16 September 2026, while closing the segmented-execution work. **Fixed the same day.**
+
+The 300-second split gave `/api/execute` a new contract: a request carries a `jobKey` and one
+`segment`, and the broker folds both into the `plansHash` that the execution grant is verified
+against. `reviewValidationWorker` was rewritten to speak it. `reviewAutofixWorker` was not, and kept
+sending one call carrying the whole plan.
+
+That is not a slower autofix. `handleExecution`'s parser rejects a body with no `jobKey` or no
+`segment` as `invalid_execution_request` before any sandbox is created, and the grant scope check
+would have refused it immediately after. **Every autofix round returned HTTP 400.**
+
+The plan predicted the wrong failure - "it reintroduces the 700s shape" - because it reasoned about
+budgets rather than the request contract. The shape was never the binding problem.
+
+**What changed.** The loop lives in `convex/lib/executionSegmentDriver.ts` and both workers drive it,
+so the contract is stated once; the second caller can no longer drift from the first without the
+compiler noticing. Each autofix round creates and claims its own execution job, which also puts it
+under the attempt cap, the wall-clock deadline and the reconcile sweeper.
+
+**What this says about the guards.** Two architecture tests caught the refactor, and both were right
+to. The lesson is the one already recorded under "validation that cannot see production": the
+`/api/execute` contract had no test that both callers satisfied it, so it could change under one of
+them silently. The extracted loop now has four - the orchestration had none before, only the segment
+primitives it calls did.
+
+**Unproven against a live sandbox.** The Hobby CPU allowance is spent, so this is verified by tests
+and types, not by an autofix round that ran.
+
 ## Hobby runs BuildIT, but 5 hours of Sandbox CPU a month is the binding limit
 
 The team was downgraded from Pro to Hobby on 2026-09-16 (refund $14.16 for 18 unused days).
