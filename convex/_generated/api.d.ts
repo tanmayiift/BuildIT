@@ -45,6 +45,7 @@ import type * as lib_durableStages from "../lib/durableStages.js";
 import type * as lib_executionGate from "../lib/executionGate.js";
 import type * as lib_executionSegmentDriver from "../lib/executionSegmentDriver.js";
 import type * as lib_findingOpinions from "../lib/findingOpinions.js";
+import type * as lib_findingResolution from "../lib/findingResolution.js";
 import type * as lib_githubProfile from "../lib/githubProfile.js";
 import type * as lib_lifecycle from "../lib/lifecycle.js";
 import type * as lib_monthlySpend from "../lib/monthlySpend.js";
@@ -162,6 +163,7 @@ declare const fullApi: ApiFromModules<{
   "lib/executionGate": typeof lib_executionGate;
   "lib/executionSegmentDriver": typeof lib_executionSegmentDriver;
   "lib/findingOpinions": typeof lib_findingOpinions;
+  "lib/findingResolution": typeof lib_findingResolution;
   "lib/githubProfile": typeof lib_githubProfile;
   "lib/lifecycle": typeof lib_lifecycle;
   "lib/monthlySpend": typeof lib_monthlySpend;
