@@ -1,5 +1,7 @@
 "use node";
 import { invokeAccountedModel } from "./lib/accountedModel";
+import { buildExecutionResponse, driveExecutionSegments, rerunTargets } from "./lib/executionSegmentDriver";
+import { runIdFor } from "./lib/runIdentity";
 import { createHash } from "node:crypto";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
@@ -9,10 +11,9 @@ import type { DataModel } from "./_generated/dataModel";
 import type { GenericActionCtx } from "convex/server";
 import { chunkRepositorySnapshot, GitHubAppClient, GitHubRepositoryWriter, isForcedOmission, RepositoryContentClient, sideEffectKey } from "@buildit/github";
 import { assertAutofixBounds, candidateWorsened, contentHash, neverMergedSentence, type PatchProposal, runModelPatchChain, stageSchemas, validatePatchProposals } from "@buildit/orchestrator";
-import { BROKER_REQUEST_TIMEOUT_MS, defaultExecutionPlans } from "@buildit/runner";
+import { defaultExecutionPlans, stampCredentialTeardown, type ExecutionStage } from "@buildit/runner";
 import {
   issueArtifactGrant,
-  issueExecutionGrant,
   redact,
   redactForModel,
 } from "@buildit/security";
@@ -541,62 +542,37 @@ export const runConvergence = internalAction({
           descriptors = [...baseDescriptors, ...candidateDescriptors];
         const artifactsHash = sha256Json(
             descriptors.map(({ readGrant: _, ...item }) => item),
-          ),
-          plansHash = sha256Json({
-            runnerImageVersion: scope.runnerImageVersion,
-            runtime,
-            install,
-            checks,
-          }),
-          executionGrant = issueExecutionGrant(
-            {
-              organizationId: String(scope.organizationId),
-              repositoryId: String(scope.repositoryId),
-              reviewId: String(scope.reviewId),
-              baseSha: scope.baseSha,
-              headSha: candidateCommitSha,
-              artifactsHash,
-              plansHash,
-              ttlMs: 120_000,
-            },
-            executionSecret,
           );
-        await assertActive(ctx, args);
-        const executionResponse = await fetch(`${brokerUrl}/api/execute`, {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${executionGrant}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            organizationId: String(scope.organizationId),
-            repositoryId: String(scope.repositoryId),
-            reviewId: String(scope.reviewId),
-            baseSha: scope.baseSha,
-            headSha: candidateCommitSha,
-            runnerImageVersion: scope.runnerImageVersion,
-            runtime,
-            artifacts: descriptors,
-            install,
-            checks,
-          }),
-          signal: AbortSignal.timeout(BROKER_REQUEST_TIMEOUT_MS),
+        // One execution job per round, driven through the same segment loop the normal review uses.
+        // Before this, autofix sent the whole plan in a single `/api/execute` call - the shape that
+        // predates the 300-second split - and the broker refused every one of them as
+        // `invalid_execution_request`, because its parser now requires `jobKey` and `segment` and
+        // folds both into the plansHash the grant is checked against.
+        const runId = runIdFor(String(args.reviewId), args.expectedGeneration) + `:autofix:${roundNumber}`;
+        const jobKey = `autofix:${String(args.reviewId)}:${args.expectedGeneration}:${roundNumber}:${candidateCommitSha}`;
+        const executionJobId: Id<"executionJobs"> = await ctx.runMutation(internal.executionJobsData.create, {
+          organizationId: args.organizationId, reviewId: args.reviewId, expectedHeadSha: args.expectedHeadSha,
+          expectedGeneration: args.expectedGeneration, jobKey, runId, baseSha: scope.baseSha, now: Date.now(),
         });
-        if (!executionResponse.ok) {
-          const detail = await executionResponse.text().catch(() => "");
-          let code: string | undefined;
-          try {
-            code = (JSON.parse(detail) as { error?: string }).error;
-          } catch {
-            code = undefined;
-          }
-          throw new Error(
-            code ?? `autofix_execution_${executionResponse.status}`,
-          );
-        }
-        const output = (await executionResponse.json()) as ExecutionResponse & {
-          error?: string;
-        };
+        const claimed: { stage: ExecutionStage; stateVersion: number } = await ctx.runMutation(internal.executionJobsData.claim, { jobId: executionJobId, workerId: runId, now: Date.now() });
+        const driven = await driveExecutionSegments({
+          brokerUrl, executionSecret, describe: () => descriptors, artifactsHash,
+          organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
+          baseSha: scope.baseSha, headSha: candidateCommitSha, runnerImageVersion: scope.runnerImageVersion,
+          runtime, install, checks, jobKey, runId, revisions: ["base", "head"],
+          stage: claimed.stage, stateVersion: claimed.stateVersion,
+          rerunTargets: current => rerunTargets(checks, current, ["base", "head"]),
+          assertActive: async () => { await ctx.runQuery(internal.reviewAutofixData.assertActive, args); },
+          checkpoint: input => ctx.runMutation(internal.executionJobsData.checkpoint, { jobId: executionJobId, ...input }),
+          failurePrefix: "autofix_execution",
+        });
+        const output: ExecutionResponse = buildExecutionResponse(driven);
+        await ctx.runMutation(internal.executionJobsData.checkpoint, {
+          jobId: executionJobId, requestKey: `autofix-complete:${runId}:${candidateCommitSha}`,
+          expectedVersion: driven.stateVersion, expectedStage: driven.stage, nextStage: "complete",
+          cursor: stampCredentialTeardown(`autofix-round:${roundNumber}:${candidateCommitSha}`, ["base", "head"]),
+          durationMs: Math.max(0, Date.now() - driven.tailStartedAt), now: Date.now(),
+        });
         const allSummaries = summarizeExecution(
             output,
             scope.baseSha,

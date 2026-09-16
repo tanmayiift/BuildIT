@@ -2,18 +2,15 @@
 import { createHash } from "node:crypto";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
-import { EXECUTION_LEASE_MS } from "@buildit/contracts";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
-  BROKER_REQUEST_TIMEOUT_MS, credentialTeardownRevisions, defaultExecutionPlans, diagnosticRerunAllowed,
-  executionSegmentCursor, firstExecutionSegment, nextExecutionSegment,
-  SANDBOX_DIAGNOSTIC_RERUN_LIMIT, segmentRunsInSandbox, stampCredentialTeardown,
-  type CheckResult, type DiagnosticRun, type ExecutionRevision, type ExecutionSegment, type ExecutionStage,
-  type PackageManager, type SegmentPlanState,
+  credentialTeardownRevisions, defaultExecutionPlans, stampCredentialTeardown,
+  type ExecutionRevision, type ExecutionStage, type PackageManager,
 } from "@buildit/runner";
-import { issueArtifactGrant, issueExecutionGrant } from "@buildit/security";
-import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, sha256Json, type ExecutionResponse, type ScannerSummary } from "./lib/validationEvidence";
+import { issueArtifactGrant } from "@buildit/security";
+import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, sha256Json, type ExecutionResponse } from "./lib/validationEvidence";
+import { buildExecutionResponse, driveExecutionSegments, rerunTargets } from "./lib/executionSegmentDriver";
 import { runIdFor } from "./lib/runIdentity";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
@@ -29,11 +26,6 @@ function validationFailureCode(error: unknown) {
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; headSha: string; baseSha: string; configRevisionId: Id<"configRevisions">; runnerImageVersion: string; expiresAt: number; completedArtifactId?: Id<"artifacts">; contexts: Array<{ id: Id<"artifacts">; storageKey: string; checksum: string; size: number }> };
 
 const revisions: ExecutionRevision[] = ["base", "head"];
-type SegmentOutput = { planId: string; text: string; truncated: boolean; evidenceTruncated: boolean };
-type SegmentSide = { credentialTeardownProved?: boolean; stopped?: boolean; results: CheckResult[]; outputs: SegmentOutput[]; diagnostics: Record<string, DiagnosticRun[]> };
-type SegmentResponse = { segment: ExecutionSegment; base: SegmentSide; head: SegmentSide; scanners?: { base: ScannerSummary; head: ScannerSummary }; error?: string };
-type RevisionEvidence = { credentialTeardownProved: boolean; stopped: boolean; results: CheckResult[]; outputs: SegmentOutput[]; diagnostics: Record<string, DiagnosticRun[]> };
-const emptyEvidence = (): RevisionEvidence => ({ credentialTeardownProved: false, stopped: false, results: [], outputs: [], diagnostics: {} });
 
 export const validate = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
@@ -83,72 +75,21 @@ export const validate = internalAction({
       readGrant: issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(context.id), storageKey: context.storageKey, operation: "read" }, artifactSecret) }));
     const artifactsHash = sha256Json(describe().map(({ readGrant: _, ...item }) => item));
 
-    const evidence: Record<ExecutionRevision, RevisionEvidence> = { base: emptyEvidence(), head: emptyEvidence() };
-    let scanners: { base: ScannerSummary; head: ScannerSummary } | undefined;
-    const state: SegmentPlanState = { checks, installable: Boolean(install), installed: [], diagnostics: [] };
-    let segment: ExecutionSegment | null = firstExecutionSegment();
-    let stage: ExecutionStage = claimed.stage, stateVersion = claimed.stateVersion, segments = 0, tailStartedAt = Date.now();
+    const jobId = executionJobId;
+    const driven = await driveExecutionSegments({
+      brokerUrl, executionSecret, describe, artifactsHash,
+      organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
+      baseSha: scope.baseSha, headSha: scope.headSha, runnerImageVersion: scope.runnerImageVersion,
+      runtime, install, checks, jobKey, runId, revisions,
+      stage: claimed.stage, stateVersion: claimed.stateVersion,
+      rerunTargets: current => rerunTargets(checks, current, revisions),
+      assertActive: async () => { await ctx.runQuery(internal.durableReview.assertActive, args); },
+      checkpoint: input => ctx.runMutation(internal.executionJobsData.checkpoint, { jobId, ...input }),
+      failurePrefix: "validation_execution",
+    });
+    const { segments, stage, stateVersion, tailStartedAt } = driven;
 
-    while (segment) {
-      const startedAt = Date.now();
-      if (segmentRunsInSandbox(segment, state)) {
-        segments += 1;
-        const artifacts = describe();
-        // Single-use, 120 seconds, and re-issued here rather than once for the job: a segmented
-        // review is minutes of sandbox work, and one grant reused across it would outlive its own
-        // replay window and bind none of the segments it authorised.
-        const executionGrant = issueExecutionGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), baseSha: scope.baseSha, headSha: scope.headSha, artifactsHash,
-          plansHash: sha256Json({ runnerImageVersion: scope.runnerImageVersion, runtime, install, checks, jobKey, segment }), ttlMs: 120_000 }, executionSecret);
-        // Re-checked immediately before every segment, not once for the review. A cancellation that
-        // arrives after prepare must not buy six more minutes of sandbox time.
-        await ctx.runQuery(internal.durableReview.assertActive, args);
-        const response = await fetch(`${brokerUrl}/api/execute`, { method: "POST", headers: { authorization: `Bearer ${executionGrant}`, "content-type": "application/json" },
-          body: JSON.stringify({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), jobKey, segment, baseSha: scope.baseSha, headSha: scope.headSha, runnerImageVersion: scope.runnerImageVersion, runtime, artifacts, install, checks }),
-          signal: AbortSignal.timeout(BROKER_REQUEST_TIMEOUT_MS) });
-        if (!response.ok) {
-          const detail = await response.text().catch(() => "");
-          let code: string | undefined;
-          try { code = (JSON.parse(detail) as { error?: string }).error; } catch { code = undefined; }
-          throw new Error(code ?? `validation_execution_${response.status}`);
-        }
-        const output = await response.json() as SegmentResponse;
-        for (const revision of segment.revisions ?? revisions) merge(evidence[revision], output[revision]);
-        if (output.scanners) scanners = output.scanners;
-        if (segment.stage === "prepare" && revisions.some(revision => !evidence[revision].credentialTeardownProved)) throw new Error("credential_teardown_unproved");
-        if (segment.stage === "install") state.installed = revisions.filter(revision => evidence[revision].results.some(item => item.planId === "install" && item.conclusion === "passed"));
-        if (segment.stage === "checks") state.diagnostics = rerunTargets(checks, evidence);
-      }
-      const next: ExecutionSegment | null = nextExecutionSegment(segment, state);
-      if (!next) { tailStartedAt = startedAt; break; }
-      // The proof that no credential is reachable inside either sandbox is made once, by `prepare`,
-      // and re-stamped onto every cursor after it. Before the split it travelled with the single
-      // result object; now it has to survive six more HTTP requests to a stateless broker, and
-      // re-probing per segment would make the claim cheap rather than durable.
-      const checkpoint: { stateVersion: number } = await ctx.runMutation(internal.executionJobsData.checkpoint, {
-        jobId: executionJobId, requestKey: `${runId}:${executionSegmentCursor(segment)}`, expectedVersion: stateVersion,
-        expectedStage: stage, nextStage: next.stage, cursor: stampCredentialTeardown(executionSegmentCursor(segment), revisions),
-        // Not clamped to EXECUTION_STAGE_LIMIT_MS. A segment that overran is exactly what
-        // assertExecutionStageDuration exists to refuse, and a clamp would hide the drift the way
-        // vercel.json's maxDuration and the plan budget hid theirs from each other for a release.
-        durationMs: Math.max(0, Date.now() - startedAt), now: Date.now(),
-        // Hold the lease across the gap to the next segment. Without this the job sits unleased
-        // between invocations with this worker still driving it, and reconcileWorker's job sweep -
-        // added to reap jobs nobody is driving - cannot tell the difference and kills a review that
-        // is progressing normally. Re-claiming instead would spend an attempt per segment and
-        // exhaust the six-attempt budget on a healthy run.
-        holdLeaseUntil: Date.now() + EXECUTION_LEASE_MS,
-      });
-      stateVersion = checkpoint.stateVersion;
-      stage = next.stage;
-      segment = next;
-    }
-
-    if (!scanners) throw new Error("scanner_evidence_incomplete");
-    const output: ExecutionResponse = {
-      base: side(evidence.base), head: side(evidence.head),
-      diagnostics: { base: diagnosticsFor(evidence.base), head: diagnosticsFor(evidence.head) },
-      scanners,
-    };
+    const output: ExecutionResponse = buildExecutionResponse(driven);
     const environment = { configRevision: String(scope.configRevisionId), runnerImage: scope.runnerImageVersion, runtime, manager: manager ?? "none" as const, architecture: "linux-x64", networkPolicy: "deny-all-v1", toolVersions: [{ name: "node", version: "24" }, { name: "package-manager", version: manager ?? "none" }], install, checks }, paired = pairExecutionEvidence(output, scope.baseSha, scope.headSha, environment), summaries = paired.summaries.map(item => ({ ...item, nameHash: createHash("sha256").update(item.planId).digest("hex") }));
     // pairExecutionEvidence reclassifies a check that failed and then passed on rerun as "flaky",
     // and that reclassification only ever reached the checkRuns table. reportChecks reads the raw
@@ -197,40 +138,5 @@ export const validate = internalAction({
   },
 });
 
-function merge(into: RevisionEvidence, from: SegmentSide | undefined) {
-  if (!from) return;
-  into.credentialTeardownProved ||= Boolean(from.credentialTeardownProved);
-  into.stopped ||= Boolean(from.stopped);
-  into.results.push(...(from.results ?? []));
-  into.outputs.push(...(from.outputs ?? []));
-  for (const [planId, runs] of Object.entries(from.diagnostics ?? {})) into.diagnostics[planId] = [...(into.diagnostics[planId] ?? []), ...runs];
-}
 
-const side = (value: RevisionEvidence) => ({ credentialTeardownProved: value.credentialTeardownProved, stopped: value.stopped, results: value.results, outputs: value.outputs });
 
-// Every result row needs a diagnostic run, because pairExecutionEvidence reads the count to decide
-// whether a failure was ever reproduced. A row the broker returned without one - the not_run rows an
-// install failure leaves behind - would otherwise read as "no runs recorded" rather than "never ran".
-function diagnosticsFor(value: RevisionEvidence): Record<string, DiagnosticRun[]> {
-  const merged: Record<string, DiagnosticRun[]> = { ...value.diagnostics };
-  for (const item of value.results) {
-    if (merged[item.planId]?.length) continue;
-    const found = value.outputs.find(output => output.planId === item.planId), passed = item.conclusion === "passed";
-    merged[item.planId] = [{ conclusion: passed ? "passed" : "failed", ...(passed ? {} : { failureFingerprint: sha256Json(found?.text ?? "") })}];
-  }
-  return merged;
-}
-
-// Which check pairs earn a rerun, and on which revision. A rerun is diagnostic, not a retry: it
-// exists to tell a genuine failure from a flaky one, so a revision whose first run passed never gets
-// a second - one green rerun beside one red first run reads as flaky, which would turn a stable pass
-// into "we could not tell".
-function rerunTargets(checks: Array<{ planId: string; required: boolean }>, evidence: Record<ExecutionRevision, RevisionEvidence>) {
-  const targets: Array<{ planId: "install" | "test" | "lint" | "typecheck" | "build"; revisions: ExecutionRevision[] }> = [];
-  for (const check of checks) {
-    if (!check.required) continue;
-    const wanted = revisions.filter(revision => diagnosticRerunAllowed(evidence[revision].diagnostics[check.planId] ?? [], 1 + SANDBOX_DIAGNOSTIC_RERUN_LIMIT));
-    if (wanted.length) targets.push({ planId: check.planId as "test", revisions: wanted });
-  }
-  return targets;
-}
