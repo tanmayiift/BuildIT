@@ -93,6 +93,34 @@ This is a hand-check with a date on it, not a gate. It goes stale the moment som
 the UI. Setting `BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN` is still what turns it into something that
 runs on every push.
 
+## AWS artifact boundary, checked by hand on 17 September 2026
+
+`smoke:aws-boundary` shells out to the `aws` CLI, whose session is expired (`aws login` is an
+interactive re-auth). The console is reachable, so the bucket's own settings were read there.
+
+**Verified in the console**, against the assertions in `scripts/verify-aws-boundary.mjs`:
+
+| Assertion | Observed |
+| --- | --- |
+| `aws_boundary_artifact_region_invalid` | Europe (Ireland) `eu-west-1` |
+| `aws_boundary_default_encryption_invalid` | SSE-KMS, key `…/db912055-b566-46ed-bfa7-561999d7e4cf`, bucket key on, SSE-C blocked |
+| `aws_boundary_public_access_block_invalid` | Block *all* public access: **On** |
+| `aws_boundary_bucket_is_public` | "Public access is blocked"; `Everyone` grantee holds nothing |
+| `aws_boundary_versioning_must_be_disabled` | Suspended - which is what the check requires, not a finding |
+| Object ownership | Bucket owner enforced, ACLs disabled |
+| Boundary tags | `data-class=ephemeral-source-derived`, `product=buildit`, `region-boundary=eu-west-1` |
+
+**Not verified, and not claimed:** KMS key rotation, the lifecycle/retention rules, historical object
+versions, the inventory bucket, the OIDC provider and broker role scoping, and CloudFormation stack
+drift. Console navigation is granted per URL here and was refused for the KMS and IAM pages. Those
+rows stay open until the CLI session is renewed and `pnpm smoke:aws-boundary` runs for real.
+
+**Separately - and this is the stronger statement - the path works.** 200 most recent artifact rows
+in production: every one `encrypted: true` and `redacted`, the newest written 2026-09-16T03:17, and
+all 200 already deleted. So the broker assumed its role through OIDC, wrote encrypted objects to the
+Ireland bucket, and the retention sweep removed them. The boundary check verifies *posture*; this
+verifies *function*, and function is not in doubt.
+
 ## Why the AWS boundary check warns instead of failing
 
 I argued the other way earlier in this repository's history, and the evidence changed my mind.
