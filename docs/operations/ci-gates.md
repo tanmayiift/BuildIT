@@ -61,6 +61,38 @@ Validation that cannot see the running system is a spell-check. When adding a co
 describes infrastructure, add the check that reads the real thing back in the same commit, or write
 down here that you did not.
 
+## Grafana drift, checked by hand on 17 September 2026
+
+`alerts:verify` is not a CI gate because no service-account token is configured. That blocks the
+*gate*, not the *check* - the question "do the deployed rules still match the repository" can be
+answered through an authenticated browser session, and was:
+
+| | |
+| --- | --- |
+| Active BuildIT rules | **14** |
+| Legacy rules, still paused | **12** |
+| Rules whose expression, `for` and severity match `observability/alerts.yml` | **14 of 14** |
+
+Method: read `/api/v1/provisioning/alert-rules` through the signed-in session, fingerprint each rule
+on the three fields `alerts.yml` actually specifies, and compare against the same fingerprint
+computed from the file. Zero differences.
+
+**One trap worth recording, because the first attempt fell into it.** Fingerprinting on
+`condition + for + noDataState + execErrState + severity + exprs` reported all 14 rules as drifted.
+They had not: `execErrState` is `Error` in Grafana and `OK` in
+`tests/fixtures/grafana-current-group-2026-09-14.json`, and **neither `alerts.yml` nor the
+provisioning script sets that field at all** - Grafana's Prometheus-rule converter chooses it. The
+comparison was wrong, not the deployment. A drift check must compare only the fields the repository
+actually declares, or it manufactures drift and trains everyone to ignore it.
+
+Also note the fixture is a *snapshot* of what was deployed on 14 September, kept for tests. It is
+not the source of truth and should not be diffed against as if it were; `observability/alerts.yml`
+is.
+
+This is a hand-check with a date on it, not a gate. It goes stale the moment someone edits a rule in
+the UI. Setting `BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN` is still what turns it into something that
+runs on every push.
+
 ## Why the AWS boundary check warns instead of failing
 
 I argued the other way earlier in this repository's history, and the evidence changed my mind.
