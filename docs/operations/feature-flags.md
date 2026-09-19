@@ -97,3 +97,56 @@ path blocks the review with `provider_credential_invalid` / `reconnect_provider`
 `tests/architecture/byok-only.test.ts` asserts all of that, because the property was true and
 unprotected: a platform key would have arrived as an ordinary convenience — one env var, in one
 worker, to unblock one demo — and every existing read path would have kept compiling.
+
+## Turning the Grafana drift check into a real gate
+
+Everything except the token itself is done. A read-only service account exists on
+`peacefulbumblebee2324.grafana.net`:
+
+| | |
+| --- | --- |
+| Name | `buildit-alerts-verify` (id 19, login `sa-1-buildit-alerts-verify`) |
+| Basic role | Viewer |
+| Assigned | `fixed:alerting:reader`, `fixed:folders:reader`, `custom:buildit.alerts.provisioning:reader` |
+| Can it write? | No. No writer role, no `alert.provisioning.secrets:read` |
+
+**Why the custom role exists.** `fixed:alerting:reader` does *not* grant `alert.provisioning:read`,
+which is what `/api/v1/provisioning/alert-rules` requires — a token with only the fixed reader role
+returns 403 on the one endpoint the check depends on. The only *fixed* role that grants it is
+`fixed:alerting.provisioning.secrets:reader`, which also exports decrypted contact-point secrets. A
+drift check needs neither writes nor secrets, so `custom:buildit.alerts.provisioning:reader` carries
+exactly one action: `alert.provisioning:read`.
+
+### The one step left, which has to be yours
+
+Generating the token means handling an API key in plaintext, so:
+
+1. Open **Administration → Users and access → Service accounts → `buildit-alerts-verify`**
+2. **Add service account token**, no expiry or 1 year, and copy it
+3. Add it as a GitHub repository secret named `BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN`
+
+### Then verify it immediately — do not assume it worked
+
+The role assignment is correct as far as it can be checked without a token; Grafana's effective
+permissions endpoint did not reflect the custom role when it was assigned, which is most likely a
+cache. The honest way to settle it is one request:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H "Authorization: Bearer $BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN" \
+  https://peacefulbumblebee2324.grafana.net/api/v1/provisioning/alert-rules
+```
+
+**200** — done; `pnpm alerts:verify` is now a real gate.
+**403** — the custom role did not take. Add `fixed:alerting.provisioning.secrets:reader` to the
+service account as a fallback and re-run. It is more access than the check needs, which is why it is
+the fallback and not the default.
+
+Then, end to end:
+
+```bash
+BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN=... pnpm alerts:verify
+```
+
+Expect it to confirm 14 active rules matching `observability/alerts.yml` and 12 legacy rules paused
+— the same result checked by hand on 17 September, but now on every push.
