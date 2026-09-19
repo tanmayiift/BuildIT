@@ -19,6 +19,14 @@ const config: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: [...securityHeaders] }];
   },
+  // /sandbox was renamed to /scan because "sandbox" already means the Vercel compute product the
+  // review executor runs in, and one word for two unrelated things cost several rounds of genuine
+  // confusion about which one a quota applied to. The old path still resolves: audit documents and
+  // anything already shared point at it, and a rename that 404s those trades one confusion for
+  // another. Permanent, because the old name is not coming back.
+  async redirects() {
+    return [{ source: "/sandbox", destination: "/scan", permanent: true }];
+  },
 };
 
 export default config;

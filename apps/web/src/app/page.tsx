@@ -33,7 +33,7 @@ export default function Overview() {
             error, so it is replaced rather than left to fail - the hero is the first thing a
             stranger sees and a broken control there says more than the copy does. */}
         {publicDemoEnabled()
-          ? <><ScanPanel variant="card" /><a className="text-link" href="/sandbox">Open the full sandbox and its limits →</a></>
+          ? <><ScanPanel variant="card" /><a className="text-link" href="/scan">Open the full scan and its limits →</a></>
           : <p className="landing-try-closed">BuildIT&rsquo;s deterministic rules and secret patterns run on every connected pull request, citing the exact line each finding came from. Connect a repository to see them on your own code.</p>}
       </aside>
       <div className="landing-commit">

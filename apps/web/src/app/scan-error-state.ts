@@ -26,14 +26,14 @@ export function scanErrorCode(value: unknown): ScanErrorCode {
 }
 
 export function scanErrorMessage(code: ScanErrorCode) {
-  if (code === "request_too_large") return "That is more code than the sandbox takes at once. It accepts about 128 KB of text, so paste a smaller section and check that.";
+  if (code === "request_too_large") return "That is more code than the scan takes at once. It accepts about 128 KB of text, so paste a smaller section and check that.";
   if (code === "invalid_json") return "The code could not be sent in a form the scanner could read. Reload the page and paste it again.";
   if (code === "files_required") return "There was no code to check. Paste some code into the box, then run the check again.";
-  if (code === "too_many_files") return "The sandbox checks at most 20 files at a time. Send fewer files and check the rest separately.";
+  if (code === "too_many_files") return "The scan checks at most 20 files at a time. Send fewer files and check the rest separately.";
   if (code === "invalid_file") return "The file path and the code both have to be plain text. Check the file path field, then run the check again.";
   if (code === "invalid_path") return "That file path cannot be used. Give a path inside a project, like src/example.ts, with no leading slash and no .. in it.";
   if (code === "file_too_long") return "That file is longer than the scanner accepts. It reads up to 4,000 lines at a time, so paste a smaller section.";
   if (code === "network_unavailable") return "The check could not reach BuildIT, so nothing was sent. Check your connection and try again.";
-  if (code === "demo_closed") return "The open sandbox is not available right now. BuildIT still checks every connected pull request, so connect a repository to see the same rules run on your own code.";
+  if (code === "demo_closed") return "The open scan is not available right now. BuildIT still checks every connected pull request, so connect a repository to see the same rules run on your own code.";
   return "The check did not run, and BuildIT did not say why. Nothing was stored. Try again in a moment.";
 }

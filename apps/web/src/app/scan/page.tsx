@@ -16,7 +16,7 @@ import { demoClosedDetail, demoClosedHeading, publicDemoEnabled } from "../publi
 export default function Sandbox() {
   const open = publicDemoEnabled();
   return <div className="content trust-page">
-    <p className="eyebrow">{open ? "Open sandbox · no account, no key" : "Deterministic rules"}</p>
+    <p className="eyebrow">{open ? "Open scan · no account, no key" : "Deterministic rules"}</p>
     <h1 className="title">{open ? <>Run BuildIT&rsquo;s deterministic rules on your own code</> : demoClosedHeading}</h1>
     <p className="lede">
       {open
@@ -27,7 +27,7 @@ export default function Sandbox() {
 
     {open ? <ScanPanel /> : null}
 
-    {open ? <div className="next"><strong>What this is not:</strong> a verdict. Two deterministic passes over text you pasted, with no commit, no tests and no evidence behind them. A real review pins an exact commit, runs your tests and the pinned scanners in an isolated sandbox, and makes a model justify every finding against that evidence.</div> : null}
+    {open ? <div className="next"><strong>What this is not:</strong> a verdict. Two deterministic passes over text you pasted, with no commit, no tests and no evidence behind them. A real review pins an exact commit, runs your tests and the pinned scanners in an isolated environment, and makes a model justify every finding against that evidence.</div> : null}
     <div className="button-row"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/pricing">See pricing and limits</a></div>
   </div>;
 }

@@ -14,7 +14,7 @@ test("the site is coherent with the open scan closed", async ({ page }) => {
 
   // 3. The route still answers. Dropping it from publicRoutes would 404 it and contradict the
   //    proxy's own route table, which three unit suites assert agrees with itself.
-  const response = await page.goto("/sandbox");
+  const response = await page.goto("/scan");
   expect(response?.status()).toBe(200);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.locator(".scan-panel")).toHaveCount(0);

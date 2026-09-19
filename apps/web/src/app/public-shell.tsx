@@ -18,10 +18,10 @@ import { BrandGlyph } from "./brand-glyph";
 const links = [
   { label: "Features", href: "/features" },
   { label: "Pricing", href: "/pricing" },
-  // Offered only while the open scan is. /sandbox still resolves either way - it stays in
+  // Offered only while the open scan is. /scan still resolves either way - it stays in
   // publicRoutes so the proxy, route-map and their tests keep agreeing about what exists - but a
   // nav entry inviting a stranger to a closed door is worse than no entry.
-  ...(publicDemoEnabled() ? [{ label: "Try a scan", href: "/sandbox" }] : []),
+  ...(publicDemoEnabled() ? [{ label: "Try a scan", href: "/scan" }] : []),
   { label: "Data & privacy", href: "/data-handling" },
 ];
 
@@ -29,7 +29,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
   // The preview banner is gone from here, and only from here. Its copy - "Sample evidence is
   // clearly marked. Connect GitHub to replace setup examples with your isolated workspace." - is
   // about the sample review tour, and there are no samples on a marketing route: the landing page,
-  // pricing and features show product copy, and /sandbox scans the reader's own pasted code. So a
+  // pricing and features show product copy, and /scan scans the reader's own pasted code. So a
   // stranger's first 44px of BuildIT was an amber warning bar about data the page did not contain,
   // sitting above the headline and reading as "something is wrong".
   //

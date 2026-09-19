@@ -2,7 +2,7 @@
 import { request } from "node:http";
 import { writeFileSync } from "node:fs";
 
-const cases = ["/", "/sign-in", "/account", "/data-handling", "/pricing", "/features", "/proof", "/sandbox", "/usage", "/metrics", "/history", "/reviews", "/repositories", "/policies", "/members", "/notifications", "/audit", "/integrations", "/setup/install", "/setup/repository", "/setup/model", "/setup/health", "/setup/tracker", "/setup/review"].map(path => ({ path, expectedStatus: 200 }));
+const cases = ["/", "/sign-in", "/account", "/data-handling", "/pricing", "/features", "/proof", "/scan", "/usage", "/metrics", "/history", "/reviews", "/repositories", "/policies", "/members", "/notifications", "/audit", "/integrations", "/setup/install", "/setup/repository", "/setup/model", "/setup/health", "/setup/tracker", "/setup/review"].map(path => ({ path, expectedStatus: 200 }));
 cases.push(...["/settings", "/setup", "/setup/github", "/setup/run", "/audit-nonexistent-route", "/audit-nonexistent-route/child", "/_not-found", "/setup/model/extra", "/reviews/example/extra"].map(path => ({ path, expectedStatus: 404 })),
   { path: "/audit-nonexistent-route", method: "HEAD", expectedStatus: 404 },
   { path: "/api/audit-auth?as=A", expectedStatus: 200 }, { path: "/api/audit-auth?as=A", host: "not-local.invalid", expectedStatus: 403 });

@@ -27,6 +27,6 @@ export function publicDemoEnabled(value = process.env.NEXT_PUBLIC_BUILDIT_PUBLIC
   return value === "true";
 }
 
-/** What the /sandbox page says when the demo is closed. Kept beside the gate so the two cannot drift. */
-export const demoClosedHeading = "The open sandbox is not currently available";
+/** What the /scan page says when the demo is closed. Kept beside the gate so the two cannot drift. */
+export const demoClosedHeading = "The open scan is not currently available";
 export const demoClosedDetail = "BuildIT's deterministic rules still run on every connected pull request. Connect a repository to see them on your own code, or ask for a walkthrough.";

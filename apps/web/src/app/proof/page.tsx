@@ -189,7 +189,7 @@ function Numbers({ data, reviewed }: { data: ProofSummary; reviewed: PublicRevie
     </div>
     <div className="button-row">
       <a className="quiet-link" href="/data-handling">What happens to your data</a>
-      {publicDemoEnabled() ? <a className="quiet-link" href="/sandbox">Run the rules on your own code</a> : null}
+      {publicDemoEnabled() ? <a className="quiet-link" href="/scan">Run the rules on your own code</a> : null}
     </div>
   </>;
 }

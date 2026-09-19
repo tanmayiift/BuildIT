@@ -53,10 +53,10 @@ test("a stranger with no account can scan code, understand every setup step, and
   await expect(page.getByText(/Scanning pasted code needs nothing\. Sign-in identifies you\./)).toBeVisible();
 
   // ------------------------------------------------- do the thing, with no account and no navigation
-  // This step used to be "click a link labelled Scan code now, land on /sandbox, then scan". The
+  // This step used to be "click a link labelled Scan code now, land on /scan, then scan". The
   // link is gone because the scanner itself is in the hero: the shortest path to a stranger seeing
   // BuildIT work is now zero navigations, and asserting the link would be asserting the detour.
-  // Every assertion that ran on /sandbox below still runs, on the landing page, at full strength.
+  // Every assertion that ran on /scan below still runs, on the landing page, at full strength.
   await expect(page.locator(".landing-try .scan-panel")).toBeVisible();
   await page.getByLabel("File path", { exact: true }).fill(scanPath);
   await page.getByLabel("Code", { exact: true }).pressSequentially(flawedSnippet, { delay: recording ? 12 : 0 });
@@ -85,10 +85,10 @@ test("a stranger with no account can scan code, understand every setup step, and
   // ------------------------------------------------------- the full sandbox, and what it is not
   // The hero has no room for the paragraph explaining that this is not a verdict, so that sentence
   // lives one click away - and the journey still has to reach it by clicking, not by typing a URL.
-  await page.getByRole("link", { name: /Open the full sandbox/i }).click();
-  await page.waitForURL(/\/sandbox$/);
+  await page.getByRole("link", { name: /Open the full scan/i }).click();
+  await page.waitForURL(/\/scan$/);
   await expect(page.getByRole("heading", { name: /deterministic rules on your own code/i })).toBeVisible();
-  await expect(page.getByText("Open sandbox · no account, no key", { exact: true })).toBeVisible();
+  await expect(page.getByText("Open scan · no account, no key", { exact: true })).toBeVisible();
   await expect(page.getByText(/What this is not:\s*a verdict/)).toBeVisible();
   // Nothing on this page asks the reader to sign in first.
   await expect(page.getByRole("main").getByRole("link", { name: /sign in/i })).toHaveCount(0);

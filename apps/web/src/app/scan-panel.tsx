@@ -7,7 +7,7 @@ import { scanErrorCode, scanErrorMessage, type ScanErrorCode } from "./scan-erro
 // the code. A list underneath is the one presentation that discards the product's central claim:
 // every finding names a file and a line, so the finding belongs ON that line. This renders the
 // scanned text with the findings pinned to the lines they cite, and it is shared rather than
-// duplicated so the landing hero, /sandbox and /features are all the same working control.
+// duplicated so the landing hero, /scan and /features are all the same working control.
 
 type Finding = { ruleId: string; severity: string; path: string; startLine: number; summary: string };
 type Secret = { path: string; line: number };
