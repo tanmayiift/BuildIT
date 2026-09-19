@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
+import { PUBLIC_DEMO_ENV } from "../../public-demo-gate";
 
 // The endpoint is unauthenticated and takes arbitrary code from strangers, so what it refuses
 // matters as much as what it finds - and what it *says it did not check* matters most of all,
@@ -11,6 +12,19 @@ const post = (body: unknown, headers: Record<string, string> = {}) =>
   }));
 
 describe("the open sandbox", () => {
+  // Every case below describes the endpoint as offered. The demo gate defaults to off, so it is
+  // turned on here rather than in each test - and the one case that asserts the closed behaviour
+  // turns it back off explicitly, so neither state is the accident of a missing stub.
+  beforeEach(() => { vi.stubEnv(PUBLIC_DEMO_ENV, "true"); });
+  afterEach(() => { vi.unstubAllEnvs(); });
+
+  it("refuses everything, before reading the body, when the demo is closed", async () => {
+    vi.stubEnv(PUBLIC_DEMO_ENV, "false");
+    const response = await post({ files: [{ path: "src/a.ts", content: "const a = 1;" }] });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "demo_closed" });
+  });
+
   it("finds a hardcoded credential, which is the reason it runs on a server", async () => {
     // Assembled, not written: a literal here would fail this repository's own secret scan.
     const key = ["AKIA", "IOSFODNN", "7EXAMPLE"].join("");

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { scanBuildITRules } from "@buildit/scanners";
 import { redact } from "@buildit/security";
+import { publicDemoEnabled } from "../../public-demo-gate";
 
 // A visitor could not try BuildIT on their own code without signing in with GitHub, so the only
 // pre-auth surface was a tour over invented data. This runs BuildIT's own deterministic rules on
@@ -30,6 +31,10 @@ function reject(status: number, error: string) {
 }
 
 export async function POST(request: Request) {
+  // Refused before the body is read, so a closed demo costs nothing to turn away. 404 rather than
+  // 403: when the open scan is not being offered, the honest answer is that there is nothing here,
+  // not that there is something here you may not have.
+  if (!publicDemoEnabled()) return reject(404, "demo_closed");
   // content-length is attacker-supplied, so it is checked first as a cheap refusal and then the
   // real byte length is checked again after reading - the pattern packages/broker/src/http.ts uses.
   if (Number(request.headers.get("content-length") ?? 0) > maxBodyBytes) return reject(413, "request_too_large");

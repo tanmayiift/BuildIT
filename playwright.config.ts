@@ -44,7 +44,12 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command: "npx pnpm@10.15.0 exec tsx tests/e2e/convex-backend.ts --preflight && NEXT_PUBLIC_BUILDIT_E2E=1 npx pnpm@10.15.0 --filter @buildit/web build && NEXT_PUBLIC_BUILDIT_E2E=1 npx pnpm@10.15.0 --filter @buildit/web exec next start -p 3107",
+        // The open scan is on for this suite because the suite describes the product as it is
+        // demonstrated - the stranger journey, the /features scan and the landing screenshot are
+        // all about that surface. It is set explicitly rather than inherited, so the state under
+        // test is stated rather than being whatever the shell happened to export. The closed state
+        // has its own config: playwright.demo-closed.config.ts.
+        command: "npx pnpm@10.15.0 exec tsx tests/e2e/convex-backend.ts --preflight && NEXT_PUBLIC_BUILDIT_E2E=1 NEXT_PUBLIC_BUILDIT_PUBLIC_DEMO_ENABLED=true npx pnpm@10.15.0 --filter @buildit/web build && NEXT_PUBLIC_BUILDIT_E2E=1 NEXT_PUBLIC_BUILDIT_PUBLIC_DEMO_ENABLED=true npx pnpm@10.15.0 --filter @buildit/web exec next start -p 3107",
         url: baseURL,
         reuseExistingServer: false,
         stderr: "pipe",

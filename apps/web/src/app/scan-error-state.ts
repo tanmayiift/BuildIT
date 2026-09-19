@@ -6,9 +6,13 @@
 // The limits below are the real ones from apps/web/src/app/api/scan/route.ts - maxBodyBytes,
 // maxFiles and maxLinesPerFile. A sentence that quotes a limit the endpoint does not enforce is
 // worse than no number at all, so scan-error-state.test.ts reads them back out of the route.
+//
+// It sits beside scan-panel.tsx rather than under sandbox/ because the landing hero and /features
+// render that same panel. While this lived in sandbox/, gating that directory would have taken the
+// homepage scanner down with it.
 export const scanErrorCodes = [
   "request_too_large", "invalid_json", "files_required", "too_many_files",
-  "invalid_file", "invalid_path", "file_too_long", "network_unavailable",
+  "invalid_file", "invalid_path", "file_too_long", "network_unavailable", "demo_closed",
 ] as const;
 
 export type ScanErrorCode = (typeof scanErrorCodes)[number] | "scan_failed";
@@ -30,5 +34,6 @@ export function scanErrorMessage(code: ScanErrorCode) {
   if (code === "invalid_path") return "That file path cannot be used. Give a path inside a project, like src/example.ts, with no leading slash and no .. in it.";
   if (code === "file_too_long") return "That file is longer than the scanner accepts. It reads up to 4,000 lines at a time, so paste a smaller section.";
   if (code === "network_unavailable") return "The check could not reach BuildIT, so nothing was sent. Check your connection and try again.";
+  if (code === "demo_closed") return "The open sandbox is not available right now. BuildIT still checks every connected pull request, so connect a repository to see the same rules run on your own code.";
   return "The check did not run, and BuildIT did not say why. Nothing was stored. Try again in a moment.";
 }

@@ -1,6 +1,6 @@
 "use client";
 import { useId, useState } from "react";
-import { scanErrorCode, scanErrorMessage, type ScanErrorCode } from "./sandbox/scan-error-state";
+import { scanErrorCode, scanErrorMessage, type ScanErrorCode } from "./scan-error-state";
 
 // The scan was the only place in the product where a stranger could watch BuildIT do its job, and
 // it lived one navigation away on a page that printed its findings as a bulleted list underneath

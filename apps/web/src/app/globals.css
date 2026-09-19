@@ -98,6 +98,9 @@ code, .mono, time { font-family: "JetBrains Mono Variable", monospace; font-vari
 .landing-try { display: grid; gap: 2px; align-content: center; }
 .landing-try h2 { margin: 0 0 12px; font-size: 20px; letter-spacing: -.03em; }
 .landing-try .text-link { justify-self: start; font-size: 12px; }
+/* Stands in for the scan panel when the open demo is closed, in the same hero slot: the column
+   already centres its content, so this only needs the body-copy treatment the panel supplied. */
+.landing-try-closed { margin: 0; font-size: 13px; line-height: 1.55; color: var(--muted); }
 .landing-flow>ol { display: grid; grid-template-columns: repeat(4,1fr); grid-template-rows: auto auto auto; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; list-style: none; overflow: hidden; }
 .landing-flow li { display: grid; grid-row: span 3; grid-template-rows: subgrid; gap: 10px; padding: 20px; border-right: 1px solid var(--line); }
 .landing-flow li:last-child { border-right: 0; }

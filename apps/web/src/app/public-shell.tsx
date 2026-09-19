@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { publicDemoEnabled } from "./public-demo-gate";
 import { AccountStatus } from "./account-status";
 import { BrandGlyph } from "./brand-glyph";
 
@@ -17,7 +18,10 @@ import { BrandGlyph } from "./brand-glyph";
 const links = [
   { label: "Features", href: "/features" },
   { label: "Pricing", href: "/pricing" },
-  { label: "Try a scan", href: "/sandbox" },
+  // Offered only while the open scan is. /sandbox still resolves either way - it stays in
+  // publicRoutes so the proxy, route-map and their tests keep agreeing about what exists - but a
+  // nav entry inviting a stranger to a closed door is worse than no entry.
+  ...(publicDemoEnabled() ? [{ label: "Try a scan", href: "/sandbox" }] : []),
   { label: "Data & privacy", href: "/data-handling" },
 ];
 

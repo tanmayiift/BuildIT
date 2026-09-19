@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { scanErrorCode, scanErrorCodes, scanErrorMessage, type ScanErrorCode } from "./scan-error-state";
 
-const route = readFileSync(join(import.meta.dirname, "..", "api", "scan", "route.ts"), "utf8");
+const route = readFileSync(join(import.meta.dirname, "api", "scan", "route.ts"), "utf8");
 
 function limit(name: string) {
   const match = route.match(new RegExp(`const ${name} = ([\\d_]+);`));

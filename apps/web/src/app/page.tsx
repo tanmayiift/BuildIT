@@ -1,5 +1,6 @@
 import { OverviewReadiness } from "./live-connections";
 import { ScanPanel } from "./scan-panel";
+import { publicDemoEnabled } from "./public-demo-gate";
 
 const layers = [
   { mark: "01", title: "Choose one pull request", body: "You choose the repositories. Unselected ones stay invisible." },
@@ -26,10 +27,14 @@ export default function Overview() {
           that cost something - instead of burying the scanner under both buttons and the fine
           print. */}
       <aside className="landing-try" aria-labelledby="landing-try-title">
-        <p className="eyebrow">No account, no key</p>
-        <h2 id="landing-try-title">Scan code now</h2>
-        <ScanPanel variant="card" />
-        <a className="text-link" href="/sandbox">Open the full sandbox and its limits →</a>
+        <p className="eyebrow">{publicDemoEnabled() ? "No account, no key" : "Deterministic rules"}</p>
+        <h2 id="landing-try-title">{publicDemoEnabled() ? "Scan code now" : "The same rules, on your pull requests"}</h2>
+        {/* The panel posts to /api/scan. When that is closed the panel can only ever render an
+            error, so it is replaced rather than left to fail - the hero is the first thing a
+            stranger sees and a broken control there says more than the copy does. */}
+        {publicDemoEnabled()
+          ? <><ScanPanel variant="card" /><a className="text-link" href="/sandbox">Open the full sandbox and its limits →</a></>
+          : <p className="landing-try-closed">BuildIT&rsquo;s deterministic rules and secret patterns run on every connected pull request, citing the exact line each finding came from. Connect a repository to see them on your own code.</p>}
       </aside>
       <div className="landing-commit">
         <div className="button-row landing-actions"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>

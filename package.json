@@ -38,7 +38,8 @@
     "alerts:pause-legacy": "node scripts/pause-buildit-grafana-legacy.mjs",
     "dashboard:check": "node scripts/provision-buildit-grafana-dashboard.mjs --dry-run",
     "dashboard:provision": "node scripts/provision-buildit-grafana-dashboard.mjs",
-    "alerts:provision": "node scripts/provision-buildit-grafana-alerts.mjs"
+    "alerts:provision": "node scripts/provision-buildit-grafana-alerts.mjs",
+    "test:e2e:demo-closed": "playwright test --config playwright.demo-closed.config.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.10.2",
