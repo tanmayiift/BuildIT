@@ -71,6 +71,8 @@ import type * as memberships from "../memberships.js";
 import type * as metricReconciliation from "../metricReconciliation.js";
 import type * as metrics from "../metrics.js";
 import type * as modelAccounting from "../modelAccounting.js";
+import type * as modelProbe from "../modelProbe.js";
+import type * as modelProbeData from "../modelProbeData.js";
 import type * as notificationOutbox from "../notificationOutbox.js";
 import type * as notificationSchema from "../notificationSchema.js";
 import type * as notificationWorker from "../notificationWorker.js";
@@ -189,6 +191,8 @@ declare const fullApi: ApiFromModules<{
   metricReconciliation: typeof metricReconciliation;
   metrics: typeof metrics;
   modelAccounting: typeof modelAccounting;
+  modelProbe: typeof modelProbe;
+  modelProbeData: typeof modelProbeData;
   notificationOutbox: typeof notificationOutbox;
   notificationSchema: typeof notificationSchema;
   notificationWorker: typeof notificationWorker;

@@ -150,6 +150,38 @@ valid credential, and `selectProviderModel` returns `gemini-2.5-pro` from its th
 reaches a model at all. The path is fixed and untested against production, and those are different
 claims.
 
+## The model providers, measured on 19 September 2026
+
+`validateKey` cannot answer "does this key have credit" - it calls the provider's `/v1/models`,
+which is free and answers perfectly well on a zero balance. That is why the OpenAI account looked
+fine for weeks while every review died on it. `internal.modelProbe.probe` makes one small real
+completion instead, which is the only thing that distinguishes a valid key from a funded one.
+
+| Provider | Model | Result |
+| --- | --- | --- |
+| **openai** | `gpt-5.4-mini` | **answered** - 45 input, 12 output tokens |
+| gemini | `gemini-2.5-pro` | 404 `model_unavailable` |
+| gemini | `gemini-2.5-flash` | 404 `model_unavailable` |
+| gemini | `gemini-3.1-pro-preview` | 429 `quota_exhausted` - **no credit** |
+| anthropic | - | revoked 1 September, not probed |
+
+Total cost of the whole exercise: **$0.000088**, at the pinned `openai:gpt-5.4-mini` rate of
+$0.75/M input and $4.50/M output.
+
+**OpenAI works.** The $10 top-up is live and the model half of a review is no longer a blocker.
+
+**The fallback target does not.** `convex/lib/providerFallback.ts` will start a second review on
+gemini when openai fails - and gemini has no credit and cannot reach two of the three models its
+stored `availableModels` claims. So the cross-provider fallback is currently a mechanism with
+nowhere to fall back *to*. It is correct and it is unusable, and those are different problems: the
+code needs no change, the account does.
+
+**Two things this probe found the hard way, recorded so the next person does not.** OpenAI's
+`/v1/responses` refuses `max_output_tokens` below 16 outright. And the GPT-5 family spends output
+tokens on reasoning before emitting anything, so a ceiling low enough to be "free" returns
+`truncated` - which is indistinguishable from a real failure and answers nothing. 256 is the
+smallest ceiling that reliably produces a verdict, and it still costs under a hundredth of a cent.
+
 ## New reviews chose the key whose account had just said it was empty
 
 **Found and fixed:** 17 September 2026.
