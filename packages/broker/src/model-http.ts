@@ -12,7 +12,7 @@ type InvocationBody = {
   invocationId?: string;
 };
 
-function json(status: number, body: Record<string, unknown>) { return Response.json(body, { status, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } }); }
+function json(status: number, body: Record<string, unknown>, extraHeaders: Record<string, string> = {}) { return Response.json(body, { status, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff", ...extraHeaders } }); }
 function bearer(request: Request) { const value = request.headers.get("authorization") ?? ""; if (!value.startsWith("Bearer ") || value.length > 8_200) throw new Error("authentication_required"); return value.slice(7); }
 function safe(error: unknown) {
   const code = error instanceof Error ? error.message : "model_invocation_failed";
@@ -119,6 +119,7 @@ export async function handleModelInvocation(request: Request, input: {
       ...(invocationId && error instanceof ProviderError && [401, 403, 404, 429].includes(error.status ?? 0) && !error.usage ? { notCharged: true } : {}),
       ...(error instanceof ProviderError && error.retryAfterMs !== undefined ? { retryAfterSeconds: error.retryAfterMs / 1_000 } : {}),
       ...(availableModels ? { availableModels } : {}),
-      ...(error instanceof ProviderError && error.status !== undefined ? { providerStatus: error.status } : mapped.providerStatus === undefined ? {} : { providerStatus: mapped.providerStatus }) });
+      ...(error instanceof ProviderError && error.status !== undefined ? { providerStatus: error.status } : mapped.providerStatus === undefined ? {} : { providerStatus: mapped.providerStatus }) },
+        mapped.code === "quota_exhausted" ? { "x-buildit-error-code": "quota_exhausted" } : {});
   }
 }

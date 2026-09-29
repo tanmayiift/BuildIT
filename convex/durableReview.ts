@@ -99,6 +99,11 @@ export const execute = reviewWorkflowManager.define({
         ? { operation: "review.analysis" as const, stage: "analysis" as const }
         : { operation: "review.tests" as const, stage: "tests" as const };
     await step.runAction(internal.telemetryWorker.emit, { ...telemetry, outcome: "started" });
+    // Measured across the whole stage, which is the unit an operator cares about. The duration
+    // histogram previously received samples only from the broker's own HTTP wrapper, so every
+    // review stage - the slow part - was absent from it, and BuildITP95LatencyHigh's two-minute
+    // threshold sat above almost everything that could still reach it.
+    const stageStartedAt = Date.now();
     try {
       if (stage === "context") {
         await step.runAction(internal.reviewContextWorker.gather, {
@@ -119,10 +124,10 @@ export const execute = reviewWorkflowManager.define({
         });
       }
     } catch (error) {
-      await step.runAction(internal.telemetryWorker.emit, { ...telemetry, outcome: "failed" });
+      await step.runAction(internal.telemetryWorker.emit, { ...telemetry, outcome: "failed", durationMs: Math.max(0, Date.now() - stageStartedAt) });
       throw error;
     }
-    await step.runAction(internal.telemetryWorker.emit, { ...telemetry, outcome: "succeeded" });
+    await step.runAction(internal.telemetryWorker.emit, { ...telemetry, outcome: "succeeded", durationMs: Math.max(0, Date.now() - stageStartedAt) });
     await step.runMutation(internal.durableReview.checkpoint, {
       organizationId: args.organizationId, reviewId: args.reviewId,
       expectedHeadSha: args.expectedHeadSha, expectedGeneration: args.expectedGeneration,

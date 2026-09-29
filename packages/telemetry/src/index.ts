@@ -31,7 +31,7 @@ const forbidden = /(api.?key|authorization|cookie|credential|diff|email|file|hea
 const allowed = new Set(["stage", "outcome", "provider", "reviewMode", "repositoryVisibility", "errorCode", "operation"]);
 const operationSet = new Set<string>(operationNames);
 const measurementSet = new Set<string>(measurementNames);
-const errorCodes = new Set(["TypeError", "UnknownError", "configuration_missing", "upstream_unavailable", "rate_limited", "timeout", "cancelled", "stale_head", "budget_exhausted", "loop_guard", "deletion_failed", "provider_error", "runner_error", "capacity_exhausted", ...Array.from({ length: 600 }, (_, index) => `http_${index}`)]);
+const errorCodes = new Set(["TypeError", "UnknownError", "configuration_missing", "upstream_unavailable", "rate_limited", "timeout", "cancelled", "stale_head", "budget_exhausted", "loop_guard", "deletion_failed", "provider_error", "runner_error", "capacity_exhausted", "quota_exhausted", ...Array.from({ length: 600 }, (_, index) => `http_${index}`)]);
 
 export function safeAttributes(input: SafeAttributes): Attributes {
   const output: Attributes = {};

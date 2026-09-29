@@ -32,7 +32,9 @@ export function safeTelemetryError(error: unknown) {
 }
 
 export const emit = internalAction({
-  args: { operation, stage, outcome, errorCode },
+  // A stage that does not report how long it took contributes no sample to the duration
+  // histogram, which is why BuildITP95LatencyHigh could never see a review.
+  args: { operation, stage, outcome, errorCode, durationMs: v.optional(v.number()) },
   handler: async (_ctx, args): Promise<{ delivered: boolean }> => {
     const broker = process.env.BUILDIT_BROKER_URL?.replace(/\/$/, ""), secret = process.env.TELEMETRY_INGEST_SECRET;
     if (!broker || !secret) return { delivered: false };

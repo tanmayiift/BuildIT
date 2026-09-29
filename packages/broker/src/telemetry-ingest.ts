@@ -8,9 +8,9 @@ const outcomes = new Set<TelemetryOutcome>(["started", "succeeded", "failed", "c
 const providers = new Set(["anthropic", "openai", "gemini"]);
 const modes = new Set(["review", "autofix"]);
 const visibilities = new Set(["public", "private"]);
-const errorCodes = new Set(["UnknownError", "cancelled", "stale_head", "budget_exhausted", "loop_guard", "provider_error", "runner_error", "upstream_unavailable", "configuration_missing", "timeout", "rate_limited", "capacity_exhausted"]);
+const errorCodes = new Set(["UnknownError", "cancelled", "stale_head", "budget_exhausted", "loop_guard", "provider_error", "runner_error", "upstream_unavailable", "configuration_missing", "timeout", "rate_limited", "capacity_exhausted", "quota_exhausted"]);
 
-export type TelemetryIngestEvent = (SafeAttributes & { operation: OperationName; outcome: TelemetryOutcome }) | { measurement: MeasurementName; value: number };
+export type TelemetryIngestEvent = (SafeAttributes & { operation: OperationName; outcome: TelemetryOutcome; durationMs?: number }) | { measurement: MeasurementName; value: number };
 
 function signature(secret: string, body: string) {
   return `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
@@ -33,13 +33,20 @@ export function parseTelemetryEvent(value: unknown): TelemetryIngestEvent | unde
     if (typeof input.measurement !== "string" || !measurements.has(input.measurement) || typeof input.value !== "number" || !Number.isFinite(input.value) || input.value < 0 || input.value > 1_000_000) return undefined;
     return input as { measurement: MeasurementName; value: number };
   }
-  if (!keys.length || keys.some(key => !["operation", "outcome", "stage", "provider", "reviewMode", "repositoryVisibility", "errorCode"].includes(key))) return undefined;
+  // durationMs joined the allowlist so a review stage can report how long it took. Before this,
+  // recordOperation only ever received a duration from the broker's own HTTP wrapper, so the p95
+  // histogram held broker route latency and nothing else - and BuildITP95LatencyHigh, whose
+  // threshold is two minutes, watched a set of series most of which cannot reach it.
+  if (!keys.length || keys.some(key => !["operation", "outcome", "stage", "provider", "reviewMode", "repositoryVisibility", "errorCode", "durationMs"].includes(key))) return undefined;
   if (typeof input.operation !== "string" || !operations.has(input.operation) || typeof input.outcome !== "string" || !outcomes.has(input.outcome as TelemetryOutcome)) return undefined;
   if (input.stage !== undefined && (typeof input.stage !== "string" || !stages.has(input.stage as ReviewStage))) return undefined;
   if (input.provider !== undefined && (typeof input.provider !== "string" || !providers.has(input.provider))) return undefined;
   if (input.reviewMode !== undefined && (typeof input.reviewMode !== "string" || !modes.has(input.reviewMode))) return undefined;
   if (input.repositoryVisibility !== undefined && (typeof input.repositoryVisibility !== "string" || !visibilities.has(input.repositoryVisibility))) return undefined;
   if (input.errorCode !== undefined && (typeof input.errorCode !== "string" || !errorCodes.has(input.errorCode))) return undefined;
+  // Bounded on the way in: an unbounded value becomes a histogram sample nobody can explain, and a
+  // negative one disappears silently at recordOperation.
+  if (input.durationMs !== undefined && (typeof input.durationMs !== "number" || !Number.isFinite(input.durationMs) || input.durationMs < 0 || input.durationMs > 86_400_000)) return undefined;
   return input as TelemetryIngestEvent;
 }
 
