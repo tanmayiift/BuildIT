@@ -67,6 +67,16 @@ export const reclaim = internalAction({
       await ctx.runMutation(internal.executionJobsData.recordSandboxReclaim, { jobId: job.jobId, released: ok, now: Date.now() });
       if (ok) released += 1; else failed += 1;
     }
+    // The counterpart to reconcileWorker's silence. A broker outage here leaves paid sandboxes
+    // running, and until now that produced no counter, no log line and no alert - on the one worker
+    // whose entire purpose is that a sandbox bills by the minute.
+    if (failed > 0 || released > 0) {
+      await ctx.runAction(internal.telemetryWorker.emit, {
+        operation: "sandbox.cleanup", stage: "decision",
+        outcome: failed > 0 ? "failed" : "succeeded",
+        ...(failed > 0 ? { errorCode: "upstream_unavailable" as const } : {}),
+      });
+    }
     return { pending: pending.length, released, failed };
   },
 });

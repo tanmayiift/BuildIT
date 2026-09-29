@@ -190,6 +190,17 @@ export const sweep = internalMutation({
     // for rows whose broker call failed; this is the immediate pass.
     if (jobsReaped > 0) await ctx.scheduler.runAfter(0, internal.sandboxReclaimWorker.reclaim, {});
 
+    // This worker had no telemetry and no logging at all - 195 lines returning counts to a cron
+    // that discards them. jobsUnreapable is the worst of it: it counts a row whose review belongs to
+    // a different organization than its job, which the sweep deliberately survives rather than
+    // crashing on. A tenant-boundary anomaly was being tallied into a value nobody reads.
+    if (jobsReaped > 0 || jobsUnreapable > 0) {
+      await ctx.scheduler.runAfter(0, internal.telemetryWorker.emit, {
+        operation: "job.reconcile", stage: "decision",
+        outcome: jobsUnreapable > 0 ? "failed" : "succeeded",
+        ...(jobsUnreapable > 0 ? { errorCode: "UnknownError" as const } : {}),
+      });
+    }
     return { expired, reconciled, deliveriesDeleted, jobsReaped, jobsUnreapable };
   },
 });
