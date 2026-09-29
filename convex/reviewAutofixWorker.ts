@@ -349,6 +349,11 @@ export const runConvergence = internalAction({
         lastOutcome: "failed" | "incomplete" = "incomplete",
         lastValidation: ExecutionResponse | undefined;
       const seenFingerprints = new Set(scope.patchFingerprints);let budgetConsumed=scope.budgetConsumed;
+      // Set once a round owns a claimed job, cleared when that round completes. The catch below is
+      // the only thing that releases the lease on a failed round, so it has to survive the scope the
+      // round's own consts live in.
+      let activeExecutionJobId: Id<"executionJobs"> | undefined;
+      try {
       for (
         let roundNumber = scope.rounds.length + 1;
         roundNumber <= 3;
@@ -565,11 +570,24 @@ export const runConvergence = internalAction({
         // folds both into the plansHash the grant is checked against.
         const runId = runIdFor(String(args.reviewId), args.expectedGeneration) + `:autofix:${roundNumber}`;
         const jobKey = `autofix:${String(args.reviewId)}:${args.expectedGeneration}:${roundNumber}:${candidateCommitSha}`;
+        activeExecutionJobId = undefined;
         const executionJobId: Id<"executionJobs"> = await ctx.runMutation(internal.executionJobsData.create, {
           organizationId: args.organizationId, reviewId: args.reviewId, expectedHeadSha: args.expectedHeadSha,
           expectedGeneration: args.expectedGeneration, jobKey, runId, baseSha: scope.baseSha, now: Date.now(),
         });
         const claimed: { stage: ExecutionStage; stateVersion: number } = await ctx.runMutation(internal.executionJobsData.claim, { jobId: executionJobId, workerId: runId, now: Date.now() });
+        // The same refusal validation makes, for the same reason. driveExecutionSegments always
+        // starts at `prepare` whatever stage it is handed, so a retry of a round that already got
+        // past prepare re-runs it in a fresh sandbox - paid - then checkpoints a stage jump the
+        // state machine rejects as execution_stage_order_invalid, repeating until the six-attempt
+        // budget is gone. The job key is deterministic across retries, so any transient broker
+        // failure mid-round reaches this.
+        if (claimed.stage !== "prepare") throw new Error("execution_segments_not_resumable");
+        activeExecutionJobId = executionJobId;
+        // Validation releases its lease on failure; autofix did not, so a failed round left the job
+        // `running` holding a lease for the full EXECUTION_LEASE_MS. reconcileWorker sweeps on
+        // `by_lease` with lt(leaseUntil, now), so it could never see the row - and sandboxReclaimAt
+        // was never stamped, leaving both sandboxes live and billing until their own timeout.
         const driven = await driveExecutionSegments({
           brokerUrl, executionSecret, describe: () => descriptors, artifactsHash,
           organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
@@ -670,6 +688,14 @@ export const runConvergence = internalAction({
         parentSha = candidateCommitSha;
         lastOutcome = outcome;
         lastValidation = output;
+      }
+      } catch (error) {
+        // The only thing that releases a failed round's lease. Without it the job stayed `running`
+        // with a lease held for the full EXECUTION_LEASE_MS, so reconcileWorker's by_lease sweep -
+        // lt(leaseUntil, now) - could never see the row, sandboxReclaimAt was never stamped, and both
+        // sandboxes stayed live and billing until their own timeout. Validation has always done this.
+        if (activeExecutionJobId) await ctx.runMutation(internal.executionJobsData.fail, { jobId: activeExecutionJobId, failureCode: "autofix_execution_failed", now: Date.now() }).catch(() => undefined);
+        throw error;
       }
       return {
         candidateCommitSha: parentSha,
