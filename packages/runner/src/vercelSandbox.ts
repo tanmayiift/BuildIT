@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Sandbox } from "@vercel/sandbox";
 import { type CheckResult, classifyCheckConclusion, type CommandPlan, diagnoseFlakiness, type DiagnosticRun, executionReady, SANDBOX_ENV_PROBE_TIMEOUT_MS, SANDBOX_JOB_LIFETIME_MS, SANDBOX_SCANNER_TIMEOUT_MS, type Workspace } from "./index.js";
-import type { ExecutionRevision, ExecutionSegment } from "./executionSegments.js";
+import { executionRevisions, executionSandboxName, type ExecutionRevision, type ExecutionSegment } from "./executionSegments.js";
 
 type Finished = { exitCode: number; durationMs?: number; stdout(): Promise<string>; stderr(): Promise<string> };
 type SandboxCommand = { cmd: string; args: string[]; cwd?: string; timeoutMs: number };
@@ -115,6 +115,9 @@ export type SegmentInput = {
   checks: CommandPlan[];
 };
 
+/** Finds an existing sandbox by name. Returns null when there is none, which is the goal state. */
+export type SandboxLookup = (input: { name: string } & Partial<SandboxCredentials>) => Promise<SandboxLike | null>;
+
 export class VercelSandboxRunner {
   constructor(private readonly open: SandboxFactory = async input => {
     const { image, runtime, ...environment } = input;
@@ -122,7 +125,43 @@ export class VercelSandboxRunner {
     // previous one left behind, or the install it is relying on never happened. On `not_found` it
     // creates, which is also what makes `prepare` and a retry of `prepare` the same call.
     return Sandbox.getOrCreate(image ? { ...environment, image } : { ...environment, runtime: runtime ?? "node24" }) as unknown as SandboxLike;
+  }, private readonly lookup: SandboxLookup = async input => {
+    // get, not getOrCreate: reclaiming must never bring a sandbox into existence. A sandbox that is
+    // already gone is the outcome we want, so "not found" is null rather than an error.
+    try { return await Sandbox.get(input as never) as unknown as SandboxLike; }
+    catch (error) {
+      if (/not.?found/i.test(error instanceof Error ? error.message : "")) return null;
+      throw error;
+    }
   }) {}
+
+  /**
+   * Stops both revisions' sandboxes for a job whose review is over.
+   *
+   * This exists because the reclaim path had no far side at all: convex/sandboxReclaimWorker posted
+   * to `/api/sandboxes`, the broker had no such route, Vercel answered 404, and the worker read that
+   * 404 as "the broker looked and there is no such sandbox". Every reclaim reported success while
+   * both sandboxes kept running and billing by the minute.
+   *
+   * `delete` is preferred over `stop` for the reason SandboxLike already documents: a stopped
+   * sandbox keeps its name and its snapshot, so a later job with the same key would resume a
+   * finished review's filesystem and call it a clean checkout.
+   *
+   * Absent and stopped are reported separately. Collapsing them is what made the original bug
+   * invisible - "released" has to mean this call did something or found nothing, never "the request
+   * failed in a way that looks like nothing".
+   */
+  async reclaim(input: { jobKey: string; credentials?: SandboxCredentials }) {
+    const revisions: Array<{ revision: ExecutionRevision; outcome: "deleted" | "stopped" | "absent" }> = [];
+    for (const revision of executionRevisions) {
+      const name = executionSandboxName(input.jobKey, revision);
+      const sandbox = await this.lookup({ name, ...(input.credentials ?? {}) });
+      if (!sandbox) { revisions.push({ revision, outcome: "absent" }); continue; }
+      if (sandbox.delete) { await sandbox.delete(); revisions.push({ revision, outcome: "deleted" }); }
+      else { await sandbox.stop(); revisions.push({ revision, outcome: "stopped" }); }
+    }
+    return { released: true as const, revisions };
+  }
 
   /**
    * Runs one segment of one revision against a sandbox addressed by name.

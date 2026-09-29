@@ -26,6 +26,9 @@
     },
     "api/health.ts": {
       "maxDuration": 10
+    },
+    "api/sandboxes.ts": {
+      "maxDuration": 60
     }
   }
 }

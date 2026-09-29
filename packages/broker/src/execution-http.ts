@@ -7,6 +7,7 @@ import type { ArtifactBroker } from "./artifacts.js";
 type Descriptor = { revision: "base" | "head"; artifactId: string; storageKey: string; checksum: string; size: number; readGrant: string };
 type Body = { organizationId: string; repositoryId: string; reviewId: string; jobKey: string; segment: ExecutionSegment; baseSha: string; headSha: string; runnerImageVersion: string; runtime: "node22" | "node24"; artifacts: Descriptor[]; install?: CommandPlan; checks: CommandPlan[] };
 type Runner = Pick<VercelSandboxRunner, "runSegment">;
+type ReclaimRunner = Pick<VercelSandboxRunner, "reclaim">;
 // The two segments that need the repository itself: `prepare` writes it into the sandbox and
 // `scanners` reads it here, for the rule pass that never enters a sandbox at all. Every other
 // segment resumes a sandbox that already holds the tree, so re-downloading and re-checksumming up
@@ -179,5 +180,43 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     // spent plan raises a ticket instead of paging someone about an outage they cannot fix.
     return json(mapped.status, { error: mapped.code },
       capacityExhausted(error instanceof Error ? error.message : "") ? { "x-buildit-error-code": "capacity_exhausted" } : {});
+  }
+}
+
+
+/**
+ * Stops both sandboxes for a job whose review is over.
+ *
+ * This route did not exist. `convex/sandboxReclaimWorker` has been posting to `/api/sandboxes`
+ * since it was written; Vercel answered 404 because there was no such function, and the worker read
+ * that 404 as "the broker looked and there is no such sandbox" - its own comment says so. So every
+ * reclaim marked the job released and stamped `sandboxReclaimedAt` while both sandboxes kept
+ * running and billing by the minute, and the attempt counter meant to surface an unreclaimable
+ * sandbox never got past one.
+ *
+ * The body and the two grant hashes are exactly what the worker already sends, so this is the far
+ * side of a contract that was already written down - not a new one.
+ */
+export async function handleSandboxReclaim(request: Request, input: { grantSecret: Uint8Array; consume: (id: string, expiresAt: number) => Promise<boolean>; runner?: ReclaimRunner; sandboxCredentials?: SandboxCredentials; now?: number }) {
+  try {
+    if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
+    const token = bearer(request), raw = await request.text();
+    if (Buffer.byteLength(raw) > 10_000) return json(413, { error: "request_too_large" });
+    let body: { jobKey?: unknown; operation?: unknown };
+    try { body = JSON.parse(raw) as typeof body; } catch { throw new Error("invalid_reclaim_request"); }
+    if (!body || typeof body.jobKey !== "string" || !/^[A-Za-z0-9:_.-]{1,200}$/.test(body.jobKey) || body.operation !== "sandbox_reclaim") throw new Error("invalid_reclaim_request");
+    const grant = await verifyExecutionGrant(token, input.grantSecret, { ...(input.now === undefined ? {} : { now: input.now }), consume: input.consume });
+    // Same binding /api/execute uses: the grant's hashes cover the body, so a token captured for one
+    // job cannot stop another workspace's sandboxes.
+    if (grant.artifactsHash !== hash({ jobKey: body.jobKey, operation: body.operation }) || grant.plansHash !== hash({ operation: body.operation })) throw new Error("execution_grant_scope_invalid");
+    const runner = input.runner ?? new VercelSandboxRunner();
+    const result = await runner.reclaim({ jobKey: body.jobKey, ...(input.sandboxCredentials ? { credentials: input.sandboxCredentials } : {}) });
+    return json(200, result);
+  } catch (error) {
+    const mapped = safeExecutionError(error);
+    // Never 404 for "no such sandbox" - that is the status a missing route returns, and reading the
+    // two as the same thing is the bug this route exists to close. Absence is a 200 saying so.
+    console.error("buildit_sandbox_reclaim_failure", { code: mapped.code });
+    return json(mapped.status, { error: mapped.code });
   }
 }

@@ -54,11 +54,15 @@ export const reclaim = internalAction({
           method: "POST", headers: { authorization: `Bearer ${grant}`, "content-type": "application/json" },
           body: JSON.stringify(body), signal: AbortSignal.timeout(30_000),
         });
-        // 404 means the broker looked and there is no such sandbox, which is the goal state. Only a
-        // reply that actually says released keeps a row from being retried, so a broker that is
-        // down leaves the intent on the row instead of losing it.
-        if (response.status === 404) ok = true;
-        else if (response.ok) ok = ((await response.json().catch(() => null)) as { released?: boolean } | null)?.released === true;
+        // Only a reply that actually says released keeps a row from being retried, so a broker that
+        // is down leaves the intent on the row instead of losing it.
+        //
+        // A bare 404 used to be read here as "the broker looked and there is no such sandbox". It
+        // was not: `/api/sandboxes` did not exist, so Vercel answered 404 for every request and this
+        // branch marked every job released while both sandboxes kept running and billing by the
+        // minute. Absence is now a 200 from the route saying so - a statement the broker made,
+        // rather than one inferred from the status any missing path returns.
+        if (response.ok) ok = ((await response.json().catch(() => null)) as { released?: boolean } | null)?.released === true;
       } catch { ok = false; }
       await ctx.runMutation(internal.executionJobsData.recordSandboxReclaim, { jobId: job.jobId, released: ok, now: Date.now() });
       if (ok) released += 1; else failed += 1;
