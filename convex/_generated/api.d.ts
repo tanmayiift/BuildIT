@@ -37,6 +37,7 @@ import type * as integrations from "../integrations.js";
 import type * as lib_accountedModel from "../lib/accountedModel.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_authz from "../lib/authz.js";
+import type * as lib_autofixBounds from "../lib/autofixBounds.js";
 import type * as lib_blockingFindings from "../lib/blockingFindings.js";
 import type * as lib_budgetAccounting from "../lib/budgetAccounting.js";
 import type * as lib_coverageGate from "../lib/coverageGate.js";
@@ -157,6 +158,7 @@ declare const fullApi: ApiFromModules<{
   "lib/accountedModel": typeof lib_accountedModel;
   "lib/audit": typeof lib_audit;
   "lib/authz": typeof lib_authz;
+  "lib/autofixBounds": typeof lib_autofixBounds;
   "lib/blockingFindings": typeof lib_blockingFindings;
   "lib/budgetAccounting": typeof lib_budgetAccounting;
   "lib/coverageGate": typeof lib_coverageGate;
