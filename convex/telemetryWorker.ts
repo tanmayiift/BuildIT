@@ -9,6 +9,10 @@ const operation = v.union(
   v.literal("review.autofix"), v.literal("review.delivery"), v.literal("review.decision"), v.literal("webhook.process"),
   v.literal("github.comment"), v.literal("github.check"), v.literal("github.branch"), v.literal("github.stacked_pr"),
   v.literal("credential.revoke"), v.literal("artifact.delete"), v.literal("sandbox.cleanup"),
+  // Two safety boundaries that trip for real and had no way to say so. BuildITLoopGuardTrip and
+  // BuildITStaleCheck watched these names for months and could never fire, because the names
+  // existed only in this union and in alerts.yml - no code path passed either one.
+  v.literal("autofix.loop_guard"), v.literal("review.stale_check"), v.literal("job.reconcile"),
 );
 const stage = v.union(v.literal("activation"), v.literal("context"), v.literal("analysis"), v.literal("tests"), v.literal("autofix"), v.literal("delivery"), v.literal("decision"));
 const outcome = v.union(v.literal("started"), v.literal("succeeded"), v.literal("failed"), v.literal("cancelled"), v.literal("blocked"));

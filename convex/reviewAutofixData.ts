@@ -1,6 +1,7 @@
 import { queueReviewNotification } from "./lib/queueNotification";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { assertReviewParent } from "./lib/parentConsistency";
 import { resolvedScannerFindings } from "./lib/findingResolution";
 import { checkConclusion, checkKind } from "./validators";
@@ -121,6 +122,10 @@ export const failPlatform = internalMutation({args:{...executionArgs,code:v.stri
     // enforced on itself was published as "a required platform step failed, retry when the service
     // is available", and three of the four terminationBound values had no writer at all.
     const stop=classifyAutofixStop(args.code);
+    // The loop guard firing is the event BuildITLoopGuardTrip was written for, and it had no
+    // emitter: durableReview recorded a plain `review.autofix` failure with no error code, so a
+    // bound stopping a runaway looked identical to any other autofix failure.
+    if(stop.kind==="bound")await ctx.scheduler.runAfter(0,internal.telemetryWorker.emit,{operation:"autofix.loop_guard",stage:"autofix",outcome:"blocked",errorCode:"loop_guard"});
     if(stop.kind==="bound")await ctx.db.patch(review._id,{status:"failed_after_bounds",statusReasonCode:stop.statusReasonCode,...(stop.terminationBound?{terminationBound:stop.terminationBound}:{}),nextActionCode:"inspect_findings",githubCheckConclusion:"failure",currentStage:"complete",completedAt:args.now,updatedAt:args.now});
     else if(stop.kind==="budget")await ctx.db.patch(review._id,{status:"budget_exhausted",statusReasonCode:"spend_ceiling_reached",nextActionCode:"increase_budget",currentStage:"complete",completedAt:args.now,updatedAt:args.now});
     else await ctx.db.patch(review._id,{status:"platform_failed",statusReasonCode:classifyPlatformFailure(args.code),nextActionCode:"retry_review",currentStage:"complete",completedAt:args.now,updatedAt:args.now});await queueReviewNotification(ctx,review._id,args.now);return args.code.slice(0,80)}});

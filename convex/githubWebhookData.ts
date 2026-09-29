@@ -504,6 +504,10 @@ export const reconcilePullRequestHead = internalMutation({
       if (review.headSha === args.observedHeadSha || review.isStale) continue;
       const active = !terminalStatuses.has(review.status);
       await recordReviewMetric(ctx, review, "stale_review", args.now);
+      // recordReviewMetric writes a Convex row, which Prometheus never sees - so BuildITStaleCheck
+      // watched an operation that had no emitter at all. A stale head refused is a safety boundary
+      // doing its job, and an operator should be able to see it happen.
+      await ctx.scheduler.runAfter(0, internal.telemetryWorker.emit, { operation: "review.stale_check", stage: "decision", outcome: "blocked", errorCode: "stale_head" });
       await ctx.db.patch(review._id, {
         isStale: true,
         staleSince: args.now,

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const root = new URL("../../", import.meta.url);
@@ -184,9 +184,43 @@ describe("every alert watches something that is actually emitted", () => {
   });
 
   it("filters on error codes the telemetry package will actually pass through", () => {
-    for (const code of new Set((rules.match(/buildit_error_code=~"([^"]+)"/g) ?? [])
-      .flatMap(match => match.replace(/.*=~"/, "").replace(/"$/, "").split("|")))) {
+    // Both forms. Only =~ was checked, so `buildit_error_code="capacity_exhausted"` - the one
+    // end-to-end chain that works - was never covered by the gate meant to protect it.
+    for (const code of new Set([
+      ...(rules.match(/buildit_error_code=~"([^"]+)"/g) ?? []).flatMap(match => match.replace(/.*=~"/, "").replace(/"$/, "").split("|")),
+      ...(rules.match(/buildit_error_code="([^"]+)"/g) ?? []).map(match => match.replace(/.*="/, "").replace(/"$/, "")),
+    ])) {
       expect(telemetry).toContain(`"${code}"`);
     }
+  });
+
+  // The gate this file is named for checked metric NAMES and error codes, never operation LABEL
+  // VALUES - so three alerts watching operations nothing emits passed it for months, and two of
+  // them were simultaneously pinned as mandatory above. An alert keyed on an operation no code
+  // path produces is not a quiet alert, it is a promise that cannot be kept.
+  it("watches only operations some code path actually emits", () => {
+    // The corpus is real code with the two vocabularies removed: packages/telemetry's name list and
+    // telemetryWorker's args union both spell every operation, including ones nothing emits, so
+    // leaving them in is precisely how the old check mistook a declaration for an emission.
+    const sources: string[] = [];
+    const walk = (directory: string) => {
+      for (const entry of readdirSync(new URL(`${directory}/`, root), { withFileTypes: true })) {
+        const path = `${directory}/${entry.name}`;
+        if (entry.isDirectory()) { if (!["node_modules", "dist", "_generated", ".next"].includes(entry.name)) walk(path); continue; }
+        if (!/\.tsx?$/.test(entry.name) || /\.test\.tsx?$/.test(entry.name)) continue;
+        if (path === "packages/telemetry/src/index.ts") continue;
+        let text = read(path);
+        if (path === "convex/telemetryWorker.ts") text = text.replace(/const operation = v\.union\([\s\S]*?\);/, "");
+        sources.push(text);
+      }
+    };
+    for (const directory of ["convex", "packages/broker", "packages/runner/src", "apps/web/src"]) walk(directory);
+    const corpus = sources.join("\n");
+    const watched = new Set([
+      ...(rules.match(/buildit_operation="([^"]+)"/g) ?? []).map(match => match.replace(/.*="/, "").replace(/"$/, "")),
+      ...(rules.match(/buildit_operation=~"([^"]+)"/g) ?? []).flatMap(match => match.replace(/.*=~"/, "").replace(/"$/, "").split("|")),
+    ]);
+    const dead = [...watched].filter(name => !corpus.includes(`"${name}"`));
+    expect(dead, "an alert watching an operation nothing emits can never fire").toEqual([]);
   });
 });

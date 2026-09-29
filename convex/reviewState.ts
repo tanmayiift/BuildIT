@@ -103,6 +103,10 @@ export const markStale = internalMutation({
     if (!review) throw new ConvexError("review_not_found");
     if (review.headSha === args.observedHeadSha) return;
     await recordReviewMetric(ctx, review, "stale_review", review.staleSince ?? args.now);
+    // recordReviewMetric writes a Convex row, which Prometheus never sees - so BuildITStaleCheck
+    // watched an operation that had no emitter at all. A stale head refused is a safety boundary
+    // doing its job, and an operator should be able to see it happen.
+    await ctx.scheduler.runAfter(0, internal.telemetryWorker.emit, { operation: "review.stale_check", stage: "decision", outcome: "blocked", errorCode: "stale_head" });
     await ctx.db.patch(args.reviewId, { isStale: true, staleSince: args.now, observedHeadSha: args.observedHeadSha, updatedAt: args.now });
   },
 });
