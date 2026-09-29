@@ -174,7 +174,11 @@ export async function handleExecution(request: Request, input: { artifactBroker:
   } catch (error) {
     const mapped = safeExecutionError(error);
     // Keep quota, image, network and safety distinctions without copying exception text or names.
-    console.error("buildit_execute_failure", { category: safeExecutionErrorCategory(error), code: mapped.code,
+    // `diagnostic` is the matched bucket from knownExecutionDiagnostics, never the provider's raw
+  // message - that stays out of logs on purpose. Logging which bucket matched is what lets the
+  // 23-entry set be extended from evidence instead of by guessing, which is the only way to learn
+  // what an unmatched failure actually said.
+  console.error("buildit_execute_failure", { category: safeExecutionErrorCategory(error), code: mapped.code,
       reason: executionFailureDiagnostic(error) });
     // The body is unchanged. The header only tells BuildIT's own telemetry which 503 this was, so a
     // spent plan raises a ticket instead of paging someone about an outage they cannot fix.

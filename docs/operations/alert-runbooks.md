@@ -35,8 +35,14 @@ Disable untrusted execution. Confirm every sandbox has a terminal teardown recei
 ## BuildITRunnerCapacityExhausted
 
 The sandbox provider is refusing new sandboxes because the plan's usage is spent, not because
-anything is broken. The broker logs the provider's own message, including the reset date, under
-`buildit_execute_failure` with `category: capacity`.
+anything is broken. The broker logs `buildit_execute_failure` with `category: capacity`, and
+`buildit_sandbox_scope` with the owner, project and OIDC issuer the sandbox was billed to.
+
+**It does not log the provider's message, and there is no reset date in the logs.** This section
+used to say otherwise, and an operator following it went looking for a field the broker
+deliberately never writes: `capacityExhausted` regex-tests the provider's message and discards it,
+because a raw sandbox failure can carry provider request context that must not enter logs. The
+reset date lives on the provider's usage page, not here.
 
 Upgrade the plan, or wait for the reset. Nothing needs disabling and nothing is unsafe. Reviews
 return inconclusive while this lasts, which is the correct behaviour: they are refusing to claim
