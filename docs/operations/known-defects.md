@@ -182,6 +182,22 @@ tokens on reasoning before emitting anything, so a ceiling low enough to be "fre
 `truncated` - which is indistinguishable from a real failure and answers nothing. 256 is the
 smallest ceiling that reliably produces a verdict, and it still costs under a hundredth of a cent.
 
+## undici advisory GHSA-3wwx-pv8p-q78v, carried and not reachable
+
+`pnpm audit` reports it against `undici@7.29.0` (via `@vercel/sandbox@3.2.1`, production) and
+`undici@8.10.0` (via `jsdom` under vitest, dev only). The gate warns rather than fails, which is
+correct here.
+
+The vulnerable path is a denial of service in undici's **WebSocket** `permessage-deflate`
+decompression. BuildIT opens no WebSocket anywhere - grep across `packages/runner/src`,
+`packages/broker/src` and `convex` returns nothing - so the code that would have to run for this to
+matter is never entered. Both copies are transitive and neither is directly depended on.
+
+**Deliberately not overridden.** Forcing a different undici under `@vercel/sandbox` would change the
+HTTP client of the one component whose failures have cost the most in this project, to close a path
+that is not reachable. The honest trade is to carry the advisory, state why, and revisit it when
+`@vercel/sandbox` ships a bump of its own.
+
 ## New reviews chose the key whose account had just said it was empty
 
 **Found and fixed:** 17 September 2026.
