@@ -6,12 +6,13 @@ import { resolvedScannerFindings } from "./lib/findingResolution";
 import { checkConclusion, checkKind } from "./validators";
 import { recordRunnerFailure } from "./lib/recordMetric";
 import { classifyPlatformFailure } from "./lib/platformFailureReport";
+import { terminalStatuses } from "./lib/lifecycle";
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
 const hash = v.string();
 
 export const mode = internalQuery({args:executionArgs,handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale)throw new ConvexError("stale_or_replaced_review");return review.mode}});
-export const assertActive = internalQuery({args:executionArgs,handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||review.mode!=="autofix"||review.cancellationRequestedAt||!["validating","autofixing","budget_exhausted"].includes(review.status))throw new ConvexError("autofix_cancelled_or_replaced");return true}});
+export const assertActive = internalQuery({args:executionArgs,handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||review.mode!=="autofix"||review.cancellationRequestedAt||!["validating","autofixing"].includes(review.status))throw new ConvexError("autofix_cancelled_or_replaced");return true}});
 
 export const scope = internalQuery({
   args: executionArgs,
@@ -65,6 +66,11 @@ export const completeRound = internalMutation({
     const roundId = await ctx.db.insert("autofixRounds", { organizationId: args.organizationId, reviewId: review._id, roundNumber: args.roundNumber, attemptId, candidateCommitSha: args.candidateCommitSha, validationScope: "final_validation", validationOutcome: args.outcome, completedValidation: true, ...(args.candidateScannerFindings ? { candidateScannerFindings: args.candidateScannerFindings } : {}), startedAt: args.now, completedAt: args.now });
     if (!args.summaries.length || (args.outcome === "passed" && args.summaries.some(item => item.required && item.conclusion !== "passed"))) throw new ConvexError("autofix_summary_invalid");
     for (const item of args.summaries) { if (item.commitSha !== args.candidateCommitSha || !/^[0-9a-f]{64}$/.test(item.commandFingerprint) || !/^[0-9a-f]{64}$/.test(item.nameHash)) throw new ConvexError("autofix_summary_invalid"); await ctx.db.insert("checkRuns", { organizationId: args.organizationId, reviewId: review._id, roundId, kind: item.kind, nameHash: item.nameHash, required: item.required, status: "completed", conclusion: item.conclusion, commandFingerprint: item.commandFingerprint, commitSha: item.commitSha, ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }), durationMs: item.durationMs, artifactId: validation._id, credentialTeardownProved: item.credentialTeardownProved, sandboxStopped: item.sandboxStopped, ...(item.conclusion === "failed" ? { failureClass: "code" as const } : {}), startedAt: Math.max(0, args.now - item.durationMs), completedAt: args.now }); }
+    // A round that settled after the spend ceiling stopped the review must not patch it back to
+    // `autofixing`. modelAccounting writes `budget_exhausted` - terminal, with `increase_budget` as
+    // the next action - and overwriting it sent the author to "a required platform step failed,
+    // retry when the service is available" instead, which spends more money reaching the same wall.
+    if (terminalStatuses.has(review.status)) throw new ConvexError("autofix_cancelled_or_replaced");
     await ctx.db.patch(review._id, { status: "autofixing", currentStage: "autofix", patchAttemptCount: args.roundNumber, completedRoundCount: args.roundNumber, updatedAt: args.now }); return roundId;
   },
 });

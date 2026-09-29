@@ -5,7 +5,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { fallbackWorthTrying } from "./lib/providerFallback";
-import { classifyPlatformFailure, type PlatformFailureReason } from "./lib/platformFailureReport";
+import { classifyPlatformFailure, isPlatformFailureReason, type PlatformFailureReason } from "./lib/platformFailureReport";
 import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { durableReviewStages, nextStageAfter } from "./lib/durableStages";
 import { terminalStatuses } from "./lib/lifecycle";
@@ -389,7 +389,15 @@ export const fallbackOrReport = internalMutation({
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration)
       throw new ConvexError("cancelled_or_replaced");
-    if (await startProviderFallback(ctx, review, classifyPlatformFailure(review.statusReasonCode ?? ""), args.now))
+    // The stored reason is already a PlatformFailureReason - reviewAutofixData.failPlatform wrote it
+    // through classifyPlatformFailure. Running it through again is the round trip
+    // platformFailureReport documents as invalid: `model_unavailable` and `platform_misconfigured`
+    // both fall back out as `platform_error`, which is not in the fallback set. So a revoked or
+    // rotated key - the case a second provider exists for - never failed over.
+    const storedReason = isPlatformFailureReason(review.statusReasonCode)
+      ? review.statusReasonCode
+      : classifyPlatformFailure(review.statusReasonCode ?? "");
+    if (await startProviderFallback(ctx, review, storedReason, args.now))
       return "fallback_started";
     await enqueueFailurePublication(ctx, {
       organizationId: args.organizationId, reviewId: args.reviewId,
