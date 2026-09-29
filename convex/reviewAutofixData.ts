@@ -6,6 +6,7 @@ import { resolvedScannerFindings } from "./lib/findingResolution";
 import { checkConclusion, checkKind } from "./validators";
 import { recordRunnerFailure } from "./lib/recordMetric";
 import { classifyPlatformFailure } from "./lib/platformFailureReport";
+import { classifyAutofixStop } from "./lib/autofixBounds";
 import { terminalStatuses } from "./lib/lifecycle";
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
@@ -115,4 +116,11 @@ export const completeFailure = internalMutation({args:{...executionArgs,reportAr
 // computing the real reason and handing it back to a caller that discarded it, so a rate limit, a
 // refused key and an unreachable sandbox all published the same "a required platform step
 // failed... retry only after the service is available" - advice that is wrong for every one of them.
-export const failPlatform = internalMutation({args:{...executionArgs,code:v.string(),now:v.number()},handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.status==="delivered"||review.status==="failed_after_bounds")return review.status;if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||review.mode!=="autofix"||!["validating","autofixing"].includes(review.status))throw new ConvexError("autofix_failure_mismatch");await recordRunnerFailure(ctx,review,args.code,args.now);await ctx.db.patch(review._id,{status:"platform_failed",statusReasonCode:classifyPlatformFailure(args.code),nextActionCode:"retry_review",currentStage:"complete",completedAt:args.now,updatedAt:args.now});await queueReviewNotification(ctx,review._id,args.now);return args.code.slice(0,80)}});
+export const failPlatform = internalMutation({args:{...executionArgs,code:v.string(),now:v.number()},handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.status==="delivered"||review.status==="failed_after_bounds")return review.status;if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||review.mode!=="autofix"||!["validating","autofixing"].includes(review.status))throw new ConvexError("autofix_failure_mismatch");await recordRunnerFailure(ctx,review,args.code,args.now);
+    // A bound is not an outage. See convex/lib/autofixBounds.ts - before this, every limit BuildIT
+    // enforced on itself was published as "a required platform step failed, retry when the service
+    // is available", and three of the four terminationBound values had no writer at all.
+    const stop=classifyAutofixStop(args.code);
+    if(stop.kind==="bound")await ctx.db.patch(review._id,{status:"failed_after_bounds",statusReasonCode:stop.statusReasonCode,...(stop.terminationBound?{terminationBound:stop.terminationBound}:{}),nextActionCode:"inspect_findings",githubCheckConclusion:"failure",currentStage:"complete",completedAt:args.now,updatedAt:args.now});
+    else if(stop.kind==="budget")await ctx.db.patch(review._id,{status:"budget_exhausted",statusReasonCode:"spend_ceiling_reached",nextActionCode:"increase_budget",currentStage:"complete",completedAt:args.now,updatedAt:args.now});
+    else await ctx.db.patch(review._id,{status:"platform_failed",statusReasonCode:classifyPlatformFailure(args.code),nextActionCode:"retry_review",currentStage:"complete",completedAt:args.now,updatedAt:args.now});await queueReviewNotification(ctx,review._id,args.now);return args.code.slice(0,80)}});
