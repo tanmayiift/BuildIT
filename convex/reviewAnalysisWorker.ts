@@ -162,7 +162,12 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   base.coverage = excludedAnything ? "partial" : "full";
   while (size() > maxBytes && exclusions.paths.length) exclusions.paths.pop();
   while (size() > maxBytes && exclusions.patchPaths.length) exclusions.patchPaths.pop();
-  while (size() > maxBytes && exclusions.changedPaths.length) exclusions.changedPaths.pop();
+  // Counted as it is popped, not inferred from what survives. introducedScannerFindings filters head
+  // findings to changedPaths, so a path dropped here takes its scanner findings with it - and
+  // analysisDroppedChangedFile read `changedPaths.length > 0`, which is false once this loop has
+  // emptied the array. A secret the pull request introduced into that file was then excluded from
+  // the findings AND from the coverage gap that would have said so.
+  while (size() > maxBytes && exclusions.changedPaths.length) { exclusions.changedPaths.pop(); increment("changedFiles"); }
   if (size() > maxBytes) throw new Error("analysis_context_too_large");
   return base;
 }
@@ -310,7 +315,14 @@ export const analyze = internalAction({
     const escalation = await (async (): Promise<{ findings: typeof firstPass; decisions: Array<{ kind: string; reason: string; detail?: string }> }> => {
       const unresolved = firstPass.filter(item => item.resolution === "uncertain");
       if (!unresolved.length) return { findings: firstPass, decisions: [] };
-      if (!criticRoute.independent || criticRoute.model === scope.model) {
+      // Against findingsModel, not scope.model. criticRoute is derived from findingsModel, and
+      // selectFindingsModel can move the findings stage off scope.model - so an OpenAI credential
+      // exposing gpt-5.4-mini and gpt-5.4 put findings on gpt-5.4 and the critic on gpt-5.4-mini,
+      // which equals scope.model. The ladder then switched itself off and recorded "no independent
+      // second model was available to ask", while requireIndependentCritic had simultaneously been
+      // told independent === true. The one configuration where a second opinion genuinely exists
+      // was exactly where this refused to ask for it.
+      if (!criticRoute.independent || criticRoute.model === findingsModel) {
         return { findings: firstPass, decisions: [{ kind: "human_escalation", reason: "no independent second model was available to ask, so a person decides", detail: `${unresolved.length} uncertain` }] };
       }
       try {
@@ -364,7 +376,10 @@ export const analyze = internalAction({
     // nothing downstream ever learned. Two ways it can happen: the file's content lost the budget
     // race (exclusions.paths), or the changed-file entry itself did not fit (exclusions.changedPaths).
     const changedPathSet = new Set(untrusted.pull.changes.map(change => change.path));
+    // The counter, not just the surviving array: the repair loop can empty changedPaths entirely,
+    // and "nothing left in the list" is indistinguishable from "nothing was ever dropped".
     const analysisDroppedChangedFile = untrusted.exclusions.changedPaths.length > 0
+      || (untrusted.exclusions.totals?.changedFiles ?? 0) > 0
       || untrusted.exclusions.paths.some(path => changedPathSet.has(path));
     // The handoff record for this stage: what it actually looked at, how completely, how long the
     // model work took, and which artifact carries the output. Written before the verdict mutation so
