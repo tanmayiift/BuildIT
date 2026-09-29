@@ -912,6 +912,23 @@ export const deliverPassed = internalAction({
         title: "Validated candidate ready for human review",
         summary: reportText,
       });
+      // The acknowledgement posted "BuildIT / review" in_progress on the pull request head before
+      // any of this began, and only reviewPublicationWorker.publish ever completes it - which this
+      // path never calls, and which would refuse a `delivered` review anyway. So a *successful*
+      // autofix left that check spinning forever, and wherever it is a required status check
+      // BuildIT itself became the reason the pull request could not merge.
+      //
+      // Completed here rather than by relaxing publish: the Autofix check above is about the
+      // candidate commit, this one is about the head the reader is looking at. They answer
+      // different questions and both belong.
+      await assertActive(ctx, args);
+      await writer.upsertCheckRun({
+        name: "BuildIT / review",
+        headSha: scope.headSha,
+        conclusion: "success",
+        title: "Autofix delivered a validated candidate",
+        summary: reportText,
+      });
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, {
         ...args,
         sideEffectId: checkEffect,
@@ -1091,6 +1108,17 @@ export const publishFailure = internalAction({
         prNumber: scope.prNumber,
         marker: `buildit-autofix:${scope.reviewId}:${scope.headSha}`,
         body: reportText,
+      });
+      // Same reason as the delivery path: the acknowledgement left "BuildIT / review" in_progress
+      // on the head and nothing on the autofix side ever finished it. A comment explaining that
+      // autofix stopped is little use beside a check still saying BuildIT is working on it.
+      await assertActive(ctx, args);
+      await writer.upsertCheckRun({
+        name: "BuildIT / review",
+        headSha: scope.headSha,
+        conclusion: "failure",
+        title: "Autofix stopped at its bounds",
+        summary: reportText,
       });
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, {
         ...args,
