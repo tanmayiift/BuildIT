@@ -44,11 +44,13 @@ export function statusPresentation(status: string, stale: boolean, reason?: stri
 // leave the primary call to action rendering a raw code like "Reconnect provider".
 export type NextActionCode =
   | "none" | "inspect_findings" | "request_autofix" | "retry_review" | "reconnect_provider"
-  | "restore_installation" | "grant_permission" | "increase_budget" | "human_merge" | "start_new_review";
+  | "restore_installation" | "grant_permission" | "increase_budget" | "await_sandbox_reset"
+  | "human_merge" | "start_new_review";
 
 export const nextActionCodes: readonly NextActionCode[] = [
   "none", "inspect_findings", "request_autofix", "retry_review", "reconnect_provider",
-  "restore_installation", "grant_permission", "increase_budget", "human_merge", "start_new_review",
+  "restore_installation", "grant_permission", "increase_budget", "await_sandbox_reset",
+  "human_merge", "start_new_review",
 ];
 
 type NextAction = { title: string; detail: string; href?: string; hrefLabel?: string };
@@ -62,6 +64,7 @@ const nextActions: Record<NextActionCode, NextAction> = {
   restore_installation: { title: "Restore GitHub access", detail: "The GitHub App installation is suspended or removed, so BuildIT cannot read this repository.", href: "/repositories", hrefLabel: "Check repository access" },
   grant_permission: { title: "Grant the missing permission", detail: "BuildIT is missing a repository permission it needs for this action.", href: "/repositories", hrefLabel: "Review GitHub access" },
   increase_budget: { title: "Increase the review budget", detail: "No further model call was made. Choose a higher ceiling, then start a new review." },
+  await_sandbox_reset: { title: "Wait for the sandbox allowance to reset", detail: "This workspace has used the sandbox time its plan allows this month, so no new review can run its checks. Retrying will not help. The allowance resets at the start of next month; ask BuildIT if you need it raised before then.", href: "/usage", hrefLabel: "Open workspace usage" },
   human_merge: { title: "Read it yourself before merging", detail: "BuildIT will not merge this and will not vouch for it. Check the change - and, if a fix was proposed, the separate pull request carrying it - and merge only if you agree." },
   start_new_review: { title: "Run a new review", detail: "This run ended without a decision." },
 };

@@ -5,6 +5,8 @@ import { rowCostUsd } from "./lib/usageCost";
 import { parentScopeChecker, summaryRowCeiling } from "./lib/parentScope";
 import { utcMonth } from "./lib/reportingPeriod";
 import { getBudgetSnapshot, reconcileMonthPage } from "./lib/budgetAccounting";
+import { sandboxCeilingSeconds, sandboxSecondsThisMonth } from "./lib/sandboxCeiling";
+import { monthKey } from "./lib/monthlySpend";
 import type { WorkspaceUsageSummary } from "./lib/workspaceFigureTypes";
 
 // Viewing usage may initialize a missing monthly subtotal. This never calls a provider or
@@ -42,6 +44,8 @@ export const summarize = query({
       recordCount++;
     }
     const budget = await getBudgetSnapshot(ctx, args.organizationId, now);
-    return { quantities, costs, recordCount, truncated: window.length > recordCount, since, monthlyBudget: organization.monthlyBudget, budget };
+    return { quantities, costs, recordCount, truncated: window.length > recordCount, since, monthlyBudget: organization.monthlyBudget,
+      sandbox: { usedSeconds: sandboxSecondsThisMonth(organization, monthKey(now)), ceilingSeconds: sandboxCeilingSeconds(organization) },
+      budget };
   },
 });

@@ -11,7 +11,7 @@ export const storedTextClassifications = {
   cursor: "operational_identifier", leaseKey: "operational_identifier", captureId: "operational_identifier", failureCode: "metadata",
   emailConsentedAddressHash: "hashed_metadata", stateHash: "hashed_metadata", refreshLeaseId: "operational_identifier", oauthResourceId: "operational_identifier",
   ciphertext: "encrypted_secret", tag: "encrypted_secret", id: "operational_identifier",
-  month: "metadata", reconciliationCursor: "operational_identifier", invocationKey: "operational_identifier", providerRequestId: "operational_identifier", eventKey: "operational_identifier",
+  month: "metadata", sandboxSecondsMonth: "metadata", reconciliationCursor: "operational_identifier", invocationKey: "operational_identifier", providerRequestId: "operational_identifier", eventKey: "operational_identifier",
   aadDigest: "hashed_metadata", accountLogin: "metadata", action: "metadata",
   actorId: "operational_identifier", approvedBy: "operational_identifier", jobKey: "operational_identifier", lastRequestKey: "operational_identifier",
   architecture: "metadata", authTag: "encrypted_secret", baseRef: "metadata",

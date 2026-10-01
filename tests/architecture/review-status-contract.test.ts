@@ -26,10 +26,11 @@ describe("review status and next-action contracts", () => {
   });
 
   // The next-action map previously overlapped the real enum in only 2 of 10 cases, so the
-  // primary call to action rendered raw codes like "Reconnect provider".
+  // primary call to action rendered raw codes like "Reconnect provider". The count is pinned so
+  // that adding a code without copy for it fails here rather than on a real pull request.
   it("the next-action map covers exactly the declared nextActionCode union", () => {
     const declared = unionLiterals(validators, "nextActionCode");
-    expect(declared.length).toBe(10);
+    expect(declared.length).toBe(11);
     expect([...nextActionCodes].sort()).toEqual([...declared].sort());
   });
 

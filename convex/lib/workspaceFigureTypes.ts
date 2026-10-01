@@ -30,5 +30,10 @@ export type WorkspaceUsageSummary = {
   truncated: boolean;
   since: number;
   monthlyBudget: number;
+  // The monthly sandbox allowance and how much of it this workspace has used. Separate from
+  // quantities.sandbox_seconds, which counts only validation-command time inside the ledger
+  // window: this is the figure the admission check compares against, so it is the one that
+  // explains a refusal.
+  sandbox: { usedSeconds: number; ceilingSeconds: number };
   budget: BudgetSnapshot;
 };
