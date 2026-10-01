@@ -191,3 +191,24 @@ export const recordSandboxReclaim = internalMutation({
     return { released: args.released, attempts, exhausted };
   },
 });
+
+// Re-open a reclaim that was closed without anything being released.
+//
+// Needed because of the /api/sandboxes bug: that route did not exist, Vercel answered 404, and
+// sandboxReclaimWorker read the 404 as "there is no such sandbox" - so it stamped sandboxReclaimedAt
+// on jobs whose sandboxes were still running. Those rows are now permanently invisible to the
+// by_sandbox_reclaim index, which requires sandboxReclaimedAt to be undefined, and the attempt
+// counter meant to be the evidence never got past one.
+//
+// Nothing else can reach them, so clearing the stamp is the only way to retry. Restricted to a job
+// that has actually finished, so this can never pull a live job back into the reclaim queue.
+export const requeueSandboxReclaim = internalMutation({
+  args: { jobId: v.id("executionJobs"), now: v.number() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.jobId);
+    if (!row) return null;
+    if (row.status !== "completed" && row.status !== "failed") return { requeued: false as const, reason: "job_not_finished" as const };
+    await ctx.db.patch(row._id, { sandboxReclaimAt: args.now, sandboxReclaimAttempts: 0, sandboxReclaimedAt: undefined });
+    return { requeued: true as const, jobKey: row.jobKey };
+  },
+});
