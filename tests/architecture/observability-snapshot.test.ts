@@ -25,4 +25,20 @@ describe("production observability snapshots", () => {
     for (const name of ["queue_depth", "active_reviews", "capacity_utilization", "expired_artifact_backlog", "model_cost_usd_hour", "budget_exhausted_reviews_hour", "effective_loc_delivered_hour", "sandbox_quota_utilization", "workspaces_at_sandbox_ceiling"]) expect(worker).toContain(name);
     expect(worker).not.toMatch(/organizationId|repositoryId|reviewId|owner|email|source|prompt/);
   });
+
+  // The ban above is applied to the worker, which is thirty lines of measurement-name literals and
+  // could never have contained a tenant field. The file that actually reads `organizations` and
+  // `metricEvents` - and therefore the only one that could leak one - was subject to no such check.
+  // Assert it where it matters: on what snapshot() returns, which is the payload that leaves the
+  // deployment. Checking the whole file would fail on the queries it legitimately makes.
+  it("returns only numbers, so no tenant field can ride out in the snapshot payload", () => {
+    const data = read("convex/telemetrySnapshotData.ts");
+    const returned = data.slice(data.lastIndexOf("return {"));
+    expect(returned.length, "the return block must be found, or this asserts nothing").toBeGreaterThan(100);
+    for (const field of ["organizationId", "repositoryId", "reviewId", "owner", "slug", "name", "email", "login", "source", "prompt", "headSha"]) {
+      expect(returned, `${field} must not reach the snapshot payload`).not.toContain(field);
+    }
+    // And every value is bounded, so a number cannot carry a count that identifies one tenant either.
+    expect(returned).toMatch(/bounded\(/);
+  });
 });

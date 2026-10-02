@@ -40,6 +40,12 @@ const deliberatelyUnreferenced: Record<string, string> = {
 // listed here is not approval - it is the record that would have made the dead notification
 // controls visible the day they shipped instead of during an audit weeks later.
 const permanentlyOffCapabilities: Record<string, string> = {
+  // Tracker OAuth is wired end to end - six Convex actions, a broker route, a purge cron, 17 broker
+  // tests - and cannot run: packages/broker/api/tracker-oauth.ts requires LINEAR_CLIENT_ID/SECRET or
+  // JIRA_CLIENT_ID/SECRET, and neither pair exists, so availability answers runtimeConfigured:false
+  // and every control renders unavailable. Recorded here rather than left looking implemented,
+  // because an audit finding dead UI weeks later is exactly what this list exists to prevent.
+  "trackerOAuth:runtimeConfigured": "no issue tracker can be connected, so /setup/tracker and the integrations panel offer nothing, and a review cannot cite the ticket it came from",
   "notifications:customerEmailDeliveryAvailable": "no customer review email is sent, and it gates the email on/off button, the digest-mode select and the whole per-repository muting list out of the interface, so notifications:updatePreferences cannot be called by anyone.",
 };
 

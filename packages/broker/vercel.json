@@ -29,6 +29,12 @@
     },
     "api/sandboxes.ts": {
       "maxDuration": 60
+    },
+    "api/telemetry.ts": {
+      "maxDuration": 10
+    },
+    "api/tracker-oauth.ts": {
+      "maxDuration": 30
     }
   }
 }

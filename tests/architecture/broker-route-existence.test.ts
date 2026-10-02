@@ -41,6 +41,26 @@ describe("every broker path a caller names is a route that ships", () => {
     expect(missing, "a caller naming a route that does not ship gets a 404 from Vercel, not from the broker").toEqual([]);
   });
 
+  // The caller scan above matches a variable literally named brokerUrl, which left two live routes
+  // unchecked: convex/trackerOAuth.ts builds `${url.origin}/api/tracker-oauth` and the telemetry
+  // workers build `${broker}/api/telemetry`. Widening the pattern to match any "/api/<name>" string
+  // is worse - it picks up the web app's own Next routes, which have nothing to do with the broker.
+  //
+  // So assert it from the side that has no ambiguity: every file in packages/broker/api is a route
+  // somebody wrote intending it to ship. A route absent from the functions map still deploys - Vercel
+  // picks up everything under api/ - but it runs on default limits rather than the ones chosen for
+  // it, which for /api/execute would be the difference between finishing a segment and being killed
+  // mid-sandbox. Two routes were in that state, telemetry and tracker-oauth, and the caller scan
+  // could not see either. No heuristic, no false positives, no blind spot.
+  it("declares every broker route it ships, whatever the caller named its base variable", () => {
+    const routes = readdirSync(join(root, "packages/broker/api")).filter(name => name.endsWith(".ts")).map(name => name.replace(/\.ts$/, ""));
+    const declared = new Set(Object.keys((JSON.parse(read("packages/broker/vercel.json")) as { functions: Record<string, unknown> }).functions)
+      .map(key => key.replace(/^api\//, "").replace(/\.ts$/, "")));
+    expect(routes.length, "an empty sweep must not pass as a clean one").toBeGreaterThan(5);
+    expect(routes.filter(route => !declared.has(route)),
+      "a route absent from the functions map runs on default limits, not the ones chosen for it").toEqual([]);
+  });
+
   // The other half of the same bug. A 404 is what a missing route returns, so no caller may read it
   // as a statement about the thing it asked for.
   it("never treats a bare 404 as a successful outcome", () => {

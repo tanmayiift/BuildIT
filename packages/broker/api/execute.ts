@@ -11,11 +11,12 @@ function sandboxCredentials(request: Request): SandboxCredentials {
   try {
     const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8")) as { owner_id?: unknown; project_id?: unknown };
     if (typeof payload.owner_id !== "string" || typeof payload.project_id !== "string" || !payload.owner_id || !payload.project_id) throw new Error("invalid_claims");
-    // Which account the sandbox is actually billed to. The provider refused with "Hobby plan usage
-    // limit exceeded" while the team owning this project is on a paid Pro plan, and there was no
-    // way to tell whether the OIDC token was resolving to the team or to a personal account. These
-    // are account and project identifiers, not secrets, and they are the whole diagnosis.
-    console.log("buildit_sandbox_scope", { owner: payload.owner_id, project: payload.project_id, issuer: typeof (payload as { iss?: unknown }).iss === "string" ? (payload as { iss: string }).iss : "unknown" });
+    // A console.log of owner_id, project_id and iss stood here to diagnose "Hobby plan usage limit
+    // exceeded" while the owning team was believed to be on Pro. Those are BuildIT's own Vercel
+    // identifiers rather than customer data, so it was never a disclosure - but it was the one
+    // logging site in the broker writing raw object fields outside safeLog, and the question it
+    // answered is settled. Removed rather than left as precedent: the next diagnostic goes through
+    // safeLog, which bounds its own field names.
     return { token, teamId: payload.owner_id, projectId: payload.project_id };
   } catch {
     throw new Error("sandbox_oidc_unavailable");
