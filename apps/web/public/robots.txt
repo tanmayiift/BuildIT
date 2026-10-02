@@ -10,6 +10,7 @@ Disallow: /integrations
 Disallow: /members
 Disallow: /metrics
 Disallow: /notifications
+Disallow: /overview
 Disallow: /policies
 Disallow: /quality
 Disallow: /repositories

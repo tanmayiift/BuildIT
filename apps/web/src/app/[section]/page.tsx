@@ -1,5 +1,5 @@
 import { TrackerOAuthCards } from "../tracker-oauth";
-import { GitHubIntegrationState, MembersWorkspaceState, ModelIntegrationState, RepositoryConnectionView, TrackerConnections } from "../live-connections";
+import { GitHubIntegrationState, MembersWorkspaceState, ModelIntegrationState, OverviewReadiness, RepositoryConnectionView, TrackerConnections } from "../live-connections";
 import { WorkspaceMetrics, WorkspaceUsage } from "../live-metrics-usage";
 import { WorkspaceAudit } from "../live-audit";
 import { WorkspaceQuality } from "../live-quality";
@@ -21,6 +21,7 @@ export async function generateMetadata({ params }: { params: Promise<{ section: 
 export default async function Section({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params;
   if (!isWorkspaceSection(section)) notFound();
+  if (section === "overview") return <Overview />;
   if (section === "repositories") return <Repositories />;
   if (section === "metrics") return <Metrics />;
   if (section === "usage") return <Usage />;
@@ -40,6 +41,29 @@ export default async function Section({ params }: { params: Promise<{ section: s
 
 function Header({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) {
   return <div className="page-heading"><div><p className="eyebrow">{eyebrow}</p><h1 className="title">{title}</h1><p className="page-description">{description}</p></div>{action}</div>;
+}
+
+// The signed-in home. The sidebar's Overview entry used to point at "/" - a public route - so
+// clicking it while signed in dropped the reader out of the workspace chrome into the marketing
+// shell, with no sidebar and no way back except the brand link. The product had no signed-in home at
+// all; /reviews was the de facto one.
+//
+// OverviewReadiness renders here and on "/" deliberately, and that is not duplication: it already
+// branches on whether the caller is signed in, and the two readings are different. To a stranger it
+// is an explainer - what each step will and will not cost before they take any of them, which
+// product.spec.ts asserts as part of the signed-out journey. To a signed-in reader it is live
+// readiness for their own workspace. Removing it from "/" to put it here took the explainer away from
+// the people who needed it most.
+function Overview() {
+  return <div className="content">
+    <Header eyebrow="This workspace" title="Overview"
+      description="What BuildIT can and cannot do for this workspace right now, and the one step that changes it." />
+    <OverviewReadiness />
+    <div className="button-row">
+      <a className="button" href="/reviews">Open the review queue</a>
+      <a className="button secondary" href="/repositories">Manage repositories</a>
+    </div>
+  </div>;
 }
 
 function Repositories() {
