@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireOrganizationRole } from "./lib/authz";
 import { concludedStatuses, isAbandoned, isConcluded, isDecisive } from "./lib/reviewOutcome";
+import { isStored } from "./lib/artifactState";
 
 type StageTimes = { identityAt?: number | undefined; repositoryAt?: number | undefined; modelKeyAt?: number | undefined; previewAt?: number | undefined; reviewAt?: number | undefined; evidenceAt?: number | undefined; humanDecisionAt?: number | undefined };
 // The same ceiling telemetrySnapshotData uses. Activation is a funnel, not an export: past a
@@ -50,7 +51,7 @@ export const funnel = query({
     for (const event of reportRows.slice(0, 100)) {
       const review = await ctx.db.get(event.reviewId);
       const artifact = event.publicMessageArtifactId ? await ctx.db.get(event.publicMessageArtifactId) : null;
-      if (review?.organizationId === args.organizationId && completedEvidenceStatuses.has(review.status) && event.createdAt >= evidenceFloor && artifact?.organizationId === args.organizationId && artifact.reviewId === review._id && artifact.redactionStatus === "redacted" && !artifact.deletedAt && artifact.expiresAt > Date.now()) evidenceTimes.push(event.createdAt);
+      if (review?.organizationId === args.organizationId && completedEvidenceStatuses.has(review.status) && event.createdAt >= evidenceFloor && artifact?.organizationId === args.organizationId && artifact.reviewId === review._id && isStored(artifact) && !artifact.deletedAt && artifact.expiresAt > Date.now()) evidenceTimes.push(event.createdAt);
     }
     const evidencePartial = reportRows.length > 100;
     const evidenceAt = !evidencePartial && evidenceTimes.length ? Math.min(...evidenceTimes) : undefined;

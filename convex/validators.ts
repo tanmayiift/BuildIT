@@ -86,6 +86,12 @@ export const reviewStage = v.union(
   v.literal("queue"), v.literal("context"), v.literal("analysis"), v.literal("validation"),
   v.literal("autofix"), v.literal("final_validation"), v.literal("delivery"), v.literal("complete"),
 );
+// "redacted" asserted a byte-level guarantee nothing provides: no code inspects artifact bytes, and
+// redactForModel applies only to the prompt. What the value actually recorded is that the upload
+// completed and its checksum was accepted. The real controls are KMS envelope encryption and expiry
+// within seven days, which /data-handling describes. "rejected" had no producer at all.
+export const storageState = v.union(v.literal("pending"), v.literal("stored"));
+// Legacy. Read only until artifactStorageMigration has moved every row; then deleted with the field.
 export const redactionStatus = v.union(v.literal("pending"), v.literal("redacted"), v.literal("rejected"));
 export const sourceType = v.union(v.literal("pull_request"), v.literal("github_issue"), v.literal("linear"), v.literal("jira"), v.literal("repository_document"), v.literal("test"));
 export const requirementStatus = v.union(v.literal("resolved"), v.literal("missing"), v.literal("inaccessible"), v.literal("conflicting"), v.literal("excluded"));

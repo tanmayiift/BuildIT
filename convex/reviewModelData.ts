@@ -10,6 +10,7 @@ import { approvedProviderModels, conservativeProviderModelCost, conservativeProv
 import { toMicros } from "./lib/usageCost";
 import { terminalStatuses } from "./lib/lifecycle";
 import { queueReviewNotification } from "./lib/queueNotification";
+import { isPending, isStored } from "./lib/artifactState";
 
 // A review may retry a provider a few times per stage, not without bound across the whole run.
 const maxProviderRetriesPerReview = 12;
@@ -118,10 +119,10 @@ export const analysisScope = internalQuery({
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
     const allArtifacts = await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
     const artifacts = allArtifacts
-      .filter(item => item.type === "repository_snapshot" && item.redactionStatus === "redacted" && !item.deletedAt)
+      .filter(item => item.type === "repository_snapshot" && isStored(item) && !item.deletedAt)
       .sort((a, b) => a.storageKey.localeCompare(b.storageKey));
     if (!artifacts.length || artifacts.some(item => item.organizationId !== args.organizationId || item.repositoryId !== review.repositoryId)) throw new ConvexError("review_context_unavailable");
-    const validationArtifact = allArtifacts.find(item => item.type === "command_output" && item.redactionStatus === "redacted" && !item.deletedAt && item.storageKey.endsWith("/validation.json"));
+    const validationArtifact = allArtifacts.find(item => item.type === "command_output" && isStored(item) && !item.deletedAt && item.storageKey.endsWith("/validation.json"));
     if (!validationArtifact || validationArtifact.organizationId !== args.organizationId || validationArtifact.repositoryId !== review.repositoryId) throw new ConvexError("validation_evidence_unavailable");
     const credentials = await ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", args.organizationId).eq("status", "valid")).collect();
     const credential = credentials.find(item => item.repositoryId === review.repositoryId && item.provider === review.provider)
@@ -149,7 +150,7 @@ export const reserveOutput = internalMutation({
     const prior = (await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect()).find(item => item.type === "prompt_trace" && item.storageKey.endsWith("/analysis.json"));
     if (prior) { if (prior.checksum !== args.checksum || prior.size !== args.size) throw new ConvexError("analysis_artifact_conflict"); return { artifactId: prior._id, storageKey: prior.storageKey }; }
     const artifactId = await ctx.db.insert("artifacts", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id,
-      type: "prompt_trace", storageKey: "pending", encrypted: true, checksum: args.checksum, size: args.size, redactionStatus: "pending",
+      type: "prompt_trace", storageKey: "pending", encrypted: true, checksum: args.checksum, size: args.size, storageState: "pending",
       expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000), deletionAttempts: 0 });
     const storageKey = `artifacts/${args.organizationId}/${review.repositoryId}/${review._id}/${artifactId}/analysis.json`;
     await ctx.db.patch(artifactId, { storageKey });
@@ -166,7 +167,7 @@ export const completeAnalysis = internalMutation({
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
     if (!artifact || artifact.organizationId !== args.organizationId || artifact.repositoryId !== review.repositoryId || artifact.reviewId !== review._id || artifact.type !== "prompt_trace" || artifact.checksum !== args.checksum || artifact.size !== args.size) throw new ConvexError("analysis_artifact_mismatch");
     if (!credential || credential.status !== "valid" || credential.organizationId !== args.organizationId || (credential.repositoryId && credential.repositoryId !== review.repositoryId)) throw new ConvexError("provider_credential_invalid");
-    if (artifact.redactionStatus === "redacted") return artifact._id;
+    if (isStored(artifact)) return artifact._id;
     // boundedAnalysisContext decides, per review, whether everything fit in the model's 80KB
     // window - and when a changed file does not fit it is skipped whole rather than truncated. That
     // verdict reached the analysis artifact and stopped there. review.coverageLevel is written back
@@ -177,7 +178,7 @@ export const completeAnalysis = internalMutation({
     // Recorded as a changed_files gap because that is exactly what it is, and blocksVerdict already
     // knows a changed_files gap must withhold the verdict rather than merely annotate it.
     if (args.analysisDroppedChangedFile && review.coverageLevel === "full") await ctx.db.patch(review._id, { coverageLevel: "partial" as const, coverageGap: "analysis_budget" as const });
-    if (artifact.redactionStatus === "pending") await ctx.db.patch(artifact._id, { redactionStatus: "redacted" });
+    if (isPending(artifact)) await ctx.db.patch(artifact._id, { storageState: "stored" });
     else throw new ConvexError("analysis_artifact_mismatch");
     const quantity = args.inputTokens + args.outputTokens;
     if (!Number.isSafeInteger(quantity) || quantity < 0) throw new ConvexError("invalid_model_usage");
@@ -194,7 +195,7 @@ export const completeAnalysis = internalMutation({
     }
     for (const item of args.findings) {
       if (!/^[0-9a-f]{64}$/.test(item.fingerprintHmac) || !/^[0-9a-f]{64}$/.test(item.pathHmac) || !Number.isFinite(item.confidence) || item.confidence < 0 || item.confidence > 1 || !Number.isInteger(item.startLine) || item.startLine < 1 || !Number.isInteger(item.endLine) || item.endLine < item.startLine || !item.evidenceIds.length) throw new ConvexError("analysis_result_invalid");
-      for (const evidenceId of item.evidenceIds) { const evidence = await ctx.db.get(evidenceId); if (!evidence || evidence.organizationId !== args.organizationId || evidence.repositoryId !== review.repositoryId || evidence.reviewId !== review._id || evidence.redactionStatus !== "redacted") throw new ConvexError("finding_evidence_scope_mismatch"); }
+      for (const evidenceId of item.evidenceIds) { const evidence = await ctx.db.get(evidenceId); if (!evidence || evidence.organizationId !== args.organizationId || evidence.repositoryId !== review.repositoryId || evidence.reviewId !== review._id || !isStored(evidence)) throw new ConvexError("finding_evidence_scope_mismatch"); }
       const requirementId = item.requirementExternalIdHash ? requirementIds.get(item.requirementExternalIdHash) : undefined;
       if (item.requirementExternalIdHash && !requirementId) throw new ConvexError("finding_requirement_missing");
       const existing = await ctx.db.query("findings").withIndex("by_review_fingerprint", q => q.eq("reviewId", review._id).eq("fingerprintHmac", item.fingerprintHmac)).unique();

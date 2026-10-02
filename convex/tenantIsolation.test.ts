@@ -1436,7 +1436,7 @@ describe("Convex tenant isolation", () => {
     ).resolves.toBe(reserved.artifactId);
     expect(await t.run((ctx) => ctx.db.get(reserved.artifactId))).toMatchObject(
       {
-        redactionStatus: "redacted",
+        storageState: "stored",
         organizationId: alpha.organizationId,
         repositoryId: alpha.repositoryId,
         reviewId: alpha.reviewId,
@@ -1620,7 +1620,7 @@ describe("Convex tenant isolation", () => {
       stageRuns:await ctx.db.query("modelStageRuns").withIndex("by_review",q=>q.eq("reviewId",alpha.reviewId)).collect(),
     }));
     expect(stored.artifact).toMatchObject({
-      redactionStatus: "redacted",
+      storageState: "stored",
       checksum,
       size: 200,
     });
@@ -2531,7 +2531,7 @@ describe("durable validation evidence", () => {
       base: await ctx.db.query("baseResults").collect(),
       usage: await ctx.db.query("usageLedger").collect(),
     }));
-    expect(stored.artifact?.redactionStatus).toBe("redacted");
+    expect(stored.artifact?.storageState).toBe("stored");
     expect(stored.checks).toHaveLength(2);
     expect(stored.checks.every((item) => item.credentialTeardownProved && item.sandboxStopped)).toBe(true);
     expect(stored.base).toHaveLength(1);
