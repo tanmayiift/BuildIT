@@ -29,16 +29,33 @@ export async function provisionGrafanaAlerts({ source, desired, token, base, req
   if (matches.length !== 1 || !matches[0].uid) throw new Error("buildit_grafana_folder_ambiguous");
   const folderUID = matches[0].uid;
   const inScope = rule => rule.folderUID === folderUID && rule.ruleGroup === "buildit-release";
-  const uniqueCurrent = deployed => {
+  // Two different questions, and asking only the stricter one meant this file could repair a rule
+  // but never add one. The pre-convert check has to allow the source file to be ahead of the stack,
+  // because a new alert in alerts.yml is exactly that - declared and not yet deployed, which is the
+  // reason to run this. Demanding parity first made adding an alert impossible: provisioning threw
+  // buildit_grafana_managed_inventory_differs before it ever reached the convert call, so the
+  // deployed rules could only ever be the set that was already there.
+  //
+  // What the pre-convert check still refuses is what it was written to refuse: a managed group
+  // holding a rule this file does not know about, or two rules sharing a title or a UID. Those mean
+  // somebody changed the stack by hand and the change has not been reviewed, and converting over it
+  // would discard their work silently. Parity is still required after the convert, where it is a
+  // statement about what was just written rather than a precondition for writing anything.
+  const knownToSource = new Set(desired.map(rule => rule.alert));
+  const reviewedCurrent = deployed => {
     if (!Array.isArray(deployed)) throw new Error("buildit_grafana_inventory_invalid");
     const current = deployed.filter(inScope);
-    if (current.length !== desired.length || new Set(current.map(rule => rule.uid)).size !== current.length ||
+    if (current.some(rule => !knownToSource.has(rule.title)) || new Set(current.map(rule => rule.uid)).size !== current.length ||
+      current.some(rule => current.filter(other => other.title === rule.title).length !== 1)) throw new Error("buildit_grafana_managed_inventory_differs");
+    return current;
+  };
+  const uniqueCurrent = deployed => {
+    const current = reviewedCurrent(deployed);
+    if (current.length !== desired.length ||
       desired.some(want => current.filter(rule => rule.title === want.alert).length !== 1)) throw new Error("buildit_grafana_managed_inventory_differs");
     return current;
   };
-  // This repair only operates on the already reviewed managed group; it does not initialize
-  // an unknown stack or delete an unexpected rule while converting the source file.
-  uniqueCurrent(await call("/api/v1/provisioning/alert-rules"));
+  reviewedCurrent(await call("/api/v1/provisioning/alert-rules"));
   await call("/api/convert/prometheus/config/v1/rules/buildit", "POST", source, {
     "content-type": "application/yaml", "x-disable-provenance": "true", "x-grafana-alerting-datasource-uid": "grafanacloud-prom",
     "x-grafana-alerting-notification-settings": JSON.stringify(builditNotificationSettings),

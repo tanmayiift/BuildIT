@@ -71,6 +71,39 @@ Confirm the stale run made no write. The user may start a new review only after 
 
 Check model routing, context size, and actual stage usage. Do not raise ceilings automatically. A user must approve each new per-review ceiling.
 
+## BuildITSandboxQuotaHigh
+
+BuildIT's own sandbox quota for the month is filling up, and at 1.0 no workspace can run checks in
+any repository. The gauge is a fraction of the *usable* quota, which is 90% of what the provider
+allows, so 1.0 is where BuildIT starts refusing and not where the provider cuts it off - that last
+tenth is the margin that lets a refusal carry an explanation instead of arriving as
+`sandbox_unavailable`.
+
+Read `sandboxSecondsUsed` per workspace on the usage page or in the `organizations` table to see
+where it went. Two causes look identical in the gauge and are not: genuine review volume, and
+sandboxes a worker abandoned mid-segment that nothing reclaimed. Check
+`executionJobs` for rows with `sandboxReclaimAt` set and `sandboxReclaimedAt` empty before assuming
+the first - `sandboxReclaimAttempts` is what says a reclaim has been failing rather than pending.
+
+It clears at the start of the next UTC month on its own. There is no way to clear it sooner than
+raising the provider plan; lowering a workspace's `monthlySandboxSeconds` stops further consumption
+but does not return what is already spent.
+
+## BuildITWorkspaceSandboxCeiling
+
+One or more workspaces are at their own monthly sandbox allowance and are being refused, while the
+platform may have plenty left. Those reviews come back `blocked` with `sandbox_ceiling_reached` and
+`await_sandbox_reset`, and the pull request says so.
+
+Confirm the workspace is genuinely at its allowance rather than holding it through abandoned
+sandboxes, as above. Then decide whether to raise it with
+`organizations:setCapacityLimits` and a `monthlySandboxSeconds` value - the ceiling is operator-only
+by design, because the allowance is a slice of capacity every workspace draws on, so the workspace
+cannot raise it from the dashboard and will not stop being refused until an operator acts or the
+month rolls over. Do not raise it past what `BuildITSandboxQuotaHigh` leaves available, or the
+workspace's next refusal is the platform one with no explanation of why its own allowance did not
+help.
+
 ## BuildITProviderRetryRateHigh
 
 No review has failed. Retries are absorbing provider errors, which is what they are for, and this

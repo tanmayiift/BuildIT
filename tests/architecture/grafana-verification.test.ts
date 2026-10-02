@@ -23,9 +23,26 @@ const capturedDesired = alertSource.split(/^ {6}- alert: /m).slice(1).map(block 
   const field = (name: string) => block.match(new RegExp(`^\\s*${name}:\\s*(.+)$`, "m"))?.[1]?.trim();
   return { alert: block.split("\n")[0]!.trim(), expr: field("expr"), for: field("for"), severity: block.match(/severity:\s*([a-z]+)/)?.[1], summary: field("summary"), action: field("action"), runbook: field("runbook_url") };
 });
+// The capture is dated evidence of what Grafana held on 2026-09-14, and these cases prove the
+// comparator against it. Comparing it to *today's* alerts.yml made every new alert break a test
+// about September: the rule is genuinely absent from a capture taken before it existed, which is
+// drift against the real stack and is what `pnpm alerts:verify` checks, not something a frozen
+// fixture can answer. So the fixture is compared against the rules it actually contains, and the
+// count is pinned so renaming or deleting one of those fourteen still fails here.
+const capturedTitles = new Set(capturedCurrent.rules.map((rule: { title: string }) => rule.title));
+const capturedDesiredAtCapture = capturedDesired.filter(rule => capturedTitles.has(rule.alert));
+
 const capturedRules = (group: { name: string; rules: Array<Record<string, unknown>> }, folderUID: string) => group.rules.map(rule => ({ ...rule, for: rule.for ?? "0s", folderUID, ruleGroup: group.name }));
 const repairedCurrent = { ...capturedCurrent, rules: capturedCurrent.rules.map((rule: Record<string, unknown>) => ({ ...rule, noDataState: "OK", execErrState: "Error", notification_settings: { receiver: "BuildIT alerts (Tanmay)" } })) };
 describe("BuildIT Grafana reconciliation evidence", () => {
+  it("still declares every rule the September capture holds", () => {
+    // The scoping above is only safe while alerts.yml is a superset of the capture. If a captured
+    // rule is renamed or dropped, this is what notices - the comparisons would otherwise just stop
+    // looking at it.
+    expect(capturedTitles.size).toBe(14);
+    expect(capturedDesiredAtCapture).toHaveLength(14);
+    expect(capturedDesired.length).toBeGreaterThanOrEqual(capturedTitles.size);
+  });
   it("requires fresh scheduled telemetry and matching complete rule definitions", () => {
     expect(compareGrafanaRules(input)).toMatchObject({ verified: true, telemetry: { fresh: true, ageSeconds: 200 } });
     expect(compareGrafanaRules({ ...input, deployed: [{ ...current, for: "5m0s" }] }).verified).toBe(true);
@@ -37,13 +54,13 @@ describe("BuildIT Grafana reconciliation evidence", () => {
     const deployed = capturedRules(capturedCurrent, "managed");
     expect(deployed).toHaveLength(14);
     expect(deployed.every(rule => rule.execErrState === "OK")).toBe(true);
-    const report = compareGrafanaRules({ ...input, desired: capturedDesired, deployed });
+    const report = compareGrafanaRules({ ...input, desired: capturedDesiredAtCapture, deployed });
     expect(report.verified).toBe(false);
     expect(report.drift).toHaveLength(14);
     const repaired = deployed.map(rule => ({ ...rule, noDataState: "OK", execErrState: "Error", notification_settings: { receiver: "BuildIT alerts (Tanmay)" } }));
-    expect(compareGrafanaRules({ ...input, desired: capturedDesired, deployed: repaired }).verified).toBe(true);
+    expect(compareGrafanaRules({ ...input, desired: capturedDesiredAtCapture, deployed: repaired }).verified).toBe(true);
     for (const change of [{ execErrState: "OK" }, { execErrState: undefined }, { notification_settings: undefined }, { notification_settings: { receiver: "empty-default" } }, { noDataState: "Alerting" }]) {
-      expect(compareGrafanaRules({ ...input, desired: capturedDesired, deployed: [{ ...repaired[0], ...change }, ...repaired.slice(1)] }).verified).toBe(false);
+      expect(compareGrafanaRules({ ...input, desired: capturedDesiredAtCapture, deployed: [{ ...repaired[0], ...change }, ...repaired.slice(1)] }).verified).toBe(false);
     }
   });
   it("requires a configured existing BuildIT email integration without claiming delivery", () => {
@@ -75,7 +92,7 @@ describe("BuildIT Grafana reconciliation evidence", () => {
     expect(report.readyForReviewedCleanup).toBe(false);
   });
   it("recognizes the twelve observed legacy UID/title pairs from the sanitized native exports", () => {
-    const report = compareGrafanaRules({ ...input, desired: capturedDesired, deployed: [...capturedRules(repairedCurrent, "managed"), ...capturedRules(capturedLegacy, "legacy")] });
+    const report = compareGrafanaRules({ ...input, desired: capturedDesiredAtCapture, deployed: [...capturedRules(repairedCurrent, "managed"), ...capturedRules(capturedLegacy, "legacy")] });
     expect(report.drift).toEqual([]);
     expect(report.legacyCandidates).toHaveLength(12);
     expect(report.unrecognizedLegacyCount).toBe(0);
@@ -116,7 +133,7 @@ describe("BuildIT Grafana reconciliation evidence", () => {
     }
   });
   it("reports native UI export definitions and fingerprints without inventing freshness or folder UIDs", () => {
-    const report = compareGrafanaExportGroups({ desired: capturedDesired, currentExport: { groups: [repairedCurrent] }, legacyExport: { groups: [capturedLegacy] } });
+    const report = compareGrafanaExportGroups({ desired: capturedDesiredAtCapture, currentExport: { groups: [repairedCurrent] }, legacyExport: { groups: [capturedLegacy] } });
     expect(report).toMatchObject({ currentDefinitionsMatch: true, managedRuleCount: 14, drift: [], unrecognizedLegacyCount: 0,
       telemetry: { status: "not_queried", fresh: null, ageSeconds: null }, folderUIDsVerified: false, fullStackInventoryVerified: false, readyForReviewedCleanup: false, verified: false });
     expect(report.legacyCandidates).toHaveLength(12);
@@ -126,7 +143,7 @@ describe("BuildIT Grafana reconciliation evidence", () => {
       expect(candidate).not.toHaveProperty("folderUID");
       expect(candidate).not.toHaveProperty("fingerprint");
     }
-    expect(() => compareGrafanaExportGroups({ desired: capturedDesired, currentExport: { groups: [capturedCurrent, capturedCurrent] }, legacyExport: { groups: [capturedLegacy] } })).toThrow("buildit_grafana_export_group_ambiguous");
+    expect(() => compareGrafanaExportGroups({ desired: capturedDesiredAtCapture, currentExport: { groups: [capturedCurrent, capturedCurrent] }, legacyExport: { groups: [capturedLegacy] } })).toThrow("buildit_grafana_export_group_ambiguous");
   });
   it("keeps the offline export command separate from a passing live gate", () => {
     const result = spawnSync(process.execPath, ["scripts/report-buildit-grafana-exports.mjs",
