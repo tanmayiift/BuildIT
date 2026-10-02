@@ -46,9 +46,18 @@ export const feedbackForRepository = internalQuery({
 export const repositoryByGithubId = internalQuery({
   args: { githubRepositoryId: v.number() },
   handler: async (ctx, args) => {
-    const repository = await ctx.db.query("repositories")
-      .withIndex("by_github_id", q => q.eq("githubRepositoryId", args.githubRepositoryId)).first();
-    return repository && repository.enabled ? { repositoryId: repository._id } : null;
+    // Convex has no uniqueness constraint and by_github_id is a plain index, so two rows carrying
+    // the same GitHub id are representable - a repository transferred between two installations
+    // BuildIT has both claimed, for instance. `.first()` picked whichever sorted first, which means
+    // a person's feedback could be attributed to the wrong tenant's repository. Losing the signal is
+    // the better failure: refuse ambiguity, exactly as the record mutation above already does for
+    // legacy fingerprint markers. githubWebhookData resolves the same thing with `.unique()`, and
+    // two call sites disagreeing about what a duplicate means is how the assumption rots.
+    const matches = await ctx.db.query("repositories")
+      .withIndex("by_github_id", q => q.eq("githubRepositoryId", args.githubRepositoryId)).take(2);
+    if (matches.length !== 1) return null;
+    const repository = matches[0]!;
+    return repository.enabled ? { repositoryId: repository._id } : null;
   },
 });
 
