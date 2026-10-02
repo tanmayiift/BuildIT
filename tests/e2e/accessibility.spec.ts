@@ -44,6 +44,20 @@ for (const route of routes) test(`has no serious accessibility violation: ${rout
   expect(result.violations.filter(item => ["serious", "critical"].includes(item.impact ?? "")), JSON.stringify(result.violations, null, 2)).toEqual([]);
 });
 
+// The same sweep in the dark scheme. interface-accessibility.test.ts measures token pairs; this
+// measures what is painted, so a rule that sets text on a ground nobody paired - or a token used on
+// the wrong ground - fails here even when every listed pair passes.
+test.describe("in the dark colour scheme", () => {
+  test.use({ colorScheme: "dark" });
+  for (const route of routes) test(`has no serious accessibility violation in dark mode: ${route}`, async ({ page }) => {
+    await page.goto(route);
+    await page.locator("body").waitFor();
+    await expect(page.locator("h1").first()).toBeVisible();
+    const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+    expect(result.violations.filter(item => ["serious", "critical"].includes(item.impact ?? "")), JSON.stringify(result.violations, null, 2)).toEqual([]);
+  });
+});
+
 for (const route of ["/", "/reviews?tour=1", "/setup/model", "/reviews/22?tour=1", "/reviews/91?tour=1", "/reviews/420?tour=1", "/reviews/418?tour=1&state=cancelled", "/reviews/418?tour=1&state=running", "/reviews/418?tour=1&state=changes", "/reviews/418?tour=1&state=passed", "/reviews/418?tour=1&state=empty", "/reviews/418?tour=1&state=populated"]) test(`matches the release screenshot: ${route}`, async ({ page }) => {
   await page.goto(route);
   await page.locator("body").waitFor();
