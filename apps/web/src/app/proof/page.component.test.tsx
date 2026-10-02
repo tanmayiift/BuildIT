@@ -75,7 +75,9 @@ describe("the public proof page", () => {
     // Every recorded status appears in the distribution, including the ones nobody would put in a
     // pitch deck, and none of them is grouped into an "other" bucket.
     const mix = document.querySelector('dl[aria-labelledby="verdict-mix"]')!;
-    for (const label of ["Checks passed", "Platform failure", "Failed after bounds", "Cancelled", "Inconclusive", "Analyzing"]) {
+    // Names from the shared vocabulary in review-status.ts. "BuildIT failed" replaced "Platform
+    // failure" when the six status vocabularies became one - the same fact, stated with the fault.
+    for (const label of ["Checks passed", "BuildIT failed", "Needs a developer", "Stopped", "Inconclusive", "Reviewing code"]) {
       expect(mix.textContent, label).toContain(label);
     }
     expect(mix.querySelectorAll("dt")).toHaveLength(Object.keys(summary().reviews.byStatus).length);
@@ -84,7 +86,11 @@ describe("the public proof page", () => {
   it("does not drop a status the server adds but the page has no label for", () => {
     state.proof = summary({ reviews: { distinctCompletedPullRequests: 1, counted: 2, truncated: false, repositoriesReviewed: 1, byStatus: { checks_passed: 1, some_new_status: 1 } } });
     render(<Proof />);
-    expect(screen.getByText("some_new_status")).toBeTruthy();
+    // Still present, still distinguishable from any other unknown status, and marked as the
+    // identifier it is rather than presented as a name. Convex deploys before the web app, so this
+    // window is real, not hypothetical.
+    const unknown = screen.getByText("some_new_status");
+    expect(unknown.tagName).toBe("CODE");
   });
 
   it("reports an empty database as empty instead of inventing an example", () => {

@@ -18,16 +18,19 @@ describe("review presentation", () => {
     expect(eventPresentation("review_cancelled")).toBe("Review stopped");
   });
 
+  // The short labels for real statuses come from review-status.ts, shared with every page. The titles
+  // asserted here are still this page's own and still carry the human-authority wording; "running" and
+  // "passed" are sample-tour states rather than enum values and keep their own labels.
   it("keeps every decision state plain-language and explicit about human authority", () => {
     expect(statusPresentation("running", false)).toMatchObject({ label: "In progress", title: "BuildIT is reviewing this change" });
-    expect(statusPresentation("changes_requested", false)).toMatchObject({ label: "Action needed", title: "Changes are needed before merge" });
+    expect(statusPresentation("changes_requested", false)).toMatchObject({ label: "Changes requested", title: "Changes are needed before merge" });
     expect(statusPresentation("passed", false)).toMatchObject({ label: "Ready for you", title: "All required checks passed" });
-    expect(statusPresentation("delivered", false)).toMatchObject({ label: "Fix ready", title: "A tested fix is ready to inspect" });
-    expect(statusPresentation("platform_failed", false)).toMatchObject({ label: "Could not complete", title: "BuildIT hit a service problem" });
+    expect(statusPresentation("delivered", false)).toMatchObject({ label: "Fix delivered", title: "A tested fix is ready to inspect" });
+    expect(statusPresentation("platform_failed", false)).toMatchObject({ label: "BuildIT failed", title: "BuildIT hit a service problem" });
     expect(statusPresentation("platform_failed", false, "provider_rate_limited")).toMatchObject({ label: "Provider is busy", title: "Your model provider is rate-limited", tone: "warning" });
     expect(statusPresentation("budget_exhausted", false)).toMatchObject({ label: "Budget reached", title: "Review stopped before the next model step", tone: "warning" });
     expect(nextActionPresentation("increase_budget", false)).toEqual({ title: "Increase the review budget", detail: "No further model call was made. Choose a higher ceiling, then start a new review." });
-    expect(statusPresentation("inconclusive", false)).toMatchObject({ label: "Not enough proof", title: "A safe decision is not possible yet" });
+    expect(statusPresentation("inconclusive", false)).toMatchObject({ label: "Inconclusive", title: "A safe decision is not possible yet" });
     expect(nextActionPresentation("await_human_approval", false).detail).toContain("never merge");
   });
 

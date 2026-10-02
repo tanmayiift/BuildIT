@@ -17,10 +17,10 @@ describe("review queue presentation", () => {
   it("separates code decisions from service retries in plain language", () => {
     const failure = retry("failure", 1), decision = { ...retry("decision", 2), status: "changes_requested", statusReasonCode: "required_check_failed" };
     expect(queueSection(failure)).toBe("retry");
-    expect(queueStatusLabel(failure)).toBe("Review didn't run");
+    expect(queueStatusLabel(failure)).toBe("BuildIT failed");
     expect(queueStatusDetail(failure)).toContain("No code decision was made");
     expect(queueSection(decision)).toBe("decision");
-    expect(queueStatusLabel(decision)).toBe("Changes needed");
+    expect(queueStatusLabel(decision)).toBe("Changes requested");
     expect(queueStatusDetail(decision)).toBe("At least one required check failed.");
   });
 
