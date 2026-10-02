@@ -61,12 +61,12 @@ describe("the tour reaches the whole workspace chrome", () => {
   const chrome: Record<string, { file: string; consults: RegExp }> = {
     AccountStatus: { file: "account-status.tsx", consults: /useSampleTour\(\)/ },
     WorkspaceSwitcher: { file: "workspace-switcher.tsx", consults: /useSampleTour\(\)/ },
-    ConnectionBanner: { file: "live-connections.tsx", consults: /export function ConnectionBanner\(\) \{\s*const connection = useConnection\(\)/ },
-    SetupProgress: { file: "live-connections.tsx", consults: /export function SetupProgress\(\) \{\s*const connection = useConnection\(\)/ },
+    ConnectionBanner: { file: "live-connections.tsx", consults: /export function ConnectionBanner\(\) \{\s*const tour = useSampleTour\(\), live = useConnection\(\);\s*const connection = tour \? signedOutConnection : live;/ },
+    SetupProgress: { file: "live-connections.tsx", consults: /export function SetupProgress\(\) \{\s*const tour = useSampleTour\(\), live = useConnection\(\);\s*const connection = tour \? signedOutConnection : live;/ },
   };
 
-  // useConnection is where the tour is consulted for the banner and the setup meter: it returns the
-  // signed-out sample connection under the tour without querying.
+  // The banner and the setup meter treat the tour as signed out outright, so even the e2e design
+  // fixture cannot put a connected-workspace claim in the chrome around a tour.
   it("names every live component the chrome mounts", () => {
     const mounted = [...shell.matchAll(/<([A-Z]\w+)[\s/>]/g)].map(match => match[1]);
     const live = mounted.filter(name => !["SampleTourProvider", "WorkspaceShell", "WorkspaceRouteBoundary", "PublicShell", "NavLink", "BrandGlyph"].includes(name!));
