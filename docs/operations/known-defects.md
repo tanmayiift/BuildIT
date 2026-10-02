@@ -283,3 +283,58 @@ resets or the plan changes.
 So: Hobby is viable in principle and unproven in practice. The honest statement is that the
 execution path fits the 300-second function ceiling — that part is proven — and whether it fits
 5 CPU-hours a month is an open question answerable only with a fresh cycle.
+
+## A notification email would name a private repository while claiming to be source-free
+
+Latent, not live. `convex/notifications.ts` holds `customerEmailDeliveryAvailable = false`, never
+reassigned, and `tests/architecture/public-function-reachability.test.ts` records the whole
+capability as off by construction. The outbox is additionally gated on local capture only
+(`packages/operations/src/emailCaptureConfig.ts` refuses when `VERCEL` or `VERCEL_ENV` is set and
+requires three loopback URLs), production Convex carries none of those variables, and no cron drains
+the outbox. There is no transactional sender anywhere in the tree.
+
+When it does run, `convex/notificationOutbox.ts` puts `repository: "owner/name"`, `prNumber` and
+`commit: headSha` into the message, and `packages/operations/src/email.ts` asserts in the body that
+*"This source-free message contains no code, diff, logs, findings, prompts, or credentials."*
+
+That sentence is literally true — a repository name is metadata, not source. It is also the kind of
+claim this product exists not to make loosely: for a private repository, the name and a commit sha
+are the two things the recipient's mail provider now holds, and a reader who took the sentence at
+face value would not expect either.
+
+**Precondition before email ships.** One of:
+
+- omit `repository` and `commit` from the body when the repository is not public, leaving the pull
+  request link to carry the context for someone who already has access; or
+- widen the sentence to name the metadata it does carry, so the claim matches the message.
+
+Not a disclosure today, and not fixed today, because the capability cannot be reached. Recorded so
+the choice is made before delivery is switched on rather than after.
+
+## `organizations.fingerprintKeyVersion` promises per-tenant keying the product does not do
+
+`convex/schema.ts` declares it and `convex/githubInstallationsData.ts` writes `1` at organization
+creation. **Nothing reads it.** `convex/reviewAnalysisWorker.ts` derives both `pathHmac` and
+`fingerprintHmac` from a single deployment-wide `FINDING_FINGERPRINT_SECRET`, so the same file path
+in two different workspaces produces the same `pathHmac`, and `findings.by_fingerprint` is a
+cross-tenant index.
+
+Not a live leak, and the reason is worth stating precisely rather than trusting the index to be
+unreachable: its only reader, `convex/findingFeedbackData.ts`, re-scopes every candidate to the
+repository's own organization and then requires exactly one survivor, so a cross-tenant collision is
+filtered out rather than followed. `reviews:getEvidence` does hand a viewer the full 64-hex
+`fingerprintHmac`, but no public function accepts a fingerprint as a lookup key.
+
+The defect is the name. A field called `fingerprintKeyVersion`, stored per organization, advertises
+versioned per-tenant key derivation; the product has one key and no versioning.
+
+**Why it is recorded rather than fixed.** Folding `organizationId` into the HMAC message breaks
+legacy fingerprint-marker matching in `findingFeedbackData.record`, so a person's dismissal on an
+older pull request silently stops being recorded — trading a naming defect for a data-loss defect.
+Doing it properly means a versioned per-organization salt with dual-read fallback: derive with the
+current version, accept the previous one on read, and re-stamp as rows are touched. Removing the
+field instead is a schema narrowing that needs a production row migration first, because Convex
+validates documents on write.
+
+Either way it is a deliberate piece of work, not a rename. Until then: one key, no versioning, and
+the schema says otherwise.
