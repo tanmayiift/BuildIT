@@ -15,13 +15,23 @@ describe("the design token system", () => {
       space: ["space-1", "space-2", "space-3", "space-4", "space-5", "space-6", "space-7", "space-8"],
       radius: ["radius-sm", "radius-md", "radius-lg", "radius-pill"],
       shadow: ["shadow-1", "shadow-2", "shadow-3"],
-      type: ["text-xs", "text-sm", "text-base", "text-md", "text-lg", "text-xl", "text-2xl", "text-3xl", "text-4xl"],
+      type: ["text-2xs", "text-xs", "text-sm", "text-base", "text-md", "text-lg", "text-xl", "text-2xl", "text-figure", "text-3xl", "text-4xl"],
       weight: ["weight-regular", "weight-medium", "weight-semibold", "weight-bold"],
       motion: ["duration-fast", "duration-base", "ease-out"],
     };
     for (const [scale, names] of Object.entries(expected)) {
       for (const name of names) expect(tokens.get(name), `--${name} is missing from the ${scale} scale`).toBeTruthy();
     }
+  });
+
+  // The scales are consumed now, so a rule may not step off them. Fluid headings keep clamp(), circles
+  // keep 50%, and a corner that is deliberately square keeps 0.
+  it("sizes type and rounds corners only from the scales", () => {
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/:root\s*\{[^}]*\}/g, "");
+    const fontSizes = [...rules.matchAll(/font-size:\s*([^;}]+)/g)].map(match => match[1]!.trim()).filter(value => !/^(var\(--text-|clamp\()/.test(value));
+    const fontShorthand = [...rules.matchAll(/font:\s*\d+\s+([^\s/]+)/g)].map(match => match[1]!).filter(value => !value.startsWith("var(--text-"));
+    const radii = [...rules.matchAll(/border-radius:\s*([^;}]+)/g)].flatMap(match => match[1]!.trim().split(/\s+/)).filter(value => !/^(var\(--radius-[a-z]+\)|0|50%)$/.test(value));
+    expect({ fontSizes, fontShorthand, radii }).toEqual({ fontSizes: [], fontShorthand: [], radii: [] });
   });
 
   it("keeps the space scale on a 4px base, so a value cannot drift off it", () => {
