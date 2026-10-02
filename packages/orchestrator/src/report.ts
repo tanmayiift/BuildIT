@@ -5,7 +5,10 @@ type ReportFinding = { title: string; severity: "critical" | "high" | "warning" 
 
 const redactionSentinel = "\u0000BUILDIT_REDACTED\u0000";
 
-function safe(value: string) {
+// Exported because the inline-comment path needs exactly this and had none of it. The summary
+// comment was hardened here while the inline comments posted raw model prose, so one review wrote
+// two different trust levels into the same pull request.
+export function safe(value: string) {
   return redact(value)
     .replaceAll("[REDACTED]", redactionSentinel)
     .replace(/@/g, "＠")
