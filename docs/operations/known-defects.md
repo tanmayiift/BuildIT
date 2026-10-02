@@ -338,3 +338,42 @@ validates documents on write.
 
 Either way it is a deliberate piece of work, not a rename. Until then: one key, no versioning, and
 the schema says otherwise.
+
+## Four webhook handlers cannot fire, because the App does not subscribe to their events
+
+Read from `https://api.github.com/apps/buildit-agentic-review` on 2 October 2026, the production
+GitHub App is subscribed to exactly five events:
+
+```
+check_run  check_suite  issue_comment  pull_request  push
+```
+
+`convex/http.ts` handles seven. The four that GitHub will never deliver:
+
+| Handler | What its absence costs |
+|---|---|
+| `installation_repositories` | Adding or removing a repository in GitHub does not reach BuildIT until somebody presses Refresh on `/repositories`. The comment in `http.ts` says this handler exists because "a customer could grant access and watch it be ignored" — which is still what happens. |
+| `repository` | A repository made private or public, renamed or transferred does not re-sync, so `repositories.visibility` stays whatever it was when access was granted. |
+| `public` | A private repository opened to the world does not re-sync. |
+| `pull_request_review_thread` | Resolving or unresolving a BuildIT finding thread records no feedback. `findingFeedbackWorker.observe` has never received a single delivery, so the learning signal and the demotion it drives (`demotedByLearning` in `reviewPublicationWorker`) have no input. |
+
+**How it was found.** Ten `buildit-demo-*` repositories were made private, which should have produced
+ten `repository` deliveries. `webhookDeliveries` recorded none, and `visibilityVerifiedAt` stayed
+absent on every row. The App's own event list confirmed why.
+
+**Why no test caught it.** A handler for an unsubscribed event is indistinguishable, in code and in
+every test, from a handler that works — GitHub simply never calls it. `webhook-events.test.ts` checked
+that each handled name is an event GitHub *can* send, which all four are. It now also checks each one
+against the App's subscription list, and requires a handler for an unsubscribed event to be written
+down with its consequence. That is the assertion that would have caught all four.
+
+**The fix is not in this repository.** GitHub App event subscriptions live in the App's settings and
+have no REST endpoint — `PATCH /app` does not exist. Someone with admin on the App must add
+`repository`, `public`, `installation_repositories` and `pull_request_review_thread` under *Subscribe
+to events* at `github.com/settings/apps/buildit-agentic-review/permissions`. No code change is needed
+once they are added; all four handlers already exist and are tested.
+
+**What is not affected.** The evidence-publication leak fixed in #60 does not depend on any of this.
+`publishAsEvidence` is absent on every row and `visibilityVerifiedAt` is absent too, so the public
+query refuses on two independent conditions regardless of whether `visibility` is stale. That was the
+point of requiring four conditions rather than trusting the column to converge.
