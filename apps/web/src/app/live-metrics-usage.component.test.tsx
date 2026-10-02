@@ -33,7 +33,7 @@ const summary = (over: Partial<WorkspaceUsageSummary> = {}): WorkspaceUsageSumma
   recordCount: 20_000,
   truncated: true,
   monthlyBudget: 100,
-  sandbox: { usedSeconds: 900, ceilingSeconds: 3_600 },
+  sandbox: { usedSeconds: 900, ceilingSeconds: 3_600, platformUsedSeconds: 4_200, platformCeilingSeconds: 16_200 },
   budget: { month: "2026-09", periodStart: Date.UTC(2026, 8, 1), periodEnd: Date.UTC(2026, 9, 1), estimatedSpendUsd: 12.5, reservedUsd: 0, monthlyBudgetUsd: 100, remainingUsd: 87.5, accountingComplete: true, reconciliationComplete: true, unknownInvocationCount: 0, legacyCostsMayBeIncomplete: false },
   ...over,
 });

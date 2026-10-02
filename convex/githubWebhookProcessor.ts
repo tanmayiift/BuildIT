@@ -129,6 +129,8 @@ async function startReviewForPullRequest(ctx: ActionCtx, input: StartReviewInput
         ? { title: "BuildIT is already reviewing this pull request", summary: "A review is running on this commit. Its result will be posted here when it finishes; there is nothing to do. To stop it, comment `@buildit cancel`." }
         : reason === "concurrency_limit_reached"
         ? { title: "BuildIT is at its review limit", summary: "This workspace already has as many reviews running as its plan allows. This one will not start. Wait for a running review to finish, then comment `@buildit review` again." }
+        : reason === "platform_capacity_reached"
+        ? { title: "BuildIT is out of sandbox capacity for the month", summary: "Every review runs its checks in an isolated sandbox, and BuildIT has used the sandbox capacity its own plan allows this month across all workspaces. This is BuildIT's limit, not this workspace's, and retrying will not start the review. Capacity resets at the start of next month." }
         : reason === "sandbox_ceiling_reached"
         ? { title: "BuildIT has used this workspace's sandbox time for the month", summary: "Every review runs its checks in an isolated sandbox, and this workspace has used the sandbox time its plan allows this month. Retrying will not start it. The allowance resets at the start of next month, or a workspace admin can raise it in BuildIT." }
         : reason === "provider_model_unavailable"

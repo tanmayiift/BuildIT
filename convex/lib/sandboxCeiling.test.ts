@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addSandboxSeconds, defaultMonthlySandboxSeconds, platformMonthlySandboxSeconds, sandboxCeilingExceeded, sandboxCeilingSeconds, sandboxSecondsThisMonth } from "./sandboxCeiling";
+import { addSandboxSeconds, defaultMonthlySandboxSeconds, platformCeilingExceeded, platformMonthlySandboxSeconds, platformUsableMonthlySandboxSeconds, sandboxCeilingExceeded, sandboxCeilingSeconds, sandboxSecondsThisMonth } from "./sandboxCeiling";
 import { monthKey } from "./monthlySpend";
 
 const month = "2026-10";
@@ -20,6 +20,30 @@ describe("sandbox ceiling", () => {
     // tenant's default may be a large fraction of it.
     expect(platformMonthlySandboxSeconds).toBe(18_000);
     expect(defaultMonthlySandboxSeconds * 5).toBeLessThanOrEqual(platformMonthlySandboxSeconds);
+  });
+
+  // This is the arithmetic that says why a per-tenant ceiling is not enough on its own, and it is
+  // asserted rather than written in a comment so nobody raises the default past the point where the
+  // platform guard is the only thing holding the quota.
+  it("does not bound the platform by per-tenant slices alone", () => {
+    const tenantsThatFit = Math.floor(platformMonthlySandboxSeconds / defaultMonthlySandboxSeconds);
+    expect(tenantsThatFit).toBe(5);
+    expect(defaultMonthlySandboxSeconds * (tenantsThatFit + 1)).toBeGreaterThan(platformMonthlySandboxSeconds);
+  });
+
+  it("trips the platform guard before the provider does, not at the same moment", () => {
+    expect(platformUsableMonthlySandboxSeconds).toBeLessThan(platformMonthlySandboxSeconds);
+    expect(platformUsableMonthlySandboxSeconds).toBe(16_200);
+    expect(platformCeilingExceeded(16_199)).toBe(false);
+    expect(platformCeilingExceeded(16_200)).toBe(true);
+    // A provider-side refusal would arrive here, with no explanation and no reset date.
+    expect(platformCeilingExceeded(platformMonthlySandboxSeconds)).toBe(true);
+  });
+
+  it("refuses rather than admits when the platform total is unusable", () => {
+    expect(platformCeilingExceeded(Number.NaN)).toBe(true);
+    expect(platformCeilingExceeded(0, 0)).toBe(true);
+    expect(platformCeilingExceeded(0, Number.NaN)).toBe(true);
   });
 
   it("honours an explicit per-tenant override", () => {

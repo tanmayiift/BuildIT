@@ -6,7 +6,7 @@ import { appendAuditEvent } from "./lib/audit";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { retentionMs, terminalStatuses } from "./lib/lifecycle";
 import { activeReviewCount, concurrencyExceeded } from "./lib/tenantLimits";
-import { sandboxCeilingExceeded, sandboxCeilingSeconds, sandboxSecondsThisMonth } from "./lib/sandboxCeiling";
+import { platformCeilingExceeded, platformSandboxSecondsThisMonth, sandboxCeilingExceeded, sandboxCeilingSeconds, sandboxSecondsThisMonth } from "./lib/sandboxCeiling";
 import { monthKey } from "./lib/monthlySpend";
 import { selectProviderModel, type ProviderName } from "@buildit/providers";
 
@@ -120,6 +120,13 @@ export const create = internalMutation({
     // sandbox_unavailable for a reason that was not theirs.
     if (sandboxCeilingExceeded(sandboxSecondsThisMonth(organization, monthKey(args.now)), sandboxCeilingSeconds(organization))) {
       throw new ConvexError("organization_sandbox_ceiling_reached");
+    }
+    // And the deployment's own total, which the per-tenant ceiling does not bound: enough tenants
+    // inside their own slices still add up to more quota than exists. Checked after the tenant's own
+    // limit so a workspace that is over its slice is told that, rather than being told the platform
+    // is full when the thing in its way is its own ceiling.
+    if (platformCeilingExceeded(await platformSandboxSecondsThisMonth(ctx, monthKey(args.now)))) {
+      throw new ConvexError("platform_sandbox_capacity_reached");
     }
     const reviewId = await ctx.db.insert("reviews", { organizationId: repository.organizationId, repositoryId: repository._id,
       githubRepositoryId: repository.githubRepositoryId, prNumber: args.prNumber, isFork: args.isFork, baseRef: args.baseRef,

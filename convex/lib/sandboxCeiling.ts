@@ -1,3 +1,4 @@
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 // A per-tenant ceiling on sandbox time, so one workspace cannot consume the whole platform's
 // sandbox quota.
 //
@@ -28,6 +29,27 @@ export type SandboxCeilingState = {
 export const platformMonthlySandboxSeconds = 18_000;
 export const defaultMonthlySandboxSeconds = 3_600;
 
+// Dividing the quota into per-tenant slices only bounds the platform while the number of tenants
+// times the default stays inside it: at 3,600 seconds each, the sixth workspace to sign up puts the
+// deployment over 18,000 with every tenant still inside its own ceiling. So the platform needs its
+// own counter, and the per-tenant ceiling is a fairness rule rather than the thing that protects
+// the quota.
+//
+// It trips at 90% rather than at the quota, because the last tenth is the difference between BuildIT
+// refusing and the provider refusing. A provider-side refusal arrives as sandbox_unavailable with no
+// explanation and no reset date; this one can say what happened and when it clears. The reserve also
+// covers what this counter cannot see - idle sandbox time after a worker abandons a job - and the
+// gap between the wall-clock seconds measured here and the Active CPU seconds the provider bills.
+export const platformSandboxReserveFraction = 0.1;
+export const platformUsableMonthlySandboxSeconds =
+  Math.floor(platformMonthlySandboxSeconds * (1 - platformSandboxReserveFraction));
+
+export function platformCeilingExceeded(usedSeconds: number, ceilingSeconds = platformUsableMonthlySandboxSeconds) {
+  if (!Number.isFinite(ceilingSeconds) || ceilingSeconds <= 0) return true;
+  if (!Number.isFinite(usedSeconds)) return true;
+  return usedSeconds >= ceilingSeconds;
+}
+
 export function sandboxCeilingSeconds(state: Pick<SandboxCeilingState, "monthlySandboxSeconds">) {
   const configured = state.monthlySandboxSeconds;
   if (configured === undefined || !Number.isFinite(configured) || configured <= 0) return defaultMonthlySandboxSeconds;
@@ -41,6 +63,28 @@ export function sandboxSecondsThisMonth(state: SandboxCeilingState, month: strin
   if (state.sandboxSecondsMonth !== month) return 0;
   const used = state.sandboxSecondsUsed;
   return Number.isFinite(used) && (used ?? 0) > 0 ? Math.floor(used!) : 0;
+}
+
+// The platform row is read on every admission and written on every checkpoint, so it is a single
+// month-keyed row rather than a sum over tenants: summing would make the cost of deciding whether
+// to run a review grow with the number of workspaces, which is the unbounded-read defect this
+// codebase has had to remove from this exact path twice.
+export async function platformSandboxSecondsThisMonth(ctx: QueryCtx, month: string) {
+  const row = await ctx.db.query("platformSandboxUsage").withIndex("by_month", q => q.eq("month", month)).unique();
+  const used = row?.usedSeconds;
+  return Number.isFinite(used) && (used ?? 0) > 0 ? Math.floor(used!) : 0;
+}
+
+export async function addPlatformSandboxSeconds(ctx: MutationCtx, seconds: number, month: string, now: number) {
+  const added = Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 0;
+  if (added === 0) return;
+  const row = await ctx.db.query("platformSandboxUsage").withIndex("by_month", q => q.eq("month", month)).unique();
+  if (!row) {
+    await ctx.db.insert("platformSandboxUsage", { month, usedSeconds: added, updatedAt: now });
+    return;
+  }
+  const carried = Number.isFinite(row.usedSeconds) && row.usedSeconds > 0 ? Math.floor(row.usedSeconds) : 0;
+  await ctx.db.patch(row._id, { usedSeconds: carried + added, updatedAt: now });
 }
 
 export function addSandboxSeconds(state: SandboxCeilingState, seconds: number, month: string) {

@@ -3,7 +3,7 @@ import { internalMutation, internalQuery, type MutationCtx } from "./_generated/
 import { assertReviewParent } from "./lib/parentConsistency";
 import { reapedExecutionFailureCodes, sandboxReclaimMaxAttempts } from "./lib/lifecycle";
 import { applyExecutionCheckpoint, claimExecutionJob, createExecutionJob, cancelExecutionJob, type ExecutionCheckpoint, type ExecutionJob } from "@buildit/contracts";
-import { addSandboxSeconds } from "./lib/sandboxCeiling";
+import { addPlatformSandboxSeconds, addSandboxSeconds } from "./lib/sandboxCeiling";
 import { monthKey } from "./lib/monthlySpend";
 import type { Doc } from "./_generated/dataModel";
 import * as value from "./validators";
@@ -88,9 +88,14 @@ type CheckpointArgs = {
 // purpose is to stop one tenant taking the whole platform's quota.
 async function chargeSandboxSeconds(ctx: MutationCtx, row: Doc<"executionJobs">, durationMs: number, now: number) {
   if (!Number.isFinite(durationMs) || durationMs <= 0) return;
+  const month = monthKey(now);
+  // The platform counter is charged for a deleted organization's sandbox too: the provider billed
+  // those seconds whoever they belonged to, and skipping them would let a deleted tenant's work
+  // vanish from the only figure that bounds the shared quota.
+  await addPlatformSandboxSeconds(ctx, durationMs / 1000, month, now);
   const organization = await ctx.db.get(row.organizationId);
   if (!organization || organization.deletedAt) return;
-  await ctx.db.patch(organization._id, addSandboxSeconds(organization, durationMs / 1000, monthKey(now)));
+  await ctx.db.patch(organization._id, addSandboxSeconds(organization, durationMs / 1000, month));
 }
 
 async function persistCheckpoint(ctx: MutationCtx, args: CheckpointArgs) {
