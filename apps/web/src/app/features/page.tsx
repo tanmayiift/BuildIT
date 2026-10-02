@@ -17,6 +17,8 @@ const boundaries = [
   ["Access is granted in steps", "Sign-in identifies you. Repository access is a separate choice in GitHub. A model key is requested only when AI analysis starts."],
   ["Source evidence is deleted", "Checked-out code and command output are encrypted, kept for the retention window you set, then deleted — with the deletion confirmed against storage, not assumed."],
   ["A large repository is read selectively", "It fetches the files your pull request changed, your dependency manifests and the documents it cites. If GitHub truncates the file listing, BuildIT says so rather than reviewing part of your code and calling it done."],
+  // The landing page's open-source answer links here, so this entry carries the anchor.
+  ["A fork cannot spend your key", "A pull request from a fork is reviewed only when a maintainer with write access comments @buildit review — never automatically, and never with a fix pushed back to it. The configuration it runs with is never read from the pull request itself, and text in it that tries to instruct the reviewer marks the affected finding uncertain for a person to judge.", "forks"],
 ];
 
 export const metadata = { title: "Features · BuildIT" };
@@ -33,7 +35,7 @@ export default function Features() {
     <FeatureStages />
 
     <h2>Where it stops</h2>
-    <dl className="trust-list">{boundaries.map(([term, detail]) => <div key={term}><dt>{term}</dt><dd>{detail}</dd></div>)}</dl>
+    <dl className="trust-list">{boundaries.map(([term, detail, anchor]) => <div key={term} id={anchor}><dt>{term}</dt><dd>{detail}</dd></div>)}</dl>
 
     <div className="next"><strong>The honest limit:</strong> BuildIT has reviewed {record.reviews} pull requests over {record.repositories} repositories, {record.decisive} of them reaching a blocking or passing verdict and {record.platformFailed} failing on BuildIT&rsquo;s own side rather than on your code. That is a real record and a small one — the next unfamiliar codebase may still find something it handles badly. It refuses rather than guesses, so you will sometimes get no answer instead of a wrong one.</div>
     <div className="button-row"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>

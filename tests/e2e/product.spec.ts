@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("overview leads through the review queue to exact-commit evidence", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Autonomous code review that cites its evidence." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Code review that shows its evidence — or says it couldn’t." })).toBeVisible();
   await page.getByRole("link", { name: /inspect a sample review/i }).click();
   await expect(page.getByRole("heading", { name: "Review queue" })).toBeVisible();
   await Promise.all([
@@ -154,7 +154,7 @@ test("preview never impersonates a signed-in customer", async ({ page }) => {
   // it was the first thing a stranger saw. What it was guarding is unchanged and asserted below and
   // on the tour: the marketing page shows no fabricated customer, and the sample tour still labels
   // itself a sample - which is the promise FIXES.md actually fences.
-  await expect(page.getByText("For lean B2B software teams", { exact: true })).toBeVisible();
+  await expect(page.getByText("Autonomous pull request review", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Inspect a sample review" })).toHaveAttribute("href", "/reviews?tour=1");
   await expect(page.getByText("Rohan Bhatia")).toHaveCount(0);
 
@@ -360,7 +360,7 @@ test("inline script is allowed only by nonce, and the page still hydrates under 
 
 
   // Content rendered by client hydration: proof the policy did not block the app's own scripts.
-  await expect(page.getByRole("heading", { name: "Autonomous code review that cites its evidence." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Code review that shows its evidence — or says it couldn’t." })).toBeVisible();
   expect(violations).toEqual([]);
 });
 
@@ -368,4 +368,18 @@ test("a second request gets a different nonce", async ({ page }) => {
   const first = (await page.goto("/"))?.headers()["content-security-policy"] ?? "";
   const second = (await page.goto("/reviews"))?.headers()["content-security-policy"] ?? "";
   expect(/'nonce-([^']+)'/.exec(first)?.[1]).not.toBe(/'nonce-([^']+)'/.exec(second)?.[1]);
+});
+
+// Each kind of team gets one question and one link into the same evidence. The open-source link
+// lands on an anchor inside /features; a renamed anchor would still load the page and silently drop
+// the reader at the top, so the test follows it and checks what is in view.
+test("each team's first question leads to the evidence that answers it", async ({ page }) => {
+  await page.goto("/");
+  const segments = page.getByRole("region", { name: "Start from the question you would ask first" });
+  for (const who of ["Startup teams", "Scale-ups", "Solo developers", "Open-source maintainers"]) {
+    await expect(segments.getByRole("heading", { name: who })).toBeVisible();
+  }
+  await segments.getByRole("link", { name: /How forks are handled/ }).click();
+  await page.waitForURL(/\/features#forks$/);
+  await expect(page.getByText("A fork cannot spend your key", { exact: true })).toBeInViewport();
 });

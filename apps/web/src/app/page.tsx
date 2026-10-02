@@ -1,4 +1,5 @@
 import { OverviewReadiness } from "./live-connections";
+import { landingSegments } from "./landing-segments";
 
 const layers = [
   { mark: "01", title: "Choose one pull request", body: "You choose the repositories. Unselected ones stay invisible." },
@@ -11,9 +12,10 @@ export default function Overview() {
   return <div className="content landing">
     <section className="landing-hero" aria-labelledby="landing-title">
       <div className="landing-promise">
-        <p className="eyebrow">For lean B2B software teams</p>
-        <h1 id="landing-title">Autonomous code review that cites its evidence.</h1>
-        <p className="landing-promise-line">It fixes what it finds and opens a stacked PR. It never merges. A human owns the merge decision.</p>
+        <p className="eyebrow">Autonomous pull request review</p>
+        <h1 id="landing-title">Code review that shows its evidence&nbsp;— or says it couldn’t.</h1>
+        <p>Every finding cites a file, a line and the exact commit it read, next to the output of the check that proved it. When the proof is missing, the verdict is <strong>inconclusive</strong>, not a confident guess.</p>
+        <p className="landing-promise-line">It fixes what it finds as a stacked PR. It never merges. A human owns the merge decision.</p>
       </div>
       {/* The hero used to carry a working scanner that executed pasted code. It was the only surface
           in the product running attacker-supplied input with no account behind it, and once BuildIT
@@ -39,6 +41,16 @@ export default function Overview() {
       </div>
     </section>
     <OverviewReadiness />
+
+    <section className="landing-segments" aria-labelledby="segments-title">
+      <div className="section-heading"><div><p className="eyebrow">The same evidence, four first questions</p><h2 id="segments-title">Start from the question you would ask first</h2></div></div>
+      <ul>{landingSegments.map(segment => <li key={segment.who}>
+        <h3>{segment.who}</h3>
+        <p className="landing-segment-question">{segment.question}</p>
+        <p>{segment.answer}</p>
+        <a className="text-link" href={segment.href}>{segment.link} &rarr;</a>
+      </li>)}</ul>
+    </section>
 
     <section className="landing-flow" aria-labelledby="flow-title"><div className="section-heading"><div><p className="eyebrow">One review, four working layers</p><h2 id="flow-title">From pull request to a decision you can inspect</h2></div></div><ol>{layers.map(layer => <li key={layer.mark}><code>{layer.mark}</code><h3>{layer.title}</h3><p>{layer.body}</p></li>)}</ol></section>
 

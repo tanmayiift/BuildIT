@@ -31,7 +31,7 @@ test("a stranger with no account can read a real review, understand every setup 
 
   // ---------------------------------------------------------------- the front door
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Autonomous code review that cites its evidence." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Code review that shows its evidence — or says it couldn’t." })).toBeVisible();
   // What it does, and the one thing it refuses to do - both said in a sentence, above the fold.
   await expect(page.getByText("It never merges. A human owns the merge decision.")).toBeVisible();
   // The reader is told what each step will and will not cost them before they take any of them.
