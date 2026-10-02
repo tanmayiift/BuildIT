@@ -360,6 +360,13 @@ export default defineSchema({
     .index("by_repository", ["repositoryId"])
     .index("by_review", ["reviewId"]),
 
+  // One row per month for the whole deployment. The per-tenant ceiling on organizations is a
+  // fairness rule between workspaces; this is what actually stops the provider's shared quota being
+  // spent, because enough tenants inside their own ceilings still add up to more than exists.
+  platformSandboxUsage: defineTable({
+    month: v.string(), usedSeconds: v.number(), updatedAt: v.number(),
+  }).index("by_month", ["month"]),
+
   usageLedger: defineTable({
     organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.id("reviews"),
     roundId: v.optional(v.id("autofixRounds")), kind: value.usageKind, quantity: v.number(),

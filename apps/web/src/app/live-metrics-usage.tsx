@@ -78,6 +78,11 @@ export function WorkspaceUsage() {
             for the sandbox allowance sent its author to this page and the number was not here. */}
         <p>{usage.sandbox.usedSeconds.toLocaleString()} of {usage.sandbox.ceilingSeconds.toLocaleString()} sandbox seconds used this month{usage.sandbox.usedSeconds >= usage.sandbox.ceilingSeconds ? " · no new review can run its checks until the allowance resets" : ""}</p>
         <p className="muted-copy">Sandbox time is BuildIT&rsquo;s own shared capacity, not a charge on your provider key, so the allowance resets at the start of each month and is set by BuildIT rather than here.</p>
+        {/* Both limits, because a workspace inside its own allowance can still be refused on the
+            shared one, and the page has to say which is in the way. */}
+        {usage.sandbox.platformUsedSeconds >= usage.sandbox.platformCeilingSeconds
+          ? <p role="status">BuildIT has used its own sandbox capacity for the month across all workspaces ({usage.sandbox.platformUsedSeconds.toLocaleString()} of {usage.sandbox.platformCeilingSeconds.toLocaleString()} seconds), so no workspace can run checks until it resets. This is BuildIT&rsquo;s limit, not yours.</p>
+          : <p className="muted-copy">BuildIT has used {usage.sandbox.platformUsedSeconds.toLocaleString()} of {usage.sandbox.platformCeilingSeconds.toLocaleString()} shared sandbox seconds this month across all workspaces.</p>}
         {usage.truncated ? <p className="muted-copy" role="status">Activity figures read only the most recent {usage.recordCount.toLocaleString()} ledger records in this period and are partial. The budget uses the separate monthly accounting total.</p> : null}
       </div>
       <aside>

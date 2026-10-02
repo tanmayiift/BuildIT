@@ -11,7 +11,7 @@ import workpoolComponent from "@convex-dev/workpool/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import { terminalStatuses } from "./lib/lifecycle";
-import { defaultMonthlySandboxSeconds } from "./lib/sandboxCeiling";
+import { defaultMonthlySandboxSeconds, platformMonthlySandboxSeconds, platformUsableMonthlySandboxSeconds } from "./lib/sandboxCeiling";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { normalizeGitHubProfile } from "./lib/githubProfile";
@@ -4340,6 +4340,113 @@ describe("a tenant cannot consume the whole platform's sandbox quota", () => {
       organizationId: tenant.organizationId, monthlySandboxSeconds: defaultMonthlySandboxSeconds * 2,
       actorId: "operator", requestId: "sandbox-raise-000001", now,
     })).resolves.toMatchObject({ monthlySandboxSeconds: defaultMonthlySandboxSeconds * 2 });
+    await expect(t.mutation(internal.dashboardReviewData.create, dashboardArgs(tenant, now)))
+      .resolves.toMatchObject({ status: "queued" });
+  });
+
+  // Five tenants at the default fit inside the 18,000 seconds Hobby allows; the sixth does not,
+  // with every tenant still inside its own ceiling. So the per-tenant ceiling is a fairness rule
+  // between workspaces and the platform counter is what actually protects the quota.
+  it("refuses a dashboard review once the deployment's own capacity is spent", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "platform-capacity-dashboard", "alice");
+    const now = Date.now();
+    await t.run(ctx => ctx.db.patch(tenant.organizationId, { concurrencyLimit: 20 }));
+    // This tenant has used nothing at all: its own ceiling is not what stops it.
+    await t.run(ctx => ctx.db.insert("platformSandboxUsage", {
+      month: month(now), usedSeconds: platformUsableMonthlySandboxSeconds, updatedAt: now,
+    }));
+    await expect(t.mutation(internal.dashboardReviewData.create, dashboardArgs(tenant, now)))
+      .rejects.toThrow("platform_sandbox_capacity_reached");
+  });
+
+  it("names the tenant's own ceiling first when both are spent", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "platform-capacity-both", "alice");
+    const now = Date.now();
+    await t.run(async ctx => {
+      await ctx.db.patch(tenant.organizationId, {
+        concurrencyLimit: 20, sandboxSecondsUsed: defaultMonthlySandboxSeconds, sandboxSecondsMonth: month(now),
+      });
+      await ctx.db.insert("platformSandboxUsage", {
+        month: month(now), usedSeconds: platformUsableMonthlySandboxSeconds, updatedAt: now,
+      });
+    });
+    // Being told the platform is full, when the thing in the way is your own ceiling, sends the
+    // reader to ask BuildIT for capacity that would not help them.
+    await expect(t.mutation(internal.dashboardReviewData.create, dashboardArgs(tenant, now)))
+      .rejects.toThrow("organization_sandbox_ceiling_reached");
+  });
+
+  it("blocks a webhook review on platform capacity and says it is BuildIT's limit, not the tenant's", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "platform-capacity-webhook", "alice");
+    const repository = await t.run(ctx => ctx.db.get(tenant.repositoryId));
+    const now = 1_000_000;
+    await t.run(ctx => ctx.db.insert("platformSandboxUsage", {
+      month: month(now), usedSeconds: platformUsableMonthlySandboxSeconds, updatedAt: now,
+    }));
+    await t.mutation(internal.githubWebhookData.reserve, {
+      deliveryId: "delivery-platform-capacity", event: "issue_comment", action: "created",
+      installationId: 20, disposition: "processed" as const, signatureValid: true, now: 1,
+    });
+    await t.mutation(internal.githubWebhookData.recordPinnedSnapshot, {
+      deliveryId: "delivery-platform-capacity", prNumber: 79, headSha: "a".repeat(40), baseSha: "b".repeat(40),
+      headRefHash: "c".repeat(64), baseRefHash: "d".repeat(64), isFork: false, triggerVerb: "review",
+    });
+    const materialized = await t.mutation(internal.githubWebhookData.materializeReview, {
+      deliveryId: "delivery-platform-capacity", organizationId: tenant.organizationId,
+      repositoryId: tenant.repositoryId, baseRef: repository!.defaultBranch ?? "main",
+      triggerActor: "someone", actorPermission: "write" as const, now,
+    });
+    expect(materialized.status).toBe("blocked");
+    expect("blockedReason" in materialized ? materialized.blockedReason : undefined).toBe("platform_capacity_reached");
+    const review = await t.run(async ctx =>
+      (await ctx.db.query("reviews").collect()).find(item => item.prNumber === 79));
+    expect(review?.statusReasonCode).toBe("platform_capacity_reached");
+    expect(review?.nextActionCode).toBe("await_sandbox_reset");
+  });
+
+  it("charges the platform counter from the same checkpoint as the tenant's", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "platform-capacity-counter", "alice");
+    const now = Date.now();
+    const created = await t.mutation(internal.dashboardReviewData.create, dashboardArgs(tenant, now));
+    const review = await t.run(ctx => ctx.db.get(created.reviewId));
+    const jobId: Id<"executionJobs"> = await t.mutation(internal.executionJobsData.create, {
+      organizationId: tenant.organizationId, reviewId: created.reviewId,
+      expectedHeadSha: review!.headSha, expectedGeneration: review!.executionGeneration,
+      jobKey: `platform-capacity-counter:${created.reviewId}`, runId: "run-platform-capacity",
+      baseSha: review!.baseSha, now,
+    });
+    const row = await t.run(ctx => ctx.db.get(jobId));
+    await t.mutation(internal.executionJobsData.claim, { jobId: row!._id, workerId: "worker-1", now });
+    const claimed = await t.run(ctx => ctx.db.get(row!._id));
+    await t.mutation(internal.executionJobsData.checkpoint, {
+      jobId: row!._id, requestKey: "segment-prepare", expectedVersion: claimed!.stateVersion,
+      expectedStage: claimed!.stage, nextStage: "scanners", cursor: "prepared", durationMs: 45_000, now,
+    });
+    const platform = await t.run(ctx => ctx.db.query("platformSandboxUsage").collect());
+    expect(platform, "one row per month, not one per tenant or per job").toHaveLength(1);
+    expect(platform[0]?.usedSeconds).toBe(45);
+    expect(platform[0]?.month).toBe(month(now));
+
+    // A replayed checkpoint must not charge the platform twice either.
+    await t.mutation(internal.executionJobsData.checkpoint, {
+      jobId: row!._id, requestKey: "segment-prepare", expectedVersion: claimed!.stateVersion,
+      expectedStage: claimed!.stage, nextStage: "scanners", cursor: "prepared", durationMs: 45_000, now,
+    });
+    expect((await t.run(ctx => ctx.db.query("platformSandboxUsage").collect()))[0]?.usedSeconds).toBe(45);
+  });
+
+  it("reads last month's platform total as zero rather than carrying it", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "platform-capacity-rollover", "alice");
+    const now = Date.UTC(2026, 9, 2);
+    await t.run(async ctx => {
+      await ctx.db.patch(tenant.organizationId, { concurrencyLimit: 20 });
+      await ctx.db.insert("platformSandboxUsage", { month: "2026-09", usedSeconds: platformMonthlySandboxSeconds, updatedAt: now });
+    });
     await expect(t.mutation(internal.dashboardReviewData.create, dashboardArgs(tenant, now)))
       .resolves.toMatchObject({ status: "queued" });
   });

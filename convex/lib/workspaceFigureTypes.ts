@@ -34,6 +34,9 @@ export type WorkspaceUsageSummary = {
   // quantities.sandbox_seconds, which counts only validation-command time inside the ledger
   // window: this is the figure the admission check compares against, so it is the one that
   // explains a refusal.
-  sandbox: { usedSeconds: number; ceilingSeconds: number };
+  // platformUsedSeconds/platformCeilingSeconds are the deployment's shared total, not this
+  // workspace's. A workspace well inside its own allowance can still be refused on the shared one,
+  // and without both figures the page cannot tell the reader which limit is in the way.
+  sandbox: { usedSeconds: number; ceilingSeconds: number; platformUsedSeconds: number; platformCeilingSeconds: number };
   budget: BudgetSnapshot;
 };

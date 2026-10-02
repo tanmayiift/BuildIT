@@ -7,7 +7,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { retentionMs, terminalStatuses, webhookDeliveryRetentionMs } from "./lib/lifecycle";
 import { activeReviewCount, concurrencyExceeded } from "./lib/tenantLimits";
-import { sandboxCeilingExceeded, sandboxCeilingSeconds, sandboxSecondsThisMonth } from "./lib/sandboxCeiling";
+import { platformCeilingExceeded, platformSandboxSecondsThisMonth, sandboxCeilingExceeded, sandboxCeilingSeconds, sandboxSecondsThisMonth } from "./lib/sandboxCeiling";
 import { monthKey } from "./lib/monthlySpend";
 import { provider as providerValidator } from "./validators";
 import { orderCredentialsByHealth } from "./lib/providerFallback";
@@ -331,7 +331,12 @@ export const materializeReview = internalMutation({
     // opposite advice: a concurrency block clears on its own, this one does not.
     const overSandboxCeiling = Boolean(organization)
       && sandboxCeilingExceeded(sandboxSecondsThisMonth(organization!, monthKey(args.now)), sandboxCeilingSeconds(organization!));
-    const status = overConcurrency || overSandboxCeiling ? ("blocked" as const) : credential && model ? ("queued" as const) : ("blocked" as const);
+    // The deployment's own total. A tenant well inside its slice still cannot run a review once the
+    // shared quota is spent, and saying so is the difference between a bound and the provider's own
+    // unexplained sandbox_unavailable.
+    const overPlatformCapacity = !overSandboxCeiling
+      && platformCeilingExceeded(await platformSandboxSecondsThisMonth(ctx, monthKey(args.now)));
+    const status = overConcurrency || overSandboxCeiling || overPlatformCapacity ? ("blocked" as const) : credential && model ? ("queued" as const) : ("blocked" as const);
     const reviewId = await ctx.db.insert("reviews", {
       organizationId: args.organizationId,
       repositoryId: repository._id,
@@ -355,12 +360,12 @@ export const materializeReview = internalMutation({
       status,
       budgetLimit,
       budgetConsumed: 0,
-      statusReasonCode: overConcurrency ? "concurrency_limit_reached" : overSandboxCeiling ? "sandbox_ceiling_reached" : credential ? undefined : "provider_credential_invalid",
+      statusReasonCode: overConcurrency ? "concurrency_limit_reached" : overSandboxCeiling ? "sandbox_ceiling_reached" : overPlatformCapacity ? "platform_capacity_reached" : credential ? undefined : "provider_credential_invalid",
       // Not retry_review for the sandbox ceiling: retrying cannot clear a monthly total, and
       // telling an author to retry something that cannot succeed is how a bound gets read as an
       // outage. The allowance is BuildIT's own shared quota, so an owner cannot raise it from the
       // dashboard the way they can raise their spend budget - which is why the action is to wait.
-      nextActionCode: overConcurrency ? "retry_review" : overSandboxCeiling ? "await_sandbox_reset" : credential ? "none" : "reconnect_provider",
+      nextActionCode: overConcurrency ? "retry_review" : overSandboxCeiling || overPlatformCapacity ? "await_sandbox_reset" : credential ? "none" : "reconnect_provider",
       isStale: false,
       ...(status === "blocked" ? { blockedExpiresAt: args.now + blockedReviewTtlMs } : {}),
       trustedRef: args.baseRef,
@@ -413,6 +418,8 @@ export const materializeReview = internalMutation({
         ? ("concurrency_limit_reached" as const)
         : overSandboxCeiling
         ? ("sandbox_ceiling_reached" as const)
+        : overPlatformCapacity
+        ? ("platform_capacity_reached" as const)
         : !credential
           ? ("provider_credential_invalid" as const)
           : !model
