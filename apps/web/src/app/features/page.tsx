@@ -41,7 +41,7 @@ export default function Features() {
     <h2>Where it stops</h2>
     <dl className="trust-list">{boundaries.map(([term, detail]) => <div key={term}><dt>{term}</dt><dd>{detail}</dd></div>)}</dl>
 
-    <div className="next"><strong>The honest limit:</strong> BuildIT has reviewed {record.reviews} pull requests over {record.repositories} repositories, {record.decisive} of them reaching a blocking or passing verdict. That is a real record and a small one — the next unfamiliar codebase may still find something it handles badly. It refuses rather than guesses, so you will sometimes get no answer instead of a wrong one.</div>
+    <div className="next"><strong>The honest limit:</strong> BuildIT has reviewed {record.reviews} pull requests over {record.repositories} repositories, {record.decisive} of them reaching a blocking or passing verdict and {record.platformFailed} failing on BuildIT&rsquo;s own side rather than on your code. That is a real record and a small one — the next unfamiliar codebase may still find something it handles badly. It refuses rather than guesses, so you will sometimes get no answer instead of a wrong one.</div>
     <div className="button-row"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
   </div>;
 }
