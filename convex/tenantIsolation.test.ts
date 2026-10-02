@@ -144,7 +144,7 @@ async function seedTenant(
       encrypted: true,
       checksum: "hash",
       size: 1,
-      redactionStatus: "redacted",
+      storageState: "stored",
       expiresAt: now + 60_000,
       deletionAttempts: 0,
     });
@@ -215,7 +215,7 @@ async function seedTenant(
       encrypted: true,
       checksum: "output-hash",
       size: 10,
-      redactionStatus: "redacted",
+      storageState: "stored",
       expiresAt: now + 60_000,
       deletionAttempts: 0,
     });
@@ -249,8 +249,8 @@ async function seedTenant(
 describe("Convex tenant isolation", () => {
   it("never exposes an encrypted finding artifact scope across organizations", async () => {
     const t = convexTest(schema, modules), alpha = await seedTenant(t, "finding-alpha", "alice"), beta = await seedTenant(t, "finding-beta", "bob"), asAlice = t.withIdentity({ subject: "alice" });
-    const analysisId = await t.run(ctx => ctx.db.insert("artifacts", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId, type: "prompt_trace", storageKey: `artifacts/${alpha.organizationId}/${alpha.repositoryId}/${alpha.reviewId}/analysis.json`, encrypted: true, checksum: "a".repeat(64), size: 100, redactionStatus: "redacted", expiresAt: Date.now() + 60_000, deletionAttempts: 0 }));
-    await t.run(ctx => ctx.db.insert("artifacts", { organizationId: beta.organizationId, repositoryId: beta.repositoryId, reviewId: beta.reviewId, type: "prompt_trace", storageKey: `artifacts/${beta.organizationId}/${beta.repositoryId}/${beta.reviewId}/analysis.json`, encrypted: true, checksum: "b".repeat(64), size: 100, redactionStatus: "redacted", expiresAt: Date.now() + 60_000, deletionAttempts: 0 }));
+    const analysisId = await t.run(ctx => ctx.db.insert("artifacts", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId, type: "prompt_trace", storageKey: `artifacts/${alpha.organizationId}/${alpha.repositoryId}/${alpha.reviewId}/analysis.json`, encrypted: true, checksum: "a".repeat(64), size: 100, storageState: "stored", expiresAt: Date.now() + 60_000, deletionAttempts: 0 }));
+    await t.run(ctx => ctx.db.insert("artifacts", { organizationId: beta.organizationId, repositoryId: beta.repositoryId, reviewId: beta.reviewId, type: "prompt_trace", storageKey: `artifacts/${beta.organizationId}/${beta.repositoryId}/${beta.reviewId}/analysis.json`, encrypted: true, checksum: "b".repeat(64), size: 100, storageState: "stored", expiresAt: Date.now() + 60_000, deletionAttempts: 0 }));
     await expect(asAlice.query(internal.reviewEvidenceData.findingDetailScope, { reviewId: beta.reviewId })).rejects.toThrow("not_found_or_forbidden");
     const own = await asAlice.query(internal.reviewEvidenceData.findingDetailScope, { reviewId: alpha.reviewId });
     expect(own.artifact.id).toBe(analysisId);
@@ -322,7 +322,7 @@ describe("Convex tenant isolation", () => {
     await t.run(ctx => ctx.db.insert("reviewEvents", { organizationId: alpha.organizationId, reviewId: alpha.reviewId, sequence: 2, type: "stage_completed", stage: "analysis", internalCode: "analysis_complete", metadata: {}, createdAt: progressedAt + 1 }));
     const attempted = await asAlice.query(activationFunnel, { organizationId: alpha.organizationId });
     expect(attempted).toMatchObject({ pullRequestPreviewed: true, firstEvidenceReady: false, chronologyValid: true });
-    const reportArtifactId = await t.run(ctx => ctx.db.insert("artifacts", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId, type: "review_message", storageKey: "activation-alpha/report.md", encrypted: true, checksum: "report-hash", size: 10, redactionStatus: "redacted", expiresAt: progressedAt + 60_000, deletionAttempts: 0 }));
+    const reportArtifactId = await t.run(ctx => ctx.db.insert("artifacts", { organizationId: alpha.organizationId, repositoryId: alpha.repositoryId, reviewId: alpha.reviewId, type: "review_message", storageKey: "activation-alpha/report.md", encrypted: true, checksum: "report-hash", size: 10, storageState: "stored", expiresAt: progressedAt + 60_000, deletionAttempts: 0 }));
     await t.run(async ctx => { await ctx.db.patch(alpha.reviewId, { status: "inconclusive", completedAt: progressedAt + 2 }); await ctx.db.insert("reviewEvents", { organizationId: alpha.organizationId, reviewId: alpha.reviewId, sequence: 3, type: "status_changed", stage: "complete", publicMessageArtifactId: reportArtifactId, internalCode: "decision_required_check_missing", metadata: {}, createdAt: progressedAt + 3 }); });
     const progressed = await asAlice.query(activationFunnel, { organizationId: alpha.organizationId });
     expect(progressed).toMatchObject({ pullRequestPreviewed: true, firstEvidenceReady: true, chronologyValid: true, durationMs: { repositoryToPreview: expect.any(Number), identityToFirstEvidence: expect.any(Number) } });
@@ -1322,7 +1322,7 @@ describe("Convex tenant isolation", () => {
         encrypted: true,
         checksum: "hash",
         size: 1,
-        redactionStatus: "redacted",
+        storageState: "stored",
         expiresAt: now + 60_000,
         deletionAttempts: 0,
       });
@@ -1459,7 +1459,7 @@ describe("Convex tenant isolation", () => {
         encrypted: true,
         checksum: "a".repeat(64),
         size: 100,
-        redactionStatus: "redacted",
+        storageState: "stored",
         expiresAt: now + 60_000,
         deletionAttempts: 0,
       });
@@ -1472,7 +1472,7 @@ describe("Convex tenant isolation", () => {
         encrypted: true,
         checksum: "f".repeat(64),
         size: 100,
-        redactionStatus: "redacted",
+        storageState: "stored",
         expiresAt: now + 60_000,
         deletionAttempts: 0,
       });
@@ -2484,7 +2484,7 @@ describe("durable validation evidence", () => {
           encrypted: true,
           checksum,
           size: 100,
-          redactionStatus: "pending",
+          storageState: "pending",
           expiresAt: now + 60_000,
           deletionAttempts: 0,
         }),
@@ -2558,7 +2558,7 @@ describe("durable validation evidence", () => {
           encrypted: true,
           checksum: "a".repeat(64),
           size: 10,
-          redactionStatus: "redacted",
+          storageState: "stored",
           expiresAt: now + 60_000,
           deletionAttempts: 0,
         });
@@ -2571,7 +2571,7 @@ describe("durable validation evidence", () => {
           encrypted: true,
           checksum: "d".repeat(64),
           size: 10,
-          redactionStatus: "redacted",
+          storageState: "stored",
           expiresAt: now + 60_000,
           deletionAttempts: 0,
         });
@@ -2633,8 +2633,8 @@ describe("durable validation evidence", () => {
     const t = convexTest(schema, modules), tenant = await seedTenant(t, "decision-no-teardown", "alice"), now = Date.now();
     const { reportArtifactId } = await t.run(async (ctx) => {
       await ctx.db.patch(tenant.reviewId, { coverageLevel: "full", status: "validating", currentStage: "analysis" });
-      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "decision-no-teardown/validation.json", encrypted: true, checksum: "a".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
-      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "decision-no-teardown/report.md", encrypted: true, checksum: "d".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "decision-no-teardown/validation.json", encrypted: true, checksum: "a".repeat(64), size: 10, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "decision-no-teardown/report.md", encrypted: true, checksum: "d".repeat(64), size: 10, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
       await ctx.db.insert("checkRuns", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, kind: "test", nameHash: "b".repeat(64), required: true, status: "completed", conclusion: "passed", commandFingerprint: "c".repeat(64), commitSha: "a".repeat(40), exitCode: 0, durationMs: 1, artifactId, startedAt: now - 1, completedAt: now });
       return { reportArtifactId };
     });
@@ -2656,7 +2656,7 @@ describe("durable validation evidence", () => {
           encrypted: true,
           checksum: "d".repeat(64),
           size: 10,
-          redactionStatus: "redacted",
+          storageState: "stored",
           expiresAt: now + 60_000,
           deletionAttempts: 0,
         }),
@@ -2695,7 +2695,7 @@ describe("durable validation evidence", () => {
           encrypted: true,
           checksum,
           size: 100,
-          redactionStatus: "pending",
+          storageState: "pending",
           expiresAt: now + 60_000,
           deletionAttempts: 0,
         }),
@@ -2795,7 +2795,7 @@ describe("durable Autofix evidence", () => {
             encrypted: true,
             checksum: "a".repeat(64),
             size: 10,
-            redactionStatus: "redacted",
+            storageState: "stored",
             expiresAt: now + 60_000,
             deletionAttempts: 0,
           }),
@@ -2808,7 +2808,7 @@ describe("durable Autofix evidence", () => {
             encrypted: true,
             checksum: "b".repeat(64),
             size: 10,
-            redactionStatus: "redacted",
+            storageState: "stored",
             expiresAt: now + 60_000,
             deletionAttempts: 0,
           });
@@ -2872,7 +2872,7 @@ describe("durable Autofix evidence", () => {
         encrypted: true,
         checksum: "1".repeat(64),
         size: 1,
-        redactionStatus: "redacted",
+        storageState: "stored",
         expiresAt: now + 60_000,
         deletionAttempts: 0,
       }),
@@ -2903,7 +2903,7 @@ describe("durable Autofix evidence", () => {
             reviewId: tenant.reviewId,
             encrypted: true as const,
             size: 10,
-            redactionStatus: "redacted" as const,
+            storageState: "stored" as const,
             expiresAt: now + 60_000,
             deletionAttempts: 0,
           };
@@ -3671,7 +3671,7 @@ describe("expired artifact cleanup", () => {
   it("leases and deletes only a parent-consistent expired artifact", async () => {
     const t=convexTest(schema,modules),tenant=await seedTenant(t,"cleanup","alice"),now=100_000,leaseId="11111111-1111-4111-8111-111111111111";
     const {validId,forgedId,futureId}=await t.run(async ctx=>{
-      const insert=async(expiresAt:number)=>ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"repository_snapshot",storageKey:"pending",encrypted:true,checksum:"a".repeat(64),size:10,redactionStatus:"redacted",expiresAt,deletionAttempts:0});
+      const insert=async(expiresAt:number)=>ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"repository_snapshot",storageKey:"pending",encrypted:true,checksum:"a".repeat(64),size:10,storageState:"stored",expiresAt,deletionAttempts:0});
       const validId=await insert(now-1),forgedId=await insert(now-1),futureId=await insert(now+60_000);
       await ctx.db.patch(validId,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${validId}/context-head-0.json`});
       await ctx.db.patch(forgedId,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/someone-else/context-head-0.json`});
@@ -3690,7 +3690,7 @@ describe("expired artifact cleanup", () => {
 
   it("releases a failed lease for a bounded retry",async()=>{
     const t=convexTest(schema,modules),tenant=await seedTenant(t,"cleanup-retry","alice"),now=200_000,first="33333333-3333-4333-8333-333333333333",second="44444444-4444-4444-8444-444444444444";
-    const artifactId=await t.run(async ctx=>{const id=await ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"command_output",storageKey:"pending",encrypted:true,checksum:"b".repeat(64),size:10,redactionStatus:"redacted",expiresAt:now-1,deletionAttempts:0});await ctx.db.patch(id,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/validation.json`});return id});
+    const artifactId=await t.run(async ctx=>{const id=await ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"command_output",storageKey:"pending",encrypted:true,checksum:"b".repeat(64),size:10,storageState:"stored",expiresAt:now-1,deletionAttempts:0});await ctx.db.patch(id,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/validation.json`});return id});
     expect(await t.mutation(internal.artifactCleanupData.claimExpired,{now,leaseId:first,limit:1})).toHaveLength(1);
     await t.mutation(internal.artifactCleanupData.failDeletion,{artifactId,leaseId:first,errorCode:"broker_delete_failed",now:now+1});
     expect(await t.mutation(internal.artifactCleanupData.claimExpired,{now:now+2,leaseId:second,limit:1})).toHaveLength(1);
@@ -3699,7 +3699,7 @@ describe("expired artifact cleanup", () => {
 
   it("deletes through the broker before marking the artifact deleted",async()=>{
     const t=convexTest(schema,modules),tenant=await seedTenant(t,"cleanup-worker","alice");
-    const artifactId=await t.run(async ctx=>{const id=await ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"repository_snapshot",storageKey:"pending",encrypted:true,checksum:"c".repeat(64),size:10,redactionStatus:"redacted",expiresAt:1,deletionAttempts:0});await ctx.db.patch(id,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/context-base-0.json`});return id});
+    const artifactId=await t.run(async ctx=>{const id=await ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"repository_snapshot",storageKey:"pending",encrypted:true,checksum:"c".repeat(64),size:10,storageState:"stored",expiresAt:1,deletionAttempts:0});await ctx.db.patch(id,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/context-base-0.json`});return id});
     vi.stubEnv("BUILDIT_BROKER_URL","https://broker.example");vi.stubEnv("ARTIFACT_GRANT_SECRET",Buffer.alloc(32,7).toString("base64url"));
     const fetchMock=vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{expect(String(input)).toBe("https://broker.example/api/artifacts");expect(init?.method).toBe("DELETE");expect(String((init?.headers as Record<string,string>).authorization)).toMatch(/^Bearer [^.]+\.[^.]+$/);return Response.json({deleted:true})});vi.stubGlobal("fetch",fetchMock);
     try{await expect(t.action(internal.artifactCleanupWorker.cleanup,{})).resolves.toEqual({claimed:1,deleted:1,failed:0});expect(fetchMock).toHaveBeenCalledTimes(1);expect(await t.run(ctx=>ctx.db.get(artifactId))).toMatchObject({deletedAt:expect.any(Number),deletionAttempts:1})}finally{vi.unstubAllGlobals();vi.unstubAllEnvs()}
@@ -3707,7 +3707,7 @@ describe("expired artifact cleanup", () => {
 
   it("quarantines the tenth failure and exposes only source-free operations evidence",async()=>{
     const t=convexTest(schema,modules),tenant=await seedTenant(t,"cleanup-terminal","alice"),now=300_000,leaseId="55555555-5555-4555-8555-555555555555";
-    const artifactId=await t.run(async ctx=>{const id=await ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"command_output",storageKey:"pending",encrypted:true,checksum:"d".repeat(64),size:10,redactionStatus:"redacted",expiresAt:now-1,deletionAttempts:9});await ctx.db.patch(id,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/validation.json`});return id});
+    const artifactId=await t.run(async ctx=>{const id=await ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"command_output",storageKey:"pending",encrypted:true,checksum:"d".repeat(64),size:10,storageState:"stored",expiresAt:now-1,deletionAttempts:9});await ctx.db.patch(id,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/validation.json`});return id});
     expect(await t.mutation(internal.artifactCleanupData.claimExpired,{now,leaseId,limit:1})).toHaveLength(1);
     await t.mutation(internal.artifactCleanupData.failDeletion,{artifactId,leaseId,errorCode:"broker_delete_failed",now:now+1});
     const terminal=await t.query(internal.artifactCleanupData.listTerminal,{limit:10});
@@ -3718,7 +3718,7 @@ describe("expired artifact cleanup", () => {
 
   it("allows explicit retry only after rechecking the complete artifact parent scope",async()=>{
     const t=convexTest(schema,modules),tenant=await seedTenant(t,"cleanup-terminal-retry","alice"),now=400_000;
-    const {validId,forgedId}=await t.run(async ctx=>{const insert=async()=>ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"command_output",storageKey:"pending",encrypted:true,checksum:"e".repeat(64),size:10,redactionStatus:"redacted",expiresAt:now-1,deletionAttempts:10,deletionTerminalAt:now-2,lastDeletionErrorCode:"deletion_attempts_exhausted"});const validId=await insert(),forgedId=await insert();await ctx.db.patch(validId,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${validId}/validation.json`});await ctx.db.patch(forgedId,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/other/validation.json`});return{validId,forgedId}});
+    const {validId,forgedId}=await t.run(async ctx=>{const insert=async()=>ctx.db.insert("artifacts",{organizationId:tenant.organizationId,repositoryId:tenant.repositoryId,reviewId:tenant.reviewId,type:"command_output",storageKey:"pending",encrypted:true,checksum:"e".repeat(64),size:10,storageState:"stored",expiresAt:now-1,deletionAttempts:10,deletionTerminalAt:now-2,lastDeletionErrorCode:"deletion_attempts_exhausted"});const validId=await insert(),forgedId=await insert();await ctx.db.patch(validId,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${validId}/validation.json`});await ctx.db.patch(forgedId,{storageKey:`artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/other/validation.json`});return{validId,forgedId}});
     await expect(t.mutation(internal.artifactCleanupData.retryTerminal,{artifactId:forgedId,now})).rejects.toThrow("artifact_cleanup_retry_invalid");
     await expect(t.mutation(internal.artifactCleanupData.retryTerminal,{artifactId:validId,now})).resolves.toBe(validId);
     const retried=await t.run(ctx=>ctx.db.get(validId));expect(retried).toMatchObject({deletionAttempts:0});expect(retried?.lastDeletionErrorCode).toBeUndefined();expect(retried?.deletionTerminalAt).toBeUndefined();
@@ -3828,7 +3828,7 @@ describe("artifact retention does not stall behind tombstones", () => {
       const insert = async (expiresAt: number) => {
         const id = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
           reviewId: tenant.reviewId, type: "command_output", storageKey: "pending", encrypted: true, checksum: "e".repeat(64),
-          size: 10, redactionStatus: "redacted", expiresAt, deletionAttempts: 0 });
+          size: 10, storageState: "stored", expiresAt, deletionAttempts: 0 });
         await ctx.db.patch(id, { storageKey: `artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/validation.json` });
         return id;
       };
@@ -3852,7 +3852,7 @@ describe("artifact retention does not stall behind tombstones", () => {
       const insert = async () => {
         const id = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
           reviewId: tenant.reviewId, type: "command_output", storageKey: "pending", encrypted: true, checksum: "f".repeat(64),
-          size: 10, redactionStatus: "redacted", expiresAt: now - 1_000, deletionAttempts: 10, deletionTerminalAt: now - 500,
+          size: 10, storageState: "stored", expiresAt: now - 1_000, deletionAttempts: 10, deletionTerminalAt: now - 500,
           lastDeletionErrorCode: "deletion_attempts_exhausted" });
         return id;
       };
@@ -3876,7 +3876,7 @@ describe("artifact retention does not stall behind tombstones", () => {
     const artifactId = await t.run(async ctx => {
       const id = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId,
         reviewId: tenant.reviewId, type: "repository_snapshot", storageKey: "pending", encrypted: true, checksum: "0".repeat(64),
-        size: 10, redactionStatus: "redacted", expiresAt: 1, deletionAttempts: 0 });
+        size: 10, storageState: "stored", expiresAt: 1, deletionAttempts: 0 });
       await ctx.db.patch(id, { storageKey: `artifacts/${tenant.organizationId}/${tenant.repositoryId}/${tenant.reviewId}/${id}/context-base-0.json` });
       return id;
     });
@@ -3899,8 +3899,8 @@ describe("a review with an unattributable injection signal fails closed", () => 
   const greenReview = async (t: ReturnType<typeof convexTest>, tenant: Awaited<ReturnType<typeof seedTenant>>, now: number) =>
     t.run(async ctx => {
       await ctx.db.patch(tenant.reviewId, { coverageLevel: "full", status: "validating", currentStage: "analysis" });
-      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "injection/validation.json", encrypted: true, checksum: "a".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
-      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "injection/report.md", encrypted: true, checksum: "d".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "injection/validation.json", encrypted: true, checksum: "a".repeat(64), size: 10, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "injection/report.md", encrypted: true, checksum: "d".repeat(64), size: 10, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
       await ctx.db.insert("checkRuns", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, kind: "test", nameHash: "b".repeat(64), required: true, status: "completed", conclusion: "passed", commandFingerprint: "c".repeat(64), commitSha: "a".repeat(40), exitCode: 0, durationMs: 1, artifactId, credentialTeardownProved: true, sandboxStopped: true, startedAt: now - 1, completedAt: now });
       return reportArtifactId;
     });
@@ -3932,8 +3932,8 @@ describe("a finding the critic cannot resolve reaches a person", () => {
   const uncertainReview = async (t: ReturnType<typeof convexTest>, tenant: Awaited<ReturnType<typeof seedTenant>>, now: number, passes: number) =>
     t.run(async ctx => {
       await ctx.db.patch(tenant.reviewId, { coverageLevel: "full", status: "validating", currentStage: "analysis" });
-      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "inconclusive/output.txt", encrypted: true, checksum: "c".repeat(64), size: 4, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
-      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "inconclusive/report.md", encrypted: true, checksum: "d".repeat(64), size: 4, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "inconclusive/output.txt", encrypted: true, checksum: "c".repeat(64), size: 4, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "inconclusive/report.md", encrypted: true, checksum: "d".repeat(64), size: 4, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
       await ctx.db.insert("checkRuns", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, kind: "test", nameHash: "b".repeat(64), required: true, status: "completed", conclusion: "passed", commandFingerprint: "c".repeat(64), commitSha: "a".repeat(40), exitCode: 0, durationMs: 1, artifactId, credentialTeardownProved: true, sandboxStopped: true, startedAt: now - 10, completedAt: now });
       await ctx.db.insert("findings", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, fingerprintHmac: "e".repeat(64), category: "correctness", severity: "high", confidence: 0.5, blocking: false, contentArtifactId: artifactId, evidenceIds: [artifactId], pathHmac: "f".repeat(64), startLine: 1, endLine: 1, resolution: "uncertain", uncertainPasses: passes, createdAt: now, updatedAt: now, expiresAt: now + 86_400_000 });
       return reportArtifactId;
@@ -4667,8 +4667,8 @@ describe("a check already failing on base does not turn the verdict red", () => 
   const pairedReview = async (t: ReturnType<typeof convexTest>, tenant: Awaited<ReturnType<typeof seedTenant>>, now: number, baseConclusion: "passed" | "failed") =>
     t.run(async ctx => {
       await ctx.db.patch(tenant.reviewId, { coverageLevel: "full", status: "validating", currentStage: "analysis" });
-      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "preexisting/validation.json", encrypted: true, checksum: "a".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
-      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "preexisting/report.md", encrypted: true, checksum: "d".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const artifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "command_output", storageKey: "preexisting/validation.json", encrypted: true, checksum: "a".repeat(64), size: 10, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
+      const reportArtifactId = await ctx.db.insert("artifacts", { organizationId: tenant.organizationId, repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type: "review_message", storageKey: "preexisting/report.md", encrypted: true, checksum: "d".repeat(64), size: 10, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
       // Same nameHash on both revisions, because nameHash is sha256(planId) and the two rows are
       // the same check run twice. That shared key is what lets the decision pair them.
       const row = (commitSha: string, conclusion: "passed" | "failed") => ({ organizationId: tenant.organizationId, reviewId: tenant.reviewId, kind: "secret_scan" as const, nameHash: "b".repeat(64), required: true, status: "completed" as const, conclusion, commandFingerprint: "c".repeat(64), commitSha, exitCode: conclusion === "failed" ? 1 : 0, durationMs: 1, artifactId, credentialTeardownProved: true, sandboxStopped: true, startedAt: now - 1, completedAt: now });

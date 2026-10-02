@@ -88,7 +88,7 @@ describe("recorded outcome evidence", () => {
   ] as const)("records confirmed base %s/head %s (%s) once", async (base, head, classification, expected) => {
     const t = convexTest(schema, modules), scope = await summaryFixture(t), now = Date.now();
     const checksum = "c".repeat(64);
-    const artifactId = await t.run(ctx => ctx.db.insert("artifacts", { ...pickScope(scope), type: "command_output", storageKey: "fixture/validation.json", encrypted: true, checksum, size: 100, redactionStatus: "pending", expiresAt: now + 60_000, deletionAttempts: 0 }));
+    const artifactId = await t.run(ctx => ctx.db.insert("artifacts", { ...pickScope(scope), type: "command_output", storageKey: "fixture/validation.json", encrypted: true, checksum, size: 100, storageState: "pending", expiresAt: now + 60_000, deletionAttempts: 0 }));
     const common = { planId: "test", kind: "test" as const, required: true, durationMs: 5, commandFingerprint: "d".repeat(64), nameHash: "e".repeat(64), credentialTeardownProved: true as const, sandboxStopped: true as const };
     const args = { organizationId: scope.organizationId, reviewId: scope.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0, artifactId, checksum, size: 100, manager: "npm" as const, now,
       summaries: [{ ...common, revision: "base" as const, commitSha: "b".repeat(40), conclusion: base }, { ...common, revision: "head" as const, commitSha: "a".repeat(40), conclusion: head, regressionClassification: classification }] };

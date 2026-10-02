@@ -20,7 +20,7 @@ async function seed(t: ReturnType<typeof makeTest>) {
     await ctx.db.patch(base.reviewId, { status: "checks_passed", currentStage: "complete", createdAt: now - 100, completedAt: now });
     const row = (await ctx.db.get(base.reviewId))!;
     const { _id, _creationTime, ...review } = row;
-    const artifactId = await ctx.db.insert("artifacts", { organizationId: base.organizationId, repositoryId: base.repositoryId, reviewId: base.reviewId, type: "review_message", storageKey: "test/report", encrypted: true, checksum: "a".repeat(64), size: 1, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+    const artifactId = await ctx.db.insert("artifacts", { organizationId: base.organizationId, repositoryId: base.repositoryId, reviewId: base.reviewId, type: "review_message", storageKey: "test/report", encrypted: true, checksum: "a".repeat(64), size: 1, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
     return { ...base, now, review, artifactId };
   });
 }

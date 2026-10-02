@@ -174,7 +174,7 @@ describe("two runs of the same pull request can be compared", () => {
         runnerImageVersion: "img", expiresAt: now + 86_400_000, createdAt: now, updatedAt: now });
       const artifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId: repository._id,
         reviewId, type: "prompt_trace", storageKey: `compare/${options.headSha}.json`, encrypted: true,
-        checksum: "a".repeat(64), size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+        checksum: "a".repeat(64), size: 10, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
       for (const stage of options.stages) {
         await ctx.db.insert("modelStageRuns", { organizationId, repositoryId: repository._id, reviewId,
           stage: stage as never, provider: "anthropic", model: "claude-sonnet-4-5", promptVersion: "chain-v1",
@@ -257,7 +257,7 @@ describe("the eval set learns from production", () => {
         executionGeneration: 0, runnerImageVersion: "img", expiresAt: now + 86_400_000, createdAt: now, updatedAt: now });
       const artifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId: repository._id, reviewId,
         type: "prompt_trace", storageKey: "eval/trace.json", encrypted: true, checksum: "a".repeat(64), size: 10,
-        redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+        storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
       const print = "f".repeat(64);
       await ctx.db.insert("findings", { organizationId, reviewId, fingerprintHmac: print, category: "correctness",
         severity: "high", confidence: 0.9, blocking: true, contentArtifactId: artifactId, evidenceIds: [artifactId],
@@ -402,7 +402,7 @@ describe("a review remembers the repository", () => {
           expiresAt: now + 86_400_000, createdAt: now + index, updatedAt: now + index });
         const artifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, reviewId,
           type: "prompt_trace", storageKey: `memory/${index}.json`, encrypted: true, checksum: "a".repeat(64),
-          size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+          size: 10, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
         for (const print of prints as string[]) {
           await ctx.db.insert("findings", { organizationId, reviewId, fingerprintHmac: print, category: "correctness",
             severity: "high", confidence: 0.9, blocking: true, contentArtifactId: artifactId, evidenceIds: [artifactId],

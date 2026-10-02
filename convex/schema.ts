@@ -359,7 +359,7 @@ export default defineSchema({
   artifacts: defineTable({
     organizationId: v.id("organizations"), repositoryId: v.id("repositories"), reviewId: v.optional(v.id("reviews")), type: value.artifactType,
     storageKey: v.string(), encrypted: v.literal(true), checksum: v.string(), size: v.number(),
-    storageState: v.optional(value.storageState), redactionStatus: v.optional(value.redactionStatus), expiresAt: v.number(), deletedAt: v.optional(v.number()),
+    storageState: value.storageState, expiresAt: v.number(), deletedAt: v.optional(v.number()),
     deletionAttempts: v.number(), deletionLeaseId: v.optional(v.string()), deletionLeaseExpiresAt: v.optional(v.number()),
     lastDeletionErrorCode: v.optional(v.string()), deletionTerminalAt: v.optional(v.number()),
   }).index("by_expiry", ["expiresAt"])

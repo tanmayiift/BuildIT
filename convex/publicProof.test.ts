@@ -49,7 +49,7 @@ async function seedEvidenceRepository(
       ...(row.visibilityVerifiedAt === undefined ? {} : { visibilityVerifiedAt: row.visibilityVerifiedAt }),
       createdAt: now, updatedAt: now });
     const configArtifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, type: "configuration",
-      storageKey: `${slug}/config`, encrypted: true, checksum: "c".repeat(64), size: 1, redactionStatus: "redacted",
+      storageKey: `${slug}/config`, encrypted: true, checksum: "c".repeat(64), size: 1, storageState: "stored",
       expiresAt: now + hour, deletionAttempts: 0 });
     const configRevisionId = await ctx.db.insert("configRevisions", { organizationId, repositoryId,
       sourceCommitSha: "b".repeat(40), sourceRef: "main", configArtifactId, contentHash: "d".repeat(64),
@@ -83,7 +83,7 @@ async function seedTenant(t: ReturnType<typeof convexTest>, slug: string, reposi
     const organizationId = await ctx.db.insert("organizations", { name: slug, slug, timezone: "UTC", region: "eu-west-1", retentionHours: 24, monthlyBudget: 100, concurrencyLimit: 2, planId: "test", fingerprintKeyVersion: 1, createdAt: now });
     const installationId = await ctx.db.insert("githubInstallations", { organizationId, installationId: Math.floor(Math.random() * 1_000_000), accountLogin: slug, accountType: "organization", permissionSnapshot: { metadata: "read", contents: "write", pullRequests: "write", issues: "read", checks: "write" }, status: "active", createdAt: now, updatedAt: now });
     const repositoryId = await ctx.db.insert("repositories", { organizationId, installationId, githubRepositoryId: Math.floor(Math.random() * 1_000_000), owner: slug, name: repositoryName, defaultBranch: "main", enabled: true, autofixMode: "stacked", forkPolicy: "manual_review_only", indexState: "ready", concurrencyLimit: 1, createdAt: now, updatedAt: now });
-    const configArtifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, type: "configuration", storageKey: `${slug}/config`, encrypted: true, checksum: "hash", size: 1, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+    const configArtifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, type: "configuration", storageKey: `${slug}/config`, encrypted: true, checksum: "hash", size: 1, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
     const configRevisionId = await ctx.db.insert("configRevisions", { organizationId, repositoryId, sourceCommitSha: "b".repeat(40), sourceRef: "main", configArtifactId, contentHash: "config-hash", rulesDigest: "rules-hash", schemaVersion: "1", validationState: "valid", provenance: "defaults_only", refProtectionState: "unverified", createdAt: now });
     await ctx.db.patch(repositoryId, { configRevisionId });
 
@@ -106,7 +106,7 @@ async function seedTenant(t: ReturnType<typeof convexTest>, slug: string, reposi
         expiresAt: now + 60_000, createdAt: now, updatedAt: now,
       });
       if (prNumber === 1) {
-        const contentArtifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, reviewId, type: "command_output", storageKey: `${slug}/output`, encrypted: true, checksum: "output-hash", size: 10, redactionStatus: "redacted", expiresAt: now + 60_000, deletionAttempts: 0 });
+        const contentArtifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, reviewId, type: "command_output", storageKey: `${slug}/output`, encrypted: true, checksum: "output-hash", size: 10, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
         for (let index = 0; index < plan.findings; index += 1) {
           await ctx.db.insert("findings", { organizationId, reviewId, fingerprintHmac: `${slug}-fingerprint-${index}`, category: "correctness", severity: "warning", confidence: 0.9, blocking: false, contentArtifactId, evidenceIds: [], pathHmac: `${slug}-path`, startLine: 1, endLine: 2, resolution: "open", createdAt: now, updatedAt: now, expiresAt: now + 60_000 });
         }

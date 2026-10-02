@@ -12,7 +12,6 @@ import type * as accountingSchema from "../accountingSchema.js";
 import type * as activation from "../activation.js";
 import type * as artifactCleanupData from "../artifactCleanupData.js";
 import type * as artifactCleanupWorker from "../artifactCleanupWorker.js";
-import type * as artifactStorageMigration from "../artifactStorageMigration.js";
 import type * as artifacts from "../artifacts.js";
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
@@ -136,7 +135,6 @@ declare const fullApi: ApiFromModules<{
   activation: typeof activation;
   artifactCleanupData: typeof artifactCleanupData;
   artifactCleanupWorker: typeof artifactCleanupWorker;
-  artifactStorageMigration: typeof artifactStorageMigration;
   artifacts: typeof artifacts;
   audit: typeof audit;
   auth: typeof auth;
