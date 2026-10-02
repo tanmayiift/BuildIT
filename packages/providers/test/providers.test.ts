@@ -1,8 +1,27 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { assertStrictSchema, checked, conservativeProviderModelCost, conservativeProviderStageCost, ProviderClient, ProviderError, selectProviderModel } from "../src/index.js";
+import { assertStrictSchema, checked, conservativeProviderModelCost, conservativeProviderStageCost, ProviderClient, ProviderError, selectProviderModel, validateSchemaValue } from "../src/index.js";
 const request={model:"allowed",system:"policy",input:"data",schemaName:"result",schema:{type:"object",properties:{ok:{type:"boolean"}},required:["ok"],additionalProperties:false},maxOutputTokens:100};
 describe("provider adapters",()=>{
+  // `key in record` walks the prototype chain, so "constructor", "toString" and "__proto__" are
+  // present on every object literal. A model response carrying one of those keys therefore passed
+  // additionalProperties:false - an unexpected key smuggled past the validator by name alone - and
+  // `required` was satisfied by a key the response never sent. src/index.ts uses own() for all
+  // three checks now; this is what stops it going back to `in`, which reads as equivalent.
+  it("rejects prototype-named properties rather than reading them off the prototype chain",()=>{
+    const schema={type:"object",properties:{ok:{type:"boolean"}},required:["ok"],additionalProperties:false} as const;
+    // JSON.parse rather than a literal: an inline __proto__ key would set the prototype instead of
+    // becoming an own property, and the test would pass without exercising anything.
+    for(const key of ["constructor","toString","__proto__","hasOwnProperty"]){
+      expect(validateSchemaValue(JSON.parse(`{"ok":true,"${key}":"smuggled"}`),schema),key).toBe(false);
+    }
+    expect(validateSchemaValue({ok:true},schema)).toBe(true);
+  });
+  it("does not accept a prototype-named key as a satisfied required field",()=>{
+    const schema={type:"object",properties:{toString:{type:"string"}},required:["toString"]} as const;
+    expect(validateSchemaValue({},schema),"required must mean the response actually sent it").toBe(false);
+    expect(validateSchemaValue(JSON.parse('{"toString":"real"}'),schema)).toBe(true);
+  });
   it("prefers the cost-effective OpenAI review model when the key can use it",()=>{
     expect(selectProviderModel("openai",["gpt-5.4","gpt-5.4-mini"])).toBe("gpt-5.4-mini");
   });
