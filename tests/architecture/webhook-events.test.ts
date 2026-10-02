@@ -19,6 +19,17 @@ const githubWebhookEvents = new Set([
 ]);
 
 describe("every webhook event BuildIT listens for", () => {
+  // installation_repositories is not sent on a visibility change. GitHub sends `repository` with
+  // action privatized/publicized, and `public` when a private repository is opened up. Without
+  // these two, `repositories.visibility` could never converge after the grant, which is how private
+  // repositories stayed stored as public and reached the unauthenticated evidence list.
+  it("listens for the events that change a repository's visibility", () => {
+    for (const event of ["repository", "public"]) {
+      expect(http, `${event} must re-sync the installation, or visibility can never converge`)
+        .toContain(`event === "${event}"`);
+    }
+  });
+
   const http = readFileSync(join(import.meta.dirname, "../../convex/http.ts"), "utf8");
 
   it("is an event GitHub actually sends", () => {

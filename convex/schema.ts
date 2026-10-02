@@ -86,11 +86,23 @@ export default defineSchema({
     // Off unless asked: BuildIT opening pull requests nobody wanted is its own kind of noise.
     changelogOnMerge: v.optional(v.boolean()),
     forkPolicy: value.forkPolicy, configRevisionId: v.optional(v.id("configRevisions")),
+    // Whether this repository's reviews may appear on the unauthenticated /proof page. Operator-set
+    // and never inferred, because inferring it from `visibility` is exactly how six pull requests
+    // from two private repositories ended up on a page that needs no account: `visibility` is a
+    // snapshot taken when access was granted, and until this change nothing in the product could
+    // correct it. An absent flag means "not published", so a repository has to be chosen rather
+    // than merely fail to be excluded.
+    publishAsEvidence: v.optional(v.boolean()),
+    // When GitHub last confirmed `visibility`. Written only beside `visibility` itself, so it
+    // cannot be stamped without a fresh read, and read as a freshness bound by the public query -
+    // an unverified or stale row is not publishable.
+    visibilityVerifiedAt: v.optional(v.number()),
     indexState: value.indexState, concurrencyLimit: v.number(), ...timestampFields,
   }).index("by_github_id", ["githubRepositoryId"])
     .index("by_installation", ["installationId"])
     .index("by_org_enabled", ["organizationId", "enabled"])
-    .index("by_owner_visibility", ["owner", "visibility"]),
+    .index("by_owner_visibility", ["owner", "visibility"])
+    .index("by_evidence", ["publishAsEvidence", "owner"]),
 
   configRevisions: defineTable({
     organizationId: v.id("organizations"), repositoryId: v.id("repositories"),

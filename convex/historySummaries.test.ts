@@ -10,7 +10,13 @@ const makeTest = () => convexTest(schema, modules);
 async function seed(t: ReturnType<typeof makeTest>) {
   const now = Date.now(), base = await summaryFixture(t, "summary", now - 10_000);
   return t.run(async ctx => {
-    await ctx.db.patch(base.repositoryId, { owner: "tanmayiift", name: "proof-fixture", visibility: "public" });
+    // publishAsEvidence and visibilityVerifiedAt are what make a repository publishable now. Public
+    // visibility alone no longer is: it is a snapshot from the moment access was granted, and
+    // trusting it put two private repositories on an unauthenticated page. These cases still prove
+    // what they were written to prove - that a customer's public repository and a private evidence
+    // repository are both excluded - so they opt the fixture in and leave their assertions alone.
+    await ctx.db.patch(base.repositoryId, { owner: "tanmayiift", name: "proof-fixture", visibility: "public",
+      publishAsEvidence: true, visibilityVerifiedAt: now });
     await ctx.db.patch(base.reviewId, { status: "checks_passed", currentStage: "complete", createdAt: now - 100, completedAt: now });
     const row = (await ctx.db.get(base.reviewId))!;
     const { _id, _creationTime, ...review } = row;

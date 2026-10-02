@@ -118,12 +118,44 @@ export const summary = query({
 // out of this list by default rather than by luck.
 const evidenceOwners = new Set(["tanmayiift"]);
 
+// Four conditions, and the first one is the one that was missing. The gate used to be "owner is
+// BuildIT's own, and the stored visibility says public", which sounds like two independent checks
+// and is really one: `repositories.visibility` is written only when access is granted
+// (githubInstallationsData.reconcileRepositories), and GitHub does not send
+// installation_repositories when a repository's visibility changes - it sends `repository`
+// privatized/publicized, which nothing handled. So the column was a snapshot that no code path
+// could correct, and six pull requests from two repositories that had been made private weeks
+// earlier were served from this function to anonymous visitors.
+//
+// publishAsEvidence is the fix: a repository is published because somebody chose it, never because
+// a stale column failed to exclude it. No existing row has it, so this empties the list on deploy.
+// visibilityVerifiedAt bounds how long a confirmation is trusted, so a dropped webhook or a broken
+// cron removes rows rather than publishing stale ones - the failure direction is correct by
+// construction rather than by luck.
+const visibilityFreshnessMs = 24 * 60 * 60_000;
+
+export function publishableAsEvidence(
+  repository: { owner: string; visibility?: string; publishAsEvidence?: boolean; visibilityVerifiedAt?: number },
+  now: number,
+) {
+  if (repository.publishAsEvidence !== true) return false;
+  if (!evidenceOwners.has(repository.owner)) return false;
+  if (repository.visibility !== "public") return false;
+  const verifiedAt = repository.visibilityVerifiedAt;
+  if (!Number.isFinite(verifiedAt) || verifiedAt === undefined) return false;
+  return now - verifiedAt < visibilityFreshnessMs;
+}
+
 export const recentPublicReviews = query({
   args: {},
   handler: async ctx => {
     const repositoryLimit = 50, reviewsPerRepository = 100, listLimit = 40;
+    const now = Date.now();
+    // Read the opt-in index, then apply the remaining three conditions. Reading by_evidence rather
+    // than by_owner_visibility means an un-opted-in repository is never even a candidate.
     const repositoryRows = (await Promise.all([...evidenceOwners].map(owner => ctx.db.query("repositories")
-      .withIndex("by_owner_visibility", q => q.eq("owner", owner).eq("visibility", "public")).take(repositoryLimit + 1)))).flat();
+      .withIndex("by_evidence", q => q.eq("publishAsEvidence", true).eq("owner", owner)).take(repositoryLimit + 1)))).flat()
+      .filter(repository => publishableAsEvidence(repository, now));
     const repositories = repositoryRows.slice(0, repositoryLimit);
     const byId = new Map(repositories.map(item => [item._id, item]));
     const pages = await Promise.all(repositories.map(repository => ctx.db.query("reviews")
@@ -139,7 +171,7 @@ export const recentPublicReviews = query({
     }
     const partial = { repositories: repositoryRows.length > repositoryLimit, reviews: pages.some(page => page.length > reviewsPerRepository), list: latest.size > listLimit };
     return {
-      generatedAt: Date.now(), repositoriesListed: byId.size,
+      generatedAt: now, repositoriesListed: byId.size,
       truncated: Object.values(partial).some(Boolean), partial,
       limits: { repositories: repositoryLimit, reviewsPerRepository, list: listLimit },
       reviews: [...latest.values()].sort((left, right) => (right.completedAt ?? 0) - (left.completedAt ?? 0)).slice(0, listLimit).map(review => {
