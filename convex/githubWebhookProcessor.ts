@@ -32,6 +32,16 @@ type StartReviewInput = {
   scope: { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; owner: string; name: string; forkPolicy: "manual_review_only" | "disabled" };
 };
 
+// One sentence per refusal. These used to share the fork-disabled sentence, so a merge-queue
+// refusal and a refused fork autofix both told the maintainer forks were not reviewed at all.
+const refusalSummaries = {
+  merge_queue_refused: "BuildIT does not review merge-queue branches. Review the pull request itself before it enters the queue.",
+  fork_disabled: "This repository does not allow BuildIT to review pull requests from forks. A maintainer can change that in the repository's BuildIT settings, or push the branch to this repository and open the pull request from there.",
+  fork_needs_request: "BuildIT reviews a pull request from a fork only when a maintainer with write access comments `@buildit review` on it. Automatic review covers branches in this repository.",
+  fork_needs_write: "A pull request from a fork is reviewed only when a maintainer with write access asks. Triage access can start reviews of this repository's own branches.",
+  fork_manual_review_only: "BuildIT reviews pull requests from forks but does not push fixes to them. Ask for `@buildit review` instead, or push the branch to this repository to use autofix.",
+} as const;
+
 async function startReviewForPullRequest(ctx: ActionCtx, input: StartReviewInput) {
     const pullResponse = await input.client.withToken(
       {
@@ -76,12 +86,13 @@ async function startReviewForPullRequest(ctx: ActionCtx, input: StartReviewInput
         repoFullName: pull.base?.repo?.full_name ?? "",
       },
     });
-    if (!reviewPolicy(snapshot, input.mode, input.scope.forkPolicy).allowed) {
+    const policy = reviewPolicy(snapshot, input.mode, input.scope.forkPolicy, input.trigger === "automatic" ? "automatic" : input.permission);
+    if (!policy.allowed) {
       await ctx.runAction(internal.reviewPublicationWorker.acknowledge, {
         installationId: input.installationId, githubRepositoryId: input.githubRepositoryId,
         headSha: snapshot.headSha, conclusion: "neutral",
         title: "BuildIT did not review this pull request",
-        summary: "This repository does not allow BuildIT to review pull requests from forks. A maintainer can change that in the repository's BuildIT settings, or push the branch to this repository and open the pull request from there.",
+        summary: refusalSummaries[policy.reason],
       });
       await ctx.runMutation(internal.githubWebhookData.complete, {
         deliveryId: input.deliveryId,
@@ -331,9 +342,9 @@ async function sha256(value: string) {
 
 
 // An automatic review only ever reaches materializeReview through startReviewForPullRequest, so it
-// gets the same pinning and fork checks as one a person asked for. The author's own permission is
-// what it runs as - an automatic review must not grant more than the person who opened the pull
-// request already has.
+// gets the same pinning and fork checks as one a person asked for. It records "write" because that
+// is what the author already has: reviewPolicy refuses an automatic review of a fork, so the only
+// pull requests that reach this are branches pushed to the repository itself.
 async function startAutomaticReview(ctx: ActionCtx, args: { deliveryId: string; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; authorLogin: string }) {
   const eligibility = await ctx.runQuery(internal.automaticReviewData.automaticEligibility, {
     installationId: args.installationId, githubRepositoryId: args.githubRepositoryId,

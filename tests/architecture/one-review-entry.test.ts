@@ -28,6 +28,14 @@ describe("one way to start a review", () => {
     expect(materialize).toBeGreaterThan(fork);
   });
 
+  // reviewPolicy refuses an automatic review of a fork, and one asked for below write access -
+  // otherwise anyone on GitHub could spend the workspace's model key by opening pull requests. That
+  // only holds if the entry point hands it who really asked; a literal "write" here would compile
+  // and pass every unit test.
+  it("hands fork policy who actually asked for the review", () => {
+    expect(code).toMatch(/reviewPolicy\(snapshot, input\.mode, input\.scope\.forkPolicy, input\.trigger === "automatic" \? "automatic" : input\.permission\)/);
+  });
+
   it("keeps every one of those steps inside the shared entry point", () => {
     const entry = code.indexOf("async function startReviewForPullRequest");
     const nextTopLevel = code.indexOf("\nexport const", entry);

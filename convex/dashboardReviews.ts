@@ -33,6 +33,8 @@ export function modelRouteDescription(route: Pick<DashboardScope, "provider" | "
   if (route.provider === "openai" && route.model === "gpt-5.4-mini" && route.availableModels.includes("gpt-5.4")) return "openai · gpt-5.4-mini for context and independent checks, with gpt-5.4 for code findings";
   return `${route.provider} · ${route.model}`;
 }
+// Every workspace role that can start a review here is recorded as at least "write"
+// (dashboardReviewData's triggerActorPermission), so that is who fork policy is told asked.
 async function snapshot(scope: { installationId: number; githubRepositoryId: number; forkPolicy: "manual_review_only" | "disabled" }, prNumber: number) {
   if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error("invalid_pull_request_number");
   const client = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
@@ -43,7 +45,7 @@ async function snapshot(scope: { installationId: number; githubRepositoryId: num
     if (!response.ok) throw new Error(`github_pull_request_${response.status}`);
     const pull = await response.json() as { number?: number; title?: string; html_url?: string; changed_files?: number; additions?: number; deletions?: number; head?: { sha?: string; ref?: string; repo?: { full_name?: string } | null }; base?: { sha?: string; ref?: string; repo?: { full_name?: string } } };
     const pinned = pinPullRequest({ number: pull.number ?? prNumber, head: { sha: pull.head?.sha ?? "", ref: pull.head?.ref ?? "", repoFullName: pull.head?.repo?.full_name ?? null }, base: { sha: pull.base?.sha ?? "", ref: pull.base?.ref ?? "", repoFullName: pull.base?.repo?.full_name ?? "" } });
-    const policy = reviewPolicy(pinned, "review", scope.forkPolicy); if (!policy.allowed) throw new Error(policy.reason);
+    const policy = reviewPolicy(pinned, "review", scope.forkPolicy, "write"); if (!policy.allowed) throw new Error(policy.reason);
     return { ...pinned, title: (pull.title ?? "Untitled pull request").slice(0, 500), url: pull.html_url ?? "", changedFiles: pull.changed_files ?? 0, additions: pull.additions ?? 0, deletions: pull.deletions ?? 0 };
   } finally { await client.revoke(tokenScope); }
 }
