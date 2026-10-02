@@ -27,7 +27,7 @@ async function seed(t: ReturnType<typeof convexTest>) {
       owner: "ledgerline", name: "api", defaultBranch: "main", enabled: true, autofixMode: "stacked",
       forkPolicy: "manual_review_only", indexState: "ready", concurrencyLimit: 1, createdAt: now, updatedAt: now });
     const configArtifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, type: "configuration",
-      storageKey: "ledgerline/config", encrypted: true, checksum: "hash", size: 1, redactionStatus: "redacted",
+      storageKey: "ledgerline/config", encrypted: true, checksum: "hash", size: 1, storageState: "stored",
       expiresAt: now + 60_000, deletionAttempts: 0 });
     const configRevisionId = await ctx.db.insert("configRevisions", { organizationId, repositoryId,
       sourceCommitSha: "b".repeat(40), sourceRef: "main", configArtifactId, contentHash: "config-hash",
@@ -45,7 +45,7 @@ async function seed(t: ReturnType<typeof convexTest>) {
       runnerImageVersion: "test", executionGeneration: 0, queuePriority: 0,
       expiresAt: now + 10_000_000, createdAt: now, updatedAt: now });
     const artifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, reviewId, type: "command_output",
-      storageKey: "placeholder", encrypted: true, checksum: "output-hash", size: 10, redactionStatus: "redacted",
+      storageKey: "placeholder", encrypted: true, checksum: "output-hash", size: 10, storageState: "stored",
       expiresAt: now + 10_000_000, deletionAttempts: 0 });
     await ctx.db.patch(artifactId, { storageKey: `artifacts/${organizationId}/${repositoryId}/${reviewId}/${artifactId}/output` });
     return { organizationId, repositoryId, reviewId, artifactId };

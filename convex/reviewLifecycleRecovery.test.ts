@@ -27,7 +27,7 @@ async function seed(t: ReturnType<typeof convexTest>): Promise<Seed> {
       owner: "ledgerline", name: "api", defaultBranch: "main", enabled: true, autofixMode: "stacked",
       forkPolicy: "manual_review_only", indexState: "ready", concurrencyLimit: 1, createdAt: now, updatedAt: now });
     const configArtifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, type: "configuration",
-      storageKey: "k", encrypted: true, checksum: "h", size: 1, redactionStatus: "redacted", expiresAt: 9e12, deletionAttempts: 0 });
+      storageKey: "k", encrypted: true, checksum: "h", size: 1, storageState: "stored", expiresAt: 9e12, deletionAttempts: 0 });
     const configRevisionId = await ctx.db.insert("configRevisions", { organizationId, repositoryId,
       sourceCommitSha: base, sourceRef: "main", configArtifactId, contentHash: "c", rulesDigest: "r",
       schemaVersion: "1", validationState: "valid", provenance: "defaults_only", refProtectionState: "unverified", createdAt: now });
