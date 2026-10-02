@@ -65,7 +65,7 @@ export const attachInstallation=internalMutation({args:{userId:v.string(),github
  // A Convex mutation runs as a serialized transaction, so nothing can write this row between
  // the read above and this insert. The rule cannot see that.
  // eslint-disable-next-line require-atomic-updates
- if(!organizationId)organizationId=await ctx.db.insert("organizations",{name:args.accountType==="user"?`${args.accountLogin}'s workspace`:args.accountLogin,slug,timezone:"UTC",region:"eu-west-1",retentionHours:24,monthlyBudget:50,concurrencyLimit:3,planId:"trial",fingerprintKeyVersion:1,createdAt:args.now});
+ if(!organizationId)organizationId=await ctx.db.insert("organizations",{name:args.accountType==="user"?`${args.accountLogin}'s workspace`:args.accountLogin,slug,timezone:"UTC",region:"eu-west-1",retentionHours:24,monthlyBudget:50,concurrencyLimit:3,createdAt:args.now});
  const membership=await ctx.db.query("memberships").withIndex("by_org_user",q=>q.eq("organizationId",organizationId!).eq("userId",args.userId)).unique();
  if(membership&&membership.status==="removed")throw new ConvexError("membership_revoked");
  if(membership&&membership.status!=="active")await ctx.db.patch(membership._id,{status:"active",role:membership.role,updatedAt:args.now});else if(!membership)await ctx.db.insert("memberships",{organizationId,userId:args.userId,role:"owner",status:"active",createdAt:args.now,updatedAt:args.now});
