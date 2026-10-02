@@ -11,6 +11,8 @@ import workpoolComponent from "@convex-dev/workpool/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import { terminalStatuses } from "./lib/lifecycle";
+import { defaultMonthlySandboxSeconds } from "./lib/sandboxCeiling";
+import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { normalizeGitHubProfile } from "./lib/githubProfile";
 import { makeFunctionReference } from "convex/server";
@@ -4206,6 +4208,158 @@ describe("an owner can change their own capacity", () => {
     await expect(signedIn.mutation(api.organizations.updateCapacity, {
       organizationId: other.organizationId, concurrencyLimit: 6, requestId: "cross-capacity-000001",
     })).rejects.toThrow("not_found_or_forbidden");
+  });
+});
+
+// Sandbox seconds were measured per organization, written to usageLedger at unitCost 0, and never
+// read back. concurrencyLimit bounds how much sandbox capacity a tenant holds at once; nothing
+// bounded how much it consumed over a month - so the first workspace to run a lot of reviews took
+// the whole deployment's provider quota, and every other workspace then failed with
+// sandbox_unavailable for a reason that was not theirs. That is how it actually happened here.
+describe("a tenant cannot consume the whole platform's sandbox quota", () => {
+  const month = (now: number) => {
+    const date = new Date(now);
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  };
+  const dashboardArgs = (tenant: Awaited<ReturnType<typeof seedTenant>>, now: number, prNumber = 91) => ({
+    repositoryId: tenant.repositoryId, prNumber, headSha: "c".repeat(40), baseSha: "b".repeat(40),
+    baseRef: "main", isFork: false, actorId: "alice", actorRole: "developer" as const,
+    expectedCredentialScopeId: "credential-test", expectedProvider: "anthropic" as const, budgetLimit: 2, now,
+  });
+
+  it("refuses a dashboard review once the month's sandbox allowance is spent", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "sandbox-ceiling-dashboard", "alice");
+    const now = Date.now();
+    // One second short of the default allowance: still admitted. concurrencyLimit is raised out of
+    // the way because seedTenant leaves one active review behind and this is about the other bound.
+    await t.run(ctx => ctx.db.patch(tenant.organizationId, {
+      concurrencyLimit: 20, sandboxSecondsUsed: defaultMonthlySandboxSeconds - 1, sandboxSecondsMonth: month(now),
+    }));
+    await expect(t.mutation(internal.dashboardReviewData.create, dashboardArgs(tenant, now)))
+      .resolves.toMatchObject({ status: "queued" });
+    // At the allowance: refused, and named for the bound rather than reported as a platform fault.
+    await t.run(ctx => ctx.db.patch(tenant.organizationId, {
+      sandboxSecondsUsed: defaultMonthlySandboxSeconds, sandboxSecondsMonth: month(now),
+    }));
+    await expect(t.mutation(internal.dashboardReviewData.create, dashboardArgs(tenant, now, 92)))
+      .rejects.toThrow("organization_sandbox_ceiling_reached");
+  });
+
+  it("blocks a webhook review instead of erroring, and does not tell the author to retry", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "sandbox-ceiling-webhook", "alice");
+    const repository = await t.run(ctx => ctx.db.get(tenant.repositoryId));
+    const now = 1_000_000;
+    await t.run(ctx => ctx.db.patch(tenant.organizationId, {
+      sandboxSecondsUsed: defaultMonthlySandboxSeconds, sandboxSecondsMonth: month(now),
+    }));
+    await t.mutation(internal.githubWebhookData.reserve, {
+      deliveryId: "delivery-sandbox-ceiling", event: "issue_comment", action: "created",
+      installationId: 20, disposition: "processed" as const, signatureValid: true, now: 1,
+    });
+    await t.mutation(internal.githubWebhookData.recordPinnedSnapshot, {
+      deliveryId: "delivery-sandbox-ceiling", prNumber: 78, headSha: "a".repeat(40), baseSha: "b".repeat(40),
+      headRefHash: "c".repeat(64), baseRefHash: "d".repeat(64), isFork: false, triggerVerb: "review",
+    });
+    // A webhook must not throw on a tenant limit: GitHub would retry the delivery and the author
+    // would see nothing at all.
+    const materialized = await t.mutation(internal.githubWebhookData.materializeReview, {
+      deliveryId: "delivery-sandbox-ceiling", organizationId: tenant.organizationId,
+      repositoryId: tenant.repositoryId, baseRef: repository!.defaultBranch ?? "main",
+      triggerActor: "someone", actorPermission: "write" as const, now,
+    });
+    expect(materialized.status).toBe("blocked");
+    // The caller is what tells the pull request why; a status with no reason announces the wrong one.
+    expect("blockedReason" in materialized ? materialized.blockedReason : undefined).toBe("sandbox_ceiling_reached");
+    const review = await t.run(async ctx =>
+      (await ctx.db.query("reviews").collect()).find(item => item.prNumber === 78));
+    expect(review?.statusReasonCode).toBe("sandbox_ceiling_reached");
+    // retry_review would be advice that cannot work: nothing a retry does clears a monthly total.
+    expect(review?.nextActionCode).toBe("await_sandbox_reset");
+  });
+
+  it("reads last month's total as zero instead of carrying it into this one", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "sandbox-ceiling-rollover", "alice");
+    const now = Date.UTC(2026, 9, 2);
+    await t.run(ctx => ctx.db.patch(tenant.organizationId, {
+      concurrencyLimit: 20, sandboxSecondsUsed: defaultMonthlySandboxSeconds * 4, sandboxSecondsMonth: "2026-09",
+    }));
+    await expect(t.mutation(internal.dashboardReviewData.create, dashboardArgs(tenant, now)))
+      .resolves.toMatchObject({ status: "queued" });
+  });
+
+  it("fills the counter from the segment durations the worker measured", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "sandbox-ceiling-counter", "alice");
+    const now = Date.now();
+    const created = await t.mutation(internal.dashboardReviewData.create, dashboardArgs(tenant, now));
+    const review = await t.run(ctx => ctx.db.get(created.reviewId));
+    const jobId: Id<"executionJobs"> = await t.mutation(internal.executionJobsData.create, {
+      organizationId: tenant.organizationId, reviewId: created.reviewId,
+      expectedHeadSha: review!.headSha, expectedGeneration: review!.executionGeneration,
+      jobKey: `sandbox-ceiling-counter:${created.reviewId}`, runId: "run-sandbox-ceiling",
+      baseSha: review!.baseSha, now,
+    });
+    const before = await t.run(ctx => ctx.db.get(tenant.organizationId));
+    expect(before?.sandboxSecondsUsed ?? 0).toBe(0);
+    const row = await t.run(ctx => ctx.db.get(jobId));
+    await t.mutation(internal.executionJobsData.claim, { jobId: row!._id, workerId: "worker-1", now });
+    const claimed = await t.run(ctx => ctx.db.get(row!._id));
+    await t.mutation(internal.executionJobsData.checkpoint, {
+      jobId: row!._id, requestKey: "segment-prepare", expectedVersion: claimed!.stateVersion,
+      expectedStage: claimed!.stage, nextStage: "scanners", cursor: "prepared", durationMs: 45_000, now,
+    });
+    const after = await t.run(ctx => ctx.db.get(tenant.organizationId));
+    expect(after?.sandboxSecondsUsed, "a measured segment must land on the tenant's monthly total").toBe(45);
+    expect(after?.sandboxSecondsMonth).toBe(month(now));
+
+    // A replayed checkpoint must not charge the segment twice.
+    await t.mutation(internal.executionJobsData.checkpoint, {
+      jobId: row!._id, requestKey: "segment-prepare", expectedVersion: claimed!.stateVersion,
+      expectedStage: claimed!.stage, nextStage: "scanners", cursor: "prepared", durationMs: 45_000, now,
+    });
+    expect((await t.run(ctx => ctx.db.get(tenant.organizationId)))?.sandboxSecondsUsed).toBe(45);
+  });
+
+  it("lets an operator raise the allowance, and keeps it inside the quota that exists", async () => {
+    const t = convexTest(schema, modules);
+    const tenant = await seedTenant(t, "sandbox-ceiling-raise", "alice");
+    const now = Date.now();
+    await t.run(ctx => ctx.db.patch(tenant.organizationId, {
+      concurrencyLimit: 20, sandboxSecondsUsed: defaultMonthlySandboxSeconds, sandboxSecondsMonth: month(now),
+    }));
+    await expect(t.mutation(internal.dashboardReviewData.create, dashboardArgs(tenant, now)))
+      .rejects.toThrow("organization_sandbox_ceiling_reached");
+    await expect(t.mutation(internal.organizations.setCapacityLimits, {
+      organizationId: tenant.organizationId, monthlySandboxSeconds: 999_999,
+      actorId: "operator", requestId: "sandbox-raise-too-big", now,
+    })).rejects.toThrow("capacity_limit_invalid");
+    await expect(t.mutation(internal.organizations.setCapacityLimits, {
+      organizationId: tenant.organizationId, monthlySandboxSeconds: defaultMonthlySandboxSeconds * 2,
+      actorId: "operator", requestId: "sandbox-raise-000001", now,
+    })).resolves.toMatchObject({ monthlySandboxSeconds: defaultMonthlySandboxSeconds * 2 });
+    await expect(t.mutation(internal.dashboardReviewData.create, dashboardArgs(tenant, now)))
+      .resolves.toMatchObject({ status: "queued" });
+  });
+
+  // The allowance is a slice of a quota BuildIT buys once and every tenant draws on. An owner who
+  // could raise their own slice could take the whole thing, so the cap would be decorative.
+  it("does not let a tenant owner raise its own slice of the shared quota", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await t.run(ctx => ctx.db.insert("users", { githubUserId: 8300, githubLogin: "owner-sandbox" }));
+    const tenant = await seedTenant(t, "sandbox-ceiling-owner", userId);
+    await t.run(async ctx => {
+      const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", tenant.organizationId).eq("userId", userId)).unique();
+      if (membership) await ctx.db.patch(membership._id, { role: "owner", status: "active" });
+      await ctx.db.insert("userProfiles", { userId, githubUserId: 8300, githubLogin: "owner-sandbox", lastAuthenticatedAt: Date.now(), updatedAt: Date.now() });
+    });
+    const signedIn = t.withIdentity({ subject: `${userId}|session` });
+    await expect(signedIn.mutation(api.organizations.updateCapacity, {
+      organizationId: tenant.organizationId, requestId: "owner-sandbox-000001",
+      ...({ monthlySandboxSeconds: 18_000 } as unknown as { concurrencyLimit: number }),
+    })).rejects.toThrow();
   });
 });
 

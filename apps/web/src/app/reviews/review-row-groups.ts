@@ -105,6 +105,8 @@ const reasonLabels: Record<string, string> = {
   blocked_expired: "The blocked review expired before access was restored.",
   spend_ceiling_reached: "The review stopped before exceeding its approved model budget.",
   concurrency_limit_reached: "Your workspace already has as many reviews running as its limit allows. This one starts when an earlier review finishes.",
+  sandbox_ceiling_reached: "Your workspace has used the sandbox time its plan allows this month, so no new review can run its checks. The allowance resets at the start of next month.",
+  provider_quota_exhausted: "The model provider reported no credit left on the connected key. No code decision was made.",
   superseded_by_new_commit: "A newer commit replaced the one this review was pinned to. Start a review at the current commit.",
   provider_rate_limited: "The model provider was rate-limited. No code decision was made.",
   platform_error: "BuildIT stopped before it could make a code decision.",

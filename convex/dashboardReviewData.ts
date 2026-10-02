@@ -6,6 +6,8 @@ import { appendAuditEvent } from "./lib/audit";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { retentionMs, terminalStatuses } from "./lib/lifecycle";
 import { activeReviewCount, concurrencyExceeded } from "./lib/tenantLimits";
+import { sandboxCeilingExceeded, sandboxCeilingSeconds, sandboxSecondsThisMonth } from "./lib/sandboxCeiling";
+import { monthKey } from "./lib/monthlySpend";
 import { selectProviderModel, type ProviderName } from "@buildit/providers";
 
 const supportedProviders: ProviderName[] = ["anthropic", "openai", "gemini"];
@@ -111,6 +113,13 @@ export const create = internalMutation({
     if (organization.concurrencyLimit > 0) {
       const active = await activeReviewCount(ctx, repository.organizationId, organization.concurrencyLimit);
       if (concurrencyExceeded(active, organization.concurrencyLimit)) throw new ConvexError("organization_concurrency_limit_reached");
+    }
+    // Concurrency bounds how much sandbox capacity a tenant holds at once; this bounds how much it
+    // consumes over a month. Without it a tenant inside its concurrency limit still took the whole
+    // deployment's sandbox quota given enough reviews, and every other tenant then saw
+    // sandbox_unavailable for a reason that was not theirs.
+    if (sandboxCeilingExceeded(sandboxSecondsThisMonth(organization, monthKey(args.now)), sandboxCeilingSeconds(organization))) {
+      throw new ConvexError("organization_sandbox_ceiling_reached");
     }
     const reviewId = await ctx.db.insert("reviews", { organizationId: repository.organizationId, repositoryId: repository._id,
       githubRepositoryId: repository.githubRepositoryId, prNumber: args.prNumber, isFork: args.isFork, baseRef: args.baseRef,

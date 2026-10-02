@@ -3,6 +3,8 @@ import { internalMutation, internalQuery, type MutationCtx } from "./_generated/
 import { assertReviewParent } from "./lib/parentConsistency";
 import { reapedExecutionFailureCodes, sandboxReclaimMaxAttempts } from "./lib/lifecycle";
 import { applyExecutionCheckpoint, claimExecutionJob, createExecutionJob, cancelExecutionJob, type ExecutionCheckpoint, type ExecutionJob } from "@buildit/contracts";
+import { addSandboxSeconds } from "./lib/sandboxCeiling";
+import { monthKey } from "./lib/monthlySpend";
 import type { Doc } from "./_generated/dataModel";
 import * as value from "./validators";
 
@@ -74,6 +76,23 @@ type CheckpointArgs = {
   nextStage: ExecutionJob["stage"]; cursor: string; artifactIds?: Array<Doc<"artifacts">["_id"]>; durationMs: number; failureCode?: string; now: number; holdLeaseUntil?: number;
 };
 
+// Sandbox time a tenant has consumed this month, counted against the ceiling in
+// lib/sandboxCeiling.ts. The quantity charged is the segment duration the worker measured and
+// passed to this checkpoint - the same number that lands on the job row - so the tenant total and
+// the per-job record come from one source rather than from two estimates of the same thing.
+//
+// What is deliberately not charged: the wait between a job being created and claimed, which holds
+// no sandbox, and idle time after a worker abandons a job mid-segment, which nothing measured. The
+// reclaim sweep is what bounds the second of those, and it is the reason this is a floor on a
+// tenant's consumption rather than an exact figure. A floor is the right error for a cap whose
+// purpose is to stop one tenant taking the whole platform's quota.
+async function chargeSandboxSeconds(ctx: MutationCtx, row: Doc<"executionJobs">, durationMs: number, now: number) {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return;
+  const organization = await ctx.db.get(row.organizationId);
+  if (!organization || organization.deletedAt) return;
+  await ctx.db.patch(organization._id, addSandboxSeconds(organization, durationMs / 1000, monthKey(now)));
+}
+
 async function persistCheckpoint(ctx: MutationCtx, args: CheckpointArgs) {
     const row = await ctx.db.get(args.jobId);
     if (!row) throw new ConvexError("execution_job_not_found");
@@ -93,6 +112,9 @@ async function persistCheckpoint(ctx: MutationCtx, args: CheckpointArgs) {
       ...(next.lastRequestKey === undefined ? {} : { lastRequestKey: next.lastRequestKey }),
       ...(next.completedAt === undefined ? {} : { completedAt: next.completedAt }),
     });
+    // After the checkpoint commits, and only on a real advance: a replayed checkpoint returns
+    // above, so a retried request cannot charge the same segment twice.
+    await chargeSandboxSeconds(ctx, row, args.durationMs, args.now);
     return { id: row._id, replayed: false, stateVersion: next.stateVersion, status: next.status };
 }
 
@@ -189,5 +211,26 @@ export const recordSandboxReclaim = internalMutation({
     const exhausted = attempts >= sandboxReclaimMaxAttempts;
     await ctx.db.patch(row._id, { sandboxReclaimAttempts: attempts, ...(args.released || exhausted ? { sandboxReclaimedAt: args.now } : {}) });
     return { released: args.released, attempts, exhausted };
+  },
+});
+
+// Re-open a reclaim that was closed without anything being released.
+//
+// Needed because of the /api/sandboxes bug: that route did not exist, Vercel answered 404, and
+// sandboxReclaimWorker read the 404 as "there is no such sandbox" - so it stamped sandboxReclaimedAt
+// on jobs whose sandboxes were still running. Those rows are now permanently invisible to the
+// by_sandbox_reclaim index, which requires sandboxReclaimedAt to be undefined, and the attempt
+// counter meant to be the evidence never got past one.
+//
+// Nothing else can reach them, so clearing the stamp is the only way to retry. Restricted to a job
+// that has actually finished, so this can never pull a live job back into the reclaim queue.
+export const requeueSandboxReclaim = internalMutation({
+  args: { jobId: v.id("executionJobs"), now: v.number() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get(args.jobId);
+    if (!row) return null;
+    if (row.status !== "completed" && row.status !== "failed") return { requeued: false as const, reason: "job_not_finished" as const };
+    await ctx.db.patch(row._id, { sandboxReclaimAt: args.now, sandboxReclaimAttempts: 0, sandboxReclaimedAt: undefined });
+    return { requeued: true as const, jobKey: row.jobKey };
   },
 });

@@ -24,6 +24,12 @@ export default defineSchema({
     retentionHours: v.number(), monthlyBudget: v.number(), concurrencyLimit: v.number(),
     planId: v.string(), fingerprintKeyVersion: v.number(), createdAt: v.number(),
     monthlySpendMicros: v.optional(v.number()), monthlySpendMonth: v.optional(v.string()),
+    // The ceiling on sandbox time this workspace may consume in a month, and the running total
+    // against it. Unlike monthlyBudget and concurrencyLimit, an absent or non-positive ceiling
+    // is not unlimited - lib/sandboxCeiling.ts falls back to the platform default, because the
+    // provider quota behind a sandbox is bought once and shared by every tenant.
+    monthlySandboxSeconds: v.optional(v.number()),
+    sandboxSecondsUsed: v.optional(v.number()), sandboxSecondsMonth: v.optional(v.string()),
     metricTrackingStartedAt: v.optional(v.number()),
     deletedAt: v.optional(v.number()),
   }).index("by_slug", ["slug"]).index("by_deleted", ["deletedAt"]).index("by_created", ["createdAt"]),

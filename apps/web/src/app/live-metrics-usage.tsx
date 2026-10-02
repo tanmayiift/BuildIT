@@ -74,6 +74,10 @@ export function WorkspaceUsage() {
         {budget && (budget.unknownInvocationCount > 0 || budget.legacyCostsMayBeIncomplete) ? <p className="muted-copy" role="status">Some model charges are unknown or were not recorded by earlier versions. The recorded estimate is a lower bound.</p> : null}
         <p>{((q.model_tokens ?? 0) + (q.ask_tokens ?? 0)).toLocaleString()} model tokens including Ask · {(q.sandbox_seconds ?? 0).toLocaleString()} recorded validation-command seconds</p>
         <p className="muted-copy">Storage usage is not measured. Validation time does not include every sandbox operation.</p>
+        {/* The figure the admission check actually compares against. Without it, a review refused
+            for the sandbox allowance sent its author to this page and the number was not here. */}
+        <p>{usage.sandbox.usedSeconds.toLocaleString()} of {usage.sandbox.ceilingSeconds.toLocaleString()} sandbox seconds used this month{usage.sandbox.usedSeconds >= usage.sandbox.ceilingSeconds ? " · no new review can run its checks until the allowance resets" : ""}</p>
+        <p className="muted-copy">Sandbox time is BuildIT&rsquo;s own shared capacity, not a charge on your provider key, so the allowance resets at the start of each month and is set by BuildIT rather than here.</p>
         {usage.truncated ? <p className="muted-copy" role="status">Activity figures read only the most recent {usage.recordCount.toLocaleString()} ledger records in this period and are partial. The budget uses the separate monthly accounting total.</p> : null}
       </div>
       <aside>

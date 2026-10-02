@@ -3,6 +3,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireOrganizationRole, requireRecentGitHubLogin, requireUserId } from "./lib/authz";
 import { appendAuditEvent } from "./lib/audit";
+import { platformMonthlySandboxSeconds, sandboxCeilingSeconds } from "./lib/sandboxCeiling";
 
 export const listMine = query({
   args: {},
@@ -92,11 +93,18 @@ export const updateCapacity = mutation({
   },
 });
 
+// monthlySandboxSeconds is settable here and deliberately not on updateCapacity above. The other
+// two limits bound what a tenant spends on its own provider key and how much of its own capacity
+// it holds, so an owner raising them costs nobody else anything. The sandbox allowance is a slice
+// of a provider quota BuildIT buys once and every tenant draws on, so a tenant that could raise
+// its own slice could take the whole thing - the cap would be decorative. Raising it is an
+// operator decision, and the audit row records who made it.
 export const setCapacityLimits = internalMutation({
   args: {
     organizationId: v.id("organizations"),
     concurrencyLimit: v.optional(v.number()),
     monthlyBudget: v.optional(v.number()),
+    monthlySandboxSeconds: v.optional(v.number()),
     actorId: v.string(),
     requestId: v.string(),
     now: v.number(),
@@ -107,11 +115,16 @@ export const setCapacityLimits = internalMutation({
     // 0 means "no limit" for both fields, so it is a legal value; anything negative or
     // non-finite is a mistake that would silently disable the cap.
     const valid = (value: number | undefined) => value === undefined || (Number.isFinite(value) && value >= 0);
-    if (!valid(args.concurrencyLimit) || !valid(args.monthlyBudget)) throw new ConvexError("capacity_limit_invalid");
-    if (args.concurrencyLimit === undefined && args.monthlyBudget === undefined) throw new ConvexError("capacity_limit_invalid");
+    if (!valid(args.concurrencyLimit) || !valid(args.monthlyBudget) || !valid(args.monthlySandboxSeconds)) throw new ConvexError("capacity_limit_invalid");
+    if (args.concurrencyLimit === undefined && args.monthlyBudget === undefined && args.monthlySandboxSeconds === undefined) throw new ConvexError("capacity_limit_invalid");
+    // The whole Hobby-plan quota is 18,000 sandbox seconds a month across every tenant. An
+    // operator may hand one tenant the lot, but not more than exists - a ceiling above the quota
+    // is not a ceiling, and the request is far more likely to be a units mistake than an intent.
+    if ((args.monthlySandboxSeconds ?? 0) > platformMonthlySandboxSeconds) throw new ConvexError("capacity_limit_invalid");
     await ctx.db.patch(args.organizationId, {
       ...(args.concurrencyLimit === undefined ? {} : { concurrencyLimit: args.concurrencyLimit }),
       ...(args.monthlyBudget === undefined ? {} : { monthlyBudget: args.monthlyBudget }),
+      ...(args.monthlySandboxSeconds === undefined ? {} : { monthlySandboxSeconds: args.monthlySandboxSeconds }),
     });
     // Capacity is a spend control, so a change to it belongs in the audit chain.
     await appendAuditEvent(ctx, {
@@ -120,6 +133,7 @@ export const setCapacityLimits = internalMutation({
       result: "allowed", createdAt: args.now,
     });
     const updated = await ctx.db.get(args.organizationId);
-    return { concurrencyLimit: updated!.concurrencyLimit, monthlyBudget: updated!.monthlyBudget };
+    return { concurrencyLimit: updated!.concurrencyLimit, monthlyBudget: updated!.monthlyBudget,
+      monthlySandboxSeconds: sandboxCeilingSeconds(updated!) };
   },
 });

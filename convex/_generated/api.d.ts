@@ -62,6 +62,7 @@ import type * as lib_reportingPeriod from "../lib/reportingPeriod.js";
 import type * as lib_reviewOutcome from "../lib/reviewOutcome.js";
 import type * as lib_runIdentity from "../lib/runIdentity.js";
 import type * as lib_runtimeVersion from "../lib/runtimeVersion.js";
+import type * as lib_sandboxCeiling from "../lib/sandboxCeiling.js";
 import type * as lib_tenantLimits from "../lib/tenantLimits.js";
 import type * as lib_trackerCredential from "../lib/trackerCredential.js";
 import type * as lib_usageCost from "../lib/usageCost.js";
@@ -183,6 +184,7 @@ declare const fullApi: ApiFromModules<{
   "lib/reviewOutcome": typeof lib_reviewOutcome;
   "lib/runIdentity": typeof lib_runIdentity;
   "lib/runtimeVersion": typeof lib_runtimeVersion;
+  "lib/sandboxCeiling": typeof lib_sandboxCeiling;
   "lib/tenantLimits": typeof lib_tenantLimits;
   "lib/trackerCredential": typeof lib_trackerCredential;
   "lib/usageCost": typeof lib_usageCost;
