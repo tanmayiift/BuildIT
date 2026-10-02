@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { WorkspaceMetricsSummary, WorkspaceUsageSummary } from "../../../../convex/lib/workspaceFigureTypes";
 import { NoActiveWorkspace } from "./no-active-workspace";
 import { useSampleTour } from "./workspace-route-boundary";
+import { Metric } from "./metric";
 
 type Connection = { organization: null | { id: string; name: string; role?: string } };
 const connectionQuery = makeFunctionReference<"query", Record<string, never>, Connection>("repositoryConnections:current");
@@ -23,7 +24,7 @@ export function WorkspaceMetrics() {
   if (!summary.totals) return <section className="live-state">Metrics are unavailable until the workspace service update is complete.</section>;
   const { totals, truncated } = summary;
   const incomplete = new Set(summary.incompleteNames ?? []);
-  const metric = (name: string, title: string, detail: string, hero = false) => <Metric title={title} value={incomplete.has(name) && !totals[name] ? null : totals[name] ?? 0} detail={detail} hero={hero} partial={truncated} incomplete={incomplete.has(name)}/>;
+  const metric = (name: string, title: string, detail: string, hero = false) => <Metric title={title} value={incomplete.has(name) && !totals[name] ? "—" : (totals[name] ?? 0).toLocaleString()} detail={detail} hero={hero} note={truncated ? "Partial count" : incomplete.has(name) ? "Incomplete history" : undefined}/>;
   return <>
     <p className="muted-copy">Since {new Date(summary.since).toLocaleDateString(undefined, { timeZone: "UTC" })} · UTC</p>
     <div className="metric-line">
@@ -114,9 +115,6 @@ function BudgetControl({ organizationId, current }: { organizationId: string; cu
   </form>;
 }
 
-function Metric({ title, value, detail, hero = false, partial = false, incomplete = false }: { title: string; value: number | null; detail: string; hero?: boolean; partial?: boolean; incomplete?: boolean }) {
-  return <article className={`metric${hero ? " hero-metric" : ""}`}><span>{title}</span><strong>{value === null ? "—" : value.toLocaleString()}</strong>{partial ? <small>Partial count</small> : incomplete ? <small>Incomplete history</small> : null}<small>{detail}</small></article>;
-}
 function useReportingRefresh() {
   const day = () => new Date().toISOString().slice(0, 10);
   const [value, setValue] = useState(day);

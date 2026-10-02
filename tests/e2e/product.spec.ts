@@ -248,9 +248,9 @@ test("repository and integration screens use truthful live connection states", a
   await expect(page.getByText("Not connected", { exact: true })).toHaveCount(0);
   await expect(page.getByText("None", { exact: true })).toHaveCount(0);
   const signIn = page.getByRole("main").getByRole("link", { name: "Sign in with GitHub" });
-  await expect(signIn).toHaveClass(/action-primary/);
+  await expect(signIn).toHaveClass(/^button$/);
   await expect(signIn).toHaveCSS("min-height", "44px");
-  await expect(page.getByRole("link", { name: "How isolation works" })).toHaveClass(/action-tertiary/);
+  await expect(page.getByRole("link", { name: "How isolation works" })).toHaveClass(/\bbutton tertiary\b/);
   await page.screenshot({ path: `.local/ui-evidence/repositories-${testInfo.project.name}.png`, fullPage: true });
   await page.goto("/integrations?tour=1");
   const github = page.getByRole("heading", { name: "GitHub", exact: true }).locator("..");

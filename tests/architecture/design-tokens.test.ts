@@ -34,11 +34,11 @@ describe("the design token system", () => {
   });
 
   it("keeps --control-height at the 44px the accessibility contract asserts", () => {
-    // interface-accessibility.test.ts asserts the literal 44px inside the .button,.action rule, so
+    // interface-accessibility.test.ts asserts the literal 44px inside the .button rule, so
     // that rule keeps its literal. This token is for every other control, and the two must agree or
     // the scale quietly contradicts the gate.
     expect(tokens.get("control-height")).toBe("44px");
-    expect(css).toMatch(/\.button,.action\s*\{[^}]*min-height:\s*44px/s);
+    expect(css).toMatch(/\.button\s*\{[^}]*min-height:\s*44px/s);
   });
 
   it("names a token for every colour the sheet would otherwise hardcode as rgba", () => {
