@@ -32,11 +32,11 @@ export function pinPullRequest(input:{number:number;head:{sha:string;ref:string;
 // issues, not for running a stranger's code - so who asked is part of the policy rather than left
 // to each caller.
 export function reviewPolicy(snapshot:PullRequestSnapshot,mode:"review"|"autofix",forkPolicy:"manual_review_only"|"disabled",requestedBy:"automatic"|TriggerInput["permission"]){
- if(snapshot.fromMergeQueue)return{allowed:false as const,reason:"merge_queue_refused"};
- if(snapshot.isFork&&forkPolicy==="disabled")return{allowed:false as const,reason:"fork_disabled"};
- if(snapshot.isFork&&requestedBy==="automatic")return{allowed:false as const,reason:"fork_needs_request"};
- if(snapshot.isFork&&!["write","maintain","admin"].includes(requestedBy))return{allowed:false as const,reason:"fork_needs_write"};
- if(snapshot.isFork&&mode==="autofix")return{allowed:false as const,reason:"fork_manual_review_only"};
+ if(snapshot.fromMergeQueue)return{allowed:false as const,reason:"merge_queue_refused" as const};
+ if(snapshot.isFork&&forkPolicy==="disabled")return{allowed:false as const,reason:"fork_disabled" as const};
+ if(snapshot.isFork&&requestedBy==="automatic")return{allowed:false as const,reason:"fork_needs_request" as const};
+ if(snapshot.isFork&&!["write","maintain","admin"].includes(requestedBy))return{allowed:false as const,reason:"fork_needs_write" as const};
+ if(snapshot.isFork&&mode==="autofix")return{allowed:false as const,reason:"fork_manual_review_only" as const};
  return{allowed:true as const};
 }
 export class PushDebouncer{
