@@ -65,8 +65,11 @@ describe("B2B interface accessibility contract", () => {
     }
   });
   it("pins the font roles, control size, focus and reduced-motion boundaries", () => {
-    expect(css).toMatch(/font-family:\s*"Manrope Variable"/);
-    expect(css).toMatch(/code, \.mono, time\s*\{[^}]*"JetBrains Mono Variable"/s);
+    // The faces are tokens now; the roles are pinned on both the token and the rules that use it.
+    expect(css).toMatch(/--font-sans:\s*"Manrope Variable"/);
+    expect(css).toMatch(/--font-mono:\s*"JetBrains Mono Variable"/);
+    expect(css).toMatch(/:root\s*\{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(css).toMatch(/code, \.mono, time\s*\{[^}]*font-family:\s*var\(--font-mono\)/s);
     expect(css).toMatch(/\.button,.action\s*\{[^}]*min-height:\s*44px/s);
     expect(css).toMatch(/:focus-visible\s*\{[^}]*outline:/s);
     expect(css).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/);
