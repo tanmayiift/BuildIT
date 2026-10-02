@@ -13,6 +13,24 @@ const desired = source.split(/^ {6}- alert: /m).slice(1).map(block => {
 describe("independent native Grafana readback review", () => {
   it.each(["immediate", "final"])("refuses %s readback when the query lookback silently changes", async phase => {
     const native = structuredClone(group.rules).map((rule: Record<string, unknown>) => ({ ...rule, for: rule.for ?? "0s", folderUID: "managed", ruleGroup: "buildit-release" }));
+    // The convert call is what writes alerts.yml into the stack, so the mock has to do that too.
+    // It used to return the September capture unchanged, which only matched `desired` while the file
+    // held exactly the rules in that capture - so the first alert added to alerts.yml broke this
+    // test for a reason that had nothing to do with the readback it exists to check.
+    const convert = () => {
+      for (const want of desired) {
+        if (native.some((rule: { title: string }) => rule.title === want.alert)) continue;
+        const template = structuredClone(native[0]);
+        native.push({ ...template, uid: `converted-${want.alert}`, title: want.alert,
+          data: template.data.map((query: Record<string, unknown>, index: number) => index === 0
+            ? { ...query, model: { ...(query.model as Record<string, unknown>), expr: want.expr } } : query),
+          for: want.for ?? "0s",
+          labels: { ...(template.labels as Record<string, unknown>), severity: want.severity, service: "buildit" },
+          annotations: { summary: want.summary?.replace(/^"|"$/g, ""), action: want.action?.replace(/^"|"$/g, ""),
+            runbook_url: want.runbook?.replace(/^"|"$/g, "") },
+        });
+      }
+    };
     let inventoryReads = 0;
     const request = async (url: URL, init: RequestInit = {}) => {
       if (url.origin !== "https://peacefulbumblebee2324.grafana.net") throw new Error("unexpected_test_destination");
@@ -21,7 +39,7 @@ describe("independent native Grafana readback review", () => {
       if (url.pathname === "/api/v1/provisioning/contact-points") return Response.json([
         { name: "BuildIT alerts (Tanmay)", type: "email", settings: { addresses: "operator@example.invalid" } },
       ]);
-      if (method === "POST") return Response.json({}, { status: 202 });
+      if (method === "POST") { convert(); return Response.json({}, { status: 202 }); }
       if (url.pathname === "/api/v1/provisioning/alert-rules") {
         if (++inventoryReads === 3 && phase === "final") native[0].data[0].relativeTimeRange.to = 300;
         return Response.json(native);

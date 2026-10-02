@@ -120,6 +120,26 @@ groups:
           summary: "BuildIT stopped because the reviewed commit changed"
           action: "Confirm the stale run made no write and let the user start a new review at the current commit."
           runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditstalecheck"
+      # Both sandbox ceilings shipped without a gauge, so the first signal that either was filling
+      # up was a workspace being refused. These watch the counters instead, and the platform one
+      # reads as a fraction of the usable quota rather than the raw provider limit, so 1.0 is the
+      # point reviews start being refused and not the point the provider cuts BuildIT off.
+      - alert: BuildITSandboxQuotaHigh
+        expr: max(buildit_snapshot{buildit_measurement="sandbox_quota_utilization"}) > 0.8
+        for: 10m
+        labels: {severity: ticket, service: buildit}
+        annotations:
+          summary: "BuildIT is approaching its monthly sandbox quota"
+          action: "Check which workspaces are consuming sandbox time this month on the usage page. No workspace can run checks once this reaches 1.0, and it clears only at the start of next month or by raising the provider plan."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditsandboxquotahigh"
+      - alert: BuildITWorkspaceSandboxCeiling
+        expr: max(buildit_snapshot{buildit_measurement="workspaces_at_sandbox_ceiling"}) > 0
+        for: 5m
+        labels: {severity: ticket, service: buildit}
+        annotations:
+          summary: "A workspace cannot start reviews because it is at its sandbox allowance"
+          action: "Confirm the workspace is genuinely at its allowance rather than holding it through abandoned sandboxes, then decide whether to raise monthlySandboxSeconds for it. The workspace cannot raise this itself."
+          runbook_url: "https://github.com/tanmayiift/BuildIT/blob/main/docs/operations/alert-runbooks.md#builditworkspacesandboxceiling"
       - alert: BuildITBudgetExhaustionSpike
         expr: max(buildit_snapshot{buildit_measurement="budget_exhausted_reviews_hour"}) > 3
         for: 5m
