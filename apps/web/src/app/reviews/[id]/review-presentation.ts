@@ -1,3 +1,4 @@
+import { isReviewStatus, reviewStatusLabel } from "../../review-status";
 // The terminal reviewStatus values. Cross-checked against packages/contracts and
 // convex/validators.ts by tests/architecture/review-status-contract.test.ts.
 export const terminalReviewStatuses: readonly string[] = [
@@ -36,7 +37,13 @@ export function statusPresentation(status: string, stale: boolean, reason?: stri
     budget_exhausted: { label: "Budget reached", title: "Review stopped before the next model step", summary: "BuildIT made no code decision and did not make the model call that could cross your chosen limit.", tone: "warning", symbol: "$" },
     inconclusive: { label: "Not enough proof", title: "A safe decision is not possible yet", summary: "Some required evidence is missing or unclear. Treat this review as not approved.", tone: "warning", symbol: "?" },
   };
-  return known[status] ?? { label: "In progress", title: "BuildIT is reviewing this change", summary: "Evidence will appear here as each review step completes.", tone: "running" as ReviewTone, symbol: "●" };
+  const presented = known[status] ?? { label: "In progress", title: "BuildIT is reviewing this change", summary: "Evidence will appear here as each review step completes.", tone: "running" as ReviewTone, symbol: "●" };
+  // The title and summary are this page's; the short label is the one every page uses, so the badge
+  // on a review matches what the queue, /history and /proof call the same review.
+  // Only for a real review status. This function is also called with the sample tour's synthetic
+  // states - "running", "passed", "changes" - which are not enum values and have their own labels in
+  // `known` above. Overriding those would turn "In progress" into "Status unavailable".
+  return isReviewStatus(status) ? { ...presented, label: reviewStatusLabel(status) } : presented;
 }
 
 // Every value of the nextActionCode union in convex/validators.ts. The Record type makes a

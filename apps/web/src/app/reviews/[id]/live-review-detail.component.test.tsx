@@ -107,7 +107,7 @@ describe("comparing two runs of one pull request", () => {
     fireEvent.change(await screen.findByLabelText("Compare against"), { target: { value: "run-earlier" } });
 
     const diff = screen.getByRole("region", { name: "Stage comparison, scrolls horizontally" });
-    expect(screen.getByText("Action needed → Ready for you")).not.toBeNull();
+    expect(screen.getByText("Changes requested → Checks passed")).not.toBeNull();
     expect(screen.getByText("aaaaaaa → ccccccc")).not.toBeNull();
     expect(screen.getByText("−$0.1000")).not.toBeNull();
     expect(screen.getByText("chain-v1 → chain-v2")).not.toBeNull();

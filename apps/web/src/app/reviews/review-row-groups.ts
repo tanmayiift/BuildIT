@@ -1,3 +1,4 @@
+import { reviewStatusLabel } from "../review-status";
 export type QueueReview = {
   id: string;
   repositoryId: string;
@@ -63,26 +64,8 @@ export function queueSection(review: QueueReview): QueueSection {
   return "decision";
 }
 
-const statusLabels: Record<string, string> = {
-  queued: "Queued",
-  gathering_context: "Reading context",
-  analyzing: "Reviewing code",
-  validating: "Running checks",
-  checks_passed: "Checks passed",
-  changes_requested: "Changes needed",
-  inconclusive: "Review incomplete",
-  autofix_queued: "Fix queued",
-  autofixing: "Preparing fix",
-  validating_round: "Testing fix",
-  validating_final: "Final checks",
-  delivered: "Fix ready",
-  failed_after_bounds: "Human review needed",
-  blocked: "Setup needed",
-  cancelling: "Stopping",
-  cancelled: "Stopped",
-  budget_exhausted: "Budget reached",
-  platform_failed: "Review didn't run",
-};
+// The status names live in ../review-status.ts, shared with every other page that shows one.
+
 
 const reasonLabels: Record<string, string> = {
   checks_complete: "Required checks finished at this exact commit.",
@@ -115,7 +98,7 @@ const reasonLabels: Record<string, string> = {
 };
 
 export function queueStatusLabel(review: QueueReview) {
-  return statusLabels[review.status] ?? "Review update";
+  return reviewStatusLabel(review.status);
 }
 
 export function queueStatusDetail(review: QueueReview) {

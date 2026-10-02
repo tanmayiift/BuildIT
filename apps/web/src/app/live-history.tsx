@@ -4,6 +4,8 @@ import { makeFunctionReference } from "convex/server";
 import { useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { useConnection } from "./live-connections";
+import { reviewStatusLabel } from "./review-status";
+import { incompleteReasonLabel } from "./workspace-labels";
 
 const historyQuery = makeFunctionReference<"query",
   { organizationId: string; since: number; refreshKey: string },
@@ -42,13 +44,14 @@ function statusGroup(status: string): VerdictGroup {
   return "running";
 }
 
+// The label comes from the shared vocabulary; only the tone is decided here, because the tone is a
+// property of how /history groups outcomes. The fallback used to print the raw status with its
+// underscores turned into spaces, which is how a reader met "validating final" as a heading.
 function verdict(status: string) {
-  if (status === "changes_requested") return { label: "Changes requested", tone: "danger" };
-  if (status === "checks_passed") return { label: "Ready for review", tone: "success" };
-  if (status === "delivered") return { label: "Fix delivered", tone: "success" };
-  if (status === "inconclusive") return { label: "Inconclusive", tone: "warning" };
-  if (status === "platform_failed") return { label: "Did not finish", tone: "danger" };
-  return { label: status.replace(/_/g, " "), tone: "info" };
+  const tone = status === "changes_requested" || status === "platform_failed" ? "danger"
+    : status === "checks_passed" || status === "delivered" ? "success"
+    : status === "inconclusive" ? "warning" : "info";
+  return { label: reviewStatusLabel(status), tone };
 }
 
 export function LiveHistory() {
@@ -139,7 +142,7 @@ export function LiveHistory() {
             <span className={`status ${shown.tone}`}>{shown.label}</span>
             <span>
               {item.blocking ? `${item.blocking} blocking of ${item.findings} findings` : item.findings ? `${item.findings} findings, none blocking` : item.findingsPartial ? "findings incomplete" : "no findings"}
-              {item.incompleteReason ? ` · ${item.incompleteReason.replace(/_/g, " ")}` : ""}
+              {item.incompleteReason ? ` · ${incompleteReasonLabel(item.incompleteReason)}` : ""}
               {item.findingsPartial ? " · partial findings" : ""}
               {` · ${item.costPending && item.costUsd === 0 ? "cost pending" : `${item.costPartial ? "at least " : ""}${money(item.costUsd)} in period`} · ${item.durationMs === null ? "duration not measured" : duration(item.durationMs)}`}
               {item.trigger === "automatic" ? " · automatic" : ""}

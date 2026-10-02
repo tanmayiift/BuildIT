@@ -4,6 +4,8 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { NoActiveWorkspace } from "./no-active-workspace";
 import { useSampleTour } from "./workspace-route-boundary";
+import { incompleteReasonLabel } from "./workspace-labels";
+import { dismissalReasonLabel } from "./reviews/[id]/review-presentation";
 
 // The evaluation loop recorded every missed verdict and every dismissed finding into a queue with
 // no reader. `pendingCandidates` and `markCurated` were written, tested, and called by nothing
@@ -52,7 +54,7 @@ export function WorkspaceQuality() {
       </article>
       {pending.candidates.map(candidate => <article className="setting-row" key={candidate.id}>
         <div>
-          <strong>{candidate.kind === "missed" ? "No verdict reached" : "Finding dismissed"} · {candidate.reasonCode}</strong>
+          <strong>{candidate.kind === "missed" ? "No verdict reached" : "Finding dismissed"} · {candidate.kind === "missed" ? incompleteReasonLabel(candidate.reasonCode) : dismissalReasonLabel(candidate.reasonCode)}</strong>
           <p>{describe(candidate.kind)} Recorded {new Date(candidate.createdAt).toLocaleDateString()} against {candidate.model} on prompt {candidate.promptVersion}.</p>
         </div>
         <button className="button" type="button" disabled={working === candidate.id} onClick={() => {
