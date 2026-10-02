@@ -1,11 +1,11 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { AccountStatus } from "./account-status";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { ConnectionBanner, SetupProgress } from "./live-connections";
-import { WorkspaceRouteBoundary } from "./workspace-route-boundary";
+import { SampleTourProvider, useSampleTour, WorkspaceRouteBoundary } from "./workspace-route-boundary";
 import { BrandGlyph } from "./brand-glyph";
 import { isPublicRoute } from "./public-routes";
 import { PublicShell } from "./public-shell";
@@ -42,11 +42,16 @@ function isCurrent(pathname: string, href: string) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const sampleTour = useSearchParams().get("tour") === "1";
   // A marketing route gets marketing chrome whoever is reading it. Keying this on the route rather
   // than on auth state also means the server and the client agree on the first paint, so there is
   // no flash of the wrong shell while the session resolves.
   if (isPublicRoute(pathname)) return <PublicShell>{children}</PublicShell>;
+  return <SampleTourProvider><WorkspaceShell>{children}</WorkspaceShell></SampleTourProvider>;
+}
+
+function WorkspaceShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const sampleTour = useSampleTour();
   return <>
     <ConnectionBanner />
     <div className="shell">

@@ -44,3 +44,44 @@ describe("sample tour writes nothing", () => {
     expect(fallback).not.toMatch(/GitHub/);
   });
 });
+
+// The tour context used to be provided inside WorkspaceRouteBoundary, which wraps only <main>. The
+// sidebar and the connection banner sit outside it, read the default, and showed a signed-in
+// visitor their real identity, workspaces and repository count beside the sample-tour note.
+describe("the tour reaches the whole workspace chrome", () => {
+  const shell = readFileSync("apps/web/src/app/app-shell.tsx", "utf8");
+
+  it("is provided around the chrome, not just the page body", () => {
+    expect(shell).toMatch(/<SampleTourProvider><WorkspaceShell>/);
+    expect(readFileSync("apps/web/src/app/workspace-route-boundary.tsx", "utf8")).not.toMatch(/SampleTourContext\.Provider value=\{?(true|false)?\}?>\s*<p/);
+  });
+
+  // Every live component the chrome mounts outside <main>, and the hook each must consult before
+  // asking Convex anything. A new one added to the sidebar without the hook fails here.
+  const chrome: Record<string, { file: string; consults: RegExp }> = {
+    AccountStatus: { file: "account-status.tsx", consults: /useSampleTour\(\)/ },
+    WorkspaceSwitcher: { file: "workspace-switcher.tsx", consults: /useSampleTour\(\)/ },
+    ConnectionBanner: { file: "live-connections.tsx", consults: /export function ConnectionBanner\(\) \{\s*const tour = useSampleTour\(\), live = useConnection\(\);\s*const connection = tour \? signedOutConnection : live;/ },
+    SetupProgress: { file: "live-connections.tsx", consults: /export function SetupProgress\(\) \{\s*const tour = useSampleTour\(\), live = useConnection\(\);\s*const connection = tour \? signedOutConnection : live;/ },
+  };
+
+  // The banner and the setup meter treat the tour as signed out outright, so even the e2e design
+  // fixture cannot put a connected-workspace claim in the chrome around a tour.
+  it("names every live component the chrome mounts", () => {
+    const mounted = [...shell.matchAll(/<([A-Z]\w+)[\s/>]/g)].map(match => match[1]);
+    const live = mounted.filter(name => !["SampleTourProvider", "WorkspaceShell", "WorkspaceRouteBoundary", "PublicShell", "NavLink", "BrandGlyph"].includes(name!));
+    expect(new Set(live)).toEqual(new Set(Object.keys(chrome)));
+  });
+
+  for (const [name, { file, consults }] of Object.entries(chrome)) {
+    it(`${name} consults the tour before reading live data`, () => {
+      expect(readFileSync(`apps/web/src/app/${file}`, "utf8")).toMatch(consults);
+    });
+  }
+});
+
+describe("useConnection, which the banner and setup meter share", () => {
+  it("asks Convex nothing under the tour", () => {
+    expect(source).toMatch(/useQuery\(connectionQuery, hydrated && isAuthenticated && !sampleTour \? \{\} : "skip"\)/);
+  });
+});

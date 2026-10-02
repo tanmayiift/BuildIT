@@ -4,6 +4,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { useEffect, useState } from "react";
+import { useSampleTour } from "./workspace-route-boundary";
 
 type Viewer = { id: string; name: string | null; email: string | null; image: string | null } | null;
 type Organization = { id: string; name: string; slug: string; timezone: string; region: "eu-west-1" };
@@ -15,8 +16,9 @@ export function AccountStatus({ compact = false }: { compact?: boolean }) {
   const [hydrated, setHydrated] = useState(false);
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { signOut } = useAuthActions();
-  const viewer = useQuery(viewerQuery, hydrated && isAuthenticated ? {} : "skip");
-  const organizations = useQuery(organizationsQuery, hydrated && isAuthenticated ? {} : "skip");
+  const tour = useSampleTour();
+  const viewer = useQuery(viewerQuery, hydrated && isAuthenticated && !tour ? {} : "skip");
+  const organizations = useQuery(organizationsQuery, hydrated && isAuthenticated && !tour ? {} : "skip");
   useEffect(() => setHydrated(true), []);
 
   // Session state is still unknown here. Offering "Sign in" would tell an already
@@ -28,6 +30,13 @@ export function AccountStatus({ compact = false }: { compact?: boolean }) {
   if (!isAuthenticated) return compact
     ? <a className="button compact" href="/sign-in">Sign in</a>
     : <><span className="preview-dot" aria-hidden="true" />Not signed in<br/><a className="account-link" href="/sign-in">Sign in with GitHub</a></>;
+  // Signed in but touring: the sidebar sits beside "Sample tour · no live workspace data", so the
+  // reader's real name and workspace do not belong in it. Sign-out stays reachable from /account.
+  if (tour) return <>
+    <strong>Sample tour</strong><br/>
+    <span className="muted">Your account is not shown in the tour.</span><br/>
+    <a className="account-link" href="/overview">Back to your workspace</a>
+  </>;
   if (!viewer) return <span className="muted" aria-live="polite">Loading account…</span>;
 
   const label = viewer.name || viewer.email || "GitHub user";

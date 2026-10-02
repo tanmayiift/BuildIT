@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useConnection } from "../live-connections";
 import { DashboardReviewStart } from "../reviews/dashboard-review-start";
+import { primarySetupSteps } from "../setup-steps";
 type Repository = { id: string; owner: string; name: string };
 function selectedPullRequest(value: string, repositories: Repository[]) {
   try {
@@ -15,7 +16,7 @@ function selectedPullRequest(value: string, repositories: Repository[]) {
 }
 export function FirstReviewSetup() {
   const workspace = useConnection();
-  return <div className="content setup-page"><a className="back-link" href="/setup/model">← Model key</a><p className="eyebrow">Step 3 of 3 · Your pull request</p><h1 className="title">See BuildIT review your own change</h1><p>Paste an open pull request from a repository you connected. First inspect the scope and cost limit, then approve one review.</p>
+  return <div className="content setup-page"><a className="back-link" href="/setup/model">← Model key</a><p className="eyebrow">Step {primarySetupSteps.findIndex(step => step.id === "review") + 1} of {primarySetupSteps.length} · Your pull request</p><h1 className="title">See BuildIT review your own change</h1><p>Paste an open pull request from a repository you connected. First inspect the scope and cost limit, then approve one review.</p>
     {workspace === undefined ? <p role="status">Loading your workspace…</p> : !workspace?.organization ? <><p>Sign in and choose which repositories BuildIT may access.</p><a className="button" href="/setup/install">Connect GitHub</a></> : !workspace.repositories.length ? <><p>Connect the repository that contains your pull request before continuing.</p><a className="button" href="/setup/install">Choose a repository in GitHub</a></> : <OwnPullRequest key={workspace.organization.id} organizationId={workspace.organization.id} repositories={workspace.repositories} canStart={workspace.organization.role !== "viewer"} />}
     <details className="setup-card"><summary>Optional settings and connections</summary><p>Your first review uses the repository&apos;s trusted policy. Open these settings when you need them.</p><p><a href="/repositories">Repository policies</a> · <a href="/setup/health">Connection checks</a> · <a href="/integrations">Linear and Jira</a></p></details>
   </div>;

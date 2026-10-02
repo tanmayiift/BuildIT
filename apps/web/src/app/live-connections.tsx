@@ -6,6 +6,7 @@ import { ActionLink } from "./action";
 import { executionReadiness, serviceUnconfiguredDetail, serviceUnconfiguredSummary, type RuntimeReadiness } from "./execution-readiness";
 import { useSampleTour } from "./workspace-route-boundary";
 import { useEffect, useState } from "react";
+import { primarySetupSteps } from "./setup-steps";
 
 type Connection = {
   state: "signed_out" | "no_workspace" | "installation_required" | "installation_unavailable" | "no_repositories_selected" | "connected";
@@ -354,8 +355,12 @@ export function GitHubIntegrationState() {
   return <article className="integration-card" data-connected={connected || undefined}><div><span className="integration-glyph">GH</span><span className={`status ${connected ? "success" : "neutral"}`}>{loading ? "Checking…" : connected ? `${connection.repositories.length} connected` : "Setup needed"}</span></div><h2>GitHub</h2><p>{loading ? "Checking your active workspace." : connected ? `${connection.organization?.name} can access only the selected repositories shown in BuildIT.` : stateCopy[connection.state].body}</p>{connection ? <ConnectionAction connection={connection} returnTo="/integrations" /> : null}</article>;
 }
 
+// The chrome around a tour always describes the tour, even when the e2e design fixture fills the
+// page body with a connected workspace: "N repositories connected" above "Sample tour" would be a
+// claim about the reader's account the tour does not make.
 export function ConnectionBanner() {
-  const connection = useConnection();
+  const tour = useSampleTour(), live = useConnection();
+  const connection = tour ? signedOutConnection : live;
   const readiness = useQuery(readinessQuery, connection && connection.state !== "signed_out" ? {} : "skip");
   if (!connection) return <div className="preview-banner" role="status"><span className="preview-label">Checking</span><span>Confirming your private workspace before showing repository data.</span></div>;
   const connected = connection?.state === "connected";
@@ -373,10 +378,11 @@ export function ConnectionBanner() {
 }
 
 export function SetupProgress() {
-  const connection = useConnection();
+  const tour = useSampleTour(), live = useConnection();
+  const connection = tour ? signedOutConnection : live;
   if (!connection) return <span className="setup-state" aria-live="polite"><span className="setup-dot" />Checking access</span>;
   const connected = connection?.state === "connected";
-  return <a className="setup-state" href={connected ? "/setup/review" : "/setup/install"}><span className={`setup-dot${connected ? " ready" : ""}`} />{connected ? "GitHub connected" : "Setup 1 of 3"}</a>;
+  return <a className="setup-state" href={connected ? "/setup/review" : "/setup/install"}><span className={`setup-dot${connected ? " ready" : ""}`} />{connected ? "GitHub connected" : `Setup 1 of ${primarySetupSteps.length}`}</a>;
 }
 
 export function OverviewReadiness() {

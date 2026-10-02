@@ -3,6 +3,7 @@
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { useEffect, useState } from "react";
+import { useSampleTour } from "./workspace-route-boundary";
 
 type Organization = { id: string; name: string; slug: string; timezone: string; region: "eu-west-1"; role: string };
 type ActiveOrganization = Pick<Organization, "id" | "name" | "slug" | "role"> | null;
@@ -13,9 +14,10 @@ const selectActive = makeFunctionReference<"mutation", { organizationId: string 
 
 export function WorkspaceSwitcher() {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const tour = useSampleTour();
   const [hydrated, setHydrated] = useState(false);
-  const organizations = useQuery(organizationsQuery, isAuthenticated ? {} : "skip");
-  const active = useQuery(activeQuery, isAuthenticated ? {} : "skip");
+  const organizations = useQuery(organizationsQuery, isAuthenticated && !tour ? {} : "skip");
+  const active = useQuery(activeQuery, isAuthenticated && !tour ? {} : "skip");
   const select = useMutation(selectActive);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -24,7 +26,9 @@ export function WorkspaceSwitcher() {
   // The server cannot know the browser's OAuth session. Keep its first client
   // render identical, then resolve the workspace after hydration.
   if (!hydrated || isLoading) return <div className="workspace-switcher" aria-live="polite"><span><strong>Checking workspace…</strong><small>Confirming your private session</small></span></div>;
-  if (!isAuthenticated) return <div className="workspace-switcher preview-workspace"><span><strong>Sample workspace</strong><small>Interactive product tour</small></span></div>;
+  // The tour shows the sample workspace to everyone. A signed-in visitor used to get their real
+  // workspace list here, and changing it fired organizations:selectActive from inside the tour.
+  if (!isAuthenticated || tour) return <div className="workspace-switcher preview-workspace"><span><strong>Sample workspace</strong><small>Interactive product tour</small></span></div>;
   if (!organizations) return <div className="workspace-switcher" aria-live="polite">Loading workspaces…</div>;
   if (!organizations.length) return <a className="workspace-switcher" href="/setup/install"><span><strong>No workspace yet</strong><small>Install the GitHub App to begin</small></span><span>→</span></a>;
 
