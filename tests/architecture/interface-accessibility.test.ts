@@ -44,6 +44,13 @@ describe("B2B interface accessibility contract", () => {
       ["ink", "canvas"], ["muted", "canvas"], ["muted", "surface-inset"], ["faint", "workbench"],
       ["canvas", "navy"], ["danger", "canvas"], ["success", "canvas"], ["warning", "canvas"],
       ["ink", "workbench"], ["ink", "surface-inset"],
+      // The pairs the components actually draw, added with dark mode so both schemes are held to them:
+      // text on the navy panels and buttons, links on every ground, and each state's ink on its tint.
+      ["ink-inverse", "navy"], ["ink-inverse-muted", "navy"], ["ink-inverse", "navy-hover"],
+      ["panel-ink", "panel"], ["panel-ink-2", "panel"], ["panel-ink-muted", "panel"],
+      ["navy", "canvas"], ["navy", "surface"], ["navy", "navy-soft"], ["ink-2", "surface"], ["muted", "surface"], ["muted", "workbench"],
+      ["danger", "danger-bg"], ["success", "success-bg"], ["warning", "warning-bg"], ["info", "info-bg"],
+      ["warning-ink", "warning-strong"], ["success-ink", "success-bright"], ["ink", "hover"],
     ];
     for (const [scheme, map] of schemes) {
       for (const [foreground, background] of pairs) {

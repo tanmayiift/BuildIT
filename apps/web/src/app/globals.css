@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light dark;
   --canvas: #ffffff;
   --workbench: #f6f7f9;
   --surface: #ffffff;
@@ -42,11 +43,17 @@
   --navy-hover: #174675;
   --hover: #eceff3;
   --focus-ring: #7ca7d7;
-  --ink-inverse-2: #d5e0ec;
   --ink-inverse-muted: #9db8d5;
-  --inverse-tint: rgba(255, 255, 255, .12);
-  --inverse-line: rgba(255, 255, 255, .22);
   --inverse-line-strong: rgba(255, 255, 255, .7);
+  /* The emphasis panels (.landing-trust, .readiness, .activation-path). They used --navy and the
+     inverse inks, which in the dark scheme are tuned for buttons - so a panel became a slab of light
+     blue on a dark page. A panel stays a deep ground with light text in both schemes. */
+  --panel: #0b315f;
+  --panel-ink: #ffffff;
+  --panel-ink-2: #d5e0ec;
+  --panel-ink-muted: #9db8d5;
+  --panel-tint: rgba(255, 255, 255, .12);
+  --panel-line: rgba(255, 255, 255, .22);
   --pattern: rgba(255, 255, 255, .6);
   --top-bar: rgba(255, 255, 255, .96);
   /* Two rules named var(--mono), which nothing defined, and fell back to the system monospace while
@@ -116,20 +123,64 @@
   background: var(--workbench);
   font-synthesis: none;
 }
-/* Dark mode is NOT defined here yet, and the reason is a precondition rather than an omission.
-
-   A dark palette only works if every component rule reads its colours from tokens. These sheets
-   still carry 52 literal hex values and 7 explicit white/black fills inside component rules - a
-   panel with `background: #fff` and a heading with `color: #174675` do not follow a token change,
-   so redefining the tokens under them produces dark text on a dark ground. Shipping the palette
-   before the components read tokens ships a broken theme, which is worse than shipping none.
-
-   The order is: migrate component rules onto the tokens above (Phase 6, route by route, so each
-   diff is reviewable), then add the @media (prefers-color-scheme: dark) block redefining tokens
-   only. interface-accessibility.test.ts is already extended to measure both schemes at 4.5:1 and to
-   refuse a dark block that does not actually redefine --canvas, so the palette will be held to the
-   same bar the light one is the moment it lands. That extension is in place now, deliberately,
-   rather than being written at the same time as the thing it is supposed to check. */
+/* Dark mode redefines tokens and nothing else. That is only safe because no component rule names a
+   colour of its own (colour-tokens.test.ts), and every pair below is measured at 4.5:1 in both schemes
+   by interface-accessibility.test.ts. Buttons invert (light blue with dark text); the emphasis panels
+   do not, and keep a deep ground of their own (--panel). */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --canvas: #0f141b;
+    --workbench: #0b0f15;
+    --surface: #151b24;
+    --surface-inset: #1c2430;
+    --ink: #e6eaf0;
+    --ink-2: #c3cad5;
+    --muted: #9aa4b2;
+    --faint: #97a1af;
+    --line: #2a3442;
+    --line-strong: #3c4858;
+    --line-subtle: #222b37;
+    --navy: #8ab8ef;
+    --navy-soft: #16263a;
+    --navy-hover: #a9cbf4;
+    --danger: #ff8b7c;
+    --danger-bg: #3a1714;
+    --danger-line: #6b2a24;
+    --warning: #f0b44c;
+    --warning-bg: #33270f;
+    --warning-line: #6a4f1c;
+    --warning-strong: #5a4415;
+    --warning-ink: #f6d69a;
+    --success: #62d293;
+    --success-bg: #0f2a1b;
+    --success-line: #23553a;
+    --success-bright: #2f7a4f;
+    --success-ink: #e3f7ea;
+    --info: #8cb8ee;
+    --info-bg: #12233a;
+    --info-line: #2b4466;
+    --info-line-strong: #4b74a6;
+    --hover: #1f2834;
+    --focus: #9cc3f2;
+    --focus-ring: #9cc3f2;
+    --ink-inverse: #0b1726;
+    --ink-inverse-muted: #24456c;
+    --inverse-line-strong: rgba(11, 23, 38, .6);
+    --panel: #14294a;
+    --panel-ink: #eef4fb;
+    --panel-ink-2: #c9d8ea;
+    --panel-ink-muted: #93b2d6;
+    --panel-tint: rgba(255, 255, 255, .10);
+    --panel-line: rgba(255, 255, 255, .18);
+    --pattern: rgba(15, 20, 27, .55);
+    --top-bar: rgba(15, 20, 27, .94);
+    --overlay: rgba(0, 0, 0, .6);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-2: 0 2px 8px rgba(0, 0, 0, .45);
+    --shadow-3: 0 8px 24px rgba(0, 0, 0, .55);
+  }
+}
 * { box-sizing: border-box; }
 html { min-width: 320px; }
 body { margin: 0; background: var(--workbench); -webkit-font-smoothing: antialiased; }
@@ -161,7 +212,7 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .nav-link { min-height: 44px; display: flex; align-items: center; gap: 10px; margin: 2px 0; padding: 7px 10px; color: var(--ink-2); border-radius: 6px; font-size: 13px; font-weight: 600; }
 .nav-link:hover { background: var(--hover); color: var(--ink); }
 .nav-link[data-current] { color: var(--navy); background: var(--surface); box-shadow: inset 3px 0 var(--navy); }
-.nav-mark { display: grid; place-items: center; width: 25px; height: 25px; color: var(--muted); background: var(--surface-inset); border: 1px solid var(--line); border-radius: 5px; font: 700 9px "JetBrains Mono Variable", monospace; }
+.nav-mark { display: grid; place-items: center; width: 25px; height: 25px; color: var(--muted); background: var(--surface-inset); border: 1px solid var(--line); border-radius: 5px; font: 700 9px var(--font-mono); }
 .nav-link[data-current] .nav-mark { color: var(--navy); background: var(--navy-soft); border-color: var(--info-line); }
 .settings-nav { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); }
 .settings-nav .nav-link { min-height: 44px; padding-left: 12px; font-size: 12px; }
@@ -223,11 +274,11 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .landing-segment-question { margin: 0; color: var(--navy); font-size: var(--text-md); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-tight); line-height: 1.3; text-wrap: balance; }
 .landing-segments li>p:not(.landing-segment-question) { margin: 0; color: var(--ink-2); font-size: var(--text-sm); line-height: 1.6; text-wrap: pretty; }
 .landing-segments .text-link { align-self: end; justify-self: start; font-size: var(--text-sm); }
-.landing-trust { display: grid; grid-template-columns: minmax(230px,.65fr) minmax(360px,1.2fr) auto; gap: 40px; align-items: center; padding: 28px; color: var(--ink-inverse); background: var(--navy); border-radius: 8px; }
+.landing-trust { display: grid; grid-template-columns: minmax(230px,.65fr) minmax(360px,1.2fr) auto; gap: 40px; align-items: center; padding: 28px; color: var(--panel-ink); background: var(--panel); border-radius: 8px; }
 .landing-trust h2 { margin: 0; font-size: 23px; letter-spacing: -.03em; }
-.landing-trust .eyebrow { color: var(--ink-inverse-muted); }
-.landing-trust p { margin: 0; color: var(--ink-inverse-2); font-size: 13px; line-height: 1.65; }
-.landing-trust a { color: var(--ink-inverse); white-space: nowrap; }
+.landing-trust .eyebrow { color: var(--panel-ink-muted); }
+.landing-trust p { margin: 0; color: var(--panel-ink-2); font-size: 13px; line-height: 1.65; }
+.landing-trust a { color: var(--panel-ink); white-space: nowrap; }
 .landing-pricing { display: grid; grid-template-columns: minmax(230px,.65fr) minmax(360px,1.2fr) auto; gap: 40px; align-items: center; padding: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .landing-pricing h2 { margin: 0; font-size: 23px; letter-spacing: -.03em; }
 .landing-pricing p { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.65; }
@@ -255,16 +306,16 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .action-compact { min-height: 44px; padding: 0 11px; }
 .action-external { font-size: 13px; font-weight: 500; }
 .button:disabled { color: var(--faint); background: var(--surface-inset); border-color: var(--line); cursor: not-allowed; }
-.readiness { display: grid; grid-template-columns: 1.15fr 1fr; gap: 28px; margin-bottom: 36px; padding: 24px; background: var(--navy); color: var(--ink-inverse); border-radius: 8px; }
+.readiness { display: grid; grid-template-columns: 1.15fr 1fr; gap: 28px; margin-bottom: 36px; padding: 24px; background: var(--panel); color: var(--panel-ink); border-radius: 8px; }
 .readiness h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
-.readiness p:not(.eyebrow) { max-width: 600px; margin: 8px 0 0; color: var(--ink-inverse-2); font-size: 13px; line-height: 1.55; }
-.readiness .eyebrow { color: var(--ink-inverse-muted); }
+.readiness p:not(.eyebrow) { max-width: 600px; margin: 8px 0 0; color: var(--panel-ink-2); font-size: 13px; line-height: 1.55; }
+.readiness .eyebrow { color: var(--panel-ink-muted); }
 .readiness ol { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.readiness li { min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--inverse-line); border-radius: 6px; }
-.readiness li > span { display: grid; place-items: center; width: 26px; height: 26px; background: var(--inverse-tint); border-radius: 5px; font: 700 11px "JetBrains Mono Variable", monospace; }
+.readiness li { min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--panel-line); border-radius: 6px; }
+.readiness li > span { display: grid; place-items: center; width: 26px; height: 26px; background: var(--panel-tint); border-radius: 5px; font: 700 11px var(--font-mono); }
 .readiness li div { display: grid; gap: 2px; }
 .readiness li strong { font-size: 12px; }
-.readiness li small { color: var(--ink-inverse-muted); }
+.readiness li small { color: var(--panel-ink-muted); }
 .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 28px 0 12px; }
 .section-heading.compact { justify-content: flex-start; align-items: center; margin-top: 0; }
 .section-heading h2 { margin: 0; font-size: 17px; letter-spacing: -.02em; }
@@ -273,7 +324,7 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .metric { min-height: 128px; display: grid; align-content: center; gap: 4px; padding: 18px; border-right: 1px solid var(--line); }
 .metric:last-child { border-right: 0; }
 .metric span { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-.metric strong { font: 650 28px "JetBrains Mono Variable", monospace; letter-spacing: -.04em; }
+.metric strong { font: 650 28px var(--font-mono); letter-spacing: -.04em; }
 .metric small { color: var(--muted); }
 .metric.hero-metric { background: var(--navy-soft); }
 .metric.hero-metric strong { color: var(--navy); }
@@ -291,7 +342,7 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .status.success, .status.pass { color: var(--success); background: var(--success-bg); border-color: var(--success-line); }
 .status.running, .status.info { color: var(--info); background: var(--info-bg); border-color: var(--info-line); }
 .status.neutral { color: var(--ink-2); background: var(--workbench); border-color: var(--line); }
-.count { min-width: 24px; padding: 2px 7px; color: var(--muted); background: var(--workbench); border: 1px solid var(--line); border-radius: 999px; font: 600 11px "JetBrains Mono Variable", monospace; text-align: center; }
+.count { min-width: 24px; padding: 2px 7px; color: var(--muted); background: var(--workbench); border: 1px solid var(--line); border-radius: 999px; font: 600 11px var(--font-mono); text-align: center; }
 .search-field input { width: 260px; min-height: 44px; padding: 0 12px; background: var(--workbench); border: 1px solid var(--line); border-radius: 6px; outline: 0; }
 .search-field input:focus { border-color: var(--navy); box-shadow: 0 0 0 3px var(--navy-soft); }
 .review-group { margin-bottom: 28px; }
@@ -321,7 +372,7 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .empty-state { min-height: 360px; display: grid; place-items: center; align-content: center; padding: 36px; text-align: center; border: 1px solid var(--line); border-radius: 7px; }
 .empty-state h2 { margin: 14px 0 4px; }
 .empty-state p { max-width: 560px; margin: 0 0 18px; color: var(--muted); line-height: 1.55; }
-.empty-mark, .integration-glyph { display: grid; place-items: center; width: 42px; height: 42px; color: var(--navy); background: var(--navy-soft); border: 1px solid var(--info-line); border-radius: 7px; font: 700 11px "JetBrains Mono Variable", monospace; }
+.empty-mark, .integration-glyph { display: grid; place-items: center; width: 42px; height: 42px; color: var(--navy); background: var(--navy-soft); border: 1px solid var(--info-line); border-radius: 7px; font: 700 11px var(--font-mono); }
 .explain-panel { padding: 22px; background: var(--workbench); border: 1px solid var(--line); border-radius: 7px; }
 .check-list, .plain-list { display: grid; gap: 10px; margin: 8px 0 24px; padding: 0; list-style: none; font-size: 12px; }
 .check-list li::before { content: "✓"; margin-right: 8px; color: var(--success); font-weight: 800; }
@@ -333,7 +384,7 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .metric-explainer p { color: var(--muted); font-size: 12px; }
 .formula { display: grid; align-content: center; gap: 5px; }
 .formula span, .formula small { color: var(--muted); font-size: 11px; }
-.formula strong { font: 600 26px "JetBrains Mono Variable", monospace; }
+.formula strong { font: 600 26px var(--font-mono); }
 .definition-table, .settings-list, .audit-preview { border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
 .definition-table h2 { margin: 0; padding: 14px 16px; font-size: 15px; background: var(--workbench); border-bottom: 1px solid var(--line); }
 .definition-table dl { margin: 0; }
@@ -344,7 +395,7 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .budget-board { display: grid; grid-template-columns: 1.5fr .7fr; margin-bottom: 20px; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
 .budget-board > div, .budget-board aside { padding: 24px; }
 .budget-board aside { background: var(--workbench); border-left: 1px solid var(--line); }
-.budget-board strong { font: 650 30px "JetBrains Mono Variable", monospace; }
+.budget-board strong { font: 650 30px var(--font-mono); }
 .budget-board strong small { color: var(--muted); font-size: 16px; }
 .budget-board p { color: var(--muted); font-size: 12px; }
 .budget-track { height: 8px; margin: 18px 0 8px; background: var(--surface-inset); border-radius: 3px; overflow: hidden; }
@@ -367,7 +418,7 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .settings-heading { margin: 26px 0 10px; font-size: 15px; letter-spacing: -.02em; }
 .notification-settings .setting-row { grid-template-columns: minmax(280px, 1fr) minmax(180px, max-content); }
 .notification-settings.has-actions .setting-row { grid-template-columns: minmax(280px, 1fr) minmax(180px, max-content) 140px; }
-.recipient-scope { color: var(--ink-2); font: 650 11px "JetBrains Mono Variable", monospace; }
+.recipient-scope { color: var(--ink-2); font: 650 11px var(--font-mono); }
 .compact-empty { min-height: 300px; }
 .audit-row { min-height: 58px; display: grid; grid-template-columns: 100px 170px 1fr 90px; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 12px; }
 .audit-row:last-child { border-bottom: 0; }
