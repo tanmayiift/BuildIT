@@ -19,11 +19,90 @@
   --success-bg: #eaf7ef;
   --info: #245c9c;
   --info-bg: #eaf2fc;
+
+  /* Four colours that existed only as literals. --overlay and --shadow-* were hardcoded rgba in
+     mobile.css and in the card rules, which is why a shadow could not be adjusted in one place. */
+  --ink-inverse: #ffffff;
+  --line-subtle: #e7eaf0;
+  --focus: #0b315f;
+  --overlay: rgba(11, 49, 95, .5);
+
+  /* The scales the stylesheet never had. Colour was tokenised from the start; spacing, radius,
+     shadow, type and motion were literals, which is why the sheet carries 28 distinct padding
+     values and 9 distinct radii for what are really four or five decisions.
+
+     Nothing consumes these yet. tests/architecture/style-hook-coverage.test.ts fails on a className
+     with no selector and not on a selector with no className, so tokens can land before the rules
+     that use them and every step of the migration stays a green commit. Consuming them is Phase 6,
+     one component at a time, because rounding 28 values onto an 8-step scale is a visual change and
+     belongs in a diff that is reviewed as one. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* 3,4,5,6,7,8,9,20,999 in use today. Four decisions: a chip, a control, a card, a pill. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /* Resting, raised, overlay. Three, because a fourth is always someone guessing. */
+  --shadow-1: 0 1px 2px rgba(20, 38, 58, .04);
+  --shadow-2: 0 2px 8px rgba(11, 49, 95, .08);
+  --shadow-3: 0 8px 24px rgba(11, 49, 95, .18);
+
+  /* 9 through 40px in use. This scale absorbs them at the nearest step; 11.5 and 23 were almost
+     certainly accidents. */
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+  --text-4xl: 40px;
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --weight-regular: 400;
+  --weight-medium: 600;
+  --weight-semibold: 700;
+  --weight-bold: 800;
+  --tracking-tight: -.02em;
+  --tracking-wide: .08em;
+
+  /* 44px is also written as a literal in the .button,.action rule, and must stay there:
+     interface-accessibility.test.ts asserts that text. The token is for every other control. */
+  --control-height: 44px;
+
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+
   font-family: "Manrope Variable", sans-serif;
   color: var(--ink);
   background: var(--workbench);
   font-synthesis: none;
 }
+/* Dark mode is NOT defined here yet, and the reason is a precondition rather than an omission.
+
+   A dark palette only works if every component rule reads its colours from tokens. These sheets
+   still carry 52 literal hex values and 7 explicit white/black fills inside component rules - a
+   panel with `background: #fff` and a heading with `color: #174675` do not follow a token change,
+   so redefining the tokens under them produces dark text on a dark ground. Shipping the palette
+   before the components read tokens ships a broken theme, which is worse than shipping none.
+
+   The order is: migrate component rules onto the tokens above (Phase 6, route by route, so each
+   diff is reviewable), then add the @media (prefers-color-scheme: dark) block redefining tokens
+   only. interface-accessibility.test.ts is already extended to measure both schemes at 4.5:1 and to
+   refuse a dark block that does not actually redefine --canvas, so the palette will be held to the
+   same bar the light one is the moment it lands. That extension is in place now, deliberately,
+   rather than being written at the same time as the thing it is supposed to check. */
 * { box-sizing: border-box; }
 html { min-width: 320px; }
 body { margin: 0; background: var(--workbench); -webkit-font-smoothing: antialiased; }
