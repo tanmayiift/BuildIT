@@ -132,7 +132,11 @@ async function startReviewForPullRequest(ctx: ActionCtx, input: StartReviewInput
         : reason === "platform_capacity_reached"
         ? { title: "BuildIT is out of sandbox capacity for the month", summary: "Every review runs its checks in an isolated sandbox, and BuildIT has used the sandbox capacity its own plan allows this month across all workspaces. This is BuildIT's limit, not this workspace's, and retrying will not start the review. Capacity resets at the start of next month." }
         : reason === "sandbox_ceiling_reached"
-        ? { title: "BuildIT has used this workspace's sandbox time for the month", summary: "Every review runs its checks in an isolated sandbox, and this workspace has used the sandbox time its plan allows this month. Retrying will not start it. The allowance resets at the start of next month, or a workspace admin can raise it in BuildIT." }
+        // Not "an admin can raise it": the sandbox allowance is a slice of capacity BuildIT buys
+        // once and every workspace draws on, so updateCapacity deliberately refuses it and only an
+        // operator can change it. Sending a reader to a control that will reject them is the same
+        // defect as telling them to retry something that cannot succeed.
+        ? { title: "BuildIT has used this workspace's sandbox time for the month", summary: "Every review runs its checks in an isolated sandbox, and this workspace has used the sandbox time its plan allows this month. Retrying will not start it, and this is not a setting the workspace can change - sandbox capacity is BuildIT's own. The allowance resets at the start of next month; ask BuildIT if you need it raised before then." }
         : reason === "provider_model_unavailable"
           ? { title: "BuildIT cannot use the connected model key", summary: `The key connected for${requested || " this workspace"} exposes no model BuildIT is approved to run. Check the model connection in BuildIT and confirm the key can reach an approved model, then comment \`@buildit review\` again.` }
           : requested

@@ -14,6 +14,7 @@ export type OperationName = typeof operationNames[number];
 export const measurementNames = [
   "queue_depth", "active_reviews", "capacity_utilization", "expired_artifact_backlog",
   "model_cost_usd_hour", "budget_exhausted_reviews_hour", "effective_loc_delivered_hour",
+  "sandbox_quota_utilization", "workspaces_at_sandbox_ceiling",
 ] as const;
 export type MeasurementName = typeof measurementNames[number];
 

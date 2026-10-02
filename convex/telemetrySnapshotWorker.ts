@@ -7,6 +7,7 @@ const names = {
   queueDepth: "queue_depth", activeReviews: "active_reviews", capacityUtilization: "capacity_utilization",
   expiredArtifactBacklog: "expired_artifact_backlog", modelCostUsdHour: "model_cost_usd_hour",
   budgetExhaustedReviewsHour: "budget_exhausted_reviews_hour", effectiveLocDeliveredHour: "effective_loc_delivered_hour",
+  sandboxQuotaUtilization: "sandbox_quota_utilization", workspacesAtSandboxCeiling: "workspaces_at_sandbox_ceiling",
 } as const;
 
 export const emit = internalAction({

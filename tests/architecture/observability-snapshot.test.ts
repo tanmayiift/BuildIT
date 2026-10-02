@@ -22,7 +22,7 @@ describe("production observability snapshots", () => {
 
   it("exports only fixed global measurements without tenant fields", () => {
     const worker = read("convex/telemetrySnapshotWorker.ts");
-    for (const name of ["queue_depth", "active_reviews", "capacity_utilization", "expired_artifact_backlog", "model_cost_usd_hour", "budget_exhausted_reviews_hour", "effective_loc_delivered_hour"]) expect(worker).toContain(name);
+    for (const name of ["queue_depth", "active_reviews", "capacity_utilization", "expired_artifact_backlog", "model_cost_usd_hour", "budget_exhausted_reviews_hour", "effective_loc_delivered_hour", "sandbox_quota_utilization", "workspaces_at_sandbox_ceiling"]) expect(worker).toContain(name);
     expect(worker).not.toMatch(/organizationId|repositoryId|reviewId|owner|email|source|prompt/);
   });
 });
