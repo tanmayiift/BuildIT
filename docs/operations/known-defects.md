@@ -377,55 +377,67 @@ send, which all three were. It now checks each one against the App's subscriptio
 installation events as always-delivered, and requires a handler for an unsubscribed event to be
 declared with what its absence costs. That list is currently empty, which is the point.
 
-## The artifact stack would revert the broker's trust policy to Pulsetrade on the next deploy
+## The artifact stack's stored template describes Pulsetrade; it is now update-protected
 
-`pnpm smoke:aws-boundary` ran for the first time on 2 October 2026 — its own comment in
-`docs/operations/ci-gates.md` said it never had, because no AWS credentials had ever been configured.
-It failed immediately, with `aws_boundary_oidc_stack_drift`, and the drift is real and dangerous.
+**Status: mitigated on 2 October 2026. The bookkeeping is still wrong, deliberately.**
 
-CloudFormation's own drift detection on `buildit-production-artifacts` reports one modified resource:
+`pnpm smoke:aws-boundary` ran for the first time on 2 October 2026 — no AWS credentials had ever been
+configured, so it had only ever warned and exited 0. It passed every check of the artifact data
+boundary on its first run: bucket region, KMS default encryption with the correct key, public access
+fully blocked, the bucket not public, versioning disabled with no historical versions, the artifact
+and replay-marker expiry rules, and KMS key state, single-region and rotation. Then it failed on
+`aws_boundary_oidc_stack_drift`.
 
-| | |
+**Three things disagree.**
+
+| | Team it describes |
 |---|---|
-| `ContentBrokerRole` expected | `Federated: arn:aws:iam::882820282590:oidc-provider/oidc.vercel.com/`**`pulsetrade`** |
-| `ContentBrokerRole` actual | `Federated: arn:aws:iam::882820282590:oidc-provider/oidc.vercel.com/`**`buildit-agentic-review`** |
+| The live `ContentBrokerRole` trust policy | `buildit-agentic-review` — correct, hand-edited after the team moved |
+| The stack's **stored** template | `pulsetrade`, as literal string keys |
+| `infra/aws/artifacts.yaml` in this repo | parameterised — but it **could not be deployed at all** |
 
-The stack also records its `VercelOidcProvider` resource as the Pulsetrade provider, and both providers
-exist in the account. `infra/aws/artifacts.yaml` now defaults `VercelTeamSlug` to
-`buildit-agentic-review`, but the stack was created before that and never passed the parameter, so the
-stack's stored template still describes the Pulsetrade identity.
+The repo template used `!Sub` as a map key in the trust condition. CloudFormation parses that as an
+intrinsic-function map and rejects it: `Template format error: ... map keys must be strings`. So every
+`aws cloudformation deploy` of this file failed validation before touching anything, and nothing ran
+`validate-template` to notice. It is fixed — the condition is now a substituted JSON string — and
+`validate-template` accepts it.
 
-**The live security posture is correct.** The role trusts the right provider, that provider's `Url` and
-`ClientIDList` verify, and every other assertion in `verifyBrokerTrust` passes. The broker works.
+**What a deploy would actually do**, measured rather than guessed: a read-only change set created and
+then deleted unexecuted on 2 October 2026 proposed seven changes. `VercelOidcProvider` would be
+**replaced**; its target, `oidc.vercel.com/buildit-agentic-review`, already exists outside the stack, so
+the create would fail with `EntityAlreadyExists` and the stack would **roll back** — and the rollback
+target is the stored Pulsetrade state, which would leave the broker unable to assume its role. It would
+also modify the KMS key and both bucket policies, for reasons not yet audited, which says the repo
+template has diverged from the stack well beyond the team slug.
 
-**The hazard is the next deploy.** `aws cloudformation deploy` on this stack would reconcile
-`ContentBrokerRole` back to the stored template and point its trust at `oidc.vercel.com/pulsetrade`.
-The broker would then be unable to assume the role, every artifact read and write would fail, and
-every review would fail at the execution boundary. The symptom would look like an AWS outage.
+**Decision: protect, do not migrate.** The live system is correct and the broker works. Migrating the
+stack's bookkeeping means several production IAM operations, each with a rollback that could break every
+review, and touches the encryption boundary for unaudited reasons. None of that buys anything the live
+system lacks. So instead:
 
-> **Do not run `aws cloudformation deploy` on `buildit-production-artifacts` until this is resolved.**
-> `infra/aws/README.md` step 3 tells an operator to deploy with the correct team names, which is the
-> right instruction and will produce exactly this failure on a stack whose stored template disagrees.
+- `infra/aws/stack-policy.json` is attached to `buildit-production-artifacts`. It denies `Update:*` on
+  every resource, so the console's "use current template", `--use-previous-template`, and a deploy of
+  this repo's template all fail safely instead of acting on the disagreement. It changes nothing about
+  the working auth and is reversible.
+- `scripts/verify-aws-boundary.mjs` checks the policy is still attached, **before** it checks trust, so an
+  unprotected stack reports the more urgent problem first (`aws_boundary_stack_unprotected`).
+- `tests/architecture/aws-boundary.test.ts` refuses an intrinsic used as a map key, pinned against the
+  exact original lines, and pins the committed stack policy.
 
-**Remediation options, none of them applied here because this is live production auth:**
+The gate continues to fail on `aws_boundary_oidc_stack_drift`. That is correct: the drift is real, and a
+gate that passed while it existed would be asserting something untrue.
 
-1. **Resource import** (safest). Import the existing `oidc.vercel.com/buildit-agentic-review` provider
-   into the stack in place of the Pulsetrade one, then update with the current template so stored and
-   live agree. Nothing is created or deleted, so the broker never loses its trust.
-2. **Change set, reviewed before execution.** Create a change set with
-   `VercelTeamSlug=buildit-agentic-review` and read it. Expect it to want to *replace* the OIDC
-   provider; since the target provider already exists, the create will likely fail with
-   `EntityAlreadyExists` rather than silently succeed. Do not execute a change set that proposes
-   deleting the provider the broker is using.
-3. **Recreate deliberately, with a window.** Delete the orphaned Pulsetrade provider, update the
-   stack, and accept that the broker cannot assume the role until the new provider exists. This
-   breaks reviews for the duration and is only acceptable with nothing in flight.
+**When someone does want the bookkeeping fixed**, with nothing in flight and someone watching:
 
-Option 1 is the recommendation. Whichever is chosen, re-run `pnpm smoke:aws-boundary` afterwards: the
-gate now has credentials and will say whether stored and live agree.
+1. Audit why the change set modifies `BuildITKey`, `ArtifactBucket` and both bucket policies, and bring
+   the template into line with the stack for those first. Do not proceed while the KMS key would change.
+2. Add `DeletionPolicy: Retain` to `VercelOidcProvider`, and make `ContentBrokerRole`'s trust reference
+   the provider ARN as a parameter rather than through the resource, so removing the resource does not
+   rewrite the role.
+3. Remove `VercelOidcProvider` from the stack (it is retained in IAM), then **import**
+   `oidc.vercel.com/buildit-agentic-review` under that logical ID. Nothing is created or deleted, so the
+   broker never loses its trust.
+4. Delete the orphaned `oidc.vercel.com/pulsetrade` provider.
+5. Re-run `pnpm smoke:aws-boundary`. Every step needs a single-operation override of the stack policy:
+   `--stack-policy-during-update-body` with an explicit Allow for exactly the resources that step touches.
 
-**Why no test caught it.** The gate was written to catch exactly this and could not run — the CI step
-warns and exits 0 without credentials, which `docs/operations/ci-gates.md` records and argues for.
-A gate that cannot run is indistinguishable from a gate that passes, which is the same shape as the
-four unsubscribed webhook handlers above and the Grafana rule drift before them. It is not a
-coincidence that all three were found in the same week by giving each gate its credential.

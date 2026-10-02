@@ -13,12 +13,12 @@ Before deployment:
 3. Deploy `artifacts.yaml` in Ireland with the exact Vercel team and project names. The production defaults are the dedicated `buildit-agentic-review` Vercel team and `buildit-content-broker` project; do not use the unrelated Pulsetrade team. Then record the stack outputs in the deployment secret store.
 4. Run the retention, cross-tenant ciphertext-swap, deletion, restore, and key-rotation drills before enabling repository execution.
 
-> **Before deploying into the existing `buildit-production-artifacts` stack, read
-> `docs/operations/known-defects.md`.** That stack's stored template still describes the Pulsetrade
-> Vercel identity, while the live `ContentBrokerRole` trusts `buildit-agentic-review`. A deploy would
-> reconcile the role back to Pulsetrade, the broker would lose its ability to assume it, and every
-> review would fail at the execution boundary looking like an AWS outage. `pnpm smoke:aws-boundary`
-> reports this as `aws_boundary_oidc_stack_drift`; resolve it by importing the live provider into the
-> stack before running step 3 against that stack.
+> **`buildit-production-artifacts` is update-protected.** `stack-policy.json` is attached and denies
+> every update, because the stack's stored template still describes the Pulsetrade Vercel identity
+> while the live role trusts `buildit-agentic-review`. A read-only change set showed an update would
+> replace the OIDC provider, fail on `EntityAlreadyExists`, and roll the broker's trust back to
+> Pulsetrade - and would also modify the KMS key and both bucket policies. Read
+> `docs/operations/known-defects.md` for the migration sequence before overriding the policy, and
+> override it for one operation at a time with `--stack-policy-during-update-body`.
 
 The bucket is intentionally non-versioned. Application deletion removes an object immediately, while the lifecycle rule is a seven-day maximum backstop. CloudFormation retains the empty bucket and KMS key during stack deletion to prevent an infrastructure command from silently destroying customer evidence or making retained ciphertext unrecoverable.
