@@ -14,6 +14,17 @@ const title = "BuildIT — Evidence-backed code review";
 const description = "Autonomous pull request review that shows its work, so a merge decision rests on evidence rather than trust.";
 const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://buildit-agentic-review.vercel.app";
 
+// The app declared no viewport at all. Next emits a default tag, so mobile was not broken - but the
+// one declaration every responsive rule depends on was outside the app's control, and the only
+// viewport meta in the tree sat in proxy.ts's static 404 document. mobile.css has two breakpoints and
+// a drawer that only works at the real device width, so this belongs where it can be read and tested.
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Not maximum-scale or user-scalable: pinching is how someone reads a diff on a phone, and
+  // disabling it is the accessibility failure this product would otherwise be asserting against.
+};
+
 export const metadata = {
   metadataBase: new URL(site),
   title,
