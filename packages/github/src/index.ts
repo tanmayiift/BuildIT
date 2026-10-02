@@ -26,10 +26,17 @@ export function pinPullRequest(input:{number:number;head:{sha:string;ref:string;
  const fromMergeQueue=input.head.ref.startsWith("gh-readonly-queue/")||Boolean(input.mergeQueueRef);
  return{number:input.number,headSha:input.head.sha.toLowerCase(),baseSha:input.base.sha.toLowerCase(),headRef:input.head.ref,baseRef:input.base.ref,isFork:input.head.repoFullName!==input.base.repoFullName,fromMergeQueue};
 }
-export function reviewPolicy(snapshot:PullRequestSnapshot,mode:"review"|"autofix",forkPolicy:"manual_review_only"|"disabled"){
- if(snapshot.fromMergeQueue)return{allowed:false as const,reason:"merge_queue_refused"};
- if(snapshot.isFork&&forkPolicy==="disabled")return{allowed:false as const,reason:"fork_disabled"};
- if(snapshot.isFork&&mode==="autofix")return{allowed:false as const,reason:"fork_manual_review_only"};
+// "manual_review_only" means a fork is reviewed when a maintainer with write access asks, and only
+// reviewed (spec REQ-231). An automatic review of a fork would let anyone on GitHub spend the
+// workspace's model key by opening pull requests, and triage is a role granted for labelling
+// issues, not for running a stranger's code - so who asked is part of the policy rather than left
+// to each caller.
+export function reviewPolicy(snapshot:PullRequestSnapshot,mode:"review"|"autofix",forkPolicy:"manual_review_only"|"disabled",requestedBy:"automatic"|TriggerInput["permission"]){
+ if(snapshot.fromMergeQueue)return{allowed:false as const,reason:"merge_queue_refused" as const};
+ if(snapshot.isFork&&forkPolicy==="disabled")return{allowed:false as const,reason:"fork_disabled" as const};
+ if(snapshot.isFork&&requestedBy==="automatic")return{allowed:false as const,reason:"fork_needs_request" as const};
+ if(snapshot.isFork&&!["write","maintain","admin"].includes(requestedBy))return{allowed:false as const,reason:"fork_needs_write" as const};
+ if(snapshot.isFork&&mode==="autofix")return{allowed:false as const,reason:"fork_manual_review_only" as const};
  return{allowed:true as const};
 }
 export class PushDebouncer{
