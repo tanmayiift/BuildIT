@@ -18,23 +18,8 @@ import { describeProofBackend, proofBackend } from "./convex-backend";
 //
 // The `onboarding` project in playwright.config.ts films it.
 
-// Assembled rather than written out, for the reason recorded in
-// packages/security/test/redaction.test.ts and used by the sandbox page's own placeholder:
-// scanBuildITRules flags this exact string as `critical`, gitleaks and the rules run over the
-// WHOLE tree rather than the diff, and a scanner check fails on any critical finding. A literal
-// here would fail a required check on every review of this repository forever after.
-const disabledTls = `rejectUnauthorized: ${["fal", "se"].join("")}`;
-const flawedSnippet = [
-  "export function connect(url) {",
-  `  const agent = new https.Agent({ ${disabledTls} });`,
-  "  return fetch(url, { agent });",
-  "}",
-].join("\n");
-// Line 2 of the snippet above. Asserted as a number the page must cite, not as a coincidence.
-const flawedLine = 2;
-const scanPath = "src/example.ts";
 
-test("a stranger with no account can scan code, understand every setup step, and check the numbers", async ({ page }, testInfo) => {
+test("a stranger with no account can read a real review, understand every setup step, and check the numbers", async ({ page }, testInfo) => {
   // The assertions below run the journey in about two seconds, which is a correct test and a
   // useless film: six screens at a third of a second each, none of them on screen long enough to
   // read. The `onboarding` project exists to be watched, so it holds a beat at each step and types
@@ -50,46 +35,38 @@ test("a stranger with no account can scan code, understand every setup step, and
   // What it does, and the one thing it refuses to do - both said in a sentence, above the fold.
   await expect(page.getByText("It never merges. A human owns the merge decision.")).toBeVisible();
   // The reader is told what each step will and will not cost them before they take any of them.
-  await expect(page.getByText(/Scanning pasted code needs nothing\. Sign-in identifies you\./)).toBeVisible();
+  await expect(page.getByText(/Reading a real review needs nothing\. Sign-in identifies you\./)).toBeVisible();
 
-  // ------------------------------------------------- do the thing, with no account and no navigation
-  // This step used to be "click a link labelled Scan code now, land on /scan, then scan". The
-  // link is gone because the scanner itself is in the hero: the shortest path to a stranger seeing
-  // BuildIT work is now zero navigations, and asserting the link would be asserting the detour.
-  // Every assertion that ran on /scan below still runs, on the landing page, at full strength.
-  await expect(page.locator(".landing-try .scan-panel")).toBeVisible();
-  await page.getByLabel("File path", { exact: true }).fill(scanPath);
-  await page.getByLabel("Code", { exact: true }).pressSequentially(flawedSnippet, { delay: recording ? 12 : 0 });
-  await beat();
-  await page.getByRole("button", { name: "Check this code" }).click();
-
-  const result = page.locator(".scan-result");
-  // The count is in the heading in words a non-engineer reads, not a status code.
-  await expect(result.getByRole("heading", { name: "1 thing to look at" })).toBeVisible();
-  // The finding is rendered ON the line it cites rather than in a list underneath the code. That
-  // placement is the product's central claim - a finding belongs to a line - so the test pins the
-  // line, not just the text: exactly one line is annotated, and it is the one holding the flaw.
-  const flagged = result.locator(".scan-line[data-flagged]");
-  await expect(flagged).toHaveCount(1);
-  await expect(flagged.locator(".scan-source")).toContainText(disabledTls);
-  await expect(flagged.getByText(`${scanPath}:${flawedLine}`, { exact: true })).toBeVisible();
-  await expect(flagged.getByText("TLS certificate verification is disabled")).toBeVisible();
-  await expect(flagged.getByText("critical", { exact: true })).toBeVisible();
-
-  // The load-bearing half: a clean result from two regex passes must never read as a clean review,
-  // so the panel has to name the checks that never ran rather than let silence imply they did.
-  await expect(result.getByText("Ran: buildit-rules, secret-patterns.")).toBeVisible();
-  await expect(result.getByText("Did not run: gitleaks, osv-scanner, tests, lint, typecheck, AI review.", { exact: true })).toBeVisible();
-  await beat();
-
-  // ------------------------------------------------------- the full sandbox, and what it is not
-  // The hero has no room for the paragraph explaining that this is not a verdict, so that sentence
-  // lives one click away - and the journey still has to reach it by clicking, not by typing a URL.
-  await page.getByRole("link", { name: /Open the full scan/i }).click();
+  // ------------------------------------------------- see the thing, with no account and no navigation
+  // This step used to type code into a scanner in the hero and assert a finding on the line it cited.
+  // That scanner is gone: it was the only surface executing a stranger's input with no account behind
+  // it, and a read-only proof of a real review is better evidence anyway - a scan ran two regex passes
+  // with no commit, no tests and no verdict, so it could never show what BuildIT is actually for.
+  //
+  // The journey still has to reach the evidence by clicking, not by typing a URL, and the evidence
+  // still has to be checkable rather than asserted.
+  await expect(page.locator(".landing-try")).toBeVisible();
+  await page.getByRole("link", { name: /Read a real review/i }).click();
   await page.waitForURL(/\/scan$/);
-  await expect(page.getByRole("heading", { name: /deterministic rules on your own code/i })).toBeVisible();
-  await expect(page.getByText("Open scan · no account, no key", { exact: true })).toBeVisible();
-  await expect(page.getByText(/What this is not:\s*a verdict/)).toBeVisible();
+  await beat();
+
+  await expect(page.getByRole("heading", { name: /What a BuildIT review actually hands you/i })).toBeVisible();
+  await expect(page.getByText("One real review · no account, no key", { exact: true })).toBeVisible();
+
+  // The finding is rendered with the things that make it checkable: the file and line it cites, the
+  // commit it read, and a link to the pull request where a reader can confirm every value. That
+  // triple is the product's central claim, so the test pins all three rather than just the text.
+  const evidence = page.locator(".complete-finding");
+  await expect(evidence.getByText("TLS certificate verification is disabled")).toBeVisible();
+  await expect(evidence.getByText("src/rates.js:4")).toBeVisible();
+  await expect(evidence.getByRole("link", { name: /buildit-public-fixture #22/ })).toBeVisible();
+  // And the fix it proposed, delivered as a separate pull request rather than merged.
+  await expect(evidence.getByText(/BuildIT never merges/)).toBeVisible();
+  await beat();
+
+  // The load-bearing half: one review must never read as a claim about the reader's code, so the
+  // page has to say what it is not rather than let a single green result imply a general one.
+  await expect(page.getByText(/What this is not:\s*a claim about your code/)).toBeVisible();
   // Nothing on this page asks the reader to sign in first.
   await expect(page.getByRole("main").getByRole("link", { name: /sign in/i })).toHaveCount(0);
   await beat();

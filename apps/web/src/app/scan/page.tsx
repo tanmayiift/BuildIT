@@ -1,33 +1,70 @@
-import { ScanPanel } from "../scan-panel";
-import { demoClosedDetail, demoClosedHeading, publicDemoEnabled } from "../public-demo-gate";
+import { sampleReviewFor } from "../sample-data";
+import { CompleteFinding } from "../complete-finding";
 
-// The only surface a visitor could reach without GitHub sign-in was a tour over invented data, so
-// nobody could try BuildIT on code they actually cared about. This is a third state - not the
-// sample tour, not a live workspace - and it says so, because a clean result here must never read
-// as a clean review.
+// This page used to execute code a stranger pasted. That was the only surface in the product running
+// attacker-supplied input with no account behind it, and once BuildIT had tenants other than its
+// author the trade stopped being worth it: the demo was gated off behind a build-time flag and the
+// page became a closed door, so the product's only zero-commitment proof of output was a sample tour
+// reached from a secondary button.
 //
-// The form and the annotated result moved into ScanPanel so the landing hero runs the identical
-// control. What is left here is the part a hero has no room for: what this is not.
+// A read-only proof is strictly better evidence anyway. A scan of pasted text ran two deterministic
+// passes with no commit, no tests and no verdict - it could never show the thing BuildIT is actually
+// for. This shows one complete review that really ran: the verdict, the checks behind it, the finding
+// with its file, line and commit, the output of the check that proved it, the fix it proposed, and
+// links to the public pull requests where every value can be checked. No form, no execution, no
+// sandbox seconds, no abuse surface.
+const review = sampleReviewFor("22");
 
-// The route answers 200 in both states on purpose. Dropping it from publicRoutes would turn it
-// into a proxy 404 and break three suites that check the route table agrees with itself, to save a
-// page that costs nothing to render. The two buttons are also unconditional: the onboarding journey
-// reaches "Connect a GitHub repository" through this page, so a closed demo must not be a dead end.
-export default function Sandbox() {
-  const open = publicDemoEnabled();
+export const metadata = { title: "A review BuildIT ran · BuildIT" };
+
+export default function Scan() {
+  // sampleReviewFor(22) is the transcribed buildit-public-fixture review and is the only sample row
+  // carrying a complete finding. If it ever stops doing so, say so rather than rendering a page whose
+  // headline promises evidence it does not have.
+  if (!review?.finding) {
+    return <div className="content trust-page">
+      <p className="eyebrow">Evidence</p>
+      <h1 className="title">This page is temporarily without a transcribed review</h1>
+      <p className="lede">The live numbers on the proof page are unaffected and are read straight from
+        production.</p>
+      <div className="button-row"><a className="button" href="/proof">See the live numbers</a></div>
+    </div>;
+  }
+
   return <div className="content trust-page">
-    <p className="eyebrow">{open ? "Open scan · no account, no key" : "Deterministic rules"}</p>
-    <h1 className="title">{open ? <>Run BuildIT&rsquo;s deterministic rules on your own code</> : demoClosedHeading}</h1>
+    <p className="eyebrow">One real review · no account, no key</p>
+    <h1 className="title">What a BuildIT review actually hands you</h1>
     <p className="lede">
-      {open
-        ? <>Paste code and the server runs BuildIT&rsquo;s own rules and secret patterns on it, pinning each
-          finding to the line it cites. Nothing is stored, no model is called, no repository is read.</>
-        : demoClosedDetail}
+      Every value below is transcribed from one review BuildIT ran on a public repository, and every
+      one of them is checkable: the file at that commit, the output of the check that failed, and the
+      pull request the fix was opened as. Nothing here is composed for the page.
     </p>
 
-    {open ? <ScanPanel /> : null}
+    {/* Only fields sample-data.ts documents as real are cited here. The row's own `repo`, `commit`
+        and `title` are illustrative placeholders for the queue mock - quoting those as evidence on a
+        page whose whole claim is checkability would be the exact defect this page exists to avoid.
+        finding.* is transcribed from the real review, and `checks` is its real check table. */}
+    <dl className="trust-list">
+      <div><dt>The pull request</dt><dd>
+        <a className="text-link" href={review.finding.source.href} rel="noreferrer noopener" target="_blank">{review.finding.source.label}</a>
+        {" "}at commit <code>{review.finding.commit.slice(0, 12)}</code>, reviewed on {review.finding.reviewedAt}.
+      </dd></div>
+      <div><dt>The verdict</dt><dd>{review.finding.verdict}. A finding BuildIT can prove blocks the merge; one it cannot prove does not.</dd></div>
+      <div><dt>What it ran</dt><dd>
+        {review.checks?.map(check => `${check.name} (${check.policy.toLowerCase()}): ${check.result.toLowerCase()}`).join(" · ")}.
+        Each is a check the repository already defines, run against that exact commit on both the base and the head.
+      </dd></div>
+    </dl>
 
-    {open ? <div className="next"><strong>What this is not:</strong> a verdict. Two deterministic passes over text you pasted, with no commit, no tests and no evidence behind them. A real review pins an exact commit, runs your tests and the pinned scanners in an isolated environment, and makes a model justify every finding against that evidence.</div> : null}
-    <div className="button-row"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/pricing">See pricing and limits</a></div>
+    <CompleteFinding finding={review.finding} />
+
+    <div className="next"><strong>What this is not:</strong> a claim about your code. It is one review
+      of one repository, and the proof page carries the whole record — including the reviews that
+      failed on BuildIT&rsquo;s own side rather than on anybody&rsquo;s code.</div>
+
+    <div className="button-row">
+      <a className="button" href="/setup/install">Connect a GitHub repository</a>
+      <a className="button secondary" href="/proof">See every review, including the failures</a>
+    </div>
   </div>;
 }

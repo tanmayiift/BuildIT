@@ -9,6 +9,10 @@ const routes = [
   "/sign-in",
   "/account",
   "/data-handling", "/pricing", "/features", "/scan",
+  // /proof and /quality had no browser coverage at all - absent from this sweep, the touch-target
+  // list and the snapshot list. /proof is the strongest evidence page in the product and /quality is
+  // the newest screen; both subscribe to Convex, so they render their own empty state without one.
+  "/proof", "/quality?tour=1",
   "/history", "/reviews?tour=1",
   "/reviews/22?tour=1", "/reviews/418?tour=1", "/reviews/91?tour=1", "/reviews/420?tour=1",
   "/reviews/418?tour=1&state=cancelled",

@@ -1,5 +1,6 @@
 import { LiveReviewDetail } from "./live-review-detail";
-import { sampleReviewFor, type SampleReview } from "../../sample-data";
+import { sampleReviewFor } from "../../sample-data";
+import { CompleteFinding } from "../../complete-finding";
 import { nextActionPresentation, stagePresentation, statusPresentation, technicalLabel } from "./review-presentation";
 
 type TourState = "cancelled" | "running" | "changes" | "passed" | "delivered" | "budget" | "empty" | "populated";
@@ -51,20 +52,6 @@ export default async function Review({ params, searchParams }: { params: Promise
 // all. This shows the six things that make a finding checkable: where it is, the code it read, why
 // it matters, what the check that caught it printed, the change it proposes, and the pull request
 // change would arrive in.
-function CompleteFinding({ finding }: { finding: NonNullable<SampleReview["finding"]> }) {
-  return <section className="complete-finding" aria-labelledby="complete-finding-title">
-    <div className="section-heading compact"><div><p className="eyebrow">Cited evidence</p><h2 id="complete-finding-title">{finding.title}</h2></div><span className="status danger">{finding.severity}</span></div>
-    <p className="finding-where"><code>{finding.path}:{finding.lines}</code> at commit <code>{finding.commit.slice(0, 12)}</code> · {finding.verdict}</p>
-    <p className="finding-source">Transcribed from a review BuildIT ran on {finding.reviewedAt}: <a className="text-link" href={finding.source.href} rel="noreferrer noopener" target="_blank">{finding.source.label}</a>. Every value below is quotable from it.</p>
-    <p className="finding-why">{finding.why}</p>
-    <p className="finding-why">{finding.inspect}</p>
-    <div className="finding-block"><h3>The code it read</h3><pre tabIndex={0} role="region" aria-label="The code it read"><code>{finding.excerpt}</code></pre></div>
-    <div className="finding-block"><h3>What <code>{finding.checkName}</code> reported</h3><pre tabIndex={0} role="region" aria-label={`What ${finding.checkName} reported`}><code>{finding.checkOutput}</code></pre></div>
-    <div className="finding-block"><h3>The change it proposes</h3><pre className="finding-diff" tabIndex={0} role="region" aria-label="The change it proposes"><code>{finding.fix}</code></pre></div>
-    <p className="finding-delivery">Delivered as a stacked pull request a person reviews and merges — BuildIT never merges: <a className="text-link" href={finding.stackedPr.href} rel="noreferrer noopener" target="_blank">{finding.stackedPr.label}</a></p>
-  </section>;
-}
-
 function Journey({ stage }: { stage: string }) {
   const steps = [["context", "Understand", "Read the PR and requirements"], ["analysis", "Inspect", "Look for risky changes"], ["validation", "Verify", "Run required checks"], ["delivery", "Hand back", "Show evidence or a tested fix"]] as const;
   const order = ["queue", "context", "analysis", "validation", "autofix", "delivery", "complete"], position = order.indexOf(stage);

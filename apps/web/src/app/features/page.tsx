@@ -1,7 +1,5 @@
 import record from "../track-record.json";
 import { FeatureStages } from "../feature-stages";
-import { ScanPanel } from "../scan-panel";
-import { publicDemoEnabled } from "../public-demo-gate";
 
 // BuildIT had a price page and a data boundary and no page saying what it does, so the only way to
 // find out was to connect a repository. Every comparable tool leads with one.
@@ -29,11 +27,7 @@ export default function Features() {
     <h1 className="title">Every claim it makes, it can show you</h1>
     {/* The lede promised "this page starts by doing it", which stops being true the moment the
         panel below is gated. Copy that describes a control has to change with the control. */}
-    <p className="lede">{publicDemoEnabled()
-      ? <>So this page starts by doing it. Paste code and BuildIT&rsquo;s own deterministic rules run on the server and cite the line they fired on — the same citation a full review makes, minus the commit, the sandbox and the model.</>
-      : <>So every claim below names the stage that makes it. BuildIT&rsquo;s own deterministic rules run on the server against a pinned commit and cite the line they fired on, and the stages that follow have to justify themselves against that evidence.</>}</p>
-
-    {publicDemoEnabled() ? <ScanPanel variant="card" /> : null}
+    <p className="lede">Every claim below names the file, the line and the commit it came from, and a review that cannot prove its result says so instead of guessing. <a className="text-link" href="/scan">Read one it ran</a>.</p>
 
     <h2>What it does, stage by stage</h2>
     <FeatureStages />

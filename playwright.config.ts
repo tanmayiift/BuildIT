@@ -47,9 +47,10 @@ export default defineConfig({
         // The open scan is on for this suite because the suite describes the product as it is
         // demonstrated - the stranger journey, the /features scan and the landing screenshot are
         // all about that surface. It is set explicitly rather than inherited, so the state under
-        // test is stated rather than being whatever the shell happened to export. The closed state
-        // has its own config: playwright.demo-closed.config.ts.
-        command: "npx pnpm@10.15.0 exec tsx tests/e2e/convex-backend.ts --preflight && NEXT_PUBLIC_BUILDIT_E2E=1 NEXT_PUBLIC_BUILDIT_PUBLIC_DEMO_ENABLED=true npx pnpm@10.15.0 --filter @buildit/web build && NEXT_PUBLIC_BUILDIT_E2E=1 NEXT_PUBLIC_BUILDIT_PUBLIC_DEMO_ENABLED=true npx pnpm@10.15.0 --filter @buildit/web exec next start -p 3107",
+        // test is stated rather than being whatever the shell happened to export. There is no longer
+        // a demo flag to state: /scan is a static proof of a real review, so it has one state and
+        // playwright.demo-closed.config.ts - which existed only to test the other one - is gone.
+        command: "npx pnpm@10.15.0 exec tsx tests/e2e/convex-backend.ts --preflight && NEXT_PUBLIC_BUILDIT_E2E=1 npx pnpm@10.15.0 --filter @buildit/web build && NEXT_PUBLIC_BUILDIT_E2E=1 npx pnpm@10.15.0 --filter @buildit/web exec next start -p 3107",
         url: baseURL,
         reuseExistingServer: false,
         stderr: "pipe",

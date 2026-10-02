@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "pnpm --filter @buildit/telemetry --filter @buildit/scanners --filter @buildit/security build",
+    "prebuild": "pnpm --filter @buildit/telemetry --filter @buildit/security build",
     "build": "next build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
@@ -19,7 +19,6 @@
     "next": "^16.3.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "@buildit/scanners": "workspace:*",
     "@buildit/security": "workspace:*"
   },
   "devDependencies": {
