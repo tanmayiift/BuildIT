@@ -26,6 +26,9 @@
   .landing-flow li { min-height: 0; }
   .landing-flow li:nth-child(2) { border-right: 0; }
   .landing-flow li:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .landing-segments>ul { grid-template-columns: repeat(2,1fr); grid-template-rows: repeat(2, auto auto 1fr auto); }
+  .landing-segments li:nth-child(2) { border-right: 0; }
+  .landing-segments li:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
   .landing-trust { grid-template-columns: 1fr; gap: 16px; }
   .landing-pricing { grid-template-columns: 1fr; gap: 18px; padding: 20px; }
   .metric-line { grid-template-columns: repeat(2, 1fr); }
@@ -63,6 +66,9 @@
   .landing-flow>ol { grid-template-columns: 1fr; grid-template-rows: repeat(4, auto auto auto); }
   .landing-flow li { min-height: 0; border-right: 0; border-bottom: 1px solid var(--line); }
   .landing-flow li:last-child { border-bottom: 0; }
+  .landing-segments>ul { grid-template-columns: 1fr; grid-template-rows: repeat(4, auto auto auto auto); }
+  .landing-segments li { border-right: 0; border-bottom: 1px solid var(--line); }
+  .landing-segments li:last-child { border-bottom: 0; }
   .metric { min-height: 104px; border-right: 0; border-bottom: 1px solid var(--line); }
   .metric:last-child { border-bottom: 0; }
   .empty-band { align-items: flex-start; flex-direction: column; }
