@@ -12,7 +12,7 @@ const tokens = new Map([...css.matchAll(/--([a-z][a-z0-9-]*):\s*([^;]+);/g)].map
 describe("the design token system", () => {
   it("defines one complete scale per decision, not a handful of ad-hoc steps", () => {
     const expected: Record<string, string[]> = {
-      space: ["space-1", "space-2", "space-3", "space-4", "space-5", "space-6", "space-7", "space-8"],
+      space: ["space-1", "space-2", "space-3", "space-4", "space-5", "space-6", "space-7", "space-8", "space-9"],
       radius: ["radius-sm", "radius-md", "radius-lg", "radius-pill"],
       shadow: ["shadow-1", "shadow-2", "shadow-3"],
       type: ["text-2xs", "text-xs", "text-sm", "text-base", "text-md", "text-lg", "text-xl", "text-2xl", "text-figure", "text-3xl", "text-4xl"],
@@ -32,6 +32,20 @@ describe("the design token system", () => {
     const fontShorthand = [...rules.matchAll(/font:\s*\d+\s+([^\s/]+)/g)].map(match => match[1]!).filter(value => !value.startsWith("var(--text-"));
     const radii = [...rules.matchAll(/border-radius:\s*([^;}]+)/g)].flatMap(match => match[1]!.trim().split(/\s+/)).filter(value => !/^(var\(--radius-[a-z]+\)|0|50%)$/.test(value));
     expect({ fontSizes, fontShorthand, radii }).toEqual({ fontSizes: [], fontShorthand: [], radii: [] });
+  });
+
+  // Spacing is consumed now too. Hairlines under 4px, em/vh (relative to text or viewport), auto,
+  // percentages and 0 are not steps on a spacing scale and stay literal.
+  it("spaces margins, padding and gaps only from the scale", () => {
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/:root\s*\{[^}]*\}/g, "");
+    const values = [...rules.matchAll(/(?<![\w-])(?:(?:margin|padding)(?:-[a-z]+)*|gap|row-gap|column-gap):\s*([^;}]+)/g)]
+      .flatMap(match => match[1]!.trim().split(/\s+(?![^(]*\))/));
+    const offScale = values.filter(value => {
+      if (/^(0|auto|-?[\d.]+(em|vh|vw|%)|calc\(-1 \* var\(--space-\d\)\)|var\(--space-\d\))$/.test(value)) return false;
+      const pixels = /^-?([\d.]+)(px|rem)$/.exec(value);
+      return !pixels || Number(pixels[1]) * (pixels[2] === "rem" ? 16 : 1) >= 4;
+    });
+    expect(offScale).toEqual([]);
   });
 
   it("keeps the space scale on a 4px base, so a value cannot drift off it", () => {
