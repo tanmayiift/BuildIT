@@ -109,6 +109,22 @@ function verifyInventoryDelivery(bucket, inventory, kmsKey, account) {
   }
   return { ageHours: Math.round(ageMs / 3600_000 * 10) / 10, proof: "recent_encrypted_manifest_and_checksum" };
 }
+// The stack's stored template still describes the Pulsetrade Vercel identity while the live role trusts
+// buildit-agentic-review, so any stack update - the console's "use current template", an
+// --use-previous-template, or a deploy of artifacts.yaml - would act on that disagreement. A read-only
+// change set on 2 October 2026 showed a deploy would replace VercelOidcProvider (whose target already
+// exists, so the create fails and the stack rolls back) and modify the KMS key and both bucket
+// policies besides. infra/aws/stack-policy.json denies every update until someone overrides it
+// deliberately for a single operation. This checks it is still attached, and it runs before the trust
+// check so that an unprotected stack reports the more urgent of the two problems first.
+function verifyStackProtected() {
+  const body = aws(["cloudformation", "get-stack-policy", "--stack-name", stackName]).StackPolicyBody;
+  requireTrue(typeof body === "string" && body.length > 0, "aws_boundary_stack_unprotected");
+  const statements = list(JSON.parse(body).Statement);
+  requireTrue(statements.some(item => item.Effect === "Deny" && list(item.Action).includes("Update:*")
+    && (item.Resource === "*" || list(item.Resource).includes("*"))), "aws_boundary_stack_unprotected");
+}
+
 function verifyBrokerTrust(roleArn, account) {
   const roleName = "buildit-production-content-broker", team = "buildit-agentic-review", project = "buildit-content-broker";
   const issuer = `oidc.vercel.com/${team}`, providerArn = `arn:aws:iam::${account}:oidc-provider/${issuer}`;
@@ -168,6 +184,7 @@ requireTrue(aws(["kms", "get-key-rotation-status", "--key-id", keyId]).KeyRotati
 
 verifyInventoryBucket(outputs.InventoryBucketName, kmsKey);
 const inventoryDelivery = verifyInventoryDelivery(bucket, outputs.InventoryBucketName, kmsKey, scope[2]);
+verifyStackProtected();
 verifyBrokerTrust(outputs.ContentBrokerRoleArn, scope[2]);
 
 process.stdout.write(`${JSON.stringify({ status: "passed", stack: stackName, region, encryption: "aws:kms", public: false, artifactRetentionDays: artifactRule.Expiration.Days, replayRetentionDays: replayRule.Expiration.Days, versioning: "disabled", kmsRotation: true, inventoryRetentionDays: 14, inventoryDelivery, brokerTrust: "exact_buildit_production_project", oidcStackOwnership: "matches" })}\n`);

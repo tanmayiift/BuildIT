@@ -24,6 +24,10 @@ function fixture() {
     trust,
     provider: { Url: issuer, ClientIDList: [`https://vercel.com/${team}`] },
     stackProviderArn: providerArn,
+    // The stack policy attached on 2 October 2026 so no update can act on the stored template's
+    // disagreement with the live role. The gate checks it before trust, so it is part of the
+    // complete verified state this fixture describes.
+    stackPolicy: JSON.stringify({ Statement: [{ Effect: "Deny", Action: "Update:*", Principal: "*", Resource: "*" }] }) as string | undefined,
     inventoryRegion: "eu-west-1",
   };
 }
@@ -35,6 +39,7 @@ function verify(data = fixture(), stackOutputs = outputs) {
     let response: unknown;
     if (service === "cloudformation" && operation === "describe-stacks") response = { Stacks: [{ StackStatus: "UPDATE_COMPLETE", Outputs: Object.entries(stackOutputs).map(([OutputKey, OutputValue]) => ({ OutputKey, OutputValue })) }] };
     else if (service === "cloudformation" && operation === "describe-stack-resource") response = { StackResourceDetail: { PhysicalResourceId: data.stackProviderArn } };
+    else if (service === "cloudformation" && operation === "get-stack-policy") response = { StackPolicyBody: data.stackPolicy };
     else if (operation === "get-bucket-encryption") response = { ServerSideEncryptionConfiguration: isInventory ? data.inventoryEncryption : { Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: "aws:kms", KMSMasterKeyID: keyArn } }] } };
     else if (operation === "get-public-access-block") response = { PublicAccessBlockConfiguration: { BlockPublicAcls: true, IgnorePublicAcls: true, BlockPublicPolicy: true, RestrictPublicBuckets: true } };
     else if (operation === "get-bucket-policy-status") response = { PolicyStatus: { IsPublic: false } };
@@ -124,7 +129,7 @@ describe("S3 inventory encryption permission", () => {
   it("refuses non-BuildIT output resources before reading their buckets", () => {
     expect(() => verify(fixture(), { ...outputs, ArtifactBucketName: "unrelated-project" })).toThrow("aws_boundary_resource_scope_invalid");
   });
-  it.each(["encryption", "expiry", "destination", "source_scope", "stale_delivery", "missing_checksum", "region", "identity", "provider", "stack_drift"])("rejects broken inventory or BuildIT identity evidence: %s", failure => {
+  it.each(["encryption", "expiry", "destination", "source_scope", "stale_delivery", "missing_checksum", "region", "identity", "provider", "stack_drift", "unprotected", "toothless_policy"])("rejects broken inventory or BuildIT identity evidence: %s", failure => {
     const data = structuredClone(fixture());
     if (failure === "encryption") data.inventoryEncryption.Rules[0]!.ApplyServerSideEncryptionByDefault.KMSMasterKeyID = "another-key";
     if (failure === "expiry") data.inventoryLifecycle[0]!.Expiration.Days = 365;
@@ -136,6 +141,10 @@ describe("S3 inventory encryption permission", () => {
     if (failure === "identity") data.trust.Statement[0]!.Condition.StringEquals[`${issuer}:sub`] = `owner:${team}:project:*:environment:production`;
     if (failure === "provider") data.provider.ClientIDList = ["https://vercel.com/another-team"];
     if (failure === "stack_drift") data.stackProviderArn = `arn:aws:iam::${account}:oidc-provider/oidc.vercel.com/legacy-other-team`;
+    // Removing the protection must fail, and so must a policy that exists but no longer denies
+    // updates - the second is the quieter way to lose it.
+    if (failure === "unprotected") data.stackPolicy = undefined;
+    if (failure === "toothless_policy") data.stackPolicy = JSON.stringify({ Statement: [{ Effect: "Allow", Action: "Update:*", Principal: "*", Resource: "*" }] });
     expect(() => verify(data)).toThrow(/aws_boundary_/);
   });
   it("only issues read operations to the scoped BuildIT resources", () => {

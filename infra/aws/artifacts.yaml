@@ -42,17 +42,27 @@ Resources:
       RoleName: buildit-production-content-broker
       Description: Short-lived production access for the BuildIT content broker only
       MaxSessionDuration: 3600
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Federated: !Ref VercelOidcProvider
-            Action: sts:AssumeRoleWithWebIdentity
-            Condition:
-              StringEquals:
-                !Sub "oidc.vercel.com/${VercelTeamSlug}:aud": !Sub https://vercel.com/${VercelTeamSlug}
-                !Sub "oidc.vercel.com/${VercelTeamSlug}:sub": !Sub owner:${VercelTeamSlug}:project:${VercelProjectName}:environment:production
+      # A JSON string through Fn::Sub rather than a YAML map, because the condition KEYS carry the team
+      # slug and CloudFormation requires map keys to be strings. The previous form used `!Sub` as a
+      # key, which CloudFormation parses as an intrinsic-function map and rejects with "map keys must
+      # be strings" - so this template could not be deployed at all, and nothing ran
+      # validate-template to notice. tests/architecture/aws-boundary.test.ts now refuses an intrinsic
+      # used as a key.
+      AssumeRolePolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": { "Federated": "${VercelOidcProvider}" },
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Condition": {
+              "StringEquals": {
+                "oidc.vercel.com/${VercelTeamSlug}:aud": "https://vercel.com/${VercelTeamSlug}",
+                "oidc.vercel.com/${VercelTeamSlug}:sub": "owner:${VercelTeamSlug}:project:${VercelProjectName}:environment:production"
+              }
+            }
+          }]
+        }
       Tags:
         - Key: product
           Value: buildit
