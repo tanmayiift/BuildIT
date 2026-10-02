@@ -640,6 +640,49 @@ describe("Convex tenant isolation", () => {
     ).rejects.toThrow("not_found_or_forbidden");
   });
 
+  // Two repositories can carry the same GitHub id - Convex has no uniqueness constraint and
+  // by_github_id is a plain index - and the two resolvers disagreed about what that means.
+  // githubWebhookData uses .unique() and throws; findingFeedbackData used .first() and silently
+  // picked one, which is how a person's feedback gets attributed to another tenant's repository.
+  it("refuses to resolve a GitHub repository id that two organizations both claim", async () => {
+    const t = convexTest(schema, modules),
+      alpha = await seedTenant(t, "ambiguous-alpha", "alice"),
+      beta = await seedTenant(t, "ambiguous-beta", "bob");
+    const shared = 987_654;
+    await t.run(async ctx => {
+      await ctx.db.patch(alpha.repositoryId, { githubRepositoryId: shared });
+      await ctx.db.patch(beta.repositoryId, { githubRepositoryId: shared });
+    });
+    await expect(
+      t.query(internal.findingFeedbackData.repositoryByGithubId, { githubRepositoryId: shared }),
+    ).resolves.toBeNull();
+    // And it still resolves an unambiguous one, so refusing ambiguity is not refusing everything.
+    await t.run(ctx => ctx.db.patch(beta.repositoryId, { githubRepositoryId: shared + 1 }));
+    await expect(
+      t.query(internal.findingFeedbackData.repositoryByGithubId, { githubRepositoryId: shared }),
+    ).resolves.toMatchObject({ repositoryId: alpha.repositoryId });
+  });
+
+  // reviewEvidenceActions:getFindingDetails is the product's only function declared
+  // authorized_source_derived - it returns a finding's full file path, title, impact and explanation.
+  // The guard was there, in reviewEvidenceData.findingDetailScope, and nothing pinned it:
+  // reviewEvidenceActions.test.ts exercises only the pure parser, so deleting the
+  // requireRepositoryRole call broke no test at all. The one function that hands back source-derived
+  // prose deserves the same treatment as the rest.
+  it("refuses a finding's source-derived detail to anyone outside the review's tenant", async () => {
+    const t = convexTest(schema, modules),
+      alpha = await seedTenant(t, "detail-alpha", "alice"),
+      beta = await seedTenant(t, "detail-beta", "bob");
+    await expect(
+      t.withIdentity({ subject: "alice|session" })
+        .query(internal.reviewEvidenceData.findingDetailScope, { reviewId: beta.reviewId }),
+    ).rejects.toThrow("not_found_or_forbidden");
+    // And with no identity at all, rather than falling through to a tenant check that passes.
+    await expect(
+      t.query(internal.reviewEvidenceData.findingDetailScope, { reviewId: alpha.reviewId }),
+    ).rejects.toThrow(/authentication_required|not_found_or_forbidden/);
+  });
+
   it("returns source-free live review evidence only to the review tenant", async () => {
     const t = convexTest(schema, modules),
       alpha = await seedTenant(t, "evidence-alpha", "alice");
