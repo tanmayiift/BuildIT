@@ -211,12 +211,12 @@ test("the trust boundary is a diagram a reader can step through, not an essay", 
 // /features was seventeen claims in one flat list and two links. A features page for a code
 // reviewer that cannot show you a review is asking to be taken on faith, so it now opens with the
 // scan and groups the claims by the stage of a review they belong to.
-test("features shows a working scan and groups its claims by review stage", async ({ page }) => {
+test("features points at a real review and groups its claims by review stage", async ({ page }) => {
   await page.goto("/features");
-  await page.getByRole("button", { name: "Use an example" }).click();
-  const result = page.locator(".scan-result");
-  await expect(result.locator(".scan-line[data-flagged]")).toHaveCount(2);
-  await expect(result.getByText("TLS certificate verification is disabled")).toBeVisible();
+  // The embedded scanner is gone - it executed a stranger's input with no account behind it, and a
+  // read-only proof of a review that really ran is better evidence than two regex passes over pasted
+  // text. What the page must still do is send a reader to that evidence rather than only assert.
+  await expect(page.getByRole("link", { name: /Read one it ran/i })).toBeVisible();
 
   // Selecting a stage changes which claims are on screen. Nothing was deleted to shorten the page:
   // the claim that used to sit in the middle of the list is still here, one click away.

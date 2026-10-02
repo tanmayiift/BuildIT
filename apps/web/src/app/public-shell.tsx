@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { publicDemoEnabled } from "./public-demo-gate";
 import { AccountStatus } from "./account-status";
 import { BrandGlyph } from "./brand-glyph";
 
@@ -21,7 +20,7 @@ const links = [
   // Offered only while the open scan is. /scan still resolves either way - it stays in
   // publicRoutes so the proxy, route-map and their tests keep agreeing about what exists - but a
   // nav entry inviting a stranger to a closed door is worse than no entry.
-  ...(publicDemoEnabled() ? [{ label: "Try a scan", href: "/scan" }] : []),
+  { label: "A real review", href: "/scan" },
   { label: "Data & privacy", href: "/data-handling" },
 ];
 

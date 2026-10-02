@@ -99,9 +99,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@buildit/scanners':
-        specifier: workspace:*
-        version: link:../../packages/scanners
       '@buildit/security':
         specifier: workspace:*
         version: link:../../packages/security

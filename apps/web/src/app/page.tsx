@@ -1,6 +1,4 @@
 import { OverviewReadiness } from "./live-connections";
-import { ScanPanel } from "./scan-panel";
-import { publicDemoEnabled } from "./public-demo-gate";
 
 const layers = [
   { mark: "01", title: "Choose one pull request", body: "You choose the repositories. Unselected ones stay invisible." },
@@ -17,28 +15,27 @@ export default function Overview() {
         <h1 id="landing-title">Autonomous code review that cites its evidence.</h1>
         <p className="landing-promise-line">It fixes what it finds and opens a stacked PR. It never merges. A human owns the merge decision.</p>
       </div>
-      {/* The scan was one navigation away behind a link, so the first thing the page asked a
-          stranger to do was still to go somewhere else. The working control is in the hero now and
-          the promise beside it is one sentence, because a reader who can try the thing in four
-          seconds does not need a paragraph arguing that it works.
+      {/* The hero used to carry a working scanner that executed pasted code. It was the only surface
+          in the product running attacker-supplied input with no account behind it, and once BuildIT
+          had tenants other than its author that trade stopped being worth it - so it was gated off
+          and the hero became a paragraph arguing that the rules work.
 
-          It is also its own grid child rather than part of the promise block, so that when the hero
-          stacks on a phone the order becomes claim, then the thing itself, then the two actions
-          that cost something - instead of burying the scanner under both buttons and the fine
-          print. */}
+          A real review is better evidence than a scan of pasted text ever was. A scan ran two
+          deterministic passes with no commit, no tests and no verdict; this points at one complete
+          review with the file, the line, the commit, the failing check and the fix, every value
+          checkable against a public pull request.
+
+          It stays its own grid child so that when the hero stacks on a phone the order is claim,
+          then the evidence, then the two actions that cost something. */}
       <aside className="landing-try" aria-labelledby="landing-try-title">
-        <p className="eyebrow">{publicDemoEnabled() ? "No account, no key" : "Deterministic rules"}</p>
-        <h2 id="landing-try-title">{publicDemoEnabled() ? "Scan code now" : "The same rules, on your pull requests"}</h2>
-        {/* The panel posts to /api/scan. When that is closed the panel can only ever render an
-            error, so it is replaced rather than left to fail - the hero is the first thing a
-            stranger sees and a broken control there says more than the copy does. */}
-        {publicDemoEnabled()
-          ? <><ScanPanel variant="card" /><a className="text-link" href="/scan">Open the full scan and its limits →</a></>
-          : <p className="landing-try-closed">BuildIT&rsquo;s deterministic rules and secret patterns run on every connected pull request, citing the exact line each finding came from. Connect a repository to see them on your own code.</p>}
+        <p className="eyebrow">One real review</p>
+        <h2 id="landing-try-title">See what it hands you</h2>
+        <p className="landing-try-closed">One review BuildIT actually ran: the file and line it cites, the commit it read, the output of the check that proved the finding, and the pull request the fix was opened as. No account, and nothing to paste.</p>
+        <a className="text-link" href="/scan">Read a real review &rarr;</a>
       </aside>
       <div className="landing-commit">
         <div className="button-row landing-actions"><a className="button" href="/setup/install">Connect a GitHub repository</a><a className="button secondary" href="/reviews?tour=1">Inspect a sample review</a></div>
-        <small className="landing-boundary">Scanning pasted code needs nothing. Sign-in identifies you. Repository access is a separate step. A model key is requested only when AI analysis starts.</small>
+        <small className="landing-boundary">Reading a real review needs nothing. Sign-in identifies you. Repository access is a separate step. A model key is requested only when AI analysis starts.</small>
       </div>
     </section>
     <OverviewReadiness />
