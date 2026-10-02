@@ -12,7 +12,7 @@ const base = "b".repeat(40), head = "a".repeat(40);
 async function seed(t: ReturnType<typeof convexTest>) {
   return t.run(async ctx => {
     const now = 1_000;
-    const organizationId = await ctx.db.insert("organizations", { name: "Execution", slug: "execution", timezone: "UTC", region: "eu-west-1", retentionHours: 24, monthlyBudget: 50, concurrencyLimit: 2, planId: "test", fingerprintKeyVersion: 1, createdAt: now });
+    const organizationId = await ctx.db.insert("organizations", { name: "Execution", slug: "execution", timezone: "UTC", region: "eu-west-1", retentionHours: 24, monthlyBudget: 50, concurrencyLimit: 2, createdAt: now });
     const installationId = await ctx.db.insert("githubInstallations", { organizationId, installationId: 1, accountLogin: "execution", accountType: "user", permissionSnapshot: { metadata: "read", contents: "read", pullRequests: "write", issues: "read", checks: "write" }, status: "active", createdAt: now, updatedAt: now });
     const repositoryId = await ctx.db.insert("repositories", { organizationId, installationId, githubRepositoryId: 1, owner: "execution", name: "repo", defaultBranch: "main", enabled: true, autofixMode: "stacked", forkPolicy: "manual_review_only", indexState: "ready", concurrencyLimit: 1, createdAt: now, updatedAt: now });
     const configArtifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, type: "configuration", storageKey: "config", encrypted: true, checksum: "a", size: 1, storageState: "stored", expiresAt: 9e12, deletionAttempts: 0 });

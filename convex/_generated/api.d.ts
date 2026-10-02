@@ -80,7 +80,6 @@ import type * as notificationOutbox from "../notificationOutbox.js";
 import type * as notificationSchema from "../notificationSchema.js";
 import type * as notificationWorker from "../notificationWorker.js";
 import type * as notifications from "../notifications.js";
-import type * as organizationFieldMigration from "../organizationFieldMigration.js";
 import type * as organizations from "../organizations.js";
 import type * as permissionReceipts from "../permissionReceipts.js";
 import type * as publicFunctionPolicy from "../publicFunctionPolicy.js";
@@ -204,7 +203,6 @@ declare const fullApi: ApiFromModules<{
   notificationSchema: typeof notificationSchema;
   notificationWorker: typeof notificationWorker;
   notifications: typeof notifications;
-  organizationFieldMigration: typeof organizationFieldMigration;
   organizations: typeof organizations;
   permissionReceipts: typeof permissionReceipts;
   publicFunctionPolicy: typeof publicFunctionPolicy;

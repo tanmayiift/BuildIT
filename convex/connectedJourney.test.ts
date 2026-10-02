@@ -19,7 +19,7 @@ async function seedWorkspace(t: ReturnType<typeof convexTest>, options: { instal
     const now = Date.now();
     const userId = await ctx.db.insert("users", { githubUserId: 7001, githubLogin: "riya" });
     const organizationId = await ctx.db.insert("organizations", { name: "Ledgerline", slug: "ledgerline", timezone: "Asia/Kolkata",
-      region: "eu-west-1", retentionHours: 24, monthlyBudget: 50, concurrencyLimit: 3, planId: "trial", fingerprintKeyVersion: 1, createdAt: now });
+      region: "eu-west-1", retentionHours: 24, monthlyBudget: 50, concurrencyLimit: 3, createdAt: now });
     await ctx.db.insert("memberships", { organizationId, userId, role: "owner", status: "active", createdAt: now, updatedAt: now });
     await ctx.db.insert("userPreferences", { userId, activeOrganizationId: organizationId, updatedAt: now });
     await ctx.db.insert("userProfiles", { userId, githubUserId: 7001, githubLogin: "riya", lastAuthenticatedAt: now, updatedAt: now });

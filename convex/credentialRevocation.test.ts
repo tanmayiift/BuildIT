@@ -18,8 +18,7 @@ async function credential(t: ReturnType<typeof convexTest>, overrides: Record<st
   return t.run(async ctx => {
     const now = 1_000;
     const organizationId = await ctx.db.insert("organizations", { name: "Ledgerline", slug: "ledgerline", timezone: "UTC",
-      region: "eu-west-1", retentionHours: 24, monthlyBudget: 50, concurrencyLimit: 3, planId: "trial",
-      fingerprintKeyVersion: 1, createdAt: now });
+      region: "eu-west-1", retentionHours: 24, monthlyBudget: 50, concurrencyLimit: 3, createdAt: now });
     const envelope = (label: string) => Buffer.from(["fixture", label, "not-a-secret"].join("-")).toString("base64url");
     const credentialId = await ctx.db.insert("providerCredentials", { organizationId,
       credentialScopeId: "11111111-1111-1111-1111-111111111111", provider: "anthropic",

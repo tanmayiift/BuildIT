@@ -21,8 +21,7 @@ async function seed(t: ReturnType<typeof convexTest>, lastAuthenticatedAt: numbe
     const now = 1_000_000;
     const userId = await ctx.db.insert("users", { name: "Ada" } as never);
     const organizationId = await ctx.db.insert("organizations", { name: "Ledgerline", slug: "ledgerline", timezone: "UTC",
-      region: "eu-west-1", retentionHours: 24, monthlyBudget: 50, concurrencyLimit: 3, planId: "trial",
-      fingerprintKeyVersion: 1, createdAt: now });
+      region: "eu-west-1", retentionHours: 24, monthlyBudget: 50, concurrencyLimit: 3, createdAt: now });
     await ctx.db.insert("memberships", { organizationId, userId, role: "admin", status: "active", createdAt: now, updatedAt: now });
     await ctx.db.insert("userProfiles", { userId, githubLogin: "ada", githubUserId: 1, lastAuthenticatedAt, updatedAt: now } as never);
     const installationId = await ctx.db.insert("githubInstallations", { organizationId, installationId: 123,
