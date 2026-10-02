@@ -6,6 +6,7 @@ import { ActionLink } from "./action";
 import { executionReadiness, serviceUnconfiguredDetail, serviceUnconfiguredSummary, type RuntimeReadiness } from "./execution-readiness";
 import { useSampleTour } from "./workspace-route-boundary";
 import { useEffect, useState } from "react";
+import { primarySetupSteps } from "./setup-steps";
 
 type Connection = {
   state: "signed_out" | "no_workspace" | "installation_required" | "installation_unavailable" | "no_repositories_selected" | "connected";
@@ -376,7 +377,7 @@ export function SetupProgress() {
   const connection = useConnection();
   if (!connection) return <span className="setup-state" aria-live="polite"><span className="setup-dot" />Checking access</span>;
   const connected = connection?.state === "connected";
-  return <a className="setup-state" href={connected ? "/setup/review" : "/setup/install"}><span className={`setup-dot${connected ? " ready" : ""}`} />{connected ? "GitHub connected" : "Setup 1 of 3"}</a>;
+  return <a className="setup-state" href={connected ? "/setup/review" : "/setup/install"}><span className={`setup-dot${connected ? " ready" : ""}`} />{connected ? "GitHub connected" : `Setup 1 of ${primarySetupSteps.length}`}</a>;
 }
 
 export function OverviewReadiness() {
