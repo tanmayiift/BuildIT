@@ -93,8 +93,6 @@ async function seedTenant(
       retentionHours: 24,
       monthlyBudget: 100,
       concurrencyLimit: 2,
-      planId: "test",
-      fingerprintKeyVersion: 1,
       createdAt: now,
     });
     await ctx.db.insert("memberships", {
@@ -1861,8 +1859,6 @@ describe("audited membership administration", () => {
         retentionHours: 24,
         monthlyBudget: 100,
         concurrencyLimit: 2,
-        planId: "test",
-        fingerprintKeyVersion: 1,
         createdAt: now,
       });
       const ownerMembershipId = await ctx.db.insert("memberships", {

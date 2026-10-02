@@ -37,7 +37,7 @@ async function seedEvidenceRepository(
 ) {
   return t.run(async (ctx) => {
     const organizationId = await ctx.db.insert("organizations", { name: slug, slug, timezone: "UTC", region: "eu-west-1",
-      retentionHours: 24, monthlyBudget: 100, concurrencyLimit: 2, planId: "test", fingerprintKeyVersion: 1, createdAt: now });
+      retentionHours: 24, monthlyBudget: 100, concurrencyLimit: 2, createdAt: now });
     const installationId = await ctx.db.insert("githubInstallations", { organizationId, installationId: Math.floor(Math.random() * 1_000_000),
       accountLogin: owner, accountType: "user", permissionSnapshot: { metadata: "read", contents: "read", pullRequests: "write", issues: "read", checks: "write" },
       status: "active", createdAt: now, updatedAt: now });
@@ -80,7 +80,7 @@ type Seeded = { reviews: Array<{ status: string; startedAt?: number; completedAt
 async function seedTenant(t: ReturnType<typeof convexTest>, slug: string, repositoryName: string, actor: string, plan: Seeded) {
   await t.run(async (ctx) => {
     const now = Date.now();
-    const organizationId = await ctx.db.insert("organizations", { name: slug, slug, timezone: "UTC", region: "eu-west-1", retentionHours: 24, monthlyBudget: 100, concurrencyLimit: 2, planId: "test", fingerprintKeyVersion: 1, createdAt: now });
+    const organizationId = await ctx.db.insert("organizations", { name: slug, slug, timezone: "UTC", region: "eu-west-1", retentionHours: 24, monthlyBudget: 100, concurrencyLimit: 2, createdAt: now });
     const installationId = await ctx.db.insert("githubInstallations", { organizationId, installationId: Math.floor(Math.random() * 1_000_000), accountLogin: slug, accountType: "organization", permissionSnapshot: { metadata: "read", contents: "write", pullRequests: "write", issues: "read", checks: "write" }, status: "active", createdAt: now, updatedAt: now });
     const repositoryId = await ctx.db.insert("repositories", { organizationId, installationId, githubRepositoryId: Math.floor(Math.random() * 1_000_000), owner: slug, name: repositoryName, defaultBranch: "main", enabled: true, autofixMode: "stacked", forkPolicy: "manual_review_only", indexState: "ready", concurrencyLimit: 1, createdAt: now, updatedAt: now });
     const configArtifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, type: "configuration", storageKey: `${slug}/config`, encrypted: true, checksum: "hash", size: 1, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });

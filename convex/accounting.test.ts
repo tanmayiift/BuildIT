@@ -18,7 +18,7 @@ const modules = import.meta.glob("./**/*.ts");
 const now = Date.UTC(2026, 8, 14, 12);
 async function seed(t: ReturnType<typeof convexTest>, budgetLimit = 5, monthlyBudget = 10) {
   return t.run(async ctx => {
-    const organizationId = await ctx.db.insert("organizations", { name: "Accounting test", slug: "accounting", timezone: "Asia/Kolkata", region: "eu-west-1", retentionHours: 24, monthlyBudget, concurrencyLimit: 2, planId: "test", fingerprintKeyVersion: 1, createdAt: now });
+    const organizationId = await ctx.db.insert("organizations", { name: "Accounting test", slug: "accounting", timezone: "Asia/Kolkata", region: "eu-west-1", retentionHours: 24, monthlyBudget, concurrencyLimit: 2, createdAt: now });
     const installationId = await ctx.db.insert("githubInstallations", { organizationId, installationId: 1, accountLogin: "accounting", accountType: "organization", permissionSnapshot: { metadata: "read", contents: "write", pullRequests: "write", issues: "read", checks: "write" }, status: "active", createdAt: now, updatedAt: now });
     const repositoryId = await ctx.db.insert("repositories", { organizationId, installationId, githubRepositoryId: 1, owner: "accounting", name: "test", defaultBranch: "main", enabled: true, autofixMode: "stacked", forkPolicy: "manual_review_only", indexState: "ready", concurrencyLimit: 2, createdAt: now, updatedAt: now });
     const configArtifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, type: "configuration", storageKey: "test/config", encrypted: true, checksum: "a".repeat(64), size: 1, storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });

@@ -2,7 +2,7 @@ import type { convexTest } from "convex-test";
 
 export async function summaryFixture(t: ReturnType<typeof convexTest>, slug = "summary", now = Date.now()) {
   return t.run(async ctx => {
-    const organizationId = await ctx.db.insert("organizations", { name: slug, slug, timezone: "Asia/Kolkata", region: "eu-west-1", retentionHours: 24, monthlyBudget: 100, concurrencyLimit: 2, planId: "test", fingerprintKeyVersion: 1, createdAt: now });
+    const organizationId = await ctx.db.insert("organizations", { name: slug, slug, timezone: "Asia/Kolkata", region: "eu-west-1", retentionHours: 24, monthlyBudget: 100, concurrencyLimit: 2, createdAt: now });
     await ctx.db.insert("memberships", { organizationId, userId: slug, role: "owner", status: "active", createdAt: now, updatedAt: now });
     const installationId = await ctx.db.insert("githubInstallations", { organizationId, installationId: now, accountLogin: slug, accountType: "organization", permissionSnapshot: { metadata: "read", contents: "write", pullRequests: "write", issues: "read", checks: "write" }, status: "active", createdAt: now, updatedAt: now });
     const repositoryId = await ctx.db.insert("repositories", { organizationId, installationId, githubRepositoryId: now, owner: slug, name: "fixture", defaultBranch: "main", enabled: true, autofixMode: "stacked", forkPolicy: "manual_review_only", indexState: "ready", concurrencyLimit: 1, createdAt: now, updatedAt: now });

@@ -22,8 +22,7 @@ export default defineSchema({
   organizations: defineTable({
     name: v.string(), slug: v.string(), timezone: v.string(), region: v.literal("eu-west-1"),
     retentionHours: v.number(), monthlyBudget: v.number(), concurrencyLimit: v.number(),
-    // Write-only, and both retiring: see organizationFieldMigration.ts.
-    planId: v.optional(v.string()), fingerprintKeyVersion: v.optional(v.number()), createdAt: v.number(),
+    createdAt: v.number(),
     monthlySpendMicros: v.optional(v.number()), monthlySpendMonth: v.optional(v.string()),
     // The ceiling on sandbox time this workspace may consume in a month, and the running total
     // against it. Unlike monthlyBudget and concurrencyLimit, an absent or non-positive ceiling

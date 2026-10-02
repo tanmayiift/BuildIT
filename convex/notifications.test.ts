@@ -23,8 +23,6 @@ async function seedMember(options: { verified?: boolean; installationAccount?: s
       retentionHours: 24,
       monthlyBudget: 10,
       concurrencyLimit: 1,
-      planId: "test",
-      fingerprintKeyVersion: 1,
       createdAt: now,
     });
     await ctx.db.insert("memberships", {
@@ -153,7 +151,7 @@ describe("tenant-safe notification recipients", () => {
       requestId: "notification-consent-0003",
     });
     const foreignRepositoryId = await t.run(async ctx => {
-      const foreignOrganizationId = await ctx.db.insert("organizations", { name: "Foreign", slug: "foreign-notification", timezone: "UTC", region: "eu-west-1", retentionHours: 24, monthlyBudget: 10, concurrencyLimit: 1, planId: "test", fingerprintKeyVersion: 1, createdAt: now });
+      const foreignOrganizationId = await ctx.db.insert("organizations", { name: "Foreign", slug: "foreign-notification", timezone: "UTC", region: "eu-west-1", retentionHours: 24, monthlyBudget: 10, concurrencyLimit: 1, createdAt: now });
       const installationId = await ctx.db.insert("githubInstallations", { organizationId: foreignOrganizationId, installationId: 999, accountLogin: "foreign-owner", accountType: "user", permissionSnapshot: { metadata: "read", contents: "read", pullRequests: "write", issues: "read", checks: "write" }, status: "active", createdAt: now, updatedAt: now });
       return ctx.db.insert("repositories", { organizationId: foreignOrganizationId, installationId, githubRepositoryId: 999, owner: "foreign-owner", name: "private", defaultBranch: "main", visibility: "private", enabled: true, autofixMode: "stacked", forkPolicy: "manual_review_only", indexState: "ready", concurrencyLimit: 1, createdAt: now, updatedAt: now });
     });

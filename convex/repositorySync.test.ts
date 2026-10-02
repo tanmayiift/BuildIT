@@ -19,8 +19,7 @@ async function seed(t: ReturnType<typeof convexTest>, repositories: Array<Record
   return t.run(async ctx => {
     const now = 1_000;
     const organizationId = await ctx.db.insert("organizations", { name: "Ledgerline", slug: "ledgerline", timezone: "UTC",
-      region: "eu-west-1", retentionHours: 24, monthlyBudget: 50, concurrencyLimit: 3, planId: "trial",
-      fingerprintKeyVersion: 1, createdAt: now });
+      region: "eu-west-1", retentionHours: 24, monthlyBudget: 50, concurrencyLimit: 3, createdAt: now });
     const installationId = await ctx.db.insert("githubInstallations", { organizationId, installationId: 123,
       accountLogin: "ledgerline", accountType: "user",
       permissionSnapshot: { metadata: "read", contents: "read", pullRequests: "write", issues: "read", checks: "write" },

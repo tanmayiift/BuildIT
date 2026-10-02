@@ -311,7 +311,9 @@ face value would not expect either.
 Not a disclosure today, and not fixed today, because the capability cannot be reached. Recorded so
 the choice is made before delivery is switched on rather than after.
 
-## `organizations.fingerprintKeyVersion` promises per-tenant keying the product does not do
+## `organizations.fingerprintKeyVersion` promised per-tenant keying the product does not do
+
+**Status: field removed on 3 October 2026 (#83 and its follow-up). The single deployment-wide key it misdescribed is unchanged and still recorded below.** Both write-only organization fields were retired together: `fingerprintKeyVersion`, and `planId`, which was hardcoded `"trial"` while /pricing said there is no trial clock. Production's two organizations were cleared by a migration before the schema dropped them, and the narrowing deploy's schema validation confirmed no row still carried either.
 
 `convex/schema.ts` declares it and `convex/githubInstallationsData.ts` writes `1` at organization
 creation. **Nothing reads it.** `convex/reviewAnalysisWorker.ts` derives both `pathHmac` and
@@ -336,8 +338,8 @@ current version, accept the previous one on read, and re-stamp as rows are touch
 field instead is a schema narrowing that needs a production row migration first, because Convex
 validates documents on write.
 
-Either way it is a deliberate piece of work, not a rename. Until then: one key, no versioning, and
-the schema says otherwise.
+Versioned per-organization keys remain a deliberate piece of work, not a rename. Until then: one key,
+no versioning - and, since the field is gone, the schema no longer says otherwise.
 
 ## Three webhook handlers could not fire, because the App did not subscribe to their events
 
