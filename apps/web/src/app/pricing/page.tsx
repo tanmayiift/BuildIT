@@ -5,6 +5,12 @@ const plan = [
   ["Who it is for", "Tech leads and builders shipping code with AI agents, who want proof before a merge rather than an incident after one."],
   ["What it costs today", "Every review is free. There is no per-seat, per-repository or per-pull-request charge, and no trial clock counting down."],
   ["What you pay for", "Your own model key. You pay Anthropic, OpenAI or Google directly at their rate, and BuildIT adds nothing on top of it. The Usage page shows every rupee spent on your behalf, per review and per stage."],
+  // Three limits are enforced in code and the page named none of them, so "no trial clock counting
+  // down" was true and incomplete: a workspace can be refused for reasons it was never told about.
+  // Described rather than quantified on purpose - the figures are defaults an operator can change
+  // per workspace, so printing them here would commit the page to numbers a future plan contradicts,
+  // which is the staleness that already rotted the track record. /usage shows the live values.
+  ["What limits you will actually hit", "Three, and each one refuses rather than overspends. A monthly ceiling on model spend, which stops the next call rather than exceeding it. A cap on how many reviews run at once, so a burst queues instead of competing. And a monthly allowance of sandbox time — BuildIT's own shared capacity, not a charge on your key — which is why a review can be told to wait even when your budget is untouched. Your workspace's current values are on the Usage page."],
   ["What changes later", "Paid plans are coming. Repositories connected now keep free reviews through that change — you will be told before anything is charged, not after."],
 ];
 

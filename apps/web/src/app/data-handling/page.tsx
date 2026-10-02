@@ -22,7 +22,7 @@ export default function DataHandling() {
 
     <h2>What is not promised</h2>
     <p className="boundary-caption">BuildIT does not promise that AI makes code bug-free. Required test, scanner, commit, citation and staleness evidence decides the result, and missing or conflicting proof ends as inconclusive — never as ready to merge.</p>
-    <p className="boundary-caption">What is still thin is the track record: {record.reviews} pull requests over {record.repositories} repositories, {record.sinceLastPlatformFailure} consecutive since the last platform failure on {record.lastPlatformFailureAt}. Enough to show the known failures are fixed; not enough to claim reliability on a codebase unlike those.</p>
+    <p className="boundary-caption">What is still thin is the track record: {record.reviews} pull requests over {record.repositories} repositories, {record.platformFailed} of which failed on BuildIT&rsquo;s own side, and {record.sinceLastPlatformFailure} consecutive since the last of those on {record.lastPlatformFailureAt}. Enough to show the known failures are fixed; not enough to claim reliability on a codebase unlike those.</p>
 
     {/* This replaced a four-row list of the same four steps. The list said them at four times the
         length and the diagram above already draws them, so what is left is the one-line answer. */}
