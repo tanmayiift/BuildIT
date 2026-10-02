@@ -339,41 +339,93 @@ validates documents on write.
 Either way it is a deliberate piece of work, not a rename. Until then: one key, no versioning, and
 the schema says otherwise.
 
-## Four webhook handlers cannot fire, because the App does not subscribe to their events
+## Three webhook handlers could not fire, because the App did not subscribe to their events
 
-Read from `https://api.github.com/apps/buildit-agentic-review` on 2 October 2026, the production
-GitHub App is subscribed to exactly five events:
+**Resolved on 2 October 2026.** Recorded because the shape of it matters more than the fix.
 
-```
-check_run  check_suite  issue_comment  pull_request  push
-```
+`https://api.github.com/apps/buildit-agentic-review` was subscribed to exactly five events —
+`check_run`, `check_suite`, `issue_comment`, `pull_request`, `push` — while `convex/http.ts` handled
+seven. Three could never be delivered:
 
-`convex/http.ts` handles seven. The four that GitHub will never deliver:
-
-| Handler | What its absence costs |
+| Handler | What its absence cost |
 |---|---|
-| `installation_repositories` | Adding or removing a repository in GitHub does not reach BuildIT until somebody presses Refresh on `/repositories`. The comment in `http.ts` says this handler exists because "a customer could grant access and watch it be ignored" — which is still what happens. |
-| `repository` | A repository made private or public, renamed or transferred does not re-sync, so `repositories.visibility` stays whatever it was when access was granted. |
-| `public` | A private repository opened to the world does not re-sync. |
-| `pull_request_review_thread` | Resolving or unresolving a BuildIT finding thread records no feedback. `findingFeedbackWorker.observe` has never received a single delivery, so the learning signal and the demotion it drives (`demotedByLearning` in `reviewPublicationWorker`) have no input. |
+| `repository` | A repository made private, public, renamed or transferred did not re-sync, so `repositories.visibility` stayed whatever it was when access was granted. This is why two repositories that had been made private were still stored as public. |
+| `public` | A private repository opened to the world did not re-sync. |
+| `pull_request_review_thread` | Resolving or unresolving a BuildIT finding thread recorded no feedback, so `findingFeedbackWorker.observe` had never received a single delivery and the demotion it drives had no input. |
 
 **How it was found.** Ten `buildit-demo-*` repositories were made private, which should have produced
-ten `repository` deliveries. `webhookDeliveries` recorded none, and `visibilityVerifiedAt` stayed
-absent on every row. The App's own event list confirmed why.
+ten `repository` deliveries. `webhookDeliveries` recorded none and `visibilityVerifiedAt` stayed
+absent on every row.
 
-**Why no test caught it.** A handler for an unsubscribed event is indistinguishable, in code and in
-every test, from a handler that works — GitHub simply never calls it. `webhook-events.test.ts` checked
-that each handled name is an event GitHub *can* send, which all four are. It now also checks each one
-against the App's subscription list, and requires a handler for an unsubscribed event to be written
-down with its consequence. That is the assertion that would have caught all four.
+**A claim in the first version of this entry was wrong.** It also named
+`installation_repositories` as dead. It is not: GitHub delivers installation lifecycle events to an
+App without subscription — the settings page offers no checkbox for them, and an `installation`
+delivery with action `new_permissions_accepted` arrived while the subscription change was being
+saved. The true statement is narrower, and was the original finding: `installation_repositories` is
+not sent when a repository changes visibility.
 
-**The fix is not in this repository.** GitHub App event subscriptions live in the App's settings and
-have no REST endpoint — `PATCH /app` does not exist. Someone with admin on the App must add
-`repository`, `public`, `installation_repositories` and `pull_request_review_thread` under *Subscribe
-to events* at `github.com/settings/apps/buildit-agentic-review/permissions`. No code change is needed
-once they are added; all four handlers already exist and are tested.
+**Verified end to end after subscribing.** Flipping `buildit-demo-zod` public then private produced
+`public`, `repository/publicized` and `repository/privatized` deliveries, each `processed`. One
+delivery re-synced the whole installation: all 15 repositories in it now match GitHub and carry a
+`visibilityVerifiedAt` stamp, including the two that caused the evidence leak, which finally read
+`private`. The repository in the second organization's installation was untouched, which is correct.
 
-**What is not affected.** The evidence-publication leak fixed in #60 does not depend on any of this.
-`publishAsEvidence` is absent on every row and `visibilityVerifiedAt` is absent too, so the public
-query refuses on two independent conditions regardless of whether `visibility` is stale. That was the
-point of requiring four conditions rather than trusting the column to converge.
+**Why no test could catch it.** A handler for an unsubscribed event is indistinguishable, in code and
+in every test, from a handler that works — GitHub simply never calls it.
+`tests/architecture/webhook-events.test.ts` checked that each handled name is an event GitHub *can*
+send, which all three were. It now checks each one against the App's subscription list, treats
+installation events as always-delivered, and requires a handler for an unsubscribed event to be
+declared with what its absence costs. That list is currently empty, which is the point.
+
+## The artifact stack would revert the broker's trust policy to Pulsetrade on the next deploy
+
+`pnpm smoke:aws-boundary` ran for the first time on 2 October 2026 — its own comment in
+`docs/operations/ci-gates.md` said it never had, because no AWS credentials had ever been configured.
+It failed immediately, with `aws_boundary_oidc_stack_drift`, and the drift is real and dangerous.
+
+CloudFormation's own drift detection on `buildit-production-artifacts` reports one modified resource:
+
+| | |
+|---|---|
+| `ContentBrokerRole` expected | `Federated: arn:aws:iam::882820282590:oidc-provider/oidc.vercel.com/`**`pulsetrade`** |
+| `ContentBrokerRole` actual | `Federated: arn:aws:iam::882820282590:oidc-provider/oidc.vercel.com/`**`buildit-agentic-review`** |
+
+The stack also records its `VercelOidcProvider` resource as the Pulsetrade provider, and both providers
+exist in the account. `infra/aws/artifacts.yaml` now defaults `VercelTeamSlug` to
+`buildit-agentic-review`, but the stack was created before that and never passed the parameter, so the
+stack's stored template still describes the Pulsetrade identity.
+
+**The live security posture is correct.** The role trusts the right provider, that provider's `Url` and
+`ClientIDList` verify, and every other assertion in `verifyBrokerTrust` passes. The broker works.
+
+**The hazard is the next deploy.** `aws cloudformation deploy` on this stack would reconcile
+`ContentBrokerRole` back to the stored template and point its trust at `oidc.vercel.com/pulsetrade`.
+The broker would then be unable to assume the role, every artifact read and write would fail, and
+every review would fail at the execution boundary. The symptom would look like an AWS outage.
+
+> **Do not run `aws cloudformation deploy` on `buildit-production-artifacts` until this is resolved.**
+> `infra/aws/README.md` step 3 tells an operator to deploy with the correct team names, which is the
+> right instruction and will produce exactly this failure on a stack whose stored template disagrees.
+
+**Remediation options, none of them applied here because this is live production auth:**
+
+1. **Resource import** (safest). Import the existing `oidc.vercel.com/buildit-agentic-review` provider
+   into the stack in place of the Pulsetrade one, then update with the current template so stored and
+   live agree. Nothing is created or deleted, so the broker never loses its trust.
+2. **Change set, reviewed before execution.** Create a change set with
+   `VercelTeamSlug=buildit-agentic-review` and read it. Expect it to want to *replace* the OIDC
+   provider; since the target provider already exists, the create will likely fail with
+   `EntityAlreadyExists` rather than silently succeed. Do not execute a change set that proposes
+   deleting the provider the broker is using.
+3. **Recreate deliberately, with a window.** Delete the orphaned Pulsetrade provider, update the
+   stack, and accept that the broker cannot assume the role until the new provider exists. This
+   breaks reviews for the duration and is only acceptable with nothing in flight.
+
+Option 1 is the recommendation. Whichever is chosen, re-run `pnpm smoke:aws-boundary` afterwards: the
+gate now has credentials and will say whether stored and live agree.
+
+**Why no test caught it.** The gate was written to catch exactly this and could not run — the CI step
+warns and exits 0 without credentials, which `docs/operations/ci-gates.md` records and argues for.
+A gate that cannot run is indistinguishable from a gate that passes, which is the same shape as the
+four unsubscribed webhook handlers above and the Grafana rule drift before them. It is not a
+coincidence that all three were found in the same week by giving each gate its credential.
