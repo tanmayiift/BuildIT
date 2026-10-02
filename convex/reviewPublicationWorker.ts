@@ -5,7 +5,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { GitHubAppClient, GitHubRepositoryWriter, inlineCommentMarker, reviewCommentMarker, sideEffectKey } from "@buildit/github";
-import { demotedByLearning, neverMergedSentence, selectInlineFindings } from "@buildit/orchestrator";
+import { demotedByLearning, neverMergedSentence, safe, selectInlineFindings } from "@buildit/orchestrator";
 import { issueArtifactGrant } from "@buildit/security";
 import { platformFailureReport, type PlatformFailureReason } from "./lib/platformFailureReport";
 
@@ -65,10 +65,22 @@ async function publishInlineFindings(scope: Scope, token: string, feedback: Read
     if (demoted > 0) console.info("buildit_learning_demoted", { demoted });
     const findings = selectInlineFindings(surviving as Array<Record<string, unknown> & { severity: string; blocking?: boolean; resolution?: string }>, scope.reviewProfile)
 
+      // safe() per field, and before the join rather than after: it collapses whitespace, so running
+      // it over the joined string would flatten the paragraph break between explanation and impact.
+      // The summary comment has always been hardened this way; these three fields are the same model
+      // prose, derived from repository content an outside contributor can influence, posted under
+      // BuildIT's verified App identity - which is what makes an unescaped markdown link in them a
+      // usable phishing surface rather than a cosmetic bug. `path` is deliberately not passed
+      // through safe(): GitHub matches it against the diff, so it is validated in
+      // GitHubRepositoryWriter.publishInlineFindings and the finding is skipped if it fails.
       .map(item => ({ id: String(item.id), path: String(item.path), startLine: Number(item.startLine), endLine: Number(item.endLine),
         severity: String(item.severity ?? "warning"),
-        title: String(item.title ?? "Finding"),
-        body: [item.explanation, item.impact].filter(text => typeof text === "string" && text).join("\n\n") || "See the review summary for detail." }));
+        title: safe(String(item.title ?? "Finding")) || "Finding",
+        body: [item.explanation, item.impact]
+          .filter(text => typeof text === "string" && text)
+          .map(text => safe(String(text)))
+          .filter(text => text)
+          .join("\n\n") || "See the review summary for detail." }));
     if (!findings.length) return;
     const writer = new GitHubRepositoryWriter({ repositoryId: scope.githubRepositoryId, installationToken: token });
     await writer.publishInlineFindings({ prNumber: scope.prNumber, headSha: scope.headSha,

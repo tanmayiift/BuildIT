@@ -124,6 +124,12 @@ export class GitHubRepositoryWriter {
       // No line, no anchor. Guessing a position puts BuildIT's name on the wrong code.
       if (!finding.path || !Number.isInteger(finding.startLine) || finding.startLine < 1
         || !Number.isInteger(finding.endLine) || finding.endLine < finding.startLine) { skipped += 1; continue; }
+      // The path is the one field that must NOT be escaped - GitHub matches it against the diff, so
+      // escaping it would break the anchor and the comment would land nowhere. It is model output
+      // derived from repository content, so it is validated instead: anything carrying traversal, a
+      // newline, a backtick or markdown punctuation is refused rather than interpolated. A finding
+      // whose own path is untrustworthy is not worth anchoring.
+      if (!/^[\w./-]{1,500}$/.test(finding.path) || finding.path.includes("..")) { skipped += 1; continue; }
       const body = [`<!-- ${input.marker}:${finding.id} -->`, `**${finding.severity}** — ${finding.title}`, "", finding.body].join("\n");
       comments.push({ path: finding.path, side: "RIGHT", body,
         ...(finding.endLine > finding.startLine ? { start_line: finding.startLine, start_side: "RIGHT", line: finding.endLine } : { line: finding.startLine }) });

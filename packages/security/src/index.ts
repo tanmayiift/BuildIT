@@ -64,10 +64,12 @@ export function redact(input:string){return secretPatterns.reduce((value,pattern
 // finding cites.
 export function redactForModel(input:string){return secretPatterns.reduce((value,pattern)=>value.replace(pattern,match=>"[REDACTED]"+"\n".repeat((match.match(/\n/g)??[]).length)),input)}
 export function fingerprint(value:string,key:Buffer){return createHmac("sha256",key).update(value).digest("hex")}
-// The GitHub egress boundary is report.ts:safe, which redacts and escapes Markdown link syntax.
-// This helper remains for any other path that writes GitHub-rendered content; it must never be
-// the only thing standing between model output and a public comment.
-export function sanitizeGitHub(input:string){return redact(input).replace(/@/g,"＠").replace(/<img[^>]*>/gi,"").replace(/<script[\s\S]*?<\/script>/gi,"")}
+// sanitizeGitHub lived here, "for any other path that writes GitHub-rendered content", and was
+// called from nowhere but its own test while the one path that needed it - inline finding comments -
+// posted raw model prose for months. A weaker helper kept beside a stronger one, used by neither,
+// does not protect anything; it invites the next person to reach for it and believe they are
+// covered. Every GitHub egress now goes through report.ts:safe, which also escapes Markdown link
+// punctuation and strips every tag rather than two named ones.
 export { AwsKmsClient } from "./aws-kms.js";
 export * from "./artifact-grant.js";
 export * from "./model-grant.js";
