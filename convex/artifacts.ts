@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireRepositoryRole } from "./lib/authz";
+import { storageStateOf } from "./lib/artifactState";
 
 export const getMetadata = query({
   args: { artifactId: v.id("artifacts") },
@@ -16,7 +17,7 @@ export const getMetadata = query({
     }
     return {
       id: artifact._id, type: artifact.type, size: artifact.size,
-      redactionStatus: artifact.redactionStatus, expiresAt: artifact.expiresAt,
+      storageState: storageStateOf(artifact), expiresAt: artifact.expiresAt,
       deletedAt: artifact.deletedAt,
     };
   },

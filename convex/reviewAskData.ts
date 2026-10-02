@@ -4,6 +4,7 @@ import { provider } from "./validators";
 import { toMicros } from "./lib/usageCost";
 import { addEstimatedCharge } from "./lib/budgetAccounting";
 import { conservativeProviderModelCost } from "@buildit/providers";
+import { isStored } from "./lib/artifactState";
 
 
 // Everything an answer may be grounded in, and nothing more. The report artifact is the whole of
@@ -36,7 +37,7 @@ export const askScope = internalQuery({
     if (!credential) return null;
 
     const artifacts = await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
-    const report = artifacts.find(item => item.type === "review_message" && item.redactionStatus === "redacted" && !item.deletedAt
+    const report = artifacts.find(item => item.type === "review_message" && isStored(item) && !item.deletedAt
       && item.organizationId === args.organizationId && item.expiresAt > args.now);
 
     return {

@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internalQuery } from "./_generated/server";
 import { requireRepositoryRole } from "./lib/authz";
+import { isStored } from "./lib/artifactState";
 
 export const findingDetailScope = internalQuery({
   args: { reviewId: v.id("reviews") },
@@ -9,7 +10,7 @@ export const findingDetailScope = internalQuery({
     if (!review) throw new ConvexError("not_found_or_forbidden");
     await requireRepositoryRole(ctx, review.repositoryId, "viewer", review.organizationId);
     const artifacts = await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
-    const analysis = artifacts.find(item => item.type === "prompt_trace" && item.redactionStatus === "redacted" && !item.deletedAt && item.storageKey.endsWith("/analysis.json"));
+    const analysis = artifacts.find(item => item.type === "prompt_trace" && isStored(item) && !item.deletedAt && item.storageKey.endsWith("/analysis.json"));
     if (!analysis || analysis.organizationId !== review.organizationId || analysis.repositoryId !== review.repositoryId || analysis.reviewId !== review._id) throw new ConvexError("finding_detail_unavailable");
     return {
       organizationId: review.organizationId,

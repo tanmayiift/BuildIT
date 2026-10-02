@@ -7,6 +7,7 @@ import { computeReviewDecision } from "@buildit/contracts";
 import { assertReviewParent } from "./lib/parentConsistency";
 import { recordReviewMetric } from "./lib/recordMetric";
 import { queueReviewNotification } from "./lib/queueNotification";
+import { isPending, isStored } from "./lib/artifactState";
 
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
 const hash = v.string();
@@ -18,9 +19,9 @@ export const validationScope = internalQuery({
     if (!organization || organization.deletedAt) throw new ConvexError("organization_unavailable");
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
     const artifacts = (await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect());
-    const contexts = artifacts.filter(item => item.type === "repository_snapshot" && item.redactionStatus === "redacted" && !item.deletedAt).sort((a, b) => a.storageKey.localeCompare(b.storageKey));
+    const contexts = artifacts.filter(item => item.type === "repository_snapshot" && isStored(item) && !item.deletedAt).sort((a, b) => a.storageKey.localeCompare(b.storageKey));
     if (!contexts.length || contexts.some(item => item.organizationId !== args.organizationId || item.repositoryId !== review.repositoryId)) throw new ConvexError("review_context_unavailable");
-    const completed = artifacts.find(item => item.type === "command_output" && item.redactionStatus === "redacted" && item.storageKey.endsWith("/validation.json"));
+    const completed = artifacts.find(item => item.type === "command_output" && isStored(item) && item.storageKey.endsWith("/validation.json"));
     return { organizationId: review.organizationId, repositoryId: review.repositoryId, reviewId: review._id, headSha: review.headSha, baseSha: review.baseSha,
       configRevisionId: review.configRevisionId, runnerImageVersion: review.runnerImageVersion, expiresAt: review.expiresAt,
       ...(completed ? { completedArtifactId: completed._id } : {}), contexts: contexts.map(item => ({ id: item._id, storageKey: item.storageKey, checksum: item.checksum, size: item.size })) };
@@ -36,7 +37,7 @@ export const reserveOutput = internalMutation({
     const prior = (await ctx.db.query("artifacts").withIndex("by_review", q => q.eq("reviewId", review._id)).collect()).find(item => item.type === "command_output" && item.storageKey.endsWith("/validation.json"));
     if (prior) { if (prior.checksum !== args.checksum || prior.size !== args.size) throw new ConvexError("validation_artifact_conflict"); return { artifactId: prior._id, storageKey: prior.storageKey }; }
     const artifactId = await ctx.db.insert("artifacts", { organizationId: args.organizationId, repositoryId: review.repositoryId, reviewId: review._id,
-      type: "command_output", storageKey: "pending", encrypted: true, checksum: args.checksum, size: args.size, redactionStatus: "pending",
+      type: "command_output", storageKey: "pending", encrypted: true, checksum: args.checksum, size: args.size, storageState: "pending",
       expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000), deletionAttempts: 0 });
     const storageKey = `artifacts/${args.organizationId}/${review.repositoryId}/${review._id}/${artifactId}/validation.json`;
     await ctx.db.patch(artifactId, { storageKey });
@@ -61,9 +62,9 @@ export const completeValidation = internalMutation({
     if (!args.summaries.length || args.summaries.length > 16) throw new ConvexError("validation_summary_invalid");
     for (const item of args.summaries) if (!/^[0-9a-f]{40}$/.test(item.commitSha) || !/^[0-9a-f]{64}$/.test(item.commandFingerprint) || !/^[0-9a-f]{64}$/.test(item.nameHash) || (item.executionFingerprint&&!/^[0-9a-f]{64}$/.test(item.executionFingerprint)) || (item.outputHash&&!/^[0-9a-f]{64}$/.test(item.outputHash)) || !Number.isInteger(item.durationMs) || item.durationMs < 0 || item.durationMs > 240_000 || (item.revision === "base" ? review.baseSha : review.headSha) !== item.commitSha) throw new ConvexError("validation_summary_invalid");
     const existing = await ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
-    if (artifact.redactionStatus === "redacted" && existing.length) return artifact._id;
-    if (artifact.redactionStatus !== "pending") throw new ConvexError("validation_artifact_mismatch");
-    await ctx.db.patch(artifact._id, { redactionStatus: "redacted" });
+    if (isStored(artifact) && existing.length) return artifact._id;
+    if (!isPending(artifact)) throw new ConvexError("validation_artifact_mismatch");
+    await ctx.db.patch(artifact._id, { storageState: "stored" });
     for (const item of args.summaries) {
       await ctx.db.insert("checkRuns", { organizationId: args.organizationId, reviewId: review._id, kind: item.kind, nameHash: item.nameHash,
         required: item.required, status: "completed", conclusion: item.conclusion, commandFingerprint: item.commandFingerprint, commitSha: item.commitSha,
@@ -102,7 +103,7 @@ export const finalizeDecision = internalMutation({
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), organization = await ctx.db.get(args.organizationId), report = await ctx.db.get(args.reportArtifactId);
     if (!organization || organization.deletedAt) throw new ConvexError("organization_unavailable");
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
-    if (!report || report.organizationId !== args.organizationId || report.repositoryId !== review.repositoryId || report.reviewId !== review._id || report.type !== "review_message" || report.redactionStatus !== "redacted" || report.deletedAt || !report.storageKey.endsWith("/report.md")) throw new ConvexError("report_artifact_mismatch");
+    if (!report || report.organizationId !== args.organizationId || report.repositoryId !== review.repositoryId || report.reviewId !== review._id || report.type !== "review_message" || !isStored(report) || report.deletedAt || !report.storageKey.endsWith("/report.md")) throw new ConvexError("report_artifact_mismatch");
     if (["checks_passed", "changes_requested", "inconclusive"].includes(review.status) && review.statusReasonCode && review.completedAt) return { status: review.status, statusReasonCode: review.statusReasonCode, nextActionCode: review.nextActionCode };
     if (review.status !== "validating" || review.currentStage !== "analysis") throw new ConvexError("review_not_ready_for_decision");
     const runs = await ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
@@ -146,7 +147,7 @@ export const finalizeDecision = internalMutation({
       // never looked, so one review could land on checks_passed with a green check while its own
       // comment said complete evidence was not available.
       const evidenceComplete = Boolean(artifact) && artifact!.organizationId === args.organizationId && artifact!.reviewId === review._id
-        && artifact!.redactionStatus === "redacted" && !artifact!.deletedAt
+        && isStored(artifact!) && !artifact!.deletedAt
         && Boolean(check.credentialTeardownProved) && Boolean(check.sandboxStopped) && check.outputTruncated !== true;
       if (check.required) {
         if (!evidenceComplete) incompleteReason ??= "evidence_missing";

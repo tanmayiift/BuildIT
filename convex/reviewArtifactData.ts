@@ -4,6 +4,7 @@ import { assertReviewParent } from "./lib/parentConsistency";
 import { terminalStatuses } from "./lib/lifecycle";
 import { assertTrackerReviewActive, trackerCredentialPayload } from "./lib/trackerCredential";
 import { coverageGap } from "./validators";
+import { isPending, isStored } from "./lib/artifactState";
 
 export const contextScope = internalQuery({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
@@ -41,7 +42,7 @@ export const reserve = internalMutation({
     }
     const artifactId = await ctx.db.insert("artifacts", { organizationId: args.organizationId, repositoryId: review.repositoryId,
       reviewId: review._id, type: "repository_snapshot", storageKey: "pending", encrypted: true, checksum: args.checksum,
-      size: args.size, redactionStatus: "pending", expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000), deletionAttempts: 0 });
+      size: args.size, storageState: "pending", expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000), deletionAttempts: 0 });
     const storageKey = `artifacts/${args.organizationId}/${review.repositoryId}/${review._id}/${artifactId}/context-${args.revision}-${args.chunkIndex}.json`;
     await ctx.db.patch(artifactId, { storageKey });
     return { artifactId, repositoryId: review.repositoryId, reviewId: review._id, storageKey, expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000) };
@@ -62,9 +63,9 @@ export const complete = internalMutation({
       || terminalStatuses.has(review.status)) throw new ConvexError("stale_or_replaced_review");
     if (!artifact || artifact.organizationId !== args.organizationId || artifact.repositoryId !== review.repositoryId || artifact.reviewId !== review._id
       || artifact.type !== "repository_snapshot" || artifact.checksum !== args.checksum || artifact.size !== args.size) throw new ConvexError("artifact_completion_mismatch");
-    if (artifact.redactionStatus === "redacted") return artifact._id;
-    if (artifact.redactionStatus !== "pending") throw new ConvexError("artifact_completion_mismatch");
-    await ctx.db.patch(artifact._id, { redactionStatus: "redacted" });
+    if (isStored(artifact)) return artifact._id;
+    if (!isPending(artifact)) throw new ConvexError("artifact_completion_mismatch");
+    await ctx.db.patch(artifact._id, { storageState: "stored" });
     await ctx.db.patch(review._id, { status: "gathering_context", currentStage: "context", coverageLevel: args.coverage, coverageGap: args.coverageGap, unreadableSources: args.unreadableSources, changeSummary: args.changeSummary, configNote: args.configNote, updatedAt: args.now });
     return artifact._id;
   },
