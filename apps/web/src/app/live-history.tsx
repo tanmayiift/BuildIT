@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useConnection } from "./live-connections";
 import { reviewStatusLabel } from "./review-status";
 import { incompleteReasonLabel } from "./workspace-labels";
+import { Metric } from "./metric";
 
 const historyQuery = makeFunctionReference<"query",
   { organizationId: string; since: number; refreshKey: string },
@@ -93,14 +94,11 @@ export function LiveHistory() {
 
   return <>
     {Object.values(partial).some(Boolean) ? <p role="status">History is incomplete. Counts may omit older rows or extra findings, and provider costs may still be pending.</p> : null}
-    {/* .metric styles its children by element - span is the label, strong the figure, small the
-        detail - so the order here matches live-metrics-usage.tsx rather than inventing a second
-        metric system with no responsive rules of its own. */}
     <section className="metric-line" aria-label="Review totals for the last 30 UTC calendar days">
-      <div className="metric"><span>Review attempts</span><strong>{partial.reviews ? "At least " : ""}{totals.reviews}</strong><small>{totals.automatic} started automatically</small></div>
-      <div className="metric"><span>Reached a verdict</span><strong>{totals.decisive}</strong><small>{totals.inconclusive} inconclusive, {totals.platformFailed} did not finish</small></div>
-      <div className="metric"><span>Recorded model cost</span><strong>{history.costPending && totals.costUsd === 0 ? "Pending" : `${partial.spend ? "At least " : ""}${money(totals.costUsd)}`}</strong><small>charges recorded during this period</small></div>
-      <div className="metric"><span>Finding occurrences judged</span><strong>{partial.feedback ? "Incomplete" : judged ? `${Math.round((totals.accepted / judged) * 100)}%` : "—"}</strong><small>{judged ? `${totals.accepted} accepted, ${totals.dismissed} dismissed` : partial.feedback ? "feedback rows omitted" : "no feedback yet"}</small></div>
+      <Metric title="Review attempts" value={<>{partial.reviews ? "At least " : ""}{totals.reviews}</>} detail={`${totals.automatic} started automatically`} />
+      <Metric title="Reached a verdict" value={totals.decisive} detail={`${totals.inconclusive} inconclusive, ${totals.platformFailed} did not finish`} />
+      <Metric title="Recorded model cost" value={history.costPending && totals.costUsd === 0 ? "Pending" : `${partial.spend ? "At least " : ""}${money(totals.costUsd)}`} detail="charges recorded during this period" />
+      <Metric title="Finding occurrences judged" value={partial.feedback ? "Incomplete" : judged ? `${Math.round((totals.accepted / judged) * 100)}%` : "—"} detail={judged ? `${totals.accepted} accepted, ${totals.dismissed} dismissed` : partial.feedback ? "feedback rows omitted" : "no feedback yet"} />
     </section>
 
     {totals.reviews > 0 ? <section className="verdict-mix" aria-labelledby="verdict-mix-title">

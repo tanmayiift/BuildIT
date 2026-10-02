@@ -2,7 +2,6 @@ import "@fontsource-variable/manrope/wght.css";
 import "@fontsource-variable/jetbrains-mono/wght.css";
 import "./globals.css";
 import "./mobile.css";
-import "./account.css";
 import "./flows.css";
 import { Suspense, type ReactNode } from "react";
 import { ConvexClientProvider } from "./convex-client-provider";

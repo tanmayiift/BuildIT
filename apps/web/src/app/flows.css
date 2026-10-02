@@ -29,10 +29,10 @@
 .repository-policy{display:grid;gap:4px}.repository-policy>span{color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase}.repository-policy strong{font-size:12px}.repository-policy small{color:var(--muted);font-size:9px;line-height:1.35}
 .repository-policy-select{width:100%;min-height:44px;padding:0 34px 0 11px;color:var(--ink);background-color:var(--workbench);border:1px solid var(--line-strong);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer}.repository-policy-select:focus-visible{outline:3px solid var(--navy-soft);outline-offset:1px;border-color:var(--navy)}.repository-policy-select:disabled{color:var(--faint);cursor:wait}
 .repository-review-state{display:grid;gap:6px;justify-items:start}.repository-review-state .button{min-width:116px}.repository-review-state .status{font-size:9px}
-.repository-actions{display:flex;align-items:center;min-height:44px}.repository-actions .action{white-space:nowrap}
+.repository-actions{display:flex;align-items:center;min-height:44px}.repository-actions .button{white-space:nowrap}
 .access-row small{margin-left:auto;color:var(--muted);font-size:10px;text-align:right}
 .integration-card[data-connected]{box-shadow:inset 3px 0 0 var(--success)}
-.integration-card .action-primary{color:var(--ink-inverse)}.integration-card .action-secondary,.integration-card .action-tertiary{color:var(--navy)}
+.integration-card .button{color:var(--ink-inverse)}.integration-card .button.secondary,.integration-card .button.tertiary{color:var(--navy)}
 /* The connections page collapse band. .repository-row declares 280+570 + 24 gap + 2x18 padding
    = 910px and .connection-overview at least 240+460 + 48 gap + 40 padding plus the min-content
    of its .button-row, but inner width is only viewport - 316, so 1100px left the whole document
@@ -45,8 +45,8 @@
    is the same answer the 760px block already gives, applied at the width where the arithmetic
    actually breaks. 961px keeps two columns on 961-316-15=630 >= 604. */
 @media(max-width:960px){.connection-overview{grid-template-columns:1fr;gap:16px}.connection-facts{grid-template-columns:repeat(2,1fr);border-top:1px solid var(--line);border-left:0;padding-top:12px}.connection-facts span{padding:6px 10px}}
-@media(max-width:760px){.connection-hero{align-items:flex-start;flex-direction:column}.connection-overview{grid-template-columns:1fr;gap:16px}.connection-facts{grid-template-columns:repeat(2,1fr);border-top:1px solid var(--line);border-left:0;padding-top:12px}.connection-facts span{padding:6px 10px}.connection-overview>.button-row{grid-column:auto}.repository-row{grid-template-columns:1fr;gap:16px}.repository-control-group{grid-template-columns:1fr}.repository-review-state{grid-template-columns:1fr auto;align-items:center}.repository-review-state .button{min-width:108px}.repository-actions{justify-content:flex-start}.repository-actions .action{padding-left:0}}
-@media(max-width:480px){.connection-facts{grid-template-columns:1fr}.connection-overview>.button-row{width:100%}.repository-review-state{grid-template-columns:1fr}.repository-review-state .button{width:100%}.repository-actions .action{width:100%;justify-content:flex-start}}
+@media(max-width:760px){.connection-hero{align-items:flex-start;flex-direction:column}.connection-overview{grid-template-columns:1fr;gap:16px}.connection-facts{grid-template-columns:repeat(2,1fr);border-top:1px solid var(--line);border-left:0;padding-top:12px}.connection-facts span{padding:6px 10px}.connection-overview>.button-row{grid-column:auto}.repository-row{grid-template-columns:1fr;gap:16px}.repository-control-group{grid-template-columns:1fr}.repository-review-state{grid-template-columns:1fr auto;align-items:center}.repository-review-state .button{min-width:108px}.repository-actions{justify-content:flex-start}.repository-actions .button{padding-left:0}}
+@media(max-width:480px){.connection-facts{grid-template-columns:1fr}.connection-overview>.button-row{width:100%}.repository-review-state{grid-template-columns:1fr}.repository-review-state .button{width:100%}.repository-actions .button{width:100%;justify-content:flex-start}}
 .sample-route-note {
   display: flex;
   align-items: center;
