@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
 import { describe, expect, it } from "vitest";
 import schema from "./schema";
+import { publishableAsEvidence } from "./publicProof";
 
 const modules = import.meta.glob("./**/*.ts");
 
@@ -14,6 +15,61 @@ type Proof = {
   spend: { modelSpendUsd: number; modelTokens: number; counted: number; truncated: boolean };
 };
 const proofSummary = makeFunctionReference<"query", Record<string, never>, Proof>("publicProof:summary");
+
+type PublicReviews = {
+  repositoriesListed: number;
+  reviews: Array<{ owner: string; name: string; prNumber: number; status: string; completedAt: number }>;
+};
+const publicReviews = makeFunctionReference<"query", Record<string, never>, PublicReviews>("publicProof:recentPublicReviews");
+
+// recentPublicReviews is the one unauthenticated function that returns a repository name, so it is
+// the one with a disclosure surface - and it had no test at all. Six pull requests from two
+// repositories that were private on GitHub were being served from it in production, because its
+// gate read `repositories.visibility`, a column written only when access was granted and which no
+// code path could correct afterwards. These cases pin the four conditions that replaced it.
+const hour = 60 * 60_000;
+async function seedEvidenceRepository(
+  t: ReturnType<typeof convexTest>,
+  slug: string,
+  owner: string,
+  row: { publishAsEvidence?: boolean; visibility: "public" | "private"; visibilityVerifiedAt?: number },
+  now: number,
+) {
+  return t.run(async (ctx) => {
+    const organizationId = await ctx.db.insert("organizations", { name: slug, slug, timezone: "UTC", region: "eu-west-1",
+      retentionHours: 24, monthlyBudget: 100, concurrencyLimit: 2, planId: "test", fingerprintKeyVersion: 1, createdAt: now });
+    const installationId = await ctx.db.insert("githubInstallations", { organizationId, installationId: Math.floor(Math.random() * 1_000_000),
+      accountLogin: owner, accountType: "user", permissionSnapshot: { metadata: "read", contents: "read", pullRequests: "write", issues: "read", checks: "write" },
+      status: "active", createdAt: now, updatedAt: now });
+    const repositoryId = await ctx.db.insert("repositories", { organizationId, installationId,
+      githubRepositoryId: Math.floor(Math.random() * 1_000_000), owner, name: `${slug}-repo`, defaultBranch: "main",
+      visibility: row.visibility, enabled: true, autofixMode: "stacked", forkPolicy: "manual_review_only",
+      indexState: "not_started", concurrencyLimit: 1,
+      ...(row.publishAsEvidence === undefined ? {} : { publishAsEvidence: row.publishAsEvidence }),
+      ...(row.visibilityVerifiedAt === undefined ? {} : { visibilityVerifiedAt: row.visibilityVerifiedAt }),
+      createdAt: now, updatedAt: now });
+    const configArtifactId = await ctx.db.insert("artifacts", { organizationId, repositoryId, type: "configuration",
+      storageKey: `${slug}/config`, encrypted: true, checksum: "c".repeat(64), size: 1, redactionStatus: "redacted",
+      expiresAt: now + hour, deletionAttempts: 0 });
+    const configRevisionId = await ctx.db.insert("configRevisions", { organizationId, repositoryId,
+      sourceCommitSha: "b".repeat(40), sourceRef: "main", configArtifactId, contentHash: "d".repeat(64),
+      rulesDigest: "d".repeat(64), schemaVersion: "defaults-v1", validationState: "valid", provenance: "defaults_only",
+      refProtectionState: "unverified", createdAt: now });
+    await ctx.db.insert("reviews", {
+      organizationId, repositoryId, githubRepositoryId: 1, prNumber: 7, isFork: false,
+      baseRef: "main", baseSha: "b".repeat(40), headSha: "a".repeat(40), requiredCheckPolicy: "advisory",
+      completedRoundCount: 0, patchAttemptCount: 0, diagnosticRunCount: 0, providerRetryCount: 0, commandRetryCount: 0,
+      trigger: "dashboard", triggerVerb: "review", triggerActor: "octocat", triggerActorPermission: "admin",
+      mode: "review", status: "checks_passed", budgetLimit: 10, budgetConsumed: 0, nextActionCode: "none",
+      isStale: false, trustedRef: "main", trustedRefSha: "b".repeat(40), configRevisionId,
+      configProvenance: "defaults_only", provider: "anthropic", model: "test-model", modelVersion: "test",
+      promptVersion: "test", evalSetVersion: "test", coverageLevel: "limited", currentStage: "complete",
+      runnerImageVersion: "test", executionGeneration: 0, queuePriority: 0,
+      startedAt: now - 10_000, completedAt: now - 1_000, expiresAt: now + hour, createdAt: now, updatedAt: now,
+    });
+    return { organizationId, repositoryId };
+  });
+}
 
 // Deliberately identifiable. Every one of these strings is something a customer would recognise as
 // theirs, and the last assertion is that not one of them survives into the response.
@@ -147,5 +203,113 @@ describe("the public proof summary", () => {
     }
     // Convex document ids are 32-character base32-ish strings; none should survive either.
     expect(serialized).not.toMatch(/[a-z0-9]{25,}/);
+  });
+});
+
+// The query reads the by_evidence index and iterates the allow-list, so two of the four conditions
+// in publishableAsEvidence are never exercised through it - deleting either leaves every end-to-end
+// case green. That redundancy is worth keeping, but it means the predicate is the contract and has
+// to be pinned on its own, or a later change to how the query reads would silently remove a gate
+// nobody notices is gone.
+describe("publishableAsEvidence, condition by condition", () => {
+  const now = 1_790_000_000_000;
+  const fresh = { owner: "tanmayiift", visibility: "public", publishAsEvidence: true, visibilityVerifiedAt: now - 1_000 };
+
+  it("admits only a row satisfying all four", () => {
+    expect(publishableAsEvidence(fresh, now)).toBe(true);
+  });
+
+  it("refuses an absent or false opt-in", () => {
+    expect(publishableAsEvidence({ ...fresh, publishAsEvidence: undefined }, now)).toBe(false);
+    expect(publishableAsEvidence({ ...fresh, publishAsEvidence: false }, now)).toBe(false);
+  });
+
+  it("refuses an owner outside the allow-list", () => {
+    expect(publishableAsEvidence({ ...fresh, owner: "acme-corp" }, now)).toBe(false);
+  });
+
+  it("refuses anything GitHub does not report as public", () => {
+    for (const visibility of ["private", "internal", "unknown", undefined]) {
+      expect(publishableAsEvidence({ ...fresh, visibility }, now), String(visibility)).toBe(false);
+    }
+  });
+
+  it("refuses an unconfirmed, stale or nonsense confirmation", () => {
+    expect(publishableAsEvidence({ ...fresh, visibilityVerifiedAt: undefined }, now)).toBe(false);
+    expect(publishableAsEvidence({ ...fresh, visibilityVerifiedAt: now - 25 * 60 * 60_000 }, now)).toBe(false);
+    expect(publishableAsEvidence({ ...fresh, visibilityVerifiedAt: Number.NaN }, now)).toBe(false);
+    // A confirmation dated in the future is not evidence of freshness either; it still falls inside
+    // the window, which is the honest reading - the stamp moves only beside a real read.
+    expect(publishableAsEvidence({ ...fresh, visibilityVerifiedAt: now - 23 * 60 * 60_000 }, now)).toBe(true);
+  });
+});
+
+describe("the public evidence list publishes only what was chosen", () => {
+  // This is the production bug, reduced: a repository stored `public` with a completed review and no
+  // explicit opt-in was served to anonymous visitors. GitHub had made it private weeks earlier.
+  it("refuses a repository that was never opted in, however its visibility reads", async () => {
+    const t = convexTest(schema, modules);
+    const now = Date.now();
+    await seedEvidenceRepository(t, "unchosen", "tanmayiift", { visibility: "public", visibilityVerifiedAt: now }, now);
+    const result = await t.query(publicReviews, {});
+    expect(result.reviews, "an un-opted-in repository must not be published").toEqual([]);
+    expect(result.repositoriesListed).toBe(0);
+  });
+
+  it("refuses an opted-in repository whose visibility has not been confirmed recently", async () => {
+    const t = convexTest(schema, modules);
+    const now = Date.now();
+    await seedEvidenceRepository(t, "stale", "tanmayiift",
+      { publishAsEvidence: true, visibility: "public", visibilityVerifiedAt: now - 48 * hour }, now);
+    expect((await t.query(publicReviews, {})).reviews, "staleness must fail closed").toEqual([]);
+  });
+
+  it("refuses an opted-in repository that has never been confirmed at all", async () => {
+    const t = convexTest(schema, modules);
+    const now = Date.now();
+    await seedEvidenceRepository(t, "unconfirmed", "tanmayiift", { publishAsEvidence: true, visibility: "public" }, now);
+    expect((await t.query(publicReviews, {})).reviews).toEqual([]);
+  });
+
+  it("refuses an opted-in repository GitHub reports as private", async () => {
+    const t = convexTest(schema, modules);
+    const now = Date.now();
+    await seedEvidenceRepository(t, "private", "tanmayiift",
+      { publishAsEvidence: true, visibility: "private", visibilityVerifiedAt: now }, now);
+    expect((await t.query(publicReviews, {})).reviews).toEqual([]);
+  });
+
+  // The flag alone is not sufficient: a customer who somehow acquired it still is not BuildIT's own
+  // evidence account, and the allow-list is what says so.
+  it("refuses an opted-in repository owned by anyone outside the evidence allow-list", async () => {
+    const t = convexTest(schema, modules);
+    const now = Date.now();
+    await seedEvidenceRepository(t, "outsider", "acme-corp",
+      { publishAsEvidence: true, visibility: "public", visibilityVerifiedAt: now }, now);
+    expect((await t.query(publicReviews, {})).reviews).toEqual([]);
+  });
+
+  it("publishes a repository that satisfies all four conditions, and nothing else about it", async () => {
+    const t = convexTest(schema, modules);
+    const now = Date.now();
+    await seedEvidenceRepository(t, "chosen", "tanmayiift",
+      { publishAsEvidence: true, visibility: "public", visibilityVerifiedAt: now - hour }, now);
+    const result = await t.query(publicReviews, {});
+    expect(result.reviews).toHaveLength(1);
+    expect(result.reviews[0]).toMatchObject({ owner: "tanmayiift", name: "chosen-repo", prNumber: 7, status: "checks_passed" });
+    const serialized = JSON.stringify(result);
+    for (const value of ["organizationId", "headSha", "fingerprint", "triggerActor", "octocat", "a".repeat(40)]) {
+      expect(serialized, `${value} reached the public response`).not.toContain(value);
+    }
+  });
+
+  it("keeps an opted-in repository out when a second, un-opted-in one is also present", async () => {
+    const t = convexTest(schema, modules);
+    const now = Date.now();
+    await seedEvidenceRepository(t, "chosen", "tanmayiift",
+      { publishAsEvidence: true, visibility: "public", visibilityVerifiedAt: now }, now);
+    await seedEvidenceRepository(t, "unchosen", "tanmayiift", { visibility: "public", visibilityVerifiedAt: now }, now);
+    const names = (await t.query(publicReviews, {})).reviews.map(review => review.name);
+    expect(names).toEqual(["chosen-repo"]);
   });
 });

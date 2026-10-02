@@ -126,7 +126,11 @@ describe("what the query is allowed to return", () => {
   // Sliced per query, not per file. summary must name no repository at all; recentPublicReviews
   // exists to name a handful, under a much narrower rule, and asserting the two together would
   // either weaken summary's guarantee or make the second query impossible to write.
-  const listStart = whole.indexOf("export const recentPublicReviews");
+  // The boundary is the gate helper, not the query, because publishableAsEvidence is part of the
+  // evidence list and necessarily names `owner` and `visibility`. Slicing at the query itself put
+  // the helper inside summary's half and tripped summary's repository ban on a predicate that is
+  // not summary's.
+  const listStart = whole.indexOf("export function publishableAsEvidence");
   const code = whole.slice(0, listStart);
   const listCode = whole.slice(listStart);
   const returned = code.slice(code.indexOf("return {"));
@@ -167,11 +171,20 @@ describe("what the pull request list is allowed to name", () => {
     expect(listCode).not.toMatch(/require\w*Role|getAuthUserId|ctx\.auth/);
   });
 
-  it("names a repository only when it is public AND an account BuildIT publishes evidence from", () => {
-    // Both halves matter. Public alone would put a customer's open-source repository on this page
-    // because someone noticed it was world-readable, which is a disclosure they never agreed to.
-    expect(listCode).toContain('q.eq("owner", owner).eq("visibility", "public")');
-    expect(listCode).toContain("[...evidenceOwners].map(owner");
+  // What used to be here asserted the two source strings `q.eq("owner", owner).eq("visibility",
+  // "public")` and `[...evidenceOwners].map(owner`. Those assertions are gone because they pinned
+  // the implementation shape of a rule that was wrong: `repositories.visibility` is written only
+  // when access is granted, GitHub does not send installation_repositories on a visibility change,
+  // and so the column was a snapshot no code path could correct. The page served six pull requests
+  // from two repositories that had been made private. A test that asserts the text of a broken rule
+  // cannot survive fixing it.
+  //
+  // The replacement is behavioural and strictly stronger: convex/publicProof.test.ts seeds each
+  // condition and asserts the handler's actual output, and tests/architecture/public-evidence-boundary.test.ts
+  // pins the allow-list narrow. Checking that publication requires an explicit opt-in is all that
+  // belongs here.
+  it("names a repository only when it was explicitly chosen for publication", () => {
+    expect(listCode).toContain("publishableAsEvidence");
   });
 
   it("returns nothing derived from source, and no tenant or commit identifier", () => {

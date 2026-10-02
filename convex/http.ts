@@ -39,10 +39,19 @@ http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(a
       authorLogin: typeof (pullRequest as { user?: { login?: unknown } }).user?.login === "string" ? (pullRequest as { user: { login: string } }).user.login : "",
       merged: (pullRequest as { merged?: unknown }).merged === true,
       title: typeof (pullRequest as { title?: unknown }).title === "string" ? ((pullRequest as { title: string }).title).slice(0, 300) : undefined });
-  } else if (event === "installation_repositories" && typeof installation?.id === "number") {
+  } else if ((event === "installation_repositories" || event === "repository" || event === "public")
+    && typeof installation?.id === "number") {
     // Adding a repository in GitHub used to change nothing on BuildIT's side, so a customer could
     // grant access and watch it be ignored. The action re-lists rather than trusting
     // repositories_added/removed, so a retried or reordered delivery still converges.
+    //
+    // `repository` and `public` are here because installation_repositories is NOT sent when a
+    // repository changes visibility - GitHub sends `repository` with action privatized/publicized,
+    // and `public` when a private repository is opened up. Listening only for the first meant
+    // `repositories.visibility` was a snapshot from the moment access was granted with no path to
+    // converge, which is how two repositories that had been made private stayed stored as public
+    // and were published on an unauthenticated page. Re-listing is the same action in every case,
+    // so renames and transfers converge through it too.
     await ctx.scheduler.runAfter(0, internal.githubInstallations.syncRepositories, { installationId: installation.id });
     await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId, disposition: "processed", status: "completed", now: Date.now() });
   } else if (event === "push" && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof pushRef === "string" && typeof pushAfter === "string") {

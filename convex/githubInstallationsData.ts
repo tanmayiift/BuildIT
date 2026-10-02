@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import type { DatabaseWriter } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
@@ -38,14 +38,18 @@ export async function reconcileRepositories(
   for (const repo of args.repositories) {
     const stored = existing.find(item => item.githubRepositoryId === repo.githubRepositoryId);
     if (stored) {
+      // visibilityVerifiedAt moves only here and on the insert below - the same two statements that
+      // write `visibility` - so a confirmation timestamp cannot exist without a fresh read behind
+      // it. publicProof.publishableAsEvidence reads it as a freshness bound, which is only sound
+      // while that remains true: never stamp it anywhere else.
       await ctx.db.patch(stored._id, { owner: repo.owner, name: repo.name, defaultBranch: repo.defaultBranch,
-        visibility: repo.visibility ?? "unknown", enabled: true, updatedAt: args.now });
+        visibility: repo.visibility ?? "unknown", visibilityVerifiedAt: args.now, enabled: true, updatedAt: args.now });
       continue;
     }
     added += 1;
     await ctx.db.insert("repositories", { organizationId: args.organizationId, installationId: args.installationDocId,
       githubRepositoryId: repo.githubRepositoryId, owner: repo.owner, name: repo.name, defaultBranch: repo.defaultBranch,
-      visibility: repo.visibility ?? "unknown", enabled: true, autofixMode: "stacked",
+      visibility: repo.visibility ?? "unknown", visibilityVerifiedAt: args.now, enabled: true, autofixMode: "stacked",
       forkPolicy: "manual_review_only", indexState: "not_started", concurrencyLimit: 1,
       createdAt: args.now, updatedAt: args.now });
   }
@@ -89,5 +93,24 @@ export const syncInstallationRepositories = internalMutation({
       installationDocId: installation._id, repositories: args.repositories, now: args.now });
     await ctx.db.patch(installation._id, { updatedAt: args.now });
     return { synced: true as const, ...result };
+  },
+});
+
+// Which installations own a repository that may be published as evidence, so the freshness sweep
+// re-reads only those. Bounded like every other sweeper: this runs on a schedule and the number of
+// evidence repositories is small by design, so a page is plenty and an unbounded scan would be the
+// same defect this codebase has had to remove from other periodic paths.
+export const evidenceInstallations = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const repositories = await ctx.db.query("repositories")
+      .withIndex("by_evidence", q => q.eq("publishAsEvidence", true)).take(51);
+    const installationIds = new Set<Id<"githubInstallations">>();
+    for (const repository of repositories.slice(0, 50)) installationIds.add(repository.installationId);
+    const rows = await Promise.all([...installationIds].map(id => ctx.db.get(id)));
+    return {
+      truncated: repositories.length > 50,
+      installations: rows.flatMap(row => row && row.status === "active" ? [row.installationId] : []),
+    };
   },
 });

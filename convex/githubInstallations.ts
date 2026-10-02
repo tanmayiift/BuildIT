@@ -91,3 +91,24 @@ export const syncRepositories = internalAction({
     });
   },
 });
+
+// Re-read visibility for the handful of repositories allowed on the public evidence list, because a
+// confirmation older than publicProof's freshness window stops being publishable. Running on a
+// schedule rather than only on a webhook is deliberate: a dropped delivery is the failure this
+// whole page exists to refuse, and with the freshness bound a sweep that misses two runs empties
+// the list instead of publishing a stale row.
+export const refreshEvidenceVisibility = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ installations: number; truncated: boolean }> => {
+    const scope = await ctx.runQuery(internal.githubInstallationsData.evidenceInstallations, {});
+    for (const installationId of scope.installations) {
+      try {
+        await ctx.runAction(internal.githubInstallations.syncRepositories, { installationId });
+      } catch {
+        // One installation failing must not stop the rest, and a failure is self-correcting: the
+        // stamp simply does not move, so the row ages out of the window and stops being published.
+      }
+    }
+    return { installations: scope.installations.length, truncated: scope.truncated };
+  },
+});
