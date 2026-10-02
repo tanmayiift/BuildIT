@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:tenant-isolation": "playwright test --config playwright.tenant.config.ts",
+    "test:e2e:session": "playwright test --config playwright.session.config.ts",
     "eval": "vitest run packages/evaluations",
     "eval:gate": "pnpm --filter @buildit/evaluations build && node packages/evaluations/dist/src/cli.js",
     "eval:release": "pnpm --filter @buildit/evaluations build && node packages/evaluations/dist/src/releaseEvidenceCli.js",
