@@ -123,10 +123,10 @@ describe("the CloudFormation template is deployable", () => {
   });
 });
 
-// The live stack's stored template still describes Pulsetrade while the role trusts BuildIT, so any
-// update would act on that disagreement - and a read-only change set showed it would also modify the
-// KMS key and both bucket policies. The stack policy denies every update until someone overrides it
-// deliberately for one operation. scripts/verify-aws-boundary.mjs checks it is attached live; this
+// The stack's stored template described the previous Vercel team while the role trusted BuildIT's,
+// until it was reconciled on 3 October 2026 one step at a time. The stack policy still denies every
+// update, so the next change is also a deliberate, single-operation override rather than a deploy
+// that acts on whatever the template says. scripts/verify-aws-boundary.mjs checks it is attached live; this
 // checks the committed copy still says what the live one does.
 describe("the stack is protected against an accidental update", () => {
   const policy = JSON.parse(readFileSync(fileURLToPath(new URL("../../infra/aws/stack-policy.json", import.meta.url)), "utf8")) as {

@@ -26,12 +26,21 @@ Rules:
         AssertDescription: BuildIT source-derived artifacts and BYOK wrapping keys must remain in eu-west-1.
 
 Resources:
+  # Retained, never deleted: the content broker's role trusts this provider, so deleting it - by a
+  # removal from this template or a replacement on a URL change - would stop every review from
+  # reaching its artifacts. It was imported into the stack on 3 October 2026, replacing the record of
+  # the previous Vercel team's provider; docs/operations/known-defects.md has the history.
   VercelOidcProvider:
     Type: AWS::IAM::OIDCProvider
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Url: !Sub https://oidc.vercel.com/${VercelTeamSlug}
       ClientIdList:
         - !Sub https://vercel.com/${VercelTeamSlug}
+      # The live provider's thumbprint. Omitting it would make an update strip the list.
+      ThumbprintList:
+        - ab9d0263244dd0326eb67015705a667e79cfe998
       Tags:
         - Key: product
           Value: buildit
