@@ -328,6 +328,7 @@ export default defineSchema({
     // A failed test suite that ran too little to excuse as pre-existing; see testSuiteRanTooLittle.
     testSuiteFailing: v.optional(v.literal(true)),
     testCounts: v.optional(value.testCounts),
+    planId: v.optional(value.checkPlanId),
     failureClass: v.optional(value.failureClass), startedAt: v.number(), completedAt: v.optional(v.number()),
   }).index("by_review", ["reviewId"])
     .index("by_review_round", ["reviewId", "roundId"]),

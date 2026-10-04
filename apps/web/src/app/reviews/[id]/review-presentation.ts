@@ -17,6 +17,7 @@ export type CheckExecution = {
   notRunReason?: "no_lockfile";
   commitSha?: string;
   testSummary?: string;
+  planId?: string;
 };
 
 export type CheckSummary = CheckExecution & {
@@ -295,7 +296,7 @@ export function pairFindingDetails<Detail extends FindingKeyParts>(
 export function summarizeChecks(checks: CheckExecution[], headSha?: string): CheckSummary[] {
   const grouped = new Map<string, CheckExecution[]>();
   for (const check of checks) {
-    const key = `${check.kind}\u0000${check.required}`;
+    const key = `${check.planId ?? check.kind}\u0000${check.required}`;
     grouped.set(key, [...(grouped.get(key) ?? []), check]);
   }
   return [...grouped.values()].map((executions) => {
@@ -308,6 +309,7 @@ export function summarizeChecks(checks: CheckExecution[], headSha?: string): Che
       .join(", ");
     return {
       kind: first.kind,
+      ...(first.planId ? { planId: first.planId } : {}),
       required: first.required,
       conclusion: counts.size === 1 ? first.conclusion : "mixed",
       durationMs: executions.reduce((total, execution) => total + execution.durationMs, 0),
@@ -321,6 +323,15 @@ export function summarizeChecks(checks: CheckExecution[], headSha?: string): Che
 }
 
 export const technicalLabel = words;
+
+/** A check row's name. The runner files the dependency install under kind "build", so the kind alone
+ *  called it "Build" on every review; the planned step says what ran. Rows recorded before the step was
+ *  stored cannot tell an install from a trusted build check, and say so rather than guess. */
+export function checkLabel(check: { kind: string; planId?: string }) {
+  if (check.planId === "install") return "Dependency install";
+  if (check.kind === "build" && !check.planId) return "Dependency install or build";
+  return words(check.kind);
+}
 
 export function pullRequestHref(owner: string, name: string, prNumber: number) {
   if (!owner || !name || !Number.isSafeInteger(prNumber) || prNumber < 1) return undefined;
@@ -337,7 +348,7 @@ export function notRunExplanation(reason: "no_lockfile" | undefined) {
 // printed above a table showing them Required · Failed. Say what happened instead.
 export function preExistingFailurePresentation(status: string, checks: CheckSummary[]) {
   if (status !== "checks_passed") return undefined;
-  const failing = checks.filter(check => check.required && check.conclusion === "failed").map(check => words(check.kind).toLowerCase());
+  const failing = checks.filter(check => check.required && check.conclusion === "failed").map(check => checkLabel(check).toLowerCase());
   if (!failing.length) return undefined;
   const list = failing.join(", ");
   return {

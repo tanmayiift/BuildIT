@@ -91,6 +91,12 @@ export const reviewStage = v.union(
 // completed and its checksum was accepted. The real controls are KMS envelope encryption and expiry
 // within seven days, which /data-handling describes. "rejected" had no producer at all.
 export const storageState = v.union(v.literal("pending"), v.literal("stored"));
+// Which planned step a check run was. checkRuns stored only kind and a hash of this, and the runner
+// files the dependency install under kind "build" - so every review page labelled the install "Build"
+// although BuildIT never builds a project unless a trusted configuration adds that step.
+export const checkPlanIds = ["install", "test", "lint", "typecheck", "build", "gitleaks", "osv-scanner", "buildit-rules"] as const;
+export const checkPlanId = v.union(...checkPlanIds.map(id => v.literal(id)));
+export const isCheckPlanId = (value: string): value is (typeof checkPlanIds)[number] => (checkPlanIds as readonly string[]).includes(value);
 // What a test runner's own summary said, parsed at validation time; see withTestSuiteEvidence.
 export const testCounts = v.object({ passed: v.optional(v.number()), failed: v.optional(v.number()), filesPassed: v.optional(v.number()), filesFailed: v.optional(v.number()) });
 export const sourceType = v.union(v.literal("pull_request"), v.literal("github_issue"), v.literal("linear"), v.literal("jira"), v.literal("repository_document"), v.literal("test"));

@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { checkConclusion, checkKind, testCounts } from "./validators";
+import { checkConclusion, checkKind, isCheckPlanId, testCounts } from "./validators";
 import { blocksVerdict } from "./lib/coverageGate";
 import { computeReviewDecision } from "@buildit/contracts";
 import { assertReviewParent } from "./lib/parentConsistency";
@@ -75,6 +75,7 @@ export const completeValidation = internalMutation({
         ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}),
         ...(item.testSuiteFailing ? { testSuiteFailing: true as const } : {}),
         ...(item.testCounts ? { testCounts: item.testCounts } : {}),
+        ...(isCheckPlanId(item.planId) ? { planId: item.planId } : {}),
         ...(item.conclusion === "failed" ? { failureClass: "code" as const } : {}), startedAt: Math.max(0, args.now - item.durationMs), completedAt: args.now });
       if (item.revision === "base") {
         const cached = await ctx.db.query("baseResults").withIndex("by_full_cache_key", q => q.eq("repositoryId", review.repositoryId).eq("baseSha", review.baseSha).eq("commandFingerprint", item.commandFingerprint).eq("configRevisionId", review.configRevisionId).eq("runnerImageVersion", review.runnerImageVersion).eq("architecture", "linux-x64").eq("networkPolicyVersion", "deny-all-v1")).unique();
