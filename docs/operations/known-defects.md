@@ -379,9 +379,32 @@ send, which all three were. It now checks each one against the App's subscriptio
 installation events as always-delivered, and requires a handler for an unsubscribed event to be
 declared with what its absence costs. That list is currently empty, which is the point.
 
-## The artifact stack's stored template describes Pulsetrade; it is now update-protected
+## The artifact stack's stored template described Pulsetrade; it is now update-protected
 
-**Status: mitigated on 2 October 2026. The bookkeeping is still wrong, deliberately.**
+**Status: resolved on 3–4 October 2026.** `pnpm smoke:aws-boundary` passes (`oidcStackOwnership: matches`),
+drift detection reports every resource `IN_SYNC`, and the stack policy still denies every update.
+
+How it was done, one operation at a time, each previewed as a change set and checked against backups of
+the live trust, key and bucket policies taken beforehand:
+
+1. Update to the stored template with three changes only: `DeletionPolicy: Retain` on the provider, the
+   role trust as it already was live, and the key policy as it already was live. Rollback disabled, so a
+   failure could not restore the Pulsetrade trust. Every live policy stayed byte-identical.
+2. Remove `VercelOidcProvider` from the stack. Retained, so IAM kept it.
+3. Import `oidc.vercel.com/buildit-agentic-review` under that logical ID. Imports cannot take a one-time
+   stack policy override and the import's post-step applies stack tags, so the deny-all policy was swapped
+   for one allowing updates only to `AWS::IAM::OIDCProvider` resources for that operation, then restored.
+4. Update to `infra/aws/artifacts.yaml`, which now carries `Retain` and the live thumbprint so an update
+   cannot delete the provider or strip its thumbprint list.
+5. Delete the orphaned `oidc.vercel.com/pulsetrade` provider, after confirming no role trusted it.
+
+One thing the original audit missed: drift detection reported `BuildITKey` in sync while its live key
+policy matched the repo template rather than the stored one. KMS key-policy edits were invisible to it, so
+the key policy was compared directly, not trusted to drift detection.
+
+The record below is the state before the fix, kept because it explains why it was done this way.
+
+**Earlier status: mitigated on 2 October 2026. The bookkeeping is still wrong, deliberately.**
 
 `pnpm smoke:aws-boundary` ran for the first time on 2 October 2026 — no AWS credentials had ever been
 configured, so it had only ever warned and exited 0. It passed every check of the artifact data
