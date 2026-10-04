@@ -9,6 +9,7 @@ export const incompleteReasonLabels: Record<string, string> = {
   evidence_missing: "Required evidence was missing",
   injection_unscoped: "Instruction-like text could not be attributed to a changed file",
   no_required_check: "The repository defines no required check",
+  tests_need_lockfile: "The project's tests need a lockfile BuildIT did not find",
   uncertain_escalated: "A finding stayed unresolved after two passes",
   unknown: "The reason was not recorded",
 };

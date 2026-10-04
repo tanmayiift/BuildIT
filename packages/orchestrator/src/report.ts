@@ -41,7 +41,8 @@ function title(status: "changes_requested" | "inconclusive" | "checks_passed") {
   if (status === "checks_passed") return "Ready for human review";
   return "Review needs attention";
 }
-function nextStep(action: "start_new_review" | "retry_review" | "inspect_findings" | "human_merge" | "none") {
+function nextStep(action: "start_new_review" | "retry_review" | "inspect_findings" | "human_merge" | "add_lockfile" | "none") {
+  if (action === "add_lockfile") return "Commit a lockfile (package-lock.json, pnpm-lock.yaml or yarn.lock), then start a new review at that commit. Retrying without one cannot run the tests.";
   if (action === "human_merge") return "BuildIT found instruction-like text it could not attribute to a specific file, so it cannot be sure whose instructions it followed. Read the changes yourself before merging.";
   if (action === "inspect_findings") return "Inspect the evidence and decide what to change.";
   if (action === "start_new_review") return "The pull request changed. Start a new review at the current commit.";
@@ -94,7 +95,9 @@ export function composeVerifiedReport(input: { repository: string; prNumber: num
   const summary = problems
     || (decision.status === "checks_passed"
       ? `All ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"} passed with complete evidence${input.ecosystem === "none" ? ", and no test, lint or typecheck command was run because BuildIT recognised no package manager in this repository" : ""}`
-      : "Complete evidence was not available");
+      : decision.reason === "tests_need_lockfile"
+        ? "The project's tests did not run: package.json declares a test script, but there is no lockfile at this commit and BuildIT installs only from one. The scanners alone are not enough to call this pull request ready"
+        : "Complete evidence was not available");
 // A failing check produced one bolded table cell and nothing else - no output, no evidence - which
 // reads as a check nobody watches, advisory or not. The text was captured by the runner and
 // carried all the way to the report worker before being dropped. Cite the tail of it: the last

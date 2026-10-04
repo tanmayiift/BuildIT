@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { computeReviewDecision } from "@buildit/contracts";
 import { defaultExecutionPlans, VercelSandboxRunner, type CheckResult, type SandboxFactory, type SandboxLike } from "@buildit/runner";
-import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, summarizeExecution, type ExecutionResponse, type ScannerSummary } from "./validationEvidence";
+import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, summarizeExecution, untestableProjectExplanation, withUntestableProject, type ExecutionResponse, type ScannerSummary } from "./validationEvidence";
 
 describe("validation evidence", () => {
   it("requires the same unambiguous package manager on base and head", () => {
@@ -103,6 +103,18 @@ describe("a repository whose dependency manifest never arrived", () => {
     ...(unavailableScanners?.length ? { unavailableScanners } : {}), findings: [],
   });
 
+  // The runner timed nothing about the scanners, so every scanner check recorded 0 ms and the per-review
+  // sandbox ledger read 0 for a review that used thirteen seconds of sandbox.
+  it("times each scanner command it runs in the sandbox", async () => {
+    const runner = new VercelSandboxRunner(sandbox());
+    const common = { runtime: "node24" as const, revision: "base" as const, sandboxName: "buildit-timing", files: [{ path: "src/index.ts", content: "export {}" }], checks: [] };
+    await runner.runSegment({ ...common, segment: { stage: "prepare", index: 0 } });
+    const scanned = await runner.runSegment({ ...common, segment: { stage: "scanners", index: 0 } }) as { gitleaksDurationMs?: number; osvDurationMs?: number };
+    expect(typeof scanned.gitleaksDurationMs).toBe("number");
+    expect(typeof scanned.osvDurationMs).toBe("number");
+    expect(scanned.gitleaksDurationMs!).toBeGreaterThanOrEqual(0);
+  });
+
   it("reports the dependency audit as advisory and still reaches a verdict", async () => {
     const baseSha = "a".repeat(40), headSha = "b".repeat(40);
     // No manager was detected, so reviewValidationWorker sends no install and no checks - and the
@@ -129,3 +141,63 @@ describe("a repository whose dependency manifest never arrived", () => {
     expect(summaries.filter(item => item.revision === "head" && item.required).map(item => item.planId).sort()).toEqual(["buildit-rules", "gitleaks"]);
   });
 });
+
+// buildit-demo-p-queue#2 on 4 October 2026: package.json has a test script, there is no lockfile, so no
+// package manager was detected and only the scanners ran. The verdict read "All required checks
+// passed" for a project whose own test suite never ran. These hold the fix end to end, from the
+// broker's response to the verdict, through the same functions the worker and the report use.
+describe("a project whose declared tests cannot run", () => {
+  const baseSha = "a".repeat(40), headSha = "b".repeat(40);
+  const scanners = (commitSha: string, durations?: [number, number, number]): ScannerSummary => ({
+    scanner: "builditRules", scannerVersion: "combined", commitSha, complete: true,
+    runs: [{ scanner: "builditRules", scannerVersion: "1.0.0", ...(durations ? { durationMs: durations[0] } : {}) },
+      { scanner: "gitleaks", scannerVersion: "8.28.0", ...(durations ? { durationMs: durations[1] } : {}) },
+      { scanner: "osvScanner", scannerVersion: "2.2.3", ...(durations ? { durationMs: durations[2] } : {}) }],
+    unavailableScanners: ["osvScanner"], findings: [],
+  });
+  const scannerOnly = (durations?: [number, number, number]): ExecutionResponse => ({
+    base: { credentialTeardownProved: true, stopped: true, results: [], outputs: [] },
+    head: { credentialTeardownProved: true, stopped: true, results: [], outputs: [] },
+    scanners: { base: scanners(baseSha, durations), head: scanners(headSha, durations) },
+  });
+  const decide = (output: ExecutionResponse) => computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [],
+    checks: summarizeExecution(output, baseSha, headSha).filter(item => item.revision === "head").map(item => ({ name: item.planId, required: item.required,
+      conclusion: item.conclusion, evidenceComplete: true, ...("notRunReason" in item && item.notRunReason ? { notRunReason: item.notRunReason } : {}) })) });
+
+  it("was a plain pass on the scanners alone, which is the defect", () => {
+    expect(decide(scannerOnly()).status).toBe("checks_passed");
+  });
+
+  it("is inconclusive with a reason that points at the lockfile, not at a retry", () => {
+    const decision = decide(withUntestableProject(scannerOnly(), "no_lockfile"));
+    expect(decision).toMatchObject({ status: "inconclusive", reason: "tests_need_lockfile", nextAction: "add_lockfile", missingChecks: ["test"] });
+  });
+
+  it("records the not-run test on both commits, with its reason, in the evidence checkRuns is built from", () => {
+    const environment = { configRevision: "cfg-1", runnerImage: `runner@sha256:${"c".repeat(64)}`, runtime: "node24" as const, manager: "none" as const,
+      architecture: "linux-x64", networkPolicy: "deny-all-v1", toolVersions: [{ name: "node", version: "24" }], checks: [] };
+    const paired = pairExecutionEvidence(withUntestableProject(scannerOnly(), "no_lockfile"), baseSha, headSha, environment);
+    const tests = paired.summaries.filter(item => item.planId === "test");
+    expect(tests.map(item => [item.revision, item.required, item.conclusion, "notRunReason" in item ? item.notRunReason : undefined]))
+      .toEqual([["base", true, "not_run", "no_lockfile"], ["head", true, "not_run", "no_lockfile"]]);
+  });
+
+  it("says why in the output the report and the review page read", () => {
+    const output = withUntestableProject(scannerOnly(), "no_lockfile");
+    expect(output.head.outputs.find(item => item.planId === "test")?.text).toBe(untestableProjectExplanation);
+    expect(untestableProjectExplanation).toMatch(/lockfile/);
+    expect(untestableProjectExplanation).toMatch(/did not run/);
+  });
+
+  it("leaves a project without a reason untouched", () => {
+    const output = scannerOnly();
+    expect(withUntestableProject(output, undefined)).toBe(output);
+  });
+
+  // The per-review sandbox ledger is the sum of check durations, and every scanner used to record 0.
+  it("records how long each scanner ran instead of 0", () => {
+    const head = summarizeExecution(scannerOnly([40, 3100, 2500]), baseSha, headSha).filter(item => item.revision === "head");
+    expect(Object.fromEntries(head.map(item => [item.planId, item.durationMs]))).toEqual({ "buildit-rules": 40, gitleaks: 3100, "osv-scanner": 2500 });
+  });
+});
+

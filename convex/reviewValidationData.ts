@@ -48,7 +48,7 @@ export const reserveOutput = internalMutation({
 const summary = v.object({ revision: v.union(v.literal("base"), v.literal("head")), commitSha: v.string(), planId: v.string(), kind: checkKind,
   required: v.boolean(), conclusion: checkConclusion, exitCode: v.optional(v.number()), durationMs: v.number(), commandFingerprint: hash, nameHash: hash,
   credentialTeardownProved: v.literal(true), sandboxStopped: v.literal(true), executionFingerprint:v.optional(hash),outputHash:v.optional(hash),outputTruncated:v.optional(v.boolean()),
-  scannerName:v.optional(v.string()),scannerVersion:v.optional(v.string()),regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))) });
+  scannerName:v.optional(v.string()),scannerVersion:v.optional(v.string()),regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))), notRunReason: v.optional(v.literal("no_lockfile")) });
 export const completeValidation = internalMutation({
   args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: hash, size: v.number(), summaries: v.array(summary), manager: v.union(v.literal("npm"), v.literal("pnpm"), v.literal("yarn"), v.literal("none")), now: v.number() },
   handler: async (ctx, args) => {
@@ -72,6 +72,7 @@ export const completeValidation = internalMutation({
         credentialTeardownProved: item.credentialTeardownProved, sandboxStopped: item.sandboxStopped,
         ...(item.executionFingerprint?{executionFingerprint:item.executionFingerprint}:{}),...(item.outputHash?{outputHash:item.outputHash}:{}),...(item.outputTruncated===undefined?{}:{outputTruncated:item.outputTruncated}),
         ...(item.scannerName?{scannerName:item.scannerName}:{}),...(item.scannerVersion?{scannerVersion:item.scannerVersion}:{}),...(item.regressionClassification?{regressionClassification:item.regressionClassification}:{}),
+        ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}),
         ...(item.conclusion === "failed" ? { failureClass: "code" as const } : {}), startedAt: Math.max(0, args.now - item.durationMs), completedAt: args.now });
       if (item.revision === "base") {
         const cached = await ctx.db.query("baseResults").withIndex("by_full_cache_key", q => q.eq("repositoryId", review.repositoryId).eq("baseSha", review.baseSha).eq("commandFingerprint", item.commandFingerprint).eq("configRevisionId", review.configRevisionId).eq("runnerImageVersion", review.runnerImageVersion).eq("architecture", "linux-x64").eq("networkPolicyVersion", "deny-all-v1")).unique();
@@ -120,7 +121,7 @@ export const finalizeDecision = internalMutation({
     // Record which condition made the evidence incomplete. Without this the review ends as a
     // flat "required check missing" and the real cause — partial context, a missing artifact,
     // a flaky rerun — is unrecoverable afterwards.
-    let incompleteReason: "injection_unscoped" | "uncertain_escalated" | "coverage_partial" | "no_required_check" | "evidence_missing" | "conclusion_unusable" | undefined;
+    let incompleteReason: "injection_unscoped" | "uncertain_escalated" | "coverage_partial" | "no_required_check" | "evidence_missing" | "conclusion_unusable" | "tests_need_lockfile" | undefined;
     // An injection signal that could not be attributed to a changed file downgraded every critic
     // decision to uncertain, which made blocking false, which landed the review on checks_passed
     // with a green check. The verdict has to fail closed: an unscoped signal means BuildIT does
@@ -151,12 +152,14 @@ export const finalizeDecision = internalMutation({
         && Boolean(check.credentialTeardownProved) && Boolean(check.sandboxStopped) && check.outputTruncated !== true;
       if (check.required) {
         if (!evidenceComplete) incompleteReason ??= "evidence_missing";
+        else if (check.notRunReason === "no_lockfile") incompleteReason ??= "tests_need_lockfile";
         else if (!["passed", "failed"].includes(check.conclusion)) incompleteReason ??= "conclusion_unusable";
       }
       // name only feeds computeReviewDecision's missingChecks list, which this caller does not use;
       // the hash is the only identifier a checkRuns row carries.
       decisionChecks.push({ name: check.nameHash, required: check.required, conclusion: check.conclusion,
-        evidenceComplete, ...(preExisting.has(check.nameHash) ? { preExisting: true } : {}) });
+        evidenceComplete, ...(preExisting.has(check.nameHash) ? { preExisting: true } : {}),
+        ...(check.notRunReason ? { notRunReason: check.notRunReason } : {}) });
     }
     // One derivation, at last. This function used to restate the entire ladder - injection,
     // escalation, coverage, missing, failed, blocking - in its own vocabulary while

@@ -156,17 +156,25 @@ export async function handleExecution(request: Request, input: { artifactBroker:
       results: outcome.results, diagnostics: outcome.diagnostics,
       outputs: outcome.outputs.map(output => ({ ...output, evidenceTruncated: output.text.length > 250_000, text: output.text.slice(0, 250_000) })),
     } : { results: [], outputs: [], diagnostics: {} };
-    const scanner = (revision: ExecutionRevision, commitSha: string, outcome: SegmentOutcome | undefined) => ({
+    // Each scanner carries how long it ran - the runner timed Gitleaks and OSV-Scanner in the sandbox,
+    // and BuildIT's own rules are timed here. Every scanner check used to record 0 ms, so the
+    // per-review sandbox ledger read 0 for a review that had used thirteen seconds of sandbox.
+    const scanner = (revision: ExecutionRevision, commitSha: string, outcome: SegmentOutcome | undefined) => {
+      const rulesStarted = Date.now();
+      const rules = scanBuildITRules([...files[revision]].map(([path, content]) => ({ path, content })), commitSha);
+      const rulesDurationMs = Date.now() - rulesStarted;
+      return {
       ...combineScannerRuns(commitSha, [
-        scanBuildITRules([...files[revision]].map(([path, content]) => ({ path, content })), commitSha),
-        parseGitleaks(outcome?.gitleaksReport ?? "[]", commitSha, scannerInventory.gitleaks),
-        parseOsv(outcome?.osvReport ?? '{"results":[]}', commitSha, scannerInventory.osvScanner),
+        { ...rules, durationMs: rulesDurationMs },
+        { ...parseGitleaks(outcome?.gitleaksReport ?? "[]", commitSha, scannerInventory.gitleaks), ...(outcome?.gitleaksDurationMs === undefined ? {} : { durationMs: outcome.gitleaksDurationMs }) },
+        { ...parseOsv(outcome?.osvReport ?? '{"results":[]}', commitSha, scannerInventory.osvScanner), ...(outcome?.osvDurationMs === undefined ? {} : { durationMs: outcome.osvDurationMs }) },
       ]),
       // Carried, not dropped. A scanner that could not read this ecosystem's manifests produced an
       // empty findings list, and without this the review would present that emptiness as a clean
       // dependency scan - which is the one thing it must not claim.
       ...(outcome?.unavailableScanners?.length ? { unavailableScanners: outcome.unavailableScanners } : {}),
-    });
+      };
+    };
     return json(200, {
       segment, base: bounded(outcomes.get("base")), head: bounded(outcomes.get("head")),
       ...(segment.stage === "scanners" ? { scanners: { base: scanner("base", body.baseSha, outcomes.get("base")), head: scanner("head", body.headSha, outcomes.get("head")) } } : {}),
