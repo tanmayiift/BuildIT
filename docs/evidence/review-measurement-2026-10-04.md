@@ -241,3 +241,34 @@ The PR, scope and provider were the same as before: `1a295bd → 7135ab8`, OpenA
   `Failed · already failing on base · Tests: 7 passed, 5 failed`. Both hid the 192 failed files, so the
   formatter now adds test files whenever one failed:
   `Tests: 7 passed, 5 failed · Test files: 6 passed, 192 failed`.
+
+### After #93: `nx7eyh167yxka9rrk53fszke1d8fmr0v`, 16:53 UTC — the decided rule, live
+
+The same PR, scope and provider. **Verdict: `inconclusive`, reason `test_suite_failing`, next action
+`repair_test_suite`.**
+
+| Stage | Finished | Took |
+|---|---|---|
+| created on consent | 16:53:54.978 | — |
+| context | 16:54:25.762 | 30.8 s |
+| validation | 16:57:05.515 | 2 min 39.8 s |
+| analysis | 16:58:21.863 | 1 min 16.3 s |
+| decision | 16:58:29.352 | 7.5 s |
+
+- **Consent to verdict:** 4 min 34.4 s.
+- **Sandbox:**
+  - 153 s on the platform counter (1105 → 1258);
+  - 153.8 s on the `executionJobs` span;
+  - 157 s in the `usageLedger`, which sums command times.
+- **Model:** 477,580 tokens, **$0.6722**.
+- **The test check:**
+  - It recorded the same counts on both commits as before: tests 7 passed / 5 failed, test files 6 passed / 192 failed.
+  - It now carries `testSuiteFailing`, so the failure is no longer excused as pre-existing.
+- **What each reader was told:**
+  - **PR comment:** "Review needs attention"; "too little of it ran - no test passed, or most of its test
+    files failed - so it says nothing about this change". The row reads
+    `Failed · already failing on base · Tests: 7 passed, 5 failed · Test files: 6 passed, 192 failed`.
+  - **GitHub check:** `neutral`, "Review needs attention". It is the same check run, updated in place, so
+    its timestamps still read 5 September.
+  - **Review page:** "Inconclusive — A safe decision is not possible yet". Next step: "Make the test
+    suite pass, then review again". The test row shows the same counts "on this commit".
