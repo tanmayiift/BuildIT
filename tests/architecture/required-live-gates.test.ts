@@ -49,6 +49,24 @@ describe("required release evidence", () => {
     expect(`${result.stdout}${result.stderr}`).toContain("signed_in_session_evidence_required");
   });
 
+  // CI reaches AWS through GitHub's OIDC token and a read-only role (infra/aws/ci-reader.yaml), never a
+  // stored key. A long-lived key in a repository secret is exactly what that role exists to avoid.
+  it("verifies the AWS boundary through the read-only OIDC role, with no stored AWS key", () => {
+    for (const name of ["ci.yml", "release.yml"]) {
+      const workflow = readFileSync(new URL(`../../.github/workflows/${name}`, import.meta.url), "utf8");
+      expect(workflow, name).not.toMatch(/AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY/);
+      expect(workflow, name).toMatch(/aws-actions\/configure-aws-credentials@[0-9a-f]{40}/);
+      expect(workflow, name).toContain("role-to-assume: ${{ vars.BUILDIT_AWS_CI_ROLE_ARN }}");
+      expect(workflow, name).toMatch(/id-token: write/);
+    }
+    const reader = readFileSync(new URL("../../infra/aws/ci-reader.yaml", import.meta.url), "utf8");
+    expect(reader).toContain('"token.actions.githubusercontent.com:sub": "repo:${Repository}:ref:refs/heads/main"');
+    // Read-only: no action in the role's policy may write, delete, decrypt or pass a role.
+    const actions = [...reader.matchAll(/^\s+- ([a-z0-9]+:[A-Za-z]+)$|Action: ([a-z0-9]+:[A-Za-z]+)$/gm)].map(match => match[1] ?? match[2]);
+    expect(actions.length).toBeGreaterThan(15);
+    expect(actions.filter(action => !/^(cloudformation:(Describe|Get)|iam:Get|kms:(Describe|Get)|s3:(Get|List))/.test(action!))).toEqual([]);
+  });
+
   it("keeps missing external evidence from passing either CI or the production release", () => {
     const ci = readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
     const release = readFileSync(new URL("../../.github/workflows/release.yml", import.meta.url), "utf8");

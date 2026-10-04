@@ -384,6 +384,10 @@ declared with what its absence costs. That list is currently empty, which is the
 **Status: resolved on 3–4 October 2026.** `pnpm smoke:aws-boundary` passes (`oidcStackOwnership: matches`),
 drift detection reports every resource `IN_SYNC`, and the stack policy still denies every update.
 
+CI now runs that check on every push to `main` and before every release, through the read-only
+`buildit-ci-boundary-reader` role (`infra/aws/ci-reader.yaml`, its own protected stack) assumed with GitHub's
+OIDC token. No AWS key is stored anywhere.
+
 How it was done, one operation at a time, each previewed as a change set and checked against backups of
 the live trust, key and bucket policies taken beforehand:
 
