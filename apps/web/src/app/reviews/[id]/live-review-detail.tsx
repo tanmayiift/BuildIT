@@ -2,7 +2,7 @@
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Component, useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
-import { comparisonRefusal, dismissalReasonLabel, dismissalReasons, dismissalRefusal, eventPresentation, evidenceRefusal, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
+import { comparisonRefusal, dismissalReasonLabel, notRunExplanation, dismissalReasons, dismissalRefusal, eventPresentation, evidenceRefusal, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
 import type { DismissalReason, SuppressionScope } from "./review-presentation";
 // Why a stage saw less than everything. Named here rather than reusing the verdict reason map,
 // because a gap on the handoff record is a description of what was read - not a reason a verdict
@@ -76,6 +76,7 @@ type Evidence = {
     durationMs: number;
     evidenceAvailable: boolean;
     failureClass?: string;
+    notRunReason?: "no_lockfile";
   }>;
   rounds: Array<{
     id: string;
@@ -409,9 +410,9 @@ function ReviewEvidence({ id }: { id: string }) {
               </span>
               <time>{(item.durationMs / 1000).toFixed(1)}s</time>
               <span>
-                {item.evidenceAvailable
+                {notRunExplanation(item.notRunReason) ?? (item.evidenceAvailable
                   ? `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · encrypted output recorded${item.executions > 1 ? ` · ${item.outcomeSummary}` : ""}`
-                  : `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · output incomplete${item.executions > 1 ? ` · ${item.outcomeSummary}` : ""}`}
+                  : `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · output incomplete${item.executions > 1 ? ` · ${item.outcomeSummary}` : ""}`)}
               </span>
             </div>
           ))

@@ -73,6 +73,7 @@ const reasonLabels: Record<string, string> = {
   required_check_failed: "At least one required check failed.",
   required_check_missing: "A required check did not produce complete evidence.",
   unsupported_check: "The repository asks for a check BuildIT cannot run yet.",
+  tests_need_lockfile: "Its tests did not run: there is no lockfile at this commit, and BuildIT installs only from one.",
   environment_unavailable: "The isolated runner was unavailable. No code decision was made.",
   review_timeout: "The review reached its time limit. No code decision was made.",
   final_validation_incomplete: "The fix candidate did not complete final validation.",

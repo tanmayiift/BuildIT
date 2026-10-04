@@ -14,6 +14,7 @@ export type CheckExecution = {
   conclusion: string;
   durationMs: number;
   evidenceAvailable: boolean;
+  notRunReason?: "no_lockfile";
 };
 
 export type CheckSummary = CheckExecution & {
@@ -52,12 +53,12 @@ export function statusPresentation(status: string, stale: boolean, reason?: stri
 export type NextActionCode =
   | "none" | "inspect_findings" | "request_autofix" | "retry_review" | "reconnect_provider"
   | "restore_installation" | "grant_permission" | "increase_budget" | "await_sandbox_reset"
-  | "human_merge" | "start_new_review";
+  | "human_merge" | "start_new_review" | "add_lockfile";
 
 export const nextActionCodes: readonly NextActionCode[] = [
   "none", "inspect_findings", "request_autofix", "retry_review", "reconnect_provider",
   "restore_installation", "grant_permission", "increase_budget", "await_sandbox_reset",
-  "human_merge", "start_new_review",
+  "human_merge", "start_new_review", "add_lockfile",
 ];
 
 type NextAction = { title: string; detail: string; href?: string; hrefLabel?: string };
@@ -74,6 +75,7 @@ const nextActions: Record<NextActionCode, NextAction> = {
   await_sandbox_reset: { title: "Wait for the sandbox allowance to reset", detail: "This workspace has used the sandbox time its plan allows this month, so no new review can run its checks. Retrying will not help. The allowance resets at the start of next month; ask BuildIT if you need it raised before then.", href: "/usage", hrefLabel: "Open workspace usage" },
   human_merge: { title: "Read it yourself before merging", detail: "BuildIT will not merge this and will not vouch for it. Check the change - and, if a fix was proposed, the separate pull request carrying it - and merge only if you agree." },
   start_new_review: { title: "Run a new review", detail: "This run ended without a decision." },
+  add_lockfile: { title: "Commit a lockfile, then review again", detail: "This repository has a test script, but no package-lock.json, pnpm-lock.yaml or yarn.lock at this commit, and BuildIT installs dependencies only from a lockfile. Its tests did not run, so the scanners alone are not a verdict. Retrying without a lockfile cannot change that." },
 };
 
 // The sample tour renders its own synthetic codes; they are not part of the live enum but are
@@ -307,6 +309,7 @@ export function summarizeChecks(checks: CheckExecution[]): CheckSummary[] {
       evidenceAvailable: executions.every((execution) => execution.evidenceAvailable),
       executions: executions.length,
       outcomeSummary,
+      ...(executions.some((execution) => execution.notRunReason === "no_lockfile") ? { notRunReason: "no_lockfile" as const } : {}),
     };
   });
 }
@@ -316,4 +319,9 @@ export const technicalLabel = words;
 export function pullRequestHref(owner: string, name: string, prNumber: number) {
   if (!owner || !name || !Number.isSafeInteger(prNumber) || prNumber < 1) return undefined;
   return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pull/${prNumber}`;
+}
+
+/** Why a check row reads "Not run", when the reason is the repository's rather than BuildIT's. */
+export function notRunExplanation(reason: "no_lockfile" | undefined) {
+  return reason === "no_lockfile" ? "Not run: no lockfile at this commit, and BuildIT installs only from one" : undefined;
 }

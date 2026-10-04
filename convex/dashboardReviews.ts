@@ -6,6 +6,7 @@ import { v } from "convex/values";
 import { makeFunctionReference } from "convex/server";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { GitHubAppClient, pinPullRequest, reviewPolicy } from "@buildit/github";
+import { consentRuns, lockfileManager, projectTests, type ProjectTests } from "@buildit/contracts";
 import { requireExecutionEnabled } from "./lib/executionGate";
 
 const provider = v.union(v.literal("anthropic"), v.literal("openai"), v.literal("gemini"));
@@ -33,6 +34,29 @@ export function modelRouteDescription(route: Pick<DashboardScope, "provider" | "
   if (route.provider === "openai" && route.model === "gpt-5.4-mini" && route.availableModels.includes("gpt-5.4")) return "openai · gpt-5.4-mini for context and independent checks, with gpt-5.4 for code findings";
   return `${route.provider} · ${route.model}`;
 }
+// What the review will be able to run, read from the repository root at the exact head commit with the
+// same short-lived token. The consent panel used to promise "dependency install, test, lint, typecheck"
+// to every repository; validation installs only from a lockfile, so a project without one ran nothing
+// but the scanners. A read that fails returns undefined, and the panel then promises no tests at all.
+async function projectTestsAt(client: GitHubAppClient, tokenScope: { installationId: number; repositoryId: number; stage: "review" }, githubRepositoryId: number, headSha: string): Promise<ProjectTests | undefined> {
+  const get = (path: string) => client.withToken(tokenScope, token => fetch(`https://api.github.com/repositories/${githubRepositoryId}/contents${path}?ref=${headSha}`, { headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "BuildIT" } }));
+  try {
+    const root = await get("");
+    if (!root.ok) return undefined;
+    const entries = await root.json() as Array<{ name?: string; type?: string }>;
+    if (!Array.isArray(entries)) return undefined;
+    const paths = new Set(entries.filter(entry => entry.type === "file" && typeof entry.name === "string").map(entry => entry.name!));
+    let packageJson: string | undefined;
+    if (paths.has("package.json") && lockfileManager(paths) === undefined) {
+      const file = await get("/package.json");
+      if (file.ok) { const body = await file.json() as { content?: string; encoding?: string }; if (body.encoding === "base64" && body.content) packageJson = Buffer.from(body.content, "base64").toString("utf8"); }
+    }
+    return projectTests(paths, packageJson);
+  } catch {
+    return undefined;
+  }
+}
+
 // Every workspace role that can start a review here is recorded as at least "write"
 // (dashboardReviewData's triggerActorPermission), so that is who fork policy is told asked.
 async function snapshot(scope: { installationId: number; githubRepositoryId: number; forkPolicy: "manual_review_only" | "disabled" }, prNumber: number) {
@@ -46,7 +70,8 @@ async function snapshot(scope: { installationId: number; githubRepositoryId: num
     const pull = await response.json() as { number?: number; title?: string; html_url?: string; changed_files?: number; additions?: number; deletions?: number; head?: { sha?: string; ref?: string; repo?: { full_name?: string } | null }; base?: { sha?: string; ref?: string; repo?: { full_name?: string } } };
     const pinned = pinPullRequest({ number: pull.number ?? prNumber, head: { sha: pull.head?.sha ?? "", ref: pull.head?.ref ?? "", repoFullName: pull.head?.repo?.full_name ?? null }, base: { sha: pull.base?.sha ?? "", ref: pull.base?.ref ?? "", repoFullName: pull.base?.repo?.full_name ?? "" } });
     const policy = reviewPolicy(pinned, "review", scope.forkPolicy, "write"); if (!policy.allowed) throw new Error(policy.reason);
-    return { ...pinned, title: (pull.title ?? "Untitled pull request").slice(0, 500), url: pull.html_url ?? "", changedFiles: pull.changed_files ?? 0, additions: pull.additions ?? 0, deletions: pull.deletions ?? 0 };
+    const tests = await projectTestsAt(client, tokenScope, scope.githubRepositoryId, pinned.headSha);
+    return { ...pinned, ...(tests ? { projectTests: tests } : {}), title: (pull.title ?? "Untitled pull request").slice(0, 500), url: pull.html_url ?? "", changedFiles: pull.changed_files ?? 0, additions: pull.additions ?? 0, deletions: pull.deletions ?? 0 };
   } finally { await client.revoke(tokenScope); }
 }
 
@@ -63,7 +88,7 @@ export const prepare = action({ args, handler: async (ctx, input): Promise<Prepa
   await ctx.runAction(internal.telemetryWorker.emit, { operation: "activation.preview", stage: "activation", outcome: "succeeded" });
   return { repository: `${scope.owner}/${scope.name}`, pull, credentialScopeId: scope.credentialScopeId,
     consent: { reads: ["PR description and diff", "linked GitHub Issues", "repository files needed for impact analysis"],
-      runs: ["dependency install with scripts disabled", "test", "lint", "typecheck", "Gitleaks 8.28.0", "OSV-Scanner 2.2.3", "BuildIT static rules 1.0.0"],
+      runs: consentRuns(pull.projectTests),
       provider: scope.provider, model: `${modelRouteDescription(scope)}. Only bounded context and evidence go to this provider through the saved key inspected now`, maximumProviderCostUsd: input.budgetLimit,
       writes: ["one BuildIT Check", "one BuildIT PR summary"], cannot: ["merge", "edit workflows", "change repository settings", "write a fix branch during review mode"] } };
 } });

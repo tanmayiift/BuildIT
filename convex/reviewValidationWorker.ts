@@ -9,7 +9,8 @@ import {
   type ExecutionRevision, type ExecutionStage, type PackageManager,
 } from "@buildit/runner";
 import { issueArtifactGrant } from "@buildit/security";
-import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, sha256Json, type ExecutionResponse } from "./lib/validationEvidence";
+import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, sha256Json, withUntestableProject, type ExecutionResponse } from "./lib/validationEvidence";
+import { declaresTestScript } from "@buildit/contracts";
 import { buildExecutionResponse, driveExecutionSegments, rerunTargets } from "./lib/executionSegmentDriver";
 import { runIdFor } from "./lib/runIdentity";
 
@@ -57,6 +58,7 @@ export const validate = internalAction({
     if (claimed.stage !== "prepare") throw new Error("execution_segments_not_resumable");
     const brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""), artifactSecret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url"), executionSecret = Buffer.from(required("EXECUTION_GRANT_SECRET"), "base64url");
     const paths = { base: new Set<string>(), head: new Set<string>() };
+    const packageJson: { base?: string; head?: string } = {};
     const contexts = scope.contexts.map(context => ({ context, revision: revisionFromStorageKey(context.storageKey) }));
     for (const { context, revision } of contexts) {
       const grant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(context.id), storageKey: context.storageKey, operation: "read" }, artifactSecret);
@@ -64,11 +66,19 @@ export const validate = internalAction({
       if (!response.ok) throw new Error(`context_artifact_download_${response.status}`);
       const body = Buffer.from(await response.arrayBuffer());
       if (body.byteLength !== context.size || createHash("sha256").update(body).digest("hex") !== context.checksum) throw new Error("context_artifact_integrity_failed");
-      const chunk = JSON.parse(body.toString("utf8")) as { revision?: string; snapshot?: { files?: Array<{ path?: string }> } };
+      const chunk = JSON.parse(body.toString("utf8")) as { revision?: string; snapshot?: { files?: Array<{ path?: string; content?: string }> } };
       if (chunk.revision !== revision || !Array.isArray(chunk.snapshot?.files)) throw new Error("context_artifact_revision_invalid");
-      for (const file of chunk.snapshot.files) if (typeof file.path === "string") paths[revision].add(file.path); else throw new Error("context_artifact_path_invalid");
+      for (const file of chunk.snapshot.files) {
+        if (typeof file.path !== "string") throw new Error("context_artifact_path_invalid");
+        paths[revision].add(file.path);
+        if (file.path === "package.json" && typeof file.content === "string") packageJson[revision] = file.content;
+      }
     }
-    const manager = detectPackageManager(paths), plans = manager ? defaultExecutionPlans(manager) : { install: undefined, checks: [] }, { install, checks } = plans, runtime = "node24" as const;
+    const manager = detectPackageManager(paths);
+    // Tests the project declares but BuildIT cannot install for. Recorded as a required check that did
+    // not run, so the verdict says so instead of passing on the scanners alone.
+    const untestable = !manager && declaresTestScript(packageJson.head) ? "no_lockfile" as const : undefined;
+    const plans = manager ? defaultExecutionPlans(manager) : { install: undefined, checks: [] }, { install, checks } = plans, runtime = "node24" as const;
     // Re-issued per request rather than once for the job: an artifact read grant is single-use with
     // a sixty second life, and the segments that need the repository are now minutes apart.
     const describe = () => contexts.map(({ context, revision }) => ({ revision, artifactId: String(context.id), storageKey: context.storageKey, checksum: context.checksum, size: context.size,
@@ -89,7 +99,7 @@ export const validate = internalAction({
     });
     const { segments, stage, stateVersion, tailStartedAt } = driven;
 
-    const output: ExecutionResponse = buildExecutionResponse(driven);
+    const output: ExecutionResponse = withUntestableProject(buildExecutionResponse(driven), untestable);
     const environment = { configRevision: String(scope.configRevisionId), runnerImage: scope.runnerImageVersion, runtime, manager: manager ?? "none" as const, architecture: "linux-x64", networkPolicy: "deny-all-v1", toolVersions: [{ name: "node", version: "24" }, { name: "package-manager", version: manager ?? "none" }], install, checks }, paired = pairExecutionEvidence(output, scope.baseSha, scope.headSha, environment), summaries = paired.summaries.map(item => ({ ...item, nameHash: createHash("sha256").update(item.planId).digest("hex") }));
     // pairExecutionEvidence reclassifies a check that failed and then passed on rerun as "flaky",
     // and that reclassification only ever reached the checkRuns table. reportChecks reads the raw

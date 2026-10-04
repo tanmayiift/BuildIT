@@ -22,15 +22,17 @@ export type ScannerRun = {
   commitSha: string;
   complete: true;
   findings: ScannerFinding[];
+  // How long the scanner ran, measured where it ran. Optional because a parsed report does not know.
+  durationMs?: number;
 };
 
-export type CombinedScannerRun = ScannerRun & { runs: Array<{ scanner: ScannerRun["scanner"]; scannerVersion: string }> };
+export type CombinedScannerRun = ScannerRun & { runs: Array<{ scanner: ScannerRun["scanner"]; scannerVersion: string; durationMs?: number }> };
 
 export function combineScannerRuns(commitSha: string, runs: ScannerRun[]): CombinedScannerRun {
   const commit = pinnedCommit(commitSha);
   if (!runs.length || runs.some(run => !run.complete || run.commitSha !== commit)) throw new Error("scanner_evidence_incomplete");
   return { scanner: "builditRules", scannerVersion: runs.map(run => `${run.scanner}@${run.scannerVersion}`).join("+"), commitSha: commit, complete: true,
-    runs: runs.map(run => ({ scanner: run.scanner, scannerVersion: run.scannerVersion })), findings: runs.flatMap(run => run.findings) };
+    runs: runs.map(run => ({ scanner: run.scanner, scannerVersion: run.scannerVersion, ...(run.durationMs === undefined ? {} : { durationMs: run.durationMs }) })), findings: runs.flatMap(run => run.findings) };
 }
 
 function pinnedCommit(commitSha: string) {

@@ -101,6 +101,10 @@ export type SegmentOutcome = {
   osvReport?: string;
   unavailableScanners?: Array<"gitleaks" | "osvScanner">;
   unavailableReason?: string;
+  // Wall-clock time of each scanner command in the sandbox. They run in parallel, so each is timed on
+  // its own rather than as the segment: the per-review sandbox ledger sums these.
+  gitleaksDurationMs?: number;
+  osvDurationMs?: number;
 };
 
 export type SegmentInput = {
@@ -226,9 +230,10 @@ export class VercelSandboxRunner {
   private async scan(sandbox: SandboxLike, files: Array<{ path: string; content: string }>) {
     const manifests = files.map(file => file.path).filter(path => dependencyManifest.test(path));
     const lockfiles = manifests.slice(0, osvManifestLimit);
-    const [gitleaks, osv] = await Promise.all([
-      sandbox.runCommand({ cmd: "gitleaks", args: ["dir", "--no-banner", "--no-color", "--redact=100", "--exit-code", "0", "--report-format", "json", "--report-path", "/tmp/buildit-gitleaks.json", "--max-target-megabytes", "10", repositoryRoot], timeoutMs: SANDBOX_SCANNER_TIMEOUT_MS }),
-      sandbox.runCommand({ cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", ...lockfiles.flatMap(path => ["--lockfile", `${repositoryRoot}/${path}`])], cwd: repositoryRoot, timeoutMs: SANDBOX_SCANNER_TIMEOUT_MS }),
+    const timed = async <T>(run: Promise<T>) => { const started = Date.now(); const value = await run; return { value, durationMs: Date.now() - started }; };
+    const [{ value: gitleaks, durationMs: gitleaksDurationMs }, { value: osv, durationMs: osvDurationMs }] = await Promise.all([
+      timed(sandbox.runCommand({ cmd: "gitleaks", args: ["dir", "--no-banner", "--no-color", "--redact=100", "--exit-code", "0", "--report-format", "json", "--report-path", "/tmp/buildit-gitleaks.json", "--max-target-megabytes", "10", repositoryRoot], timeoutMs: SANDBOX_SCANNER_TIMEOUT_MS })),
+      timed(sandbox.runCommand({ cmd: "osv-scanner", args: ["scan", "source", "--offline", "--no-resolve", "--format", "json", "--output", "/tmp/buildit-osv.json", ...lockfiles.flatMap(path => ["--lockfile", `${repositoryRoot}/${path}`])], cwd: repositoryRoot, timeoutMs: SANDBOX_SCANNER_TIMEOUT_MS })),
     ]);
     // gitleaks runs with --exit-code 0, so a non-zero exit is never a finding - it is only ever a
     // runner problem: a SIGKILL at SANDBOX_SCANNER_TIMEOUT_MS on a large tree, or a missing binary
@@ -298,7 +303,7 @@ export class VercelSandboxRunner {
     if (!osvReport || osvReport.byteLength > 4_000_000) throw new Error("osv_report_invalid");
     const unavailableScanners = [...(gitleaksUnavailable ? ["gitleaks" as const] : []), ...(osvUnavailable ? ["osvScanner" as const] : [])];
     return {
-      gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"),
+      gitleaksReport: gitleaksReport.toString("utf8"), osvReport: osvReport.toString("utf8"), gitleaksDurationMs, osvDurationMs,
       ...(unavailableScanners.length ? { unavailableScanners, unavailableReason: [gitleaksUnavailable, osvUnavailable].filter(Boolean).join("; ") } : {}),
     };
   }

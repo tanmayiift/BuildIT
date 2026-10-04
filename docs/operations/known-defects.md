@@ -381,7 +381,22 @@ declared with what its absence costs. That list is currently empty, which is the
 
 ## A repository without a lockfile gets no tests, and the verdict reads as a pass
 
-**Status: open, found 4 October 2026** (`docs/evidence/review-measurement-2026-10-04.md`).
+**Status: fixed on 4 October 2026, found the same day** (`docs/evidence/review-measurement-2026-10-04.md`).
+
+What changed:
+
+- **Validation:** when `package.json` declares a test script but there is no lockfile, a required `test`
+  check is recorded on both commits as not run, with the reason `no_lockfile`.
+- **Verdict:** `computeReviewDecision` turns that into `inconclusive`, with reason `tests_need_lockfile`
+  and next action `add_lockfile`, never "retry". The stored verdict, the GitHub check and the PR comment
+  all derive it from the same evidence.
+- **Consent panel:** it now lists only what will run, read from the repository root at the pinned commit.
+- **Scanner durations:** recorded where each scanner runs, so the per-review sandbox ledger is no longer 0.
+
+A repository with no `package.json` still passes on the scanners, as before. It declares no test BuildIT
+skipped, and the consent panel now says so.
+
+The original record follows.
 
 **What happened.** `tanmayiift/buildit-demo-p-queue` has a `test` script but no lockfile, which is common:
 many npm libraries set `package-lock=false`. BuildIT installs with `npm ci`, which needs a lockfile, so the
