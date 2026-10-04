@@ -194,7 +194,7 @@ A review that falls back between providers costs two validations.
 
 - The verdict was still `checks_passed`, with the new wording: "This change introduced no new failure in its
   5 required checks", naming `test`, `lint` and `gitleaks` as already failing.
-- `test` failed on both commits and was not marked `noPassingTests`, because its full output contained a
+- `test` failed on both commits and was not marked `noPassingTests` (now `testSuiteFailing`), because its full output contained a
   pass count.
 - Nothing a reader could see showed that count. The page and the comment show the last six lines of output,
   and vitest prints its summary above them. That gap is what #92 closes.
@@ -232,7 +232,8 @@ The PR, scope and provider were the same as before: `1a295bd → 7135ab8`, OpenA
   the 6 files that loaded.
 - The rule chosen in #91 makes a suite inconclusive only when *no* test passes. Seven passed, so the failure
   was treated as pre-existing and the verdict is `checks_passed`. That is the rule working as decided.
-  Whether 6 of 198 files is enough evidence to call a suite "ran" is a policy question, recorded in
+- The decision after seeing these counts: a suite where more than half of the test files fail is not one
+  that ran. From #93 on, this review ends `inconclusive` (`test_suite_failing`). See
   `docs/operations/known-defects.md`.
 - The page showed "Tests: 7 passed, 5 failed on this commit", and the comment row read
   `Failed · already failing on base · Tests: 7 passed, 5 failed`. Both hid the 192 failed files, so the

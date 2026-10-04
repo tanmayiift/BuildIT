@@ -403,10 +403,13 @@ suite that otherwise ran.
   for example "Failed · already failing on base · Tests: 7 passed, 5 failed · Test files: 6 passed, 192
   failed". Test files are shown whenever one failed. A count is read only from a summary line, never from
   prose or a code frame.
-- **Open policy question, measured.** With the counts recorded, zod's suite on both commits is 6 of 198 test
-  files loading, and 7 of 12 tests passing. Under the #91 rule, which is inconclusive only when no test
-  passes, that stays `checks_passed`. A stricter rule would also count file-level coverage, for example
-  inconclusive when most test files fail on both commits. Not changed without a decision.
+- **Most files failing is not a suite that ran (decided 4 October 2026).** The counts showed zod's suite on
+  both commits loading 6 of 198 test files, with 7 of 12 tests passing. Under the #91 rule, which made a
+  suite inconclusive only when no test passed, that stayed `checks_passed`. The rule is now
+  `testSuiteRanTooLittle`: no test passed, **or more than half of the test files failed**, ends
+  `inconclusive` (`test_suite_failing`). Exactly half is not most. A got-style suite, with a few failing
+  files and most clean, still counts as pre-existing. The stored flag was renamed `noPassingTests` →
+  `testSuiteFailing`; no production row carried the old name (0 of 2,420).
 
 The original record follows.
 

@@ -34,10 +34,20 @@ describe("the comment for required checks that were already failing", () => {
 
   it("is inconclusive, not ready, when the test suite shows no test passing", () => {
     const { body, decision } = composeVerifiedReport({ ...base, checks: [...scanners, install,
-      { name: "test", required: true, conclusion: "failed", evidenceComplete: true, preExisting: true, noPassingTests: true }] });
+      { name: "test", required: true, conclusion: "failed", evidenceComplete: true, preExisting: true, testSuiteFailing: true }] });
     expect(decision).toMatchObject({ status: "inconclusive", reason: "test_suite_failing", nextAction: "repair_test_suite" });
     expect(body).toMatch(/says nothing about this change/);
     expect(body).not.toMatch(/Ready for human review/);
+  });
+
+  // The reader needs the reason and the numbers together: the sentence names both clauses of the rule,
+  // and the check row prints which one applied.
+  it("says why the suite did not count, and shows the counts that decided it", () => {
+    const { body } = composeVerifiedReport({ ...base, checks: [...scanners, install,
+      { name: "test", required: true, conclusion: "failed", evidenceComplete: true, preExisting: true, testSuiteFailing: true,
+        testCounts: { passed: 7, failed: 5, filesPassed: 6, filesFailed: 192 } }] });
+    expect(body).toMatch(/no test passed, or most of its test files failed/);
+    expect(body).toContain("Tests: 7 passed, 5 failed · Test files: 6 passed, 192 failed");
   });
 
   it("never says every required check passed when one failed before this change", () => {

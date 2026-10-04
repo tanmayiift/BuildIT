@@ -96,6 +96,17 @@ export function testCountsSummary(counts: TestCounts | undefined): string | unde
   return [tests, files].filter(Boolean).join(" · ") || undefined;
 }
 
+/** Whether a failed test suite ran too little for its failures to be excused as pre-existing: no test
+ *  passed, or more than half of its test files failed. The second clause was decided on 4 Oct 2026,
+ *  after the counts showed buildit-demo-zod loading 6 of 198 files; seven passing tests from six files
+ *  say nothing about the 192 that never ran. A suite with a few failing files still counts as having run. */
+export function testSuiteRanTooLittle(output: string | undefined): boolean {
+  const passed = passedTestCount(output);
+  if (passed === undefined || passed === 0) return true;
+  const { filesPassed, filesFailed } = testCounts(output);
+  return filesFailed !== undefined && filesFailed > (filesPassed ?? 0);
+}
+
 /** Tests the output shows passing: the test count, or at least the number of clean test files. */
 export function passedTestCount(output: string | undefined): number | undefined {
   const counts = testCounts(output);

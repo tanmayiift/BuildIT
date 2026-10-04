@@ -208,13 +208,13 @@ describe("a failed test suite with no test passing", () => {
   const marked = (side: ExecutionResponse["head"]) => withTestSuiteEvidence({ base: side, head: side, scanners: {} as ExecutionResponse["scanners"] }).head.results[0];
 
   it("is marked when its output shows no test passing, as buildit-demo-zod's did", () => {
-    expect(marked(run("failed", '   const z = await import("../../index.js");\n[194/194]'))).toMatchObject({ noPassingTests: true });
-    expect(marked(run("failed", "      Tests  194 failed (194)"))).toMatchObject({ noPassingTests: true });
+    expect(marked(run("failed", '   const z = await import("../../index.js");\n[194/194]'))).toMatchObject({ testSuiteFailing: true });
+    expect(marked(run("failed", "      Tests  194 failed (194)"))).toMatchObject({ testSuiteFailing: true });
   });
 
   it("is not marked when the suite otherwise ran, or passed", () => {
-    expect(marked(run("failed", "Tests  2 failed | 192 passed (194)"))).not.toHaveProperty("noPassingTests");
-    expect(marked(run("passed", "Tests  194 failed (194)"))).not.toHaveProperty("noPassingTests");
+    expect(marked(run("failed", "Tests  2 failed | 192 passed (194)"))).not.toHaveProperty("testSuiteFailing");
+    expect(marked(run("passed", "Tests  194 failed (194)"))).not.toHaveProperty("testSuiteFailing");
   });
 
   // The page and the comment show six lines of output; vitest prints its summary above them. A suite
@@ -222,9 +222,16 @@ describe("a failed test suite with no test passing", () => {
   it("records the counts the runner printed, passed or failed, on both commits", () => {
     const failed = marked(run("failed", " Test Files  194 failed | 3 passed (197)\n      Tests  no tests")), passed = marked(run("passed", "Tests  194 passed (194)"));
     expect(failed).toMatchObject({ testCounts: { filesFailed: 194, filesPassed: 3 } });
-    expect(failed).not.toHaveProperty("noPassingTests");
     expect(passed).toMatchObject({ testCounts: { passed: 194 } });
     expect(marked(run("failed", '[194/194]'))).not.toHaveProperty("testCounts");
+  });
+
+  // Decided 4 Oct 2026, from zod's recorded counts: six of 198 files loading is not a suite that ran.
+  it("is marked when most of its test files failed, though some tests passed", () => {
+    const zod = " Test Files  192 failed | 6 passed (198)\n      Tests  5 failed | 7 passed (12)";
+    expect(marked(run("failed", zod))).toMatchObject({ testSuiteFailing: true, testCounts: { filesFailed: 192, filesPassed: 6, failed: 5, passed: 7 } });
+    expect(marked(run("failed", " Test Files  194 failed | 3 passed (197)\n      Tests  no tests"))).toMatchObject({ testSuiteFailing: true });
+    expect(marked(run("failed", " Test Files  1 failed | 11 passed (12)\n      Tests  2 failed | 192 passed (194)"))).not.toHaveProperty("testSuiteFailing");
   });
 
   it("carries the counts into the summaries checkRuns are written from", () => {

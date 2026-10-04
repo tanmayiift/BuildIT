@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeReviewDecision, consentRuns, declaresTestScript, lockfileManager, projectTests, testCounts, testCountsSummary } from "../src/index.js";
+import { computeReviewDecision, consentRuns, declaresTestScript, lockfileManager, projectTests, testCounts, testCountsSummary, testSuiteRanTooLittle } from "../src/index.js";
 
 describe("what BuildIT can run for a JavaScript project", () => {
   it("reads the package manager from exactly one root lockfile", () => {
@@ -131,8 +131,17 @@ describe("the verdict for a test suite failing on both commits", () => {
   const suite = (over: object) => ({ name: "test", required: true, conclusion: "failed" as const, evidenceComplete: true, preExisting: true, ...over });
 
   it("is inconclusive when the suite shows no test passing", () => {
-    expect(computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [], checks: [scanner, suite({ noPassingTests: true })] }))
+    expect(computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [], checks: [scanner, suite({ testSuiteFailing: true })] }))
       .toMatchObject({ status: "inconclusive", reason: "test_suite_failing", nextAction: "repair_test_suite" });
+  });
+
+  it("counts a suite as having run only when tests passed and most test files did not fail", () => {
+    expect(testSuiteRanTooLittle(" Test Files  192 failed | 6 passed (198)\n      Tests  5 failed | 7 passed (12)")).toBe(true);   // zod, 4 Oct 2026
+    expect(testSuiteRanTooLittle("      Tests  194 failed (194)")).toBe(true);
+    expect(testSuiteRanTooLittle(undefined)).toBe(true);
+    expect(testSuiteRanTooLittle(" Test Files  1 failed | 11 passed (12)\n      Tests  2 failed | 192 passed (194)")).toBe(false); // got-style
+    expect(testSuiteRanTooLittle(" Test Files  6 failed | 6 passed (12)\n      Tests  6 failed | 30 passed (36)")).toBe(false);    // half is not most
+    expect(testSuiteRanTooLittle("Tests:       1 failed, 193 passed, 194 total")).toBe(false);
   });
 
   it("keeps the pre-existing rule for a suite that otherwise ran", () => {
@@ -141,7 +150,7 @@ describe("the verdict for a test suite failing on both commits", () => {
 
   it("still requests changes when this pull request broke something", () => {
     const introduced = { name: "lint", required: true, conclusion: "failed" as const, evidenceComplete: true };
-    expect(computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [], checks: [scanner, suite({ noPassingTests: true }), introduced] }).status)
+    expect(computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [], checks: [scanner, suite({ testSuiteFailing: true }), introduced] }).status)
       .toBe("changes_requested");
   });
 });
