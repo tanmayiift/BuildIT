@@ -61,6 +61,8 @@ describe("required release evidence", () => {
     }
     const reader = readFileSync(new URL("../../infra/aws/ci-reader.yaml", import.meta.url), "utf8");
     expect(reader).toContain('"token.actions.githubusercontent.com:sub": "repo:${Repository}:ref:refs/heads/main"');
+    // The immutable owner@id/repository@id subject: a renamed or re-created repository cannot match it.
+    expect(reader).toMatch(/Repository:[\s\S]*?Default: tanmayiift@\d+\/BuildIT@\d+/);
     // Read-only: no action in the role's policy may write, delete, decrypt or pass a role.
     const actions = [...reader.matchAll(/^\s+- ([a-z0-9]+:[A-Za-z]+)$|Action: ([a-z0-9]+:[A-Za-z]+)$/gm)].map(match => match[1] ?? match[2]);
     expect(actions.length).toBeGreaterThan(15);
