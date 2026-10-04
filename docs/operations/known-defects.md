@@ -379,6 +379,36 @@ send, which all three were. It now checks each one against the App's subscriptio
 installation events as always-delivered, and requires a handler for an unsubscribed event to be
 declared with what its absence costs. That list is currently empty, which is the point.
 
+## A repository without a lockfile gets no tests, and the verdict reads as a pass
+
+**Status: open, found 4 October 2026** (`docs/evidence/review-measurement-2026-10-04.md`).
+
+**What happened.** `tanmayiift/buildit-demo-p-queue` has a `test` script but no lockfile, which is common:
+many npm libraries set `package-lock=false`. BuildIT installs with `npm ci`, which needs a lockfile, so the
+package manager resolved to `none`. Install, test, lint and typecheck never ran; only BuildIT's static
+rules and Gitleaks did.
+
+**What the reader was told:**
+
+- The consent panel said BuildIT would run "dependency install, test, lint, typecheck".
+- The verdict was `checks_passed`: "All required checks passed — BuildIT found enough evidence for this
+  exact commit."
+- Coverage showed "Partial".
+- Nothing said the project's own test suite did not run, or why.
+
+**Why it matters.** This is the claim BuildIT exists to refuse: a pass that does not say what it did
+not check. Two parts need fixing:
+
+1. The consent panel must name the checks that will actually run for this repository, or say that tests
+   need a lockfile.
+2. When the repository declares a test script that could not run, the verdict must say so. It should
+   either be `inconclusive` with a stated reason, or carry a visible "tests not run: no lockfile" line
+   beside the scanner results.
+
+**Related measurement gap.** Scanner checks record `durationMs: 0`, so the per-review
+`usageLedger` `sandbox_seconds` for a scanner-only run is 0. The real cost, about 13 s, shows up only
+in the org and platform counters.
+
 ## The artifact stack's stored template described Pulsetrade; it is now update-protected
 
 **Status: resolved on 3–4 October 2026.** `pnpm smoke:aws-boundary` passes (`oidcStackOwnership: matches`),
