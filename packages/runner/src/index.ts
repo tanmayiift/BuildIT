@@ -1,10 +1,10 @@
-import {EXECUTION_FUNCTION_LIMIT_MS,EXECUTION_JOB_DEADLINE_MS} from "@buildit/contracts";
+import {EXECUTION_FUNCTION_LIMIT_MS,EXECUTION_JOB_DEADLINE_MS,type TestCounts} from "@buildit/contracts";
 export type CheckKind="test"|"lint"|"typecheck"|"build"|"static_analysis"|"dependency_audit"|"secret_scan";
 export type CheckConclusion="passed"|"failed"|"not_run"|"not_configured"|"timed_out"|"truncated";
 export type NamedCommand="install"|"test"|"lint"|"typecheck"|"build";
 export type PackageManager="npm"|"pnpm"|"yarn";
 export type CommandPlan={planId:NamedCommand;origin:"built_in"|"trusted_ref";kind:CheckKind;executable:PackageManager;args:string[];required:boolean;timeoutMs:number;cpuLimit:number;memoryMb:number;outputBytes:number;fileBytes:number;network:"none"|"registry_only"};
-export type CheckResult=CommandPlan&{conclusion:CheckConclusion;exitCode?:number;durationMs:number;failureClass?:"code"|"environment"|"tooling_missing"|"timeout"|"resource_limit"|"network_blocked"|"platform";notRunReason?:"no_lockfile";noPassingTests?:true};
+export type CheckResult=CommandPlan&{conclusion:CheckConclusion;exitCode?:number;durationMs:number;failureClass?:"code"|"environment"|"tooling_missing"|"timeout"|"resource_limit"|"network_blocked"|"platform";notRunReason?:"no_lockfile";noPassingTests?:true;testCounts?:TestCounts};
 // Two ceilings, and they used to be one. A review's whole plan had to fit a single /api/execute
 // call, so the function's maxDuration bounded the plan directly - and when that maxDuration was 300
 // seconds the only way to fit was a 30-second test budget, which meant BuildIT could not finish

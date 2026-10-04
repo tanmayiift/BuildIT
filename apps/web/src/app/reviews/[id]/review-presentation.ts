@@ -15,6 +15,8 @@ export type CheckExecution = {
   durationMs: number;
   evidenceAvailable: boolean;
   notRunReason?: "no_lockfile";
+  commitSha?: string;
+  testSummary?: string;
 };
 
 export type CheckSummary = CheckExecution & {
@@ -265,7 +267,7 @@ export function dismissalRefusal(error: unknown): string {
 // to the wrong finding would name the wrong file to the person deciding whether to merge.
 export type FindingKeyParts = { category: string; severity: string; blocking: boolean; startLine: number; endLine: number };
 const findingKey = (item: FindingKeyParts) =>
-  [item.category, item.severity, item.blocking, item.startLine, item.endLine].join(" ");
+  [item.category, item.severity, item.blocking, item.startLine, item.endLine].join("\u0000");
 
 export function pairFindingDetails<Detail extends FindingKeyParts>(
   rows: ReadonlyArray<FindingKeyParts & { id: string }>,
@@ -288,8 +290,9 @@ export function pairFindingDetails<Detail extends FindingKeyParts>(
 
 // A review can run the same named check against more than one immutable worktree.
 // The audit store keeps every execution; the main result groups them so people do
-// not mistake repeated evidence for separate checks.
-export function summarizeChecks(checks: CheckExecution[]): CheckSummary[] {
+// not mistake repeated evidence for separate checks. Test counts are the head
+// commit's: that is the code being reviewed, and the base commit's run is context.
+export function summarizeChecks(checks: CheckExecution[], headSha?: string): CheckSummary[] {
   const grouped = new Map<string, CheckExecution[]>();
   for (const check of checks) {
     const key = `${check.kind}\u0000${check.required}`;
@@ -299,6 +302,7 @@ export function summarizeChecks(checks: CheckExecution[]): CheckSummary[] {
     const first = executions[0]!;
     const counts = new Map<string, number>();
     for (const execution of executions) counts.set(execution.conclusion, (counts.get(execution.conclusion) ?? 0) + 1);
+    const headSummary = headSha ? executions.find((execution) => execution.commitSha === headSha)?.testSummary : undefined;
     const outcomeSummary = [...counts.entries()]
       .map(([outcome, count]) => `${count} ${outcome}`)
       .join(", ");
@@ -311,6 +315,7 @@ export function summarizeChecks(checks: CheckExecution[]): CheckSummary[] {
       executions: executions.length,
       outcomeSummary,
       ...(executions.some((execution) => execution.notRunReason === "no_lockfile") ? { notRunReason: "no_lockfile" as const } : {}),
+      ...(headSummary ? { testSummary: headSummary } : {}),
     };
   });
 }

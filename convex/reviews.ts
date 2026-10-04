@@ -5,6 +5,7 @@ import { query } from "./_generated/server";
 import { requireOrganizationRole, requireRepositoryRole } from "./lib/authz";
 import { parentScopeChecker } from "./lib/parentScope";
 import { totalCostUsd } from "./lib/usageCost";
+import { testCountsSummary } from "@buildit/contracts";
 
 // These feed live subscriptions that re-execute on every matching write, so an unbounded read
 // re-reads a tenant's whole history each time and eventually crosses Convex's per-query read
@@ -95,7 +96,8 @@ export const getEvidence = query({
         evidenceCount: item.evidenceIds.length, resolution: item.resolution, ruleId: item.ruleId })),
       checks: checks.map(item => ({ id: item._id, kind: item.kind, required: item.required, status: item.status,
         conclusion: item.conclusion, commitSha: item.commitSha, exitCode: item.exitCode, durationMs: item.durationMs,
-        evidenceAvailable: Boolean(item.artifactId), failureClass: item.failureClass, ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}) })),
+        evidenceAvailable: Boolean(item.artifactId), failureClass: item.failureClass, ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}),
+        ...(testCountsSummary(item.testCounts) ? { testSummary: testCountsSummary(item.testCounts) } : {}) })),
       rounds: rounds.map(item => ({ id: item._id, roundNumber: item.roundNumber, candidateCommitSha: item.candidateCommitSha,
         validationOutcome: item.validationOutcome, completedValidation: item.completedValidation, startedAt: item.startedAt, completedAt: item.completedAt })),
       events: events.map(item => ({ id: item._id, sequence: item.sequence, type: item.type, stage: item.stage,

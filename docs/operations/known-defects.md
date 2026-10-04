@@ -396,6 +396,12 @@ suite that otherwise ran.
   this change. The PR comment says "This change introduced no new failure in its N required checks" and
   names the ones already failing. The review page heading reads "No new failures from this change" and
   names them.
+- **Counts on the check.** The rerun after the fix still ended `checks_passed`: zod's output contained a pass
+  count, but the page and the comment show only the last six lines, where vitest never prints its summary, so
+  nobody could see what was counted. Validation now records the runner's own counts on the test check
+  (`testCounts`: tests and test files, kept apart) and both readers print them from one formatter -
+  for example "Failed · already failing on base · Tests: 192 passed, 2 failed". A count is read only from a
+  summary line, never from prose or a code frame.
 
 The original record follows.
 

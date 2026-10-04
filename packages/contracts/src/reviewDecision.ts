@@ -1,3 +1,4 @@
+import type { TestCounts } from "./projectChecks.js";
 // The review verdict, in the one place both runtimes can reach it.
 //
 // It lived in @buildit/orchestrator, which is Node-only, so convex/reviewValidationData.ts - a
@@ -7,7 +8,7 @@
 // comment beside it. Moving it here is what makes "derive it once" actually available to the
 // caller that was reimplementing it.
 
-export type ReviewCheckDecision={name:string;required:boolean;conclusion:"passed"|"failed"|"not_run"|"not_configured"|"timed_out"|"truncated"|"flaky";evidenceComplete:boolean;preExisting?:boolean;excerpt?:string;notRunReason?:"no_lockfile";noPassingTests?:true};
+export type ReviewCheckDecision={name:string;required:boolean;conclusion:"passed"|"failed"|"not_run"|"not_configured"|"timed_out"|"truncated"|"flaky";evidenceComplete:boolean;preExisting?:boolean;excerpt?:string;notRunReason?:"no_lockfile";noPassingTests?:true;testCounts?:TestCounts};
 // A required check that reported not_configured is demoted rather than counted as missing evidence.
 // "Missing script: test" is a fact about the repository, not a gap in what BuildIT gathered, and
 // missing evidence carries nextAction retry_review - so every pull request in a repository with no

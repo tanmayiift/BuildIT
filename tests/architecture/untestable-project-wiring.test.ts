@@ -29,6 +29,14 @@ describe("the not-run test reaches every reader", () => {
     expect(report).toMatch(/\.\.\.\(item\.noPassingTests \? \{ noPassingTests: true as const \} : \{\}\)/);
   });
 
+  it("carries the test runner's counts from validation to the page and the comment", () => {
+    expect(read("convex/lib/validationEvidence.ts")).toMatch(/\.\.\.\(item\.testCounts \? \{ testCounts: item\.testCounts \} : \{\}\)/);
+    expect(read("convex/reviewValidationData.ts")).toMatch(/\.\.\.\(item\.testCounts \? \{ testCounts: item\.testCounts \} : \{\}\)/);
+    expect(read("convex/reviewReportWorker.ts")).toMatch(/\.\.\.\(item\.testCounts \? \{ testCounts: item\.testCounts \} : \{\}\)/);
+    expect(read("convex/reviews.ts")).toMatch(/testSummary: testCountsSummary\(item\.testCounts\)/);
+    expect(read("apps/web/src/app/reviews/[id]/live-review-detail.tsx")).toMatch(/summarizeChecks\(evidence\.checks, review\.headSha\)/);
+  });
+
   it("lets the consent panel promise only what will run", () => {
     const prepare = read("convex/dashboardReviews.ts");
     expect(prepare).toMatch(/runs: consentRuns\(pull\.projectTests\)/);

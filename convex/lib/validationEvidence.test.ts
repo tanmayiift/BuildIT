@@ -216,5 +216,23 @@ describe("a failed test suite with no test passing", () => {
     expect(marked(run("failed", "Tests  2 failed | 192 passed (194)"))).not.toHaveProperty("noPassingTests");
     expect(marked(run("passed", "Tests  194 failed (194)"))).not.toHaveProperty("noPassingTests");
   });
+
+  // The page and the comment show six lines of output; vitest prints its summary above them. A suite
+  // with 3 of 197 files passing and one with 192 of 194 tests passing read the same until this.
+  it("records the counts the runner printed, passed or failed, on both commits", () => {
+    const failed = marked(run("failed", " Test Files  194 failed | 3 passed (197)\n      Tests  no tests")), passed = marked(run("passed", "Tests  194 passed (194)"));
+    expect(failed).toMatchObject({ testCounts: { filesFailed: 194, filesPassed: 3 } });
+    expect(failed).not.toHaveProperty("noPassingTests");
+    expect(passed).toMatchObject({ testCounts: { passed: 194 } });
+    expect(marked(run("failed", '[194/194]'))).not.toHaveProperty("testCounts");
+  });
+
+  it("carries the counts into the summaries checkRuns are written from", () => {
+    const side = { ...run("failed", "Tests  2 failed | 192 passed (194)"), outputs: [{ planId: "test", text: "Tests  2 failed | 192 passed (194)", truncated: false, evidenceTruncated: false }] };
+    const scanner = (commitSha: string) => ({ complete: true, commitSha, findings: [], scanner: "builditRules" }) as unknown as ExecutionResponse["scanners"]["head"];
+    const output = withTestSuiteEvidence({ base: side, head: side, scanners: { base: scanner("b".repeat(40)), head: scanner("a".repeat(40)) } });
+    const test = summarizeExecution(output, "b".repeat(40), "a".repeat(40)).find(item => item.planId === "test" && item.revision === "head");
+    expect(test).toMatchObject({ testCounts: { passed: 192, failed: 2 } });
+  });
 });
 
