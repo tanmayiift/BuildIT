@@ -9,10 +9,14 @@ Description: Read-only role GitHub Actions assumes to verify the BuildIT artifac
 # write, no delete, no decrypt, no list beyond the two buckets it inspects.
 
 Parameters:
+  # GitHub's immutable subject form, owner@id/repository@id, which this repository uses
+  # (actions/oidc/customization/sub reports use_immutable_subject). It is the stronger form: a renamed
+  # or re-created repository with the same name cannot present it. The first run used the plain
+  # owner/name and was refused, which is how this was found.
   Repository:
     Type: String
-    Default: tanmayiift/BuildIT
-    AllowedPattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
+    Default: tanmayiift@69677354/BuildIT@1350694820
+    AllowedPattern: '^[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+$'
   ArtifactStackName:
     Type: String
     Default: buildit-production-artifacts
