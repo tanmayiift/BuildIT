@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../live-browser";
 
 const fixture = {
   "user-a": { ownLogin: process.env.BUILDIT_E2E_USER_A_LOGIN, foreignLogin: process.env.BUILDIT_E2E_USER_B_LOGIN, ownOrganization: process.env.BUILDIT_E2E_USER_A_ORG, foreignOrganization: process.env.BUILDIT_E2E_USER_B_ORG, ownMarker: process.env.BUILDIT_E2E_USER_A_MARKER, foreignMarker: process.env.BUILDIT_E2E_USER_B_MARKER, ownReview: process.env.BUILDIT_E2E_USER_A_REVIEW, foreignReview: process.env.BUILDIT_E2E_USER_B_REVIEW },

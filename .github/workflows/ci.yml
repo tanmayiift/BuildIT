@@ -125,38 +125,24 @@ jobs:
       # No states configured is a warning naming what was not proven, never a pass; states present make
       # any leak or broken journey a hard failure.
       - name: Signed-in and two-user browser evidence
-        if: ${{ github.event_name != 'pull_request' }}
-        env:
-          BUILDIT_E2E_BASE_URL: https://buildit-agentic-review.vercel.app
-          USER_A_STATE_B64: ${{ secrets.BUILDIT_E2E_USER_A_STATE_B64 }}
-          USER_B_STATE_B64: ${{ secrets.BUILDIT_E2E_USER_B_STATE_B64 }}
-          SESSION_STATE_B64: ${{ secrets.BUILDIT_E2E_SESSION_STATE_B64 }}
-          BUILDIT_E2E_USER_A_LOGIN: ${{ vars.BUILDIT_E2E_USER_A_LOGIN }}
-          BUILDIT_E2E_USER_B_LOGIN: ${{ vars.BUILDIT_E2E_USER_B_LOGIN }}
-          BUILDIT_E2E_USER_A_ORG: ${{ vars.BUILDIT_E2E_USER_A_ORG }}
-          BUILDIT_E2E_USER_B_ORG: ${{ vars.BUILDIT_E2E_USER_B_ORG }}
-          BUILDIT_E2E_USER_A_MARKER: ${{ vars.BUILDIT_E2E_USER_A_MARKER }}
-          BUILDIT_E2E_USER_B_MARKER: ${{ vars.BUILDIT_E2E_USER_B_MARKER }}
-          BUILDIT_E2E_USER_A_REVIEW: ${{ vars.BUILDIT_E2E_USER_A_REVIEW }}
-          BUILDIT_E2E_USER_B_REVIEW: ${{ vars.BUILDIT_E2E_USER_B_REVIEW }}
-          BUILDIT_E2E_SESSION_LOGIN: ${{ vars.BUILDIT_E2E_SESSION_LOGIN }}
+        # Not run here: CI cannot hold a BuildIT login (refresh tokens are single-use, so a saved
+        # session survives one refresh), and GitHub sign-in through Google refuses automated
+        # browsers. An operator runs `pnpm evidence:browser` in their own signed-in Chrome windows
+        # and commits the result; this step says when that evidence is missing or old.
         run: |
-          mkdir -p .local
-          if [ -n "$USER_A_STATE_B64" ] || [ -n "$USER_B_STATE_B64" ] || [ -n "$SESSION_STATE_B64" ]; then
-            npx playwright install --with-deps chromium
-          fi
-          if [ -z "$USER_A_STATE_B64" ] || [ -z "$USER_B_STATE_B64" ]; then
-            echo "::warning title=Tenant isolation unproven::No two-user storage states are configured, so cross-tenant isolation was NOT checked in a real browser. Set BUILDIT_E2E_USER_A_STATE_B64 and BUILDIT_E2E_USER_B_STATE_B64 (and the BUILDIT_E2E_USER_* variables) to make this a real gate."
+          latest=$(ls docs/evidence/browser-evidence-*.md 2>/dev/null | sort | tail -n 1)
+          if [ -z "$latest" ]; then
+            echo "::warning title=Tenant isolation unproven::No browser evidence is recorded, so cross-tenant isolation and the signed-in journey were NOT checked in a real browser. Run pnpm evidence:browser and commit its file."
           else
-            printf '%s' "$USER_A_STATE_B64" | base64 -d > .local/user-a.json
-            printf '%s' "$USER_B_STATE_B64" | base64 -d > .local/user-b.json
-            BUILDIT_E2E_USER_A_STATE=.local/user-a.json BUILDIT_E2E_USER_B_STATE=.local/user-b.json pnpm test:e2e:tenant-isolation
-          fi
-          if [ -z "$SESSION_STATE_B64" ]; then
-            echo "::warning title=Signed-in journey unproven::No session storage state is configured, so the real signed-in journey was NOT exercised. Set BUILDIT_E2E_SESSION_STATE_B64 and BUILDIT_E2E_SESSION_LOGIN to make this a real gate."
-          else
-            printf '%s' "$SESSION_STATE_B64" | base64 -d > .local/session.json
-            BUILDIT_E2E_SESSION_STATE=.local/session.json pnpm test:e2e:session
+            day=$(basename "$latest" .md | sed 's/^browser-evidence-//')
+            age=$(( ( $(date -u +%s) - $(date -u -d "$day" +%s) ) / 86400 ))
+            if ! grep -q '^\*\*Result: passed\.\*\*$' "$latest"; then
+              echo "::warning title=Tenant isolation unproven::The newest browser evidence ($latest) did not pass, so cross-tenant isolation was NOT checked. Fix it and run pnpm evidence:browser again."
+            elif [ "$age" -gt 14 ]; then
+              echo "::warning title=Tenant isolation unproven::The newest browser evidence is $age days old ($latest), so recent changes were NOT checked in a real browser. Run pnpm evidence:browser."
+            else
+              echo "Browser evidence $latest passed, $age days old."
+            fi
           fi
       - name: Evaluation gate
         run: pnpm eval
