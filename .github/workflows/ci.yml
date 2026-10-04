@@ -58,6 +58,10 @@ jobs:
 
   release-gates:
     runs-on: ubuntu-latest
+    # id-token lets the AWS boundary step exchange this run's OIDC token for the read-only role.
+    permissions:
+      contents: read
+      id-token: write
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,24 +94,30 @@ jobs:
       # and the public dashboard was whatever someone last built by hand in the UI.
       - name: Dashboard definition
         run: pnpm dashboard:check
-      # infra/aws/artifacts.yaml is 308 lines of CloudFormation applied by hand - the KMS key, the
-      # OIDC trust scoping, and the 7-day artifact retention backstop. verify-aws-boundary.mjs was
-      # written to detect drift from it and had zero references, so nothing has ever compared the
-      # committed template against the live stack.
+      # GitHub's OIDC token for this run, exchanged for the read-only buildit-ci-boundary-reader role
+      # (infra/aws/ci-reader.yaml). No AWS key is stored anywhere: the role trusts only workflows of
+      # this repository on main, for an hour, and can make only the reads verify-aws-boundary.mjs makes.
+      - name: Assume the read-only AWS boundary role
+        if: ${{ github.event_name != 'pull_request' && vars.BUILDIT_AWS_CI_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.BUILDIT_AWS_CI_ROLE_ARN }}
+          role-session-name: buildit-ci-boundary
+          aws-region: eu-west-1
+      # Compares the live artifact stack against infra/aws/artifacts.yaml: KMS key, OIDC trust scoping,
+      # the 7-day retention backstop and the stack policy. It warned on every run until October 2026
+      # because CI had no AWS access; with the role configured, drift is a hard failure.
       - name: AWS artifact boundary matches the template
         if: ${{ github.event_name != 'pull_request' }}
         env:
-          BUILDIT_AWS_REGION: ${{ secrets.BUILDIT_AWS_REGION }}
-          BUILDIT_AWS_STACK: ${{ secrets.BUILDIT_AWS_STACK }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          BUILDIT_AWS_REGION: ${{ vars.BUILDIT_AWS_REGION }}
+          BUILDIT_AWS_STACK: ${{ vars.BUILDIT_AWS_STACK }}
+          BUILDIT_AWS_CI_ROLE_ARN: ${{ vars.BUILDIT_AWS_CI_ROLE_ARN }}
         run: |
-          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$BUILDIT_AWS_STACK" ]; then
-            echo "::warning title=AWS boundary unverified::No AWS credentials are configured, so infra/aws/artifacts.yaml was NOT checked against the live stack. The 7-day retention backstop, the Ireland-only assertion and the KMS key remain unverified. Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, BUILDIT_AWS_REGION and BUILDIT_AWS_STACK to turn this into a real gate."
+          if [ -z "$BUILDIT_AWS_CI_ROLE_ARN" ] || [ -z "$BUILDIT_AWS_STACK" ]; then
+            echo "::warning title=AWS boundary unverified::No AWS boundary role is configured, so infra/aws/artifacts.yaml was NOT checked against the live stack. The 7-day retention backstop, the Ireland-only assertion and the KMS key remain unverified. Deploy infra/aws/ci-reader.yaml and set the BUILDIT_AWS_CI_ROLE_ARN, BUILDIT_AWS_REGION and BUILDIT_AWS_STACK repository variables to turn this into a real gate."
             exit 0
           fi
-          # Credentials exist, so drift is a hard failure - that is the case this check was written
-          # for and it has never once been exercised.
           pnpm smoke:aws-boundary
       # Two real accounts, each asking for the other's data, and one real session walking the
       # customer journey. Both configs refuse to run without operator-generated storage states - GitHub

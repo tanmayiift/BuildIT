@@ -32,6 +32,9 @@ jobs:
   # A release must never ship something the gates would have rejected.
   verify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,12 +51,22 @@ jobs:
         env:
           BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN }}
         run: pnpm alerts:verify
+      # GitHub's OIDC token for this run, exchanged for the read-only buildit-ci-boundary-reader role
+      # (infra/aws/ci-reader.yaml). No AWS key is stored anywhere: the role trusts only workflows of
+      # this repository on main, for an hour, and can make only the reads verify-aws-boundary.mjs makes.
+      - name: Assume the read-only AWS boundary role
+        if: ${{ vars.BUILDIT_AWS_CI_ROLE_ARN != '' }}
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.BUILDIT_AWS_CI_ROLE_ARN }}
+          role-session-name: buildit-ci-boundary
+          aws-region: eu-west-1
+      # A release is not allowed to skip this: with no role configured the script fails, and the
+      # release stops rather than shipping over an unverified boundary.
       - name: Verify the AWS artifact boundary before releasing
         env:
-          BUILDIT_AWS_REGION: ${{ secrets.BUILDIT_AWS_REGION }}
-          BUILDIT_AWS_STACK: ${{ secrets.BUILDIT_AWS_STACK }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          BUILDIT_AWS_REGION: ${{ vars.BUILDIT_AWS_REGION }}
+          BUILDIT_AWS_STACK: ${{ vars.BUILDIT_AWS_STACK }}
         run: pnpm smoke:aws-boundary
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e

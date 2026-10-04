@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Read-only role GitHub Actions assumes to verify the BuildIT artifact boundary
+
+# CI's AWS boundary step only ever warned: nothing gave it AWS access, and the alternative on offer
+# was a long-lived access key stored as a repository secret. This is the other way round. GitHub
+# Actions presents a short-lived OIDC token, and this role trusts exactly one subject - workflows of
+# tanmayiift/BuildIT running on main - for an hour at most. It can make the nineteen read calls
+# scripts/verify-aws-boundary.mjs makes, on the resources that script names, and nothing else: no
+# write, no delete, no decrypt, no list beyond the two buckets it inspects.
+
+Parameters:
+  Repository:
+    Type: String
+    Default: tanmayiift/BuildIT
+    AllowedPattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
+  ArtifactStackName:
+    Type: String
+    Default: buildit-production-artifacts
+  ArtifactKeyArn:
+    Type: String
+    AllowedPattern: '^arn:aws:kms:eu-west-1:\d{12}:key/[0-9a-f-]{36}$'
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues: [production, staging]
+
+Rules:
+  IrelandOnly:
+    Assertions:
+      - Assert: !Equals [!Ref "AWS::Region", eu-west-1]
+        AssertDescription: The artifact boundary this role verifies lives in eu-west-1.
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+      Tags:
+        - Key: product
+          Value: buildit
+
+  BoundaryReaderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: buildit-ci-boundary-reader
+      Description: GitHub Actions on main reads the BuildIT artifact boundary; nothing else
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": { "Federated": "${GitHubOidcProvider}" },
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Condition": {
+              "StringEquals": {
+                "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                "token.actions.githubusercontent.com:sub": "repo:${Repository}:ref:refs/heads/main"
+              }
+            }
+          }]
+        }
+      Policies:
+        - PolicyName: verify-artifact-boundary
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadArtifactStack
+                Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackResource
+                  - cloudformation:GetStackPolicy
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ArtifactStackName}/*
+              - Sid: ReadBrokerTrust
+                Effect: Allow
+                Action:
+                  - iam:GetRole
+                  - iam:GetOpenIDConnectProvider
+                Resource:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/buildit-${Environment}-content-broker
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/oidc.vercel.com/*
+              - Sid: ReadKeyConfiguration
+                Effect: Allow
+                Action:
+                  - kms:DescribeKey
+                  - kms:GetKeyPolicy
+                  - kms:GetKeyRotationStatus
+                Resource: !Ref ArtifactKeyArn
+              - Sid: ReadBucketConfiguration
+                Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:GetEncryptionConfiguration
+                  - s3:GetBucketPublicAccessBlock
+                  - s3:GetBucketPolicy
+                  - s3:GetBucketPolicyStatus
+                  - s3:GetBucketVersioning
+                  - s3:GetLifecycleConfiguration
+                  - s3:GetInventoryConfiguration
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                Resource:
+                  - !Sub arn:${AWS::Partition}:s3:::buildit-${Environment}-${AWS::AccountId}-artifacts-eu-west-1
+                  - !Sub arn:${AWS::Partition}:s3:::buildit-${Environment}-${AWS::AccountId}-artifact-inventory-eu-west-1
+              # head-object on the inventory manifests, to prove the latest delivery is fresh and
+              # KMS-encrypted. Metadata only: no kms:Decrypt is granted, so object bodies stay unreadable.
+              - Sid: ReadInventoryManifestMetadata
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::buildit-${Environment}-${AWS::AccountId}-artifact-inventory-eu-west-1/inventory/*
+      Tags:
+        - Key: product
+          Value: buildit
+        - Key: workload
+          Value: ci-boundary-reader
+
+Outputs:
+  BoundaryReaderRoleArn:
+    Value: !GetAtt BoundaryReaderRole.Arn
