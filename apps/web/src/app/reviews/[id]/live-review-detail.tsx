@@ -77,6 +77,7 @@ type Evidence = {
     evidenceAvailable: boolean;
     failureClass?: string;
     notRunReason?: "no_lockfile";
+    testSummary?: string;
   }>;
   rounds: Array<{
     id: string;
@@ -271,7 +272,7 @@ function ReviewEvidence({ id }: { id: string }) {
       />
     );
   const { review, repository } = evidence;
-  const checkSummaries = summarizeChecks(evidence.checks),
+  const checkSummaries = summarizeChecks(evidence.checks, review.headSha),
     preExisting = preExistingFailurePresentation(review.status, checkSummaries),
     baseVerdict = statusPresentation(review.status, review.isStale, review.statusReasonCode),
     verdict = preExisting ? { ...baseVerdict, title: preExisting.title, summary: preExisting.summary } : baseVerdict,
@@ -413,6 +414,7 @@ function ReviewEvidence({ id }: { id: string }) {
               </span>
               <time>{(item.durationMs / 1000).toFixed(1)}s</time>
               <span>
+                {item.testSummary ? `${item.testSummary} on this commit · ` : ""}
                 {notRunExplanation(item.notRunReason) ?? (item.evidenceAvailable
                   ? `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · encrypted output recorded${item.executions > 1 ? ` · ${item.outcomeSummary}` : ""}`
                   : `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · output incomplete${item.executions > 1 ? ` · ${item.outcomeSummary}` : ""}`)}

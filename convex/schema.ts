@@ -327,6 +327,7 @@ export default defineSchema({
     notRunReason: v.optional(v.literal("no_lockfile")),
     // A failed test suite whose own output shows no test passing; see withTestSuiteEvidence.
     noPassingTests: v.optional(v.literal(true)),
+    testCounts: v.optional(value.testCounts),
     failureClass: v.optional(value.failureClass), startedAt: v.number(), completedAt: v.optional(v.number()),
   }).index("by_review", ["reviewId"])
     .index("by_review_round", ["reviewId", "roundId"]),

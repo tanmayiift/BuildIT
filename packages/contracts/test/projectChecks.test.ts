@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeReviewDecision, consentRuns, declaresTestScript, lockfileManager, projectTests } from "../src/index.js";
+import { computeReviewDecision, consentRuns, declaresTestScript, lockfileManager, projectTests, testCounts, testCountsSummary } from "../src/index.js";
 
 describe("what BuildIT can run for a JavaScript project", () => {
   it("reads the package manager from exactly one root lockfile", () => {
@@ -87,6 +87,35 @@ describe("reading how many tests passed", () => {
     expect(passedTestCount("      Tests  no tests")).toBeUndefined();
     expect(passedTestCount('   const z = await import("../../index.js");\n⎯⎯⎯[194/194]⎯')).toBeUndefined();
     expect(passedTestCount(undefined)).toBeUndefined();
+  });
+});
+
+describe("recording what a test runner's summary said", () => {
+  it("keeps tests and test files apart", () => {
+    expect(testCounts(" Test Files  1 failed | 11 passed (12)\n      Tests  2 failed | 192 passed (194)")).toEqual({ filesFailed: 1, filesPassed: 11, failed: 2, passed: 192 });
+    expect(testCounts("Test Suites: 1 failed, 5 passed, 6 total\nTests:       1 failed, 193 passed, 194 total")).toEqual({ filesFailed: 1, filesPassed: 5, failed: 1, passed: 193 });
+    expect(testCounts("  12 passing (30ms)\n  1 failing")).toEqual({ passed: 12, failed: 1 });
+    expect(testCounts("# tests 13\n# pass 12\n# fail 1")).toEqual({ passed: 12, failed: 1 });
+    expect(testCounts("Total:   13\nPassed:  12\nFailed:  1")).toEqual({ passed: 12, failed: 1 });
+  });
+
+  it("reads through a workspace runner's line prefix", () => {
+    expect(testCounts("packages/core test:       Tests  3 failed | 40 passed (43)")).toEqual({ failed: 3, passed: 40 });
+    expect(testCounts("@acme/core:test:  Test Files  2 passed (2)")).toEqual({ filesPassed: 2 });
+  });
+
+  it("does not read a count out of ordinary prose or a code frame", () => {
+    expect(testCounts("The 3 passed arguments are validated\n   const tests = 12 passed")).toEqual({});
+    expect(testCounts('   const z = await import("../../index.js");\n⎯⎯⎯[194/194]⎯')).toEqual({});
+    expect(testCounts(undefined)).toEqual({});
+  });
+
+  it("says one line a person can read, naming which unit was counted", () => {
+    expect(testCountsSummary({ passed: 192, failed: 2, filesPassed: 11, filesFailed: 1 })).toBe("Tests: 192 passed, 2 failed");
+    expect(testCountsSummary({ failed: 194 })).toBe("Tests: 194 failed");
+    expect(testCountsSummary({ filesPassed: 3, filesFailed: 194 })).toBe("Test files: 3 passed, 194 failed");
+    expect(testCountsSummary({})).toBeUndefined();
+    expect(testCountsSummary(undefined)).toBeUndefined();
   });
 });
 

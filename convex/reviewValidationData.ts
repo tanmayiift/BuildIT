@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { checkConclusion, checkKind } from "./validators";
+import { checkConclusion, checkKind, testCounts } from "./validators";
 import { blocksVerdict } from "./lib/coverageGate";
 import { computeReviewDecision } from "@buildit/contracts";
 import { assertReviewParent } from "./lib/parentConsistency";
@@ -48,7 +48,7 @@ export const reserveOutput = internalMutation({
 const summary = v.object({ revision: v.union(v.literal("base"), v.literal("head")), commitSha: v.string(), planId: v.string(), kind: checkKind,
   required: v.boolean(), conclusion: checkConclusion, exitCode: v.optional(v.number()), durationMs: v.number(), commandFingerprint: hash, nameHash: hash,
   credentialTeardownProved: v.literal(true), sandboxStopped: v.literal(true), executionFingerprint:v.optional(hash),outputHash:v.optional(hash),outputTruncated:v.optional(v.boolean()),
-  scannerName:v.optional(v.string()),scannerVersion:v.optional(v.string()),regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))), notRunReason: v.optional(v.literal("no_lockfile")), noPassingTests: v.optional(v.literal(true)) });
+  scannerName:v.optional(v.string()),scannerVersion:v.optional(v.string()),regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))), notRunReason: v.optional(v.literal("no_lockfile")), noPassingTests: v.optional(v.literal(true)), testCounts: v.optional(testCounts) });
 export const completeValidation = internalMutation({
   args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: hash, size: v.number(), summaries: v.array(summary), manager: v.union(v.literal("npm"), v.literal("pnpm"), v.literal("yarn"), v.literal("none")), now: v.number() },
   handler: async (ctx, args) => {
@@ -60,7 +60,7 @@ export const completeValidation = internalMutation({
     // scanners for both base and head commits: fourteen records. Repositories
     // may add one trusted check, so sixteen is the explicit maximum.
     if (!args.summaries.length || args.summaries.length > 16) throw new ConvexError("validation_summary_invalid");
-    for (const item of args.summaries) if (!/^[0-9a-f]{40}$/.test(item.commitSha) || !/^[0-9a-f]{64}$/.test(item.commandFingerprint) || !/^[0-9a-f]{64}$/.test(item.nameHash) || (item.executionFingerprint&&!/^[0-9a-f]{64}$/.test(item.executionFingerprint)) || (item.outputHash&&!/^[0-9a-f]{64}$/.test(item.outputHash)) || !Number.isInteger(item.durationMs) || item.durationMs < 0 || item.durationMs > 240_000 || (item.revision === "base" ? review.baseSha : review.headSha) !== item.commitSha) throw new ConvexError("validation_summary_invalid");
+    for (const item of args.summaries) if (!/^[0-9a-f]{40}$/.test(item.commitSha) || !/^[0-9a-f]{64}$/.test(item.commandFingerprint) || !/^[0-9a-f]{64}$/.test(item.nameHash) || (item.executionFingerprint&&!/^[0-9a-f]{64}$/.test(item.executionFingerprint)) || (item.outputHash&&!/^[0-9a-f]{64}$/.test(item.outputHash)) || !Number.isInteger(item.durationMs) || item.durationMs < 0 || item.durationMs > 240_000 || (item.revision === "base" ? review.baseSha : review.headSha) !== item.commitSha || Object.values(item.testCounts ?? {}).some(count => !Number.isSafeInteger(count) || count < 0)) throw new ConvexError("validation_summary_invalid");
     const existing = await ctx.db.query("checkRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
     if (isStored(artifact) && existing.length) return artifact._id;
     if (!isPending(artifact)) throw new ConvexError("validation_artifact_mismatch");
@@ -74,6 +74,7 @@ export const completeValidation = internalMutation({
         ...(item.scannerName?{scannerName:item.scannerName}:{}),...(item.scannerVersion?{scannerVersion:item.scannerVersion}:{}),...(item.regressionClassification?{regressionClassification:item.regressionClassification}:{}),
         ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}),
         ...(item.noPassingTests ? { noPassingTests: true as const } : {}),
+        ...(item.testCounts ? { testCounts: item.testCounts } : {}),
         ...(item.conclusion === "failed" ? { failureClass: "code" as const } : {}), startedAt: Math.max(0, args.now - item.durationMs), completedAt: args.now });
       if (item.revision === "base") {
         const cached = await ctx.db.query("baseResults").withIndex("by_full_cache_key", q => q.eq("repositoryId", review.repositoryId).eq("baseSha", review.baseSha).eq("commandFingerprint", item.commandFingerprint).eq("configRevisionId", review.configRevisionId).eq("runnerImageVersion", review.runnerImageVersion).eq("architecture", "linux-x64").eq("networkPolicyVersion", "deny-all-v1")).unique();

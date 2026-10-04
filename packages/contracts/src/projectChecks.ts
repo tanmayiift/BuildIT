@@ -52,23 +52,47 @@ export function consentRuns(tests: ProjectTests | undefined): string[] {
     : "no project tests: there is no lockfile at this commit, and package.json declares no test script"];
 }
 
-// How many tests a runner's own output says passed, or undefined when it says nothing readable. Used for
-// one decision only: whether a required test suite that fails on both commits still ran well enough to
-// count its failures as pre-existing. Absence of a pass count is never read as a pass.
-const passPatterns = [
-  /Tests?\s*:?\s+(?:[^\n]*?[|,]\s*)?(\d+)\s+passed/gi,   // vitest "Tests  2 failed | 192 passed", jest "Tests: 1 failed, 193 passed"
-  /^\s*(\d+)\s+passing\b/gim,                            // mocha "12 passing"
-  /^\s*[#\u2139]\s*pass\s+(\d+)/gim,                       // node:test / tap "# pass 12", "\u2139 pass 12"
-  /\b(\d+)\s+tests?\s+passed\b/gi,                        // ava "12 tests passed"
-  /^\s*Passed:\s+(\d+)/gim,                                // uvu "Passed: 12"
-];
-export function passedTestCount(output: string | undefined): number | undefined {
-  if (!output) return undefined;
-  const text = output.replace(/\u001b\[[0-9;]*m/g, "");
-  let best: number | undefined;
-  for (const pattern of passPatterns) for (const match of text.matchAll(pattern)) {
-    const count = Number(match[1]);
-    if (Number.isSafeInteger(count)) best = Math.max(best ?? 0, count);
+// How many tests a runner's own output says passed and failed, read only from summary lines anchored
+// at the start of a line - "Tests  2 failed | 192 passed (194)", not any sentence containing "test".
+// Test files are kept apart from tests: vitest's "Test Files  194 failed | 3 passed" says three files
+// ran clean, which does mean tests passed, but not how many. Absence of a count is never a pass. A
+// workspace runner's prefix - pnpm's "packages/a test: ", turbo's "a:test: " - is removed first.
+export type TestCounts = { passed?: number; failed?: number; filesPassed?: number; filesFailed?: number };
+
+const workspacePrefix = /^(?:(?:\S*\/\S*|\.) [\w:.-]+|[\w@/.-]+:[\w:.-]+):\s+/;  // a path, so never "Test Suites: "
+const count = (line: string, word: string) => { const match = new RegExp(`(\\d+)\\s+${word}`, "i").exec(line); return match ? Number(match[1]) : undefined; };
+
+export function testCounts(output: string | undefined): TestCounts {
+  if (!output) return {};
+  const counts: TestCounts = {};
+  const keep = (key: keyof TestCounts, value: number | undefined) => { if (value !== undefined && Number.isSafeInteger(value)) counts[key] = Math.max(counts[key] ?? 0, value); };
+  for (const raw of output.replace(/\u001b\[[0-9;]*m/g, "").split(/\r?\n/)) {
+    const line = raw.trim().replace(workspacePrefix, "");
+    let match: RegExpExecArray | null;
+    if ((match = /^Test (?:Files|Suites):?\s+(.*)$/i.exec(line))) { keep("filesPassed", count(match[1]!, "passed")); keep("filesFailed", count(match[1]!, "failed")); continue; }
+    if ((match = /^Tests:?\s+(.*)$/i.exec(line))) { keep("passed", count(match[1]!, "passed")); keep("failed", count(match[1]!, "failed")); continue; }  // vitest, jest
+    if ((match = /^(\d+)\s+passing\b/i.exec(line))) { keep("passed", Number(match[1])); continue; }                                      // mocha
+    if ((match = /^(\d+)\s+failing\b/i.exec(line))) { keep("failed", Number(match[1])); continue; }
+    if ((match = /^[#\u2139]\s*pass\s+(\d+)$/i.exec(line))) { keep("passed", Number(match[1])); continue; }                             // node:test, tap
+    if ((match = /^[#\u2139]\s*fail\s+(\d+)$/i.exec(line))) { keep("failed", Number(match[1])); continue; }
+    if ((match = /^[\u2714\u2716]?\s*(\d+)\s+tests?\s+(passed|failed)$/i.exec(line))) { keep(match[2]!.toLowerCase() === "passed" ? "passed" : "failed", Number(match[1])); continue; } // ava
+    if ((match = /^(Passed|Failed):\s+(\d+)$/i.exec(line))) keep(match[1]!.toLowerCase() === "passed" ? "passed" : "failed", Number(match[2])); // uvu
   }
-  return best;
+  return counts;
+}
+
+/** The counts as one line - "Tests: 192 passed, 2 failed" - or undefined when the output showed none. */
+export function testCountsSummary(counts: TestCounts | undefined): string | undefined {
+  if (!counts) return undefined;
+  const tests = counts.passed !== undefined || counts.failed !== undefined;
+  const [unit, passed, failed] = tests ? ["Tests", counts.passed, counts.failed] : ["Test files", counts.filesPassed, counts.filesFailed];
+  const parts = [passed === undefined ? "" : `${passed} passed`, failed === undefined ? "" : `${failed} failed`].filter(Boolean);
+  return parts.length ? `${unit}: ${parts.join(", ")}` : undefined;
+}
+
+/** Tests the output shows passing: the test count, or at least the number of clean test files. */
+export function passedTestCount(output: string | undefined): number | undefined {
+  const counts = testCounts(output);
+  if (counts.passed !== undefined || counts.filesPassed !== undefined) return Math.max(counts.passed ?? 0, counts.filesPassed ?? 0);
+  return undefined;
 }

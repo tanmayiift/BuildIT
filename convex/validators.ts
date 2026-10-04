@@ -91,6 +91,8 @@ export const reviewStage = v.union(
 // completed and its checksum was accepted. The real controls are KMS envelope encryption and expiry
 // within seven days, which /data-handling describes. "rejected" had no producer at all.
 export const storageState = v.union(v.literal("pending"), v.literal("stored"));
+// What a test runner's own summary said, parsed at validation time; see withTestSuiteEvidence.
+export const testCounts = v.object({ passed: v.optional(v.number()), failed: v.optional(v.number()), filesPassed: v.optional(v.number()), filesFailed: v.optional(v.number()) });
 export const sourceType = v.union(v.literal("pull_request"), v.literal("github_issue"), v.literal("linear"), v.literal("jira"), v.literal("repository_document"), v.literal("test"));
 export const requirementStatus = v.union(v.literal("resolved"), v.literal("missing"), v.literal("inaccessible"), v.literal("conflicting"), v.literal("excluded"));
 export const severity = v.union(v.literal("critical"), v.literal("high"), v.literal("warning"), v.literal("info"));

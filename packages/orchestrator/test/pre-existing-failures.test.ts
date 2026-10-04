@@ -75,6 +75,11 @@ describe("what the report says about it", () => {
     expect(body).not.toContain("| lint | Required | **Failed** · already failing on base |");
   });
 
+  it("prints the runner's own counts on the row, so a partly-run suite is visible", () => {
+    const { body } = composeVerifiedReport({ ...base, checks: [check({ preExisting: true, testCounts: { filesFailed: 194, filesPassed: 3 } })] });
+    expect(body).toContain("| test | Required | Failed · already failing on base · Test files: 3 passed, 194 failed |");
+  });
+
   it("does not claim a required check failed when the only failure predates the change", () => {
     const { body } = composeVerifiedReport({ ...base, checks: [check({ preExisting: true })] });
     expect(body).not.toContain("required check failed");

@@ -1,4 +1,5 @@
 import { redact } from "@buildit/security";
+import { testCountsSummary } from "@buildit/contracts";
 import { computeReviewDecision, gateClaims, type EvidenceRecord, type MaterialClaim, type ReviewCheckDecision } from "./index.js";
 
 type ReportFinding = { title: string; severity: "critical" | "high" | "warning" | "info"; resolution: "accepted" | "rejected" | "uncertain"; blocking: boolean; evidenceIds: string[]; path?: string; startLine?: number; endLine?: number; impact?: string; explanation?: string };
@@ -114,7 +115,7 @@ function checkExcerpt(check: ReviewCheckDecision) {
 }
 
   const checkRows = input.checks.length
-    ? input.checks.map(check => `| ${safe(check.name)} | ${check.required ? "Required" : "Advisory"} | ${check.conclusion === "failed" ? (check.preExisting ? `${conclusion(check.conclusion)} · already failing on base` : `**${conclusion(check.conclusion)}**`) : conclusion(check.conclusion)}${check.evidenceComplete ? "" : " · evidence incomplete"} |`)
+    ? input.checks.map(check => `| ${safe(check.name)} | ${check.required ? "Required" : "Advisory"} | ${check.conclusion === "failed" ? (check.preExisting ? `${conclusion(check.conclusion)} · already failing on base` : `**${conclusion(check.conclusion)}**`) : conclusion(check.conclusion)}${testCountsSummary(check.testCounts) ? ` · ${testCountsSummary(check.testCounts)}` : ""}${check.evidenceComplete ? "" : " · evidence incomplete"} |`)
     : ["| No checks configured | — | Not run |"];
   const failedChecks = input.checks.filter(check => check.conclusion === "failed" || check.conclusion === "timed_out");
   // not_configured deliberately excluded: there is no output, only the package manager saying so.

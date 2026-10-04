@@ -46,6 +46,15 @@ describe("review presentation", () => {
     ]);
   });
 
+  it("shows the head commit's test counts, not the base commit's", () => {
+    const [test] = summarizeChecks([
+      { kind: "test", required: true, conclusion: "failed", durationMs: 300, evidenceAvailable: true, commitSha: "b".repeat(40), testSummary: "Tests: 190 passed, 4 failed" },
+      { kind: "test", required: true, conclusion: "failed", durationMs: 400, evidenceAvailable: true, commitSha: "a".repeat(40), testSummary: "Tests: 192 passed, 2 failed" },
+    ], "a".repeat(40));
+    expect(test).toMatchObject({ testSummary: "Tests: 192 passed, 2 failed" });
+    expect(summarizeChecks([{ kind: "lint", required: true, conclusion: "passed", durationMs: 1, evidenceAvailable: true, commitSha: "a".repeat(40) }], "a".repeat(40))[0]).not.toHaveProperty("testSummary");
+  });
+
   it("links an authorized person to the exact pull request without inventing a URL", () => {
     expect(pullRequestHref("tanmayiift", "buildit-public-fixture", 2)).toBe("https://github.com/tanmayiift/buildit-public-fixture/pull/2");
     expect(pullRequestHref("", "repository", 2)).toBeUndefined();
