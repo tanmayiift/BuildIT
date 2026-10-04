@@ -400,8 +400,13 @@ suite that otherwise ran.
   count, but the page and the comment show only the last six lines, where vitest never prints its summary, so
   nobody could see what was counted. Validation now records the runner's own counts on the test check
   (`testCounts`: tests and test files, kept apart) and both readers print them from one formatter -
-  for example "Failed · already failing on base · Tests: 192 passed, 2 failed". A count is read only from a
-  summary line, never from prose or a code frame.
+  for example "Failed · already failing on base · Tests: 7 passed, 5 failed · Test files: 6 passed, 192
+  failed". Test files are shown whenever one failed. A count is read only from a summary line, never from
+  prose or a code frame.
+- **Open policy question, measured.** With the counts recorded, zod's suite on both commits is 6 of 198 test
+  files loading, and 7 of 12 tests passing. Under the #91 rule, which is inconclusive only when no test
+  passes, that stays `checks_passed`. A stricter rule would also count file-level coverage, for example
+  inconclusive when most test files fail on both commits. Not changed without a decision.
 
 The original record follows.
 

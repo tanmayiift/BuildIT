@@ -81,13 +81,19 @@ export function testCounts(output: string | undefined): TestCounts {
   return counts;
 }
 
-/** The counts as one line - "Tests: 192 passed, 2 failed" - or undefined when the output showed none. */
+/** The counts as one line - "Tests: 192 passed, 2 failed" - or undefined when the output showed none.
+ *  Test files are added whenever one failed, or when they are all there is. buildit-demo-zod printed
+ *  "Tests 5 failed | 7 passed" beside "Test Files 192 failed | 6 passed": the twelve tests were the few
+ *  that loaded, and showing only those made a suite that barely ran look like a small one. */
 export function testCountsSummary(counts: TestCounts | undefined): string | undefined {
   if (!counts) return undefined;
-  const tests = counts.passed !== undefined || counts.failed !== undefined;
-  const [unit, passed, failed] = tests ? ["Tests", counts.passed, counts.failed] : ["Test files", counts.filesPassed, counts.filesFailed];
-  const parts = [passed === undefined ? "" : `${passed} passed`, failed === undefined ? "" : `${failed} failed`].filter(Boolean);
-  return parts.length ? `${unit}: ${parts.join(", ")}` : undefined;
+  const line = (unit: string, passed: number | undefined, failed: number | undefined) => {
+    const parts = [passed === undefined ? "" : `${passed} passed`, failed === undefined ? "" : `${failed} failed`].filter(Boolean);
+    return parts.length ? `${unit}: ${parts.join(", ")}` : "";
+  };
+  const tests = line("Tests", counts.passed, counts.failed);
+  const files = !tests || (counts.filesFailed ?? 0) > 0 ? line("Test files", counts.filesPassed, counts.filesFailed) : "";
+  return [tests, files].filter(Boolean).join(" · ") || undefined;
 }
 
 /** Tests the output shows passing: the test count, or at least the number of clean test files. */

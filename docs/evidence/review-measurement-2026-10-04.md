@@ -187,3 +187,54 @@ A review that falls back between providers costs two validations.
 - A suite that fails on both commits gives no evidence about the change, whether or not the failure is
   this pull request's fault.
 - Recorded in `docs/operations/known-defects.md`.
+
+## Third and fourth runs: what zod's test suite actually did
+
+### After #91: `nx7asz0vnc4z1mwxs2ppj3wtns8fmmvg`, 13:12 UTC
+
+- The verdict was still `checks_passed`, with the new wording: "This change introduced no new failure in its
+  5 required checks", naming `test`, `lint` and `gitleaks` as already failing.
+- `test` failed on both commits and was not marked `noPassingTests`, because its full output contained a
+  pass count.
+- Nothing a reader could see showed that count. The page and the comment show the last six lines of output,
+  and vitest prints its summary above them. That gap is what #92 closes.
+
+### After #92: `nx7avqsnya9qe09nwghhw9m3s18fnm7t`, 15:36 UTC
+
+The PR, scope and provider were the same as before: `1a295bd → 7135ab8`, OpenAI, $5 ceiling. The verdict was
+`checks_passed`.
+
+| Stage | Finished | Took |
+|---|---|---|
+| created on consent | 15:36:32.286 | — |
+| context | 15:37:01.759 | 29.5 s |
+| validation | 15:40:10.840 | 3 min 9.1 s |
+| analysis | 15:41:29.297 | 1 min 18.5 s |
+| decision | 15:41:35.815 | 6.5 s |
+
+**Consent to verdict: 5 min 3.5 s.**
+
+- **Sandbox:** 184 s, and all three measures agree: the org and platform counters (921 → 1105), the
+  `executionJobs` span (184.0 s) and the `usageLedger` (184 s). That is 35 s more than the second run,
+  for the same commands on the same commits. It is spread across `test` (+16 s), OSV-Scanner (+8 s) and
+  the dependency install (+4 s), so it is sandbox variance, not a change in what ran. Capacity at 184 s
+  is ~19 reviews per workspace per month, and ~88 on the platform.
+- **Model:** five calls, the same models as before, 475,791 tokens, **$0.6676**.
+
+**What the test suite did, now recorded on the check (`checkRuns.testCounts`), identical on both commits:**
+
+| | Passed | Failed |
+|---|---|---|
+| Test files | 6 | 192 |
+| Tests | 7 | 5 |
+
+- 192 of zod's 198 test files failed to load (`import("../../index.js")`). The 12 tests that ran came from
+  the 6 files that loaded.
+- The rule chosen in #91 makes a suite inconclusive only when *no* test passes. Seven passed, so the failure
+  was treated as pre-existing and the verdict is `checks_passed`. That is the rule working as decided.
+  Whether 6 of 198 files is enough evidence to call a suite "ran" is a policy question, recorded in
+  `docs/operations/known-defects.md`.
+- The page showed "Tests: 7 passed, 5 failed on this commit", and the comment row read
+  `Failed · already failing on base · Tests: 7 passed, 5 failed`. Both hid the 192 failed files, so the
+  formatter now adds test files whenever one failed:
+  `Tests: 7 passed, 5 failed · Test files: 6 passed, 192 failed`.
