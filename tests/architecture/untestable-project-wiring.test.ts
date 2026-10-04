@@ -37,6 +37,12 @@ describe("the not-run test reaches every reader", () => {
     expect(read("apps/web/src/app/reviews/[id]/live-review-detail.tsx")).toMatch(/summarizeChecks\(evidence\.checks, review\.headSha\)/);
   });
 
+  it("carries each check's planned step from validation to the page's row name", () => {
+    expect(read("convex/reviewValidationData.ts")).toMatch(/\.\.\.\(isCheckPlanId\(item\.planId\) \? \{ planId: item\.planId \} : \{\}\)/);
+    expect(read("convex/reviews.ts")).toMatch(/\.\.\.\(item\.planId \? \{ planId: item\.planId \} : \{\}\)/);
+    expect(read("apps/web/src/app/reviews/[id]/live-review-detail.tsx")).toMatch(/<strong>\{checkLabel\(item\)\}<\/strong>/);
+  });
+
   it("lets the consent panel promise only what will run", () => {
     const prepare = read("convex/dashboardReviews.ts");
     expect(prepare).toMatch(/runs: consentRuns\(pull\.projectTests\)/);

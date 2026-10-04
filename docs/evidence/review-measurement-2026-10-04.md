@@ -115,7 +115,9 @@ A test-running measurement needs a repository with a lockfile: `buildit-demo-zod
 ## Second run: a review that runs the project's tests (`buildit-demo-zod#1`)
 
 Run after #89 was deployed, which records each scanner's real duration. The project has a
-`pnpm-lock.yaml`, so install, test, lint, typecheck and build all ran.
+`pnpm-lock.yaml`, so the dependency install, test, lint and typecheck all ran. No build step runs unless a trusted
+configuration adds one; the row the review page labelled "Build" was the install, which the runner files under
+check kind `build` (labelled correctly from #94).
 
 - PR `tanmayiift/buildit-demo-zod#1`, `1a295bd → 7135ab8`, 8 files, +218 −1.
 - Provider OpenAI, ceiling $5. Gemini was skipped: it is out of credit and the fallback was already proven above.
@@ -147,7 +149,7 @@ The per-review ledger is no longer 0: scanner durations are recorded since #89.
 |---|---|---|
 | test | 43.4 s / 46.5 s | failed on both (see finding) |
 | dependency audit (OSV-Scanner) | 16.1 s / 16.7 s | passed |
-| build | 10.3 s / 10.9 s | passed |
+| dependency install | 10.3 s / 10.9 s | passed |
 | lint (advisory) | 2.3 s / 2.3 s | failed on both |
 | secret scan (Gitleaks) | 1.5 s / 1.6 s | failed on both |
 | typecheck (advisory) | 0.5 s / 0.5 s | not configured |
@@ -239,3 +241,34 @@ The PR, scope and provider were the same as before: `1a295bd → 7135ab8`, OpenA
   `Failed · already failing on base · Tests: 7 passed, 5 failed`. Both hid the 192 failed files, so the
   formatter now adds test files whenever one failed:
   `Tests: 7 passed, 5 failed · Test files: 6 passed, 192 failed`.
+
+### After #93: `nx7eyh167yxka9rrk53fszke1d8fmr0v`, 16:53 UTC — the decided rule, live
+
+The same PR, scope and provider. **Verdict: `inconclusive`, reason `test_suite_failing`, next action
+`repair_test_suite`.**
+
+| Stage | Finished | Took |
+|---|---|---|
+| created on consent | 16:53:54.978 | — |
+| context | 16:54:25.762 | 30.8 s |
+| validation | 16:57:05.515 | 2 min 39.8 s |
+| analysis | 16:58:21.863 | 1 min 16.3 s |
+| decision | 16:58:29.352 | 7.5 s |
+
+- **Consent to verdict:** 4 min 34.4 s.
+- **Sandbox:**
+  - 153 s on the platform counter (1105 → 1258);
+  - 153.8 s on the `executionJobs` span;
+  - 157 s in the `usageLedger`, which sums command times.
+- **Model:** 477,580 tokens, **$0.6722**.
+- **The test check:**
+  - It recorded the same counts on both commits as before: tests 7 passed / 5 failed, test files 6 passed / 192 failed.
+  - It now carries `testSuiteFailing`, so the failure is no longer excused as pre-existing.
+- **What each reader was told:**
+  - **PR comment:** "Review needs attention"; "too little of it ran - no test passed, or most of its test
+    files failed - so it says nothing about this change". The row reads
+    `Failed · already failing on base · Tests: 7 passed, 5 failed · Test files: 6 passed, 192 failed`.
+  - **GitHub check:** `neutral`, "Review needs attention". It is the same check run, updated in place, so
+    its timestamps still read 5 September.
+  - **Review page:** "Inconclusive — A safe decision is not possible yet". Next step: "Make the test
+    suite pass, then review again". The test row shows the same counts "on this commit".

@@ -97,6 +97,7 @@ export const getEvidence = query({
       checks: checks.map(item => ({ id: item._id, kind: item.kind, required: item.required, status: item.status,
         conclusion: item.conclusion, commitSha: item.commitSha, exitCode: item.exitCode, durationMs: item.durationMs,
         evidenceAvailable: Boolean(item.artifactId), failureClass: item.failureClass, ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}),
+        ...(item.planId ? { planId: item.planId } : {}),
         ...(testCountsSummary(item.testCounts) ? { testSummary: testCountsSummary(item.testCounts) } : {}) })),
       rounds: rounds.map(item => ({ id: item._id, roundNumber: item.roundNumber, candidateCommitSha: item.candidateCommitSha,
         validationOutcome: item.validationOutcome, completedValidation: item.completedValidation, startedAt: item.startedAt, completedAt: item.completedAt })),

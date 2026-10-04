@@ -125,6 +125,36 @@ describe("review presentation", () => {
   });
 });
 
+// zod #1, 4 Oct 2026: the page showed "Build · Required · Passed" for the dependency install. BuildIT
+// built nothing; the runner files the install under kind "build".
+describe("naming the step a check row ran", () => {
+  it("calls the install what it is, and keeps a trusted build check apart from it", async () => {
+    const { checkLabel, summarizeChecks } = await import("./review-presentation");
+    expect(checkLabel({ kind: "build", planId: "install" })).toBe("Dependency install");
+    expect(checkLabel({ kind: "build", planId: "build" })).toBe("Build");
+    expect(checkLabel({ kind: "secret_scan", planId: "gitleaks" })).toBe("Secret scan");
+    const rows = summarizeChecks([
+      { kind: "build", planId: "install", required: true, conclusion: "passed", durationMs: 10, evidenceAvailable: true },
+      { kind: "build", planId: "build", required: true, conclusion: "failed", durationMs: 20, evidenceAvailable: true },
+    ]);
+    expect(rows.map(row => [checkLabel(row), row.conclusion])).toEqual([["Dependency install", "passed"], ["Build", "failed"]]);
+  });
+
+  it("does not guess for a row recorded before the step was stored", async () => {
+    const { checkLabel } = await import("./review-presentation");
+    expect(checkLabel({ kind: "build" })).toBe("Dependency install or build");
+    expect(checkLabel({ kind: "test" })).toBe("Test");
+  });
+
+  it("names a failing install as the install in the pre-existing summary", async () => {
+    const { preExistingFailurePresentation } = await import("./review-presentation");
+    const shown = preExistingFailurePresentation("checks_passed", [
+      { kind: "build", planId: "install", required: true, conclusion: "failed", durationMs: 1, evidenceAvailable: true, executions: 2, outcomeSummary: "2 failed" },
+    ])!;
+    expect(shown.summary).toMatch(/\(dependency install\)/);
+  });
+});
+
 describe("a pass with required checks that were already failing", () => {
   it("does not claim every required check passed", async () => {
     const { preExistingFailurePresentation } = await import("./review-presentation");

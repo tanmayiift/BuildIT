@@ -98,6 +98,19 @@ describe("recorded outcome evidence", () => {
     expect(rows.filter(row => row.name === "ci_regression_caught")).toHaveLength(expected);
   });
 
+  // The page names a row by its planned step; kind alone called the dependency install "Build".
+  it("stores which planned step each check run was, and nothing outside the known steps", async () => {
+    const t = convexTest(schema, modules), scope = await summaryFixture(t), now = Date.now(), checksum = "c".repeat(64);
+    const artifactId = await t.run(ctx => ctx.db.insert("artifacts", { ...pickScope(scope), type: "command_output", storageKey: "fixture/validation.json", encrypted: true, checksum, size: 100, storageState: "pending", expiresAt: now + 60_000, deletionAttempts: 0 }));
+    const row = (planId: string, revision: "base" | "head") => ({ planId, kind: "build" as const, required: true, durationMs: 5, commandFingerprint: "d".repeat(64), nameHash: (planId === "install" ? "e" : "f").repeat(64),
+      credentialTeardownProved: true as const, sandboxStopped: true as const, revision, commitSha: (revision === "base" ? "b" : "a").repeat(40), conclusion: "passed" as const });
+    await t.mutation(internal.reviewValidationData.completeValidation, { organizationId: scope.organizationId, reviewId: scope.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0,
+      artifactId, checksum, size: 100, manager: "npm" as const, now, summaries: [row("install", "base"), row("install", "head"), row("unlisted-step", "base"), row("unlisted-step", "head")] });
+    const runs = await t.run(ctx => ctx.db.query("checkRuns").collect());
+    expect(runs.filter(run => run.planId === "install")).toHaveLength(2);
+    expect(runs.filter(run => run.nameHash === "f".repeat(64)).every(run => run.planId === undefined)).toBe(true);
+  });
+
   it("records a runner failure when the review transitions to sandbox unavailable", async () => {
     const t = convexTest(schema, modules), scope = await summaryFixture(t);
     await t.mutation(internal.reviewState.transition, { reviewId: scope.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0, to: "platform_failed", statusReasonCode: "sandbox_unavailable", nextActionCode: "retry_review", now: Date.now() });

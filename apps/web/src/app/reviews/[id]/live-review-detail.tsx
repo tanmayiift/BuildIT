@@ -2,7 +2,7 @@
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Component, useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
-import { comparisonRefusal, dismissalReasonLabel, notRunExplanation, preExistingFailurePresentation, dismissalReasons, dismissalRefusal, eventPresentation, evidenceRefusal, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
+import { comparisonRefusal, dismissalReasonLabel, notRunExplanation, preExistingFailurePresentation, dismissalReasons, dismissalRefusal, eventPresentation, evidenceRefusal, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, checkLabel, technicalLabel as label } from "./review-presentation";
 import type { DismissalReason, SuppressionScope } from "./review-presentation";
 // Why a stage saw less than everything. Named here rather than reusing the verdict reason map,
 // because a gap on the handoff record is a description of what was read - not a reason a verdict
@@ -78,6 +78,7 @@ type Evidence = {
     failureClass?: string;
     notRunReason?: "no_lockfile";
     testSummary?: string;
+    planId?: string;
   }>;
   rounds: Array<{
     id: string;
@@ -406,8 +407,8 @@ function ReviewEvidence({ id }: { id: string }) {
       >
         {checkSummaries.length ? (
           checkSummaries.map((item) => (
-            <div className="validation-row" key={`${item.kind}-${item.required}`}>
-              <strong>{label(item.kind)}</strong>
+            <div className="validation-row" key={`${item.planId ?? item.kind}-${item.required}`}>
+              <strong>{checkLabel(item)}</strong>
               <span>{item.required ? "Required" : "Optional"}</span>
               <span className={`status ${tone(item.conclusion)}`}>
                 {label(item.conclusion)}
