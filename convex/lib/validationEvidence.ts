@@ -1,7 +1,7 @@
 "use node";
 import { createHash } from "node:crypto";
 import { classifyRegression, diagnoseFlakiness, type CheckResult, type CommandPlan, type DiagnosticRun, type PackageManager } from "@buildit/runner";
-import { lockfileManager, passedTestCount, testCounts } from "@buildit/contracts";
+import { lockfileManager, testCounts, testSuiteRanTooLittle } from "@buildit/contracts";
 
 export type ContextArtifact = { id: string; storageKey: string; checksum: string; size: number };
 export type ExecutionResult = { credentialTeardownProved: boolean; stopped: boolean; results: CheckResult[]; outputs: Array<{ planId: string; text: string; truncated: boolean; evidenceTruncated: boolean }> };
@@ -43,7 +43,7 @@ export function summarizeExecution(output: ExecutionResponse, baseSha: string, h
   if (!output.base.credentialTeardownProved || !output.head.credentialTeardownProved) throw new Error("credential_teardown_unproved");
   if (!output.base.stopped || !output.head.stopped) throw new Error("sandbox_stop_unproved");
   const proof = { credentialTeardownProved: true as const, sandboxStopped: true as const };
-  const summarize = (revision: "base" | "head", commitSha: string, result: ExecutionResult) => result.results.map(item => ({ revision, commitSha, ...proof, planId: item.planId, kind: item.kind, required: item.required, conclusion: item.conclusion, ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }), ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}), ...(item.noPassingTests ? { noPassingTests: true as const } : {}), ...(item.testCounts ? { testCounts: item.testCounts } : {}), durationMs: item.durationMs, commandFingerprint: sha256Json({ planId: item.planId, origin: item.origin, executable: item.executable, args: item.args, limits: { timeoutMs: item.timeoutMs, cpuLimit: item.cpuLimit, memoryMb: item.memoryMb, outputBytes: item.outputBytes, fileBytes: item.fileBytes, network: item.network } }) }));
+  const summarize = (revision: "base" | "head", commitSha: string, result: ExecutionResult) => result.results.map(item => ({ revision, commitSha, ...proof, planId: item.planId, kind: item.kind, required: item.required, conclusion: item.conclusion, ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }), ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}), ...(item.testSuiteFailing ? { testSuiteFailing: true as const } : {}), ...(item.testCounts ? { testCounts: item.testCounts } : {}), durationMs: item.durationMs, commandFingerprint: sha256Json({ planId: item.planId, origin: item.origin, executable: item.executable, args: item.args, limits: { timeoutMs: item.timeoutMs, cpuLimit: item.cpuLimit, memoryMb: item.memoryMb, outputBytes: item.outputBytes, fileBytes: item.fileBytes, network: item.network } }) }));
   const scanner = (revision: "base" | "head", commitSha: string, run: ScannerSummary) => {
     if (!run.complete || run.commitSha !== commitSha) throw new Error("scanner_evidence_incomplete");
     const runs = run.runs?.length ? run.runs : [{ scanner: run.scanner, scannerVersion: run.scannerVersion }];
@@ -79,13 +79,13 @@ export function withUntestableProject(output: ExecutionResponse, reason: "no_loc
   return { ...output, base: side(output.base), head: side(output.head) };
 }
 
-// A failed test suite whose own output shows no test passing. computeReviewDecision excuses a test
-// failure that was already on the base commit only when the suite otherwise ran; a suite that fails
-// entirely - buildit-demo-zod's 194 tests all failing to load - shows nothing about the change. Marked
-// on the broker's response, like the not-run test above, so every reader decides from the same flag.
+// A failed test suite that ran too little to say anything about the change (testSuiteRanTooLittle: no
+// test passed, or most test files failed). computeReviewDecision excuses a test failure that was already
+// on the base commit only when the suite otherwise ran; buildit-demo-zod loaded 6 of its 198 test files.
+// Marked on the broker's response, like the not-run test above, so every reader decides from one flag.
 // The counts themselves are recorded too. The page and the comment show only the last six lines of
-// output, where vitest never prints its summary, so a suite with 3 of 197 files passing read exactly
-// like one with 192 of 194 tests passing; the full text is encrypted and has no operator read path.
+// output, where vitest never prints its summary, so until they were recorded nobody could see that zod's
+// "7 passed" came from six files; the full text is encrypted and has no operator read path.
 export function withTestSuiteEvidence(output: ExecutionResponse): ExecutionResponse {
   const side = (result: ExecutionResult): ExecutionResult => ({
     ...result,
@@ -94,8 +94,7 @@ export function withTestSuiteEvidence(output: ExecutionResponse): ExecutionRespo
       const text = result.outputs.find(entry => entry.planId === item.planId)?.text, counts = testCounts(text);
       const recorded = Object.keys(counts).length ? { ...item, testCounts: counts } : item;
       if (item.conclusion !== "failed") return recorded;
-      const passed = passedTestCount(text);
-      return passed !== undefined && passed > 0 ? recorded : { ...recorded, noPassingTests: true as const };
+      return testSuiteRanTooLittle(text) ? { ...recorded, testSuiteFailing: true as const } : recorded;
     }),
   });
   return { ...output, base: side(output.base), head: side(output.head) };

@@ -48,7 +48,7 @@ export const reserveOutput = internalMutation({
 const summary = v.object({ revision: v.union(v.literal("base"), v.literal("head")), commitSha: v.string(), planId: v.string(), kind: checkKind,
   required: v.boolean(), conclusion: checkConclusion, exitCode: v.optional(v.number()), durationMs: v.number(), commandFingerprint: hash, nameHash: hash,
   credentialTeardownProved: v.literal(true), sandboxStopped: v.literal(true), executionFingerprint:v.optional(hash),outputHash:v.optional(hash),outputTruncated:v.optional(v.boolean()),
-  scannerName:v.optional(v.string()),scannerVersion:v.optional(v.string()),regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))), notRunReason: v.optional(v.literal("no_lockfile")), noPassingTests: v.optional(v.literal(true)), testCounts: v.optional(testCounts) });
+  scannerName:v.optional(v.string()),scannerVersion:v.optional(v.string()),regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))), notRunReason: v.optional(v.literal("no_lockfile")), testSuiteFailing: v.optional(v.literal(true)), testCounts: v.optional(testCounts) });
 export const completeValidation = internalMutation({
   args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: hash, size: v.number(), summaries: v.array(summary), manager: v.union(v.literal("npm"), v.literal("pnpm"), v.literal("yarn"), v.literal("none")), now: v.number() },
   handler: async (ctx, args) => {
@@ -73,7 +73,7 @@ export const completeValidation = internalMutation({
         ...(item.executionFingerprint?{executionFingerprint:item.executionFingerprint}:{}),...(item.outputHash?{outputHash:item.outputHash}:{}),...(item.outputTruncated===undefined?{}:{outputTruncated:item.outputTruncated}),
         ...(item.scannerName?{scannerName:item.scannerName}:{}),...(item.scannerVersion?{scannerVersion:item.scannerVersion}:{}),...(item.regressionClassification?{regressionClassification:item.regressionClassification}:{}),
         ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}),
-        ...(item.noPassingTests ? { noPassingTests: true as const } : {}),
+        ...(item.testSuiteFailing ? { testSuiteFailing: true as const } : {}),
         ...(item.testCounts ? { testCounts: item.testCounts } : {}),
         ...(item.conclusion === "failed" ? { failureClass: "code" as const } : {}), startedAt: Math.max(0, args.now - item.durationMs), completedAt: args.now });
       if (item.revision === "base") {
@@ -162,7 +162,7 @@ export const finalizeDecision = internalMutation({
       decisionChecks.push({ name: check.nameHash, required: check.required, conclusion: check.conclusion,
         evidenceComplete, ...(preExisting.has(check.nameHash) ? { preExisting: true } : {}),
         ...(check.notRunReason ? { notRunReason: check.notRunReason } : {}),
-        ...(check.noPassingTests ? { noPassingTests: true as const } : {}) });
+        ...(check.testSuiteFailing ? { testSuiteFailing: true as const } : {}) });
     }
     // One derivation, at last. This function used to restate the entire ladder - injection,
     // escalation, coverage, missing, failed, blocking - in its own vocabulary while

@@ -81,13 +81,30 @@ export function testCounts(output: string | undefined): TestCounts {
   return counts;
 }
 
-/** The counts as one line - "Tests: 192 passed, 2 failed" - or undefined when the output showed none. */
+/** The counts as one line - "Tests: 192 passed, 2 failed" - or undefined when the output showed none.
+ *  Test files are added whenever one failed, or when they are all there is. buildit-demo-zod printed
+ *  "Tests 5 failed | 7 passed" beside "Test Files 192 failed | 6 passed": the twelve tests were the few
+ *  that loaded, and showing only those made a suite that barely ran look like a small one. */
 export function testCountsSummary(counts: TestCounts | undefined): string | undefined {
   if (!counts) return undefined;
-  const tests = counts.passed !== undefined || counts.failed !== undefined;
-  const [unit, passed, failed] = tests ? ["Tests", counts.passed, counts.failed] : ["Test files", counts.filesPassed, counts.filesFailed];
-  const parts = [passed === undefined ? "" : `${passed} passed`, failed === undefined ? "" : `${failed} failed`].filter(Boolean);
-  return parts.length ? `${unit}: ${parts.join(", ")}` : undefined;
+  const line = (unit: string, passed: number | undefined, failed: number | undefined) => {
+    const parts = [passed === undefined ? "" : `${passed} passed`, failed === undefined ? "" : `${failed} failed`].filter(Boolean);
+    return parts.length ? `${unit}: ${parts.join(", ")}` : "";
+  };
+  const tests = line("Tests", counts.passed, counts.failed);
+  const files = !tests || (counts.filesFailed ?? 0) > 0 ? line("Test files", counts.filesPassed, counts.filesFailed) : "";
+  return [tests, files].filter(Boolean).join(" · ") || undefined;
+}
+
+/** Whether a failed test suite ran too little for its failures to be excused as pre-existing: no test
+ *  passed, or more than half of its test files failed. The second clause was decided on 4 Oct 2026,
+ *  after the counts showed buildit-demo-zod loading 6 of 198 files; seven passing tests from six files
+ *  say nothing about the 192 that never ran. A suite with a few failing files still counts as having run. */
+export function testSuiteRanTooLittle(output: string | undefined): boolean {
+  const passed = passedTestCount(output);
+  if (passed === undefined || passed === 0) return true;
+  const { filesPassed, filesFailed } = testCounts(output);
+  return filesFailed !== undefined && filesFailed > (filesPassed ?? 0);
 }
 
 /** Tests the output shows passing: the test count, or at least the number of clean test files. */

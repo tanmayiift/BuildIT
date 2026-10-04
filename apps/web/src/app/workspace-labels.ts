@@ -10,7 +10,7 @@ export const incompleteReasonLabels: Record<string, string> = {
   injection_unscoped: "Instruction-like text could not be attributed to a changed file",
   no_required_check: "The repository defines no required check",
   tests_need_lockfile: "The project's tests need a lockfile BuildIT did not find",
-  test_suite_failing: "The test suite failed on both commits with no test passing",
+  test_suite_failing: "The test suite failed on both commits and too little of it ran",
   uncertain_escalated: "A finding stayed unresolved after two passes",
   unknown: "The reason was not recorded",
 };

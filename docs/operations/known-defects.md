@@ -400,8 +400,16 @@ suite that otherwise ran.
   count, but the page and the comment show only the last six lines, where vitest never prints its summary, so
   nobody could see what was counted. Validation now records the runner's own counts on the test check
   (`testCounts`: tests and test files, kept apart) and both readers print them from one formatter -
-  for example "Failed · already failing on base · Tests: 192 passed, 2 failed". A count is read only from a
-  summary line, never from prose or a code frame.
+  for example "Failed · already failing on base · Tests: 7 passed, 5 failed · Test files: 6 passed, 192
+  failed". Test files are shown whenever one failed. A count is read only from a summary line, never from
+  prose or a code frame.
+- **Most files failing is not a suite that ran (decided 4 October 2026).** The counts showed zod's suite on
+  both commits loading 6 of 198 test files, with 7 of 12 tests passing. Under the #91 rule, which made a
+  suite inconclusive only when no test passed, that stayed `checks_passed`. The rule is now
+  `testSuiteRanTooLittle`: no test passed, **or more than half of the test files failed**, ends
+  `inconclusive` (`test_suite_failing`). Exactly half is not most. A got-style suite, with a few failing
+  files and most clean, still counts as pre-existing. The stored flag was renamed `noPassingTests` →
+  `testSuiteFailing`; no production row carried the old name (0 of 2,420).
 
 The original record follows.
 

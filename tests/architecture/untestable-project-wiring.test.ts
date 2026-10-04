@@ -19,14 +19,14 @@ describe("the not-run test reaches every reader", () => {
     const data = read("convex/reviewValidationData.ts");
     expect(data).toMatch(/\.\.\.\(check\.notRunReason \? \{ notRunReason: check\.notRunReason \} : \{\}\)/);
     expect(data).toMatch(/\.\.\.\(item\.notRunReason \? \{ notRunReason: item\.notRunReason \} : \{\}\)/);
-    expect(data).toMatch(/\.\.\.\(check\.noPassingTests \? \{ noPassingTests: true as const \} : \{\}\)/);
-    expect(data).toMatch(/\.\.\.\(item\.noPassingTests \? \{ noPassingTests: true as const \} : \{\}\)/);
+    expect(data).toMatch(/\.\.\.\(check\.testSuiteFailing \? \{ testSuiteFailing: true as const \} : \{\}\)/);
+    expect(data).toMatch(/\.\.\.\(item\.testSuiteFailing \? \{ testSuiteFailing: true as const \} : \{\}\)/);
   });
 
   it("carries its reason into the pull-request comment's decision", () => {
     const report = read("convex/reviewReportWorker.ts");
     expect(report).toMatch(/\.\.\.\(item\.notRunReason \? \{ notRunReason: item\.notRunReason \} : \{\}\)/);
-    expect(report).toMatch(/\.\.\.\(item\.noPassingTests \? \{ noPassingTests: true as const \} : \{\}\)/);
+    expect(report).toMatch(/\.\.\.\(item\.testSuiteFailing \? \{ testSuiteFailing: true as const \} : \{\}\)/);
   });
 
   it("carries the test runner's counts from validation to the page and the comment", () => {

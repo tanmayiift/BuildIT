@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeReviewDecision, consentRuns, declaresTestScript, lockfileManager, projectTests, testCounts, testCountsSummary } from "../src/index.js";
+import { computeReviewDecision, consentRuns, declaresTestScript, lockfileManager, projectTests, testCounts, testCountsSummary, testSuiteRanTooLittle } from "../src/index.js";
 
 describe("what BuildIT can run for a JavaScript project", () => {
   it("reads the package manager from exactly one root lockfile", () => {
@@ -111,10 +111,17 @@ describe("recording what a test runner's summary said", () => {
   });
 
   it("says one line a person can read, naming which unit was counted", () => {
-    expect(testCountsSummary({ passed: 192, failed: 2, filesPassed: 11, filesFailed: 1 })).toBe("Tests: 192 passed, 2 failed");
+    expect(testCountsSummary({ passed: 194, filesPassed: 12 })).toBe("Tests: 194 passed");
+    expect(testCountsSummary({ passed: 192, failed: 2, filesPassed: 11, filesFailed: 1 })).toBe("Tests: 192 passed, 2 failed · Test files: 11 passed, 1 failed");
     expect(testCountsSummary({ failed: 194 })).toBe("Tests: 194 failed");
     expect(testCountsSummary({ filesPassed: 3, filesFailed: 194 })).toBe("Test files: 3 passed, 194 failed");
     expect(testCountsSummary({})).toBeUndefined();
+  });
+
+  // Recorded live on 4 Oct 2026 (review nx7avqsnya9qe09nwghhw9m3s18fnm7t). Showing only the tests made
+  // a suite where 192 of 198 files failed to load read as twelve tests, seven passing.
+  it("does not let the few tests that loaded hide the files that did not", () => {
+    expect(testCountsSummary({ passed: 7, failed: 5, filesPassed: 6, filesFailed: 192 })).toBe("Tests: 7 passed, 5 failed · Test files: 6 passed, 192 failed");
     expect(testCountsSummary(undefined)).toBeUndefined();
   });
 });
@@ -124,8 +131,17 @@ describe("the verdict for a test suite failing on both commits", () => {
   const suite = (over: object) => ({ name: "test", required: true, conclusion: "failed" as const, evidenceComplete: true, preExisting: true, ...over });
 
   it("is inconclusive when the suite shows no test passing", () => {
-    expect(computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [], checks: [scanner, suite({ noPassingTests: true })] }))
+    expect(computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [], checks: [scanner, suite({ testSuiteFailing: true })] }))
       .toMatchObject({ status: "inconclusive", reason: "test_suite_failing", nextAction: "repair_test_suite" });
+  });
+
+  it("counts a suite as having run only when tests passed and most test files did not fail", () => {
+    expect(testSuiteRanTooLittle(" Test Files  192 failed | 6 passed (198)\n      Tests  5 failed | 7 passed (12)")).toBe(true);   // zod, 4 Oct 2026
+    expect(testSuiteRanTooLittle("      Tests  194 failed (194)")).toBe(true);
+    expect(testSuiteRanTooLittle(undefined)).toBe(true);
+    expect(testSuiteRanTooLittle(" Test Files  1 failed | 11 passed (12)\n      Tests  2 failed | 192 passed (194)")).toBe(false); // got-style
+    expect(testSuiteRanTooLittle(" Test Files  6 failed | 6 passed (12)\n      Tests  6 failed | 30 passed (36)")).toBe(false);    // half is not most
+    expect(testSuiteRanTooLittle("Tests:       1 failed, 193 passed, 194 total")).toBe(false);
   });
 
   it("keeps the pre-existing rule for a suite that otherwise ran", () => {
@@ -134,7 +150,7 @@ describe("the verdict for a test suite failing on both commits", () => {
 
   it("still requests changes when this pull request broke something", () => {
     const introduced = { name: "lint", required: true, conclusion: "failed" as const, evidenceComplete: true };
-    expect(computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [], checks: [scanner, suite({ noPassingTests: true }), introduced] }).status)
+    expect(computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [], checks: [scanner, suite({ testSuiteFailing: true }), introduced] }).status)
       .toBe("changes_requested");
   });
 });
