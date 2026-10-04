@@ -53,12 +53,12 @@ export function statusPresentation(status: string, stale: boolean, reason?: stri
 export type NextActionCode =
   | "none" | "inspect_findings" | "request_autofix" | "retry_review" | "reconnect_provider"
   | "restore_installation" | "grant_permission" | "increase_budget" | "await_sandbox_reset"
-  | "human_merge" | "start_new_review" | "add_lockfile";
+  | "human_merge" | "start_new_review" | "add_lockfile" | "repair_test_suite";
 
 export const nextActionCodes: readonly NextActionCode[] = [
   "none", "inspect_findings", "request_autofix", "retry_review", "reconnect_provider",
   "restore_installation", "grant_permission", "increase_budget", "await_sandbox_reset",
-  "human_merge", "start_new_review", "add_lockfile",
+  "human_merge", "start_new_review", "add_lockfile", "repair_test_suite",
 ];
 
 type NextAction = { title: string; detail: string; href?: string; hrefLabel?: string };
@@ -75,6 +75,7 @@ const nextActions: Record<NextActionCode, NextAction> = {
   await_sandbox_reset: { title: "Wait for the sandbox allowance to reset", detail: "This workspace has used the sandbox time its plan allows this month, so no new review can run its checks. Retrying will not help. The allowance resets at the start of next month; ask BuildIT if you need it raised before then.", href: "/usage", hrefLabel: "Open workspace usage" },
   human_merge: { title: "Read it yourself before merging", detail: "BuildIT will not merge this and will not vouch for it. Check the change - and, if a fix was proposed, the separate pull request carrying it - and merge only if you agree." },
   start_new_review: { title: "Run a new review", detail: "This run ended without a decision." },
+  repair_test_suite: { title: "Make the test suite pass, then review again", detail: "The required test suite failed on this commit and on the base commit, and its output shows no test passing, so it says nothing about this change. Fix it on the default branch first; retrying the review cannot change the result." },
   add_lockfile: { title: "Commit a lockfile, then review again", detail: "This repository has a test script, but no package-lock.json, pnpm-lock.yaml or yarn.lock at this commit, and BuildIT installs dependencies only from a lockfile. Its tests did not run, so the scanners alone are not a verdict. Retrying without a lockfile cannot change that." },
 };
 
@@ -324,4 +325,19 @@ export function pullRequestHref(owner: string, name: string, prNumber: number) {
 /** Why a check row reads "Not run", when the reason is the repository's rather than BuildIT's. */
 export function notRunExplanation(reason: "no_lockfile" | undefined) {
   return reason === "no_lockfile" ? "Not run: no lockfile at this commit, and BuildIT installs only from one" : undefined;
+}
+
+// A pass whose required checks include ones that failed - on this commit and, identically, on the base
+// commit, so the review did not attribute them to this pull request. "All required checks passed" was
+// printed above a table showing them Required · Failed. Say what happened instead.
+export function preExistingFailurePresentation(status: string, checks: CheckSummary[]) {
+  if (status !== "checks_passed") return undefined;
+  const failing = checks.filter(check => check.required && check.conclusion === "failed").map(check => words(check.kind).toLowerCase());
+  if (!failing.length) return undefined;
+  const list = failing.join(", ");
+  return {
+    title: "No new failures from this change",
+    summary: `Required ${failing.length === 1 ? "check" : "checks"} still failing here (${list}) failed the same way on the base commit, so BuildIT did not attribute ${failing.length === 1 ? "it" : "them"} to this pull request. A human still decides whether to merge.`,
+    nextDetail: `The other required checks produced evidence for this exact commit; ${list} ${failing.length === 1 ? "was" : "were"} already failing before it. You own the merge decision.`,
+  };
 }

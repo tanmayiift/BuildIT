@@ -41,7 +41,8 @@ function title(status: "changes_requested" | "inconclusive" | "checks_passed") {
   if (status === "checks_passed") return "Ready for human review";
   return "Review needs attention";
 }
-function nextStep(action: "start_new_review" | "retry_review" | "inspect_findings" | "human_merge" | "add_lockfile" | "none") {
+function nextStep(action: "start_new_review" | "retry_review" | "inspect_findings" | "human_merge" | "add_lockfile" | "repair_test_suite" | "none") {
+  if (action === "repair_test_suite") return "The test suite fails on the base commit too, so its result says nothing about this change. Make it pass on the default branch, then start a new review.";
   if (action === "add_lockfile") return "Commit a lockfile (package-lock.json, pnpm-lock.yaml or yarn.lock), then start a new review at that commit. Retrying without one cannot run the tests.";
   if (action === "human_merge") return "BuildIT found instruction-like text it could not attribute to a specific file, so it cannot be sure whose instructions it followed. Read the changes yourself before merging.";
   if (action === "inspect_findings") return "Inspect the evidence and decide what to change.";
@@ -94,8 +95,10 @@ export function composeVerifiedReport(input: { repository: string; prNumber: num
   ].filter(Boolean).join(" and ");
   const summary = problems
     || (decision.status === "checks_passed"
-      ? `All ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"} passed with complete evidence${input.ecosystem === "none" ? ", and no test, lint or typecheck command was run because BuildIT recognised no package manager in this repository" : ""}`
-      : decision.reason === "tests_need_lockfile"
+      ? `${requiredChecks.some(check => check.conclusion === "failed") ? `This change introduced no new failure in its ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"}` : `All ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"} passed with complete evidence`}${input.ecosystem === "none" ? ", and no test, lint or typecheck command was run because BuildIT recognised no package manager in this repository" : ""}`
+      : decision.reason === "test_suite_failing"
+        ? "The required test suite failed on this commit and on the base commit, and its output shows no test passing, so it says nothing about this change"
+        : decision.reason === "tests_need_lockfile"
         ? "The project's tests did not run: package.json declares a test script, but there is no lockfile at this commit and BuildIT installs only from one. The scanners alone are not enough to call this pull request ready"
         : "Complete evidence was not available");
 // A failing check produced one bolded table cell and nothing else - no output, no evidence - which

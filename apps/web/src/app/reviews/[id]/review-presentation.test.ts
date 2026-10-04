@@ -115,3 +115,20 @@ describe("review presentation", () => {
     expect(pairFindingDetails([row("finding-a", { severity: "warning" })], [prose("arbitrated-a")]).size).toBe(0);
   });
 });
+
+describe("a pass with required checks that were already failing", () => {
+  it("does not claim every required check passed", async () => {
+    const { preExistingFailurePresentation } = await import("./review-presentation");
+    const checks = [
+      { kind: "test", required: true, conclusion: "failed", durationMs: 1, evidenceAvailable: true, executions: 2, outcomeSummary: "2 failed" },
+      { kind: "secret_scan", required: true, conclusion: "failed", durationMs: 1, evidenceAvailable: true, executions: 2, outcomeSummary: "2 failed" },
+      { kind: "build", required: true, conclusion: "passed", durationMs: 1, evidenceAvailable: true, executions: 2, outcomeSummary: "2 passed" },
+    ];
+    const shown = preExistingFailurePresentation("checks_passed", checks)!;
+    expect(shown.title).toBe("No new failures from this change");
+    expect(shown.summary).toMatch(/test, secret scan/);
+    expect(shown.summary).not.toMatch(/All required checks passed/);
+    expect(preExistingFailurePresentation("checks_passed", [checks[2]!])).toBeUndefined();
+    expect(preExistingFailurePresentation("changes_requested", checks)).toBeUndefined();
+  });
+});

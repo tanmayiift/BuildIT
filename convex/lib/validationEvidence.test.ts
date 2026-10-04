@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { computeReviewDecision } from "@buildit/contracts";
 import { defaultExecutionPlans, VercelSandboxRunner, type CheckResult, type SandboxFactory, type SandboxLike } from "@buildit/runner";
-import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, summarizeExecution, untestableProjectExplanation, withUntestableProject, type ExecutionResponse, type ScannerSummary } from "./validationEvidence";
+import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, summarizeExecution, untestableProjectExplanation, withTestSuiteEvidence, withUntestableProject, type ExecutionResponse, type ScannerSummary } from "./validationEvidence";
 
 describe("validation evidence", () => {
   it("requires the same unambiguous package manager on base and head", () => {
@@ -198,6 +198,23 @@ describe("a project whose declared tests cannot run", () => {
   it("records how long each scanner ran instead of 0", () => {
     const head = summarizeExecution(scannerOnly([40, 3100, 2500]), baseSha, headSha).filter(item => item.revision === "head");
     expect(Object.fromEntries(head.map(item => [item.planId, item.durationMs]))).toEqual({ "buildit-rules": 40, gitleaks: 3100, "osv-scanner": 2500 });
+  });
+});
+
+describe("a failed test suite with no test passing", () => {
+  const plan = { origin: "built_in" as const, executable: "pnpm" as const, args: ["run", "test"], required: true, timeoutMs: 150_000, cpuLimit: 2, memoryMb: 4096, outputBytes: 0, fileBytes: 0, network: "none" as const };
+  const run = (conclusion: "failed" | "passed", text: string): ExecutionResponse["head"] => ({ credentialTeardownProved: true, stopped: true,
+    results: [{ ...plan, planId: "test", kind: "test", conclusion, durationMs: 45_000 }], outputs: [{ planId: "test", text, truncated: false, evidenceTruncated: false }] });
+  const marked = (side: ExecutionResponse["head"]) => withTestSuiteEvidence({ base: side, head: side, scanners: {} as ExecutionResponse["scanners"] }).head.results[0];
+
+  it("is marked when its output shows no test passing, as buildit-demo-zod's did", () => {
+    expect(marked(run("failed", '   const z = await import("../../index.js");\n[194/194]'))).toMatchObject({ noPassingTests: true });
+    expect(marked(run("failed", "      Tests  194 failed (194)"))).toMatchObject({ noPassingTests: true });
+  });
+
+  it("is not marked when the suite otherwise ran, or passed", () => {
+    expect(marked(run("failed", "Tests  2 failed | 192 passed (194)"))).not.toHaveProperty("noPassingTests");
+    expect(marked(run("passed", "Tests  194 failed (194)"))).not.toHaveProperty("noPassingTests");
   });
 });
 

@@ -65,3 +65,47 @@ describe("the verdict for tests that could not run", () => {
       .toMatchObject({ reason: "stale_commit" });
   });
 });
+
+// buildit-demo-zod#1: the required test suite failed on both commits - all 194 tests failing to load,
+// with no summary line - and the pre-existing rule turned that into checks_passed. A suite failing on
+// both commits is excused only when its own output shows tests passing.
+describe("reading how many tests passed", () => {
+  it("reads the common JavaScript runners' summaries", async () => {
+    const { passedTestCount } = await import("../src/index.js");
+    expect(passedTestCount(" Test Files  1 failed | 11 passed (12)\n      Tests  2 failed | 192 passed (194)")).toBe(192);
+    expect(passedTestCount("Tests:       1 failed, 193 passed, 194 total")).toBe(193);
+    expect(passedTestCount("  12 passing (30ms)\n  1 failing")).toBe(12);
+    expect(passedTestCount("# tests 13\n# pass 12\n# fail 1")).toBe(12);
+    expect(passedTestCount("ℹ tests 13\nℹ pass 12")).toBe(12);
+    expect(passedTestCount("  12 tests passed\n  1 test failed")).toBe(12);
+    expect(passedTestCount("\u001b[32m      Tests \u001b[39m \u001b[31m2 failed\u001b[39m | \u001b[32m40 passed\u001b[39m")).toBe(40);
+  });
+
+  it("finds no pass count where none is shown, rather than assuming one", async () => {
+    const { passedTestCount } = await import("../src/index.js");
+    expect(passedTestCount("      Tests  194 failed (194)")).toBeUndefined();
+    expect(passedTestCount("      Tests  no tests")).toBeUndefined();
+    expect(passedTestCount('   const z = await import("../../index.js");\n⎯⎯⎯[194/194]⎯')).toBeUndefined();
+    expect(passedTestCount(undefined)).toBeUndefined();
+  });
+});
+
+describe("the verdict for a test suite failing on both commits", () => {
+  const scanner = { name: "gitleaks", required: true, conclusion: "passed" as const, evidenceComplete: true };
+  const suite = (over: object) => ({ name: "test", required: true, conclusion: "failed" as const, evidenceComplete: true, preExisting: true, ...over });
+
+  it("is inconclusive when the suite shows no test passing", () => {
+    expect(computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [], checks: [scanner, suite({ noPassingTests: true })] }))
+      .toMatchObject({ status: "inconclusive", reason: "test_suite_failing", nextAction: "repair_test_suite" });
+  });
+
+  it("keeps the pre-existing rule for a suite that otherwise ran", () => {
+    expect(computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [], checks: [scanner, suite({})] }).status).toBe("checks_passed");
+  });
+
+  it("still requests changes when this pull request broke something", () => {
+    const introduced = { name: "lint", required: true, conclusion: "failed" as const, evidenceComplete: true };
+    expect(computeReviewDecision({ isStale: false, environmentAvailable: true, findings: [], checks: [scanner, suite({ noPassingTests: true }), introduced] }).status)
+      .toBe("changes_requested");
+  });
+});

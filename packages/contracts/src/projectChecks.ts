@@ -51,3 +51,24 @@ export function consentRuns(tests: ProjectTests | undefined): string[] {
     ? "not the project's tests: package.json has a test script, but there is no lockfile (package-lock.json, pnpm-lock.yaml or yarn.lock) at this commit and BuildIT installs only from one, so this review will end inconclusive"
     : "no project tests: there is no lockfile at this commit, and package.json declares no test script"];
 }
+
+// How many tests a runner's own output says passed, or undefined when it says nothing readable. Used for
+// one decision only: whether a required test suite that fails on both commits still ran well enough to
+// count its failures as pre-existing. Absence of a pass count is never read as a pass.
+const passPatterns = [
+  /Tests?\s*:?\s+(?:[^\n]*?[|,]\s*)?(\d+)\s+passed/gi,   // vitest "Tests  2 failed | 192 passed", jest "Tests: 1 failed, 193 passed"
+  /^\s*(\d+)\s+passing\b/gim,                            // mocha "12 passing"
+  /^\s*[#\u2139]\s*pass\s+(\d+)/gim,                       // node:test / tap "# pass 12", "\u2139 pass 12"
+  /\b(\d+)\s+tests?\s+passed\b/gi,                        // ava "12 tests passed"
+  /^\s*Passed:\s+(\d+)/gim,                                // uvu "Passed: 12"
+];
+export function passedTestCount(output: string | undefined): number | undefined {
+  if (!output) return undefined;
+  const text = output.replace(/\u001b\[[0-9;]*m/g, "");
+  let best: number | undefined;
+  for (const pattern of passPatterns) for (const match of text.matchAll(pattern)) {
+    const count = Number(match[1]);
+    if (Number.isSafeInteger(count)) best = Math.max(best ?? 0, count);
+  }
+  return best;
+}

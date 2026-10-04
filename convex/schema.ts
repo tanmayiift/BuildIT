@@ -325,6 +325,8 @@ export default defineSchema({
     regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))),
     // Why a required check did not run, when the reason is the repository's rather than BuildIT's.
     notRunReason: v.optional(v.literal("no_lockfile")),
+    // A failed test suite whose own output shows no test passing; see withTestSuiteEvidence.
+    noPassingTests: v.optional(v.literal(true)),
     failureClass: v.optional(value.failureClass), startedAt: v.number(), completedAt: v.optional(v.number()),
   }).index("by_review", ["reviewId"])
     .index("by_review_round", ["reviewId", "roundId"]),

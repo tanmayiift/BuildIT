@@ -30,8 +30,8 @@ describe("review status and next-action contracts", () => {
   // that adding a code without copy for it fails here rather than on a real pull request.
   it("the next-action map covers exactly the declared nextActionCode union", () => {
     const declared = unionLiterals(validators, "nextActionCode");
-    // 12 since add_lockfile (4 Oct 2026): a project with tests but no lockfile is told to commit one.
-    expect(declared.length).toBe(12);
+    // 12 since add_lockfile and 13 since repair_test_suite (both 4 Oct 2026).
+    expect(declared.length).toBe(13);
     expect([...nextActionCodes].sort()).toEqual([...declared].sort());
   });
 

@@ -48,7 +48,7 @@ export const reserveOutput = internalMutation({
 const summary = v.object({ revision: v.union(v.literal("base"), v.literal("head")), commitSha: v.string(), planId: v.string(), kind: checkKind,
   required: v.boolean(), conclusion: checkConclusion, exitCode: v.optional(v.number()), durationMs: v.number(), commandFingerprint: hash, nameHash: hash,
   credentialTeardownProved: v.literal(true), sandboxStopped: v.literal(true), executionFingerprint:v.optional(hash),outputHash:v.optional(hash),outputTruncated:v.optional(v.boolean()),
-  scannerName:v.optional(v.string()),scannerVersion:v.optional(v.string()),regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))), notRunReason: v.optional(v.literal("no_lockfile")) });
+  scannerName:v.optional(v.string()),scannerVersion:v.optional(v.string()),regressionClassification:v.optional(v.union(v.literal("introduced"),v.literal("pre_existing"),v.literal("resolved"),v.literal("unchanged_pass"),v.literal("flaky"),v.literal("unknown"))), notRunReason: v.optional(v.literal("no_lockfile")), noPassingTests: v.optional(v.literal(true)) });
 export const completeValidation = internalMutation({
   args: { ...executionArgs, artifactId: v.id("artifacts"), checksum: hash, size: v.number(), summaries: v.array(summary), manager: v.union(v.literal("npm"), v.literal("pnpm"), v.literal("yarn"), v.literal("none")), now: v.number() },
   handler: async (ctx, args) => {
@@ -73,6 +73,7 @@ export const completeValidation = internalMutation({
         ...(item.executionFingerprint?{executionFingerprint:item.executionFingerprint}:{}),...(item.outputHash?{outputHash:item.outputHash}:{}),...(item.outputTruncated===undefined?{}:{outputTruncated:item.outputTruncated}),
         ...(item.scannerName?{scannerName:item.scannerName}:{}),...(item.scannerVersion?{scannerVersion:item.scannerVersion}:{}),...(item.regressionClassification?{regressionClassification:item.regressionClassification}:{}),
         ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}),
+        ...(item.noPassingTests ? { noPassingTests: true as const } : {}),
         ...(item.conclusion === "failed" ? { failureClass: "code" as const } : {}), startedAt: Math.max(0, args.now - item.durationMs), completedAt: args.now });
       if (item.revision === "base") {
         const cached = await ctx.db.query("baseResults").withIndex("by_full_cache_key", q => q.eq("repositoryId", review.repositoryId).eq("baseSha", review.baseSha).eq("commandFingerprint", item.commandFingerprint).eq("configRevisionId", review.configRevisionId).eq("runnerImageVersion", review.runnerImageVersion).eq("architecture", "linux-x64").eq("networkPolicyVersion", "deny-all-v1")).unique();
@@ -121,7 +122,7 @@ export const finalizeDecision = internalMutation({
     // Record which condition made the evidence incomplete. Without this the review ends as a
     // flat "required check missing" and the real cause — partial context, a missing artifact,
     // a flaky rerun — is unrecoverable afterwards.
-    let incompleteReason: "injection_unscoped" | "uncertain_escalated" | "coverage_partial" | "no_required_check" | "evidence_missing" | "conclusion_unusable" | "tests_need_lockfile" | undefined;
+    let incompleteReason: "injection_unscoped" | "uncertain_escalated" | "coverage_partial" | "no_required_check" | "evidence_missing" | "conclusion_unusable" | "tests_need_lockfile" | "test_suite_failing" | undefined;
     // An injection signal that could not be attributed to a changed file downgraded every critic
     // decision to uncertain, which made blocking false, which landed the review on checks_passed
     // with a green check. The verdict has to fail closed: an unscoped signal means BuildIT does
@@ -159,7 +160,8 @@ export const finalizeDecision = internalMutation({
       // the hash is the only identifier a checkRuns row carries.
       decisionChecks.push({ name: check.nameHash, required: check.required, conclusion: check.conclusion,
         evidenceComplete, ...(preExisting.has(check.nameHash) ? { preExisting: true } : {}),
-        ...(check.notRunReason ? { notRunReason: check.notRunReason } : {}) });
+        ...(check.notRunReason ? { notRunReason: check.notRunReason } : {}),
+        ...(check.noPassingTests ? { noPassingTests: true as const } : {}) });
     }
     // One derivation, at last. This function used to restate the entire ladder - injection,
     // escalation, coverage, missing, failed, blocking - in its own vocabulary while
@@ -184,7 +186,7 @@ export const finalizeDecision = internalMutation({
     const statusReasonCode = decision.reason;
     const nextActionCode = decision.nextAction;
     const incomplete = status === "inconclusive";
-    if (incomplete) incompleteReason ??= "conclusion_unusable";
+    if (incomplete) incompleteReason ??= statusReasonCode === "test_suite_failing" ? "test_suite_failing" : "conclusion_unusable";
     const githubCheckConclusion = status === "checks_passed" ? "success" as const : status === "changes_requested" ? "failure" as const : "neutral" as const;
     await ctx.db.patch(review._id, { status, statusReasonCode, nextActionCode, githubCheckConclusion, currentStage: "complete", completedAt: args.now, updatedAt: args.now });
     await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", publicMessageArtifactId: report._id, internalCode: `decision_${statusReasonCode}`, metadata: { count: findings.length, ...(incompleteReason ? { reasonCode: incompleteReason } : {}) }, createdAt: args.now });

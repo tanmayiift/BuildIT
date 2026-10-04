@@ -117,7 +117,7 @@ export const statusReasonCode = v.union(
   v.literal("sandbox_unavailable"),
   v.literal("environment_unavailable"), v.literal("review_timeout"),
   v.literal("final_validation_incomplete"), v.literal("human_review_required"), v.literal("provider_credential_invalid"),
-  v.literal("tests_need_lockfile"), v.literal("installation_suspended"), v.literal("permission_revoked"),
+  v.literal("tests_need_lockfile"), v.literal("test_suite_failing"), v.literal("installation_suspended"), v.literal("permission_revoked"),
   v.literal("user_cancelled"), v.literal("blocked_expired"),
   v.literal("spend_ceiling_reached"), v.literal("sandbox_ceiling_reached"), v.literal("platform_capacity_reached"), v.literal("concurrency_limit_reached"), v.literal("superseded_by_new_commit"), v.literal("provider_rate_limited"), v.literal("provider_quota_exhausted"), v.literal("platform_error"),
   v.literal("delivery_complete"),
@@ -128,7 +128,7 @@ export const nextActionCode = v.union(
   v.literal("retry_review"), v.literal("reconnect_provider"),
   v.literal("restore_installation"), v.literal("grant_permission"),
   v.literal("increase_budget"), v.literal("await_sandbox_reset"), v.literal("human_merge"), v.literal("start_new_review"),
-  v.literal("add_lockfile"),
+  v.literal("add_lockfile"), v.literal("repair_test_suite"),
 );
 export const notificationType = v.union(
   v.literal("review_finished"), v.literal("autofix_delivered"),
