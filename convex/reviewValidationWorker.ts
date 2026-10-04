@@ -9,7 +9,7 @@ import {
   type ExecutionRevision, type ExecutionStage, type PackageManager,
 } from "@buildit/runner";
 import { issueArtifactGrant } from "@buildit/security";
-import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, sha256Json, withUntestableProject, type ExecutionResponse } from "./lib/validationEvidence";
+import { detectPackageManager, pairExecutionEvidence, revisionFromStorageKey, sha256Json, withTestSuiteEvidence, withUntestableProject, type ExecutionResponse } from "./lib/validationEvidence";
 import { declaresTestScript } from "@buildit/contracts";
 import { buildExecutionResponse, driveExecutionSegments, rerunTargets } from "./lib/executionSegmentDriver";
 import { runIdFor } from "./lib/runIdentity";
@@ -99,7 +99,7 @@ export const validate = internalAction({
     });
     const { segments, stage, stateVersion, tailStartedAt } = driven;
 
-    const output: ExecutionResponse = withUntestableProject(buildExecutionResponse(driven), untestable);
+    const output: ExecutionResponse = withTestSuiteEvidence(withUntestableProject(buildExecutionResponse(driven), untestable));
     const environment = { configRevision: String(scope.configRevisionId), runnerImage: scope.runnerImageVersion, runtime, manager: manager ?? "none" as const, architecture: "linux-x64", networkPolicy: "deny-all-v1", toolVersions: [{ name: "node", version: "24" }, { name: "package-manager", version: manager ?? "none" }], install, checks }, paired = pairExecutionEvidence(output, scope.baseSha, scope.headSha, environment), summaries = paired.summaries.map(item => ({ ...item, nameHash: createHash("sha256").update(item.planId).digest("hex") }));
     // pairExecutionEvidence reclassifies a check that failed and then passed on rerun as "flaky",
     // and that reclassification only ever reached the checkRuns table. reportChecks reads the raw

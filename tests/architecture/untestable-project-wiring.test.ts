@@ -11,7 +11,7 @@ describe("the not-run test reaches every reader", () => {
   it("is injected by validation only for a project with no lockfile that declares tests", () => {
     const worker = read("convex/reviewValidationWorker.ts");
     expect(worker).toMatch(/const untestable = !manager && declaresTestScript\(packageJson\.head\) \? "no_lockfile" as const : undefined;/);
-    expect(worker).toMatch(/withUntestableProject\(buildExecutionResponse\(driven\), untestable\)/);
+    expect(worker).toMatch(/withTestSuiteEvidence\(withUntestableProject\(buildExecutionResponse\(driven\), untestable\)\)/);
     expect(worker).toMatch(/file\.path === "package\.json" && typeof file\.content === "string"\) packageJson\[revision\] = file\.content/);
   });
 
@@ -19,10 +19,14 @@ describe("the not-run test reaches every reader", () => {
     const data = read("convex/reviewValidationData.ts");
     expect(data).toMatch(/\.\.\.\(check\.notRunReason \? \{ notRunReason: check\.notRunReason \} : \{\}\)/);
     expect(data).toMatch(/\.\.\.\(item\.notRunReason \? \{ notRunReason: item\.notRunReason \} : \{\}\)/);
+    expect(data).toMatch(/\.\.\.\(check\.noPassingTests \? \{ noPassingTests: true as const \} : \{\}\)/);
+    expect(data).toMatch(/\.\.\.\(item\.noPassingTests \? \{ noPassingTests: true as const \} : \{\}\)/);
   });
 
   it("carries its reason into the pull-request comment's decision", () => {
-    expect(read("convex/reviewReportWorker.ts")).toMatch(/\.\.\.\(item\.notRunReason \? \{ notRunReason: item\.notRunReason \} : \{\}\)/);
+    const report = read("convex/reviewReportWorker.ts");
+    expect(report).toMatch(/\.\.\.\(item\.notRunReason \? \{ notRunReason: item\.notRunReason \} : \{\}\)/);
+    expect(report).toMatch(/\.\.\.\(item\.noPassingTests \? \{ noPassingTests: true as const \} : \{\}\)/);
   });
 
   it("lets the consent panel promise only what will run", () => {

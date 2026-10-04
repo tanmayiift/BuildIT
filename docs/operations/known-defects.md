@@ -381,7 +381,23 @@ declared with what its absence costs. That list is currently empty, which is the
 
 ## A required check failing on both commits is reported as "All required checks passed"
 
-**Status: open, found 4 October 2026** (`docs/evidence/review-measurement-2026-10-04.md`, second run).
+**Status: fixed on 4 October 2026, found the same day** (`docs/evidence/review-measurement-2026-10-04.md`,
+second run). Decision taken: a suite that fails entirely is inconclusive; the pre-existing rule stays for a
+suite that otherwise ran.
+
+**What changed:**
+
+- **Verdict.** A required test suite that fails on both commits counts as pre-existing only when its own
+  output shows tests passing (`passedTestCount` reads the summaries of vitest, jest, mocha, node:test, tap,
+  ava and uvu). A suite with no test passing, or with no readable summary, is now `inconclusive`, reason
+  `test_suite_failing`, next action `repair_test_suite`. Missing evidence is never read as a pass. A suite
+  that ran with a few failures, the original `got` case, still counts as pre-existing.
+- **Wording.** A pass no longer says "All N required checks passed" when a required check failed before
+  this change. The PR comment says "This change introduced no new failure in its N required checks" and
+  names the ones already failing. The review page heading reads "No new failures from this change" and
+  names them.
+
+The original record follows.
 
 **What happened.** On `buildit-demo-zod#1`, the required `test` check (all 194 tests failing to load)
 and the required `gitleaks` check failed on the base and the head commit. The deliberate pre-existing

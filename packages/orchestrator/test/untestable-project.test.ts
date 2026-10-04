@@ -26,3 +26,26 @@ describe("the pull request comment for a project whose tests could not run", () 
     expect(body).not.toMatch(/retry once/);
   });
 });
+
+// buildit-demo-zod#1 printed "All 5 required checks passed with complete evidence" and then listed two
+// required checks as already failing.
+describe("the comment for required checks that were already failing", () => {
+  const install = { name: "install", required: true, conclusion: "passed" as const, evidenceComplete: true };
+
+  it("is inconclusive, not ready, when the test suite shows no test passing", () => {
+    const { body, decision } = composeVerifiedReport({ ...base, checks: [...scanners, install,
+      { name: "test", required: true, conclusion: "failed", evidenceComplete: true, preExisting: true, noPassingTests: true }] });
+    expect(decision).toMatchObject({ status: "inconclusive", reason: "test_suite_failing", nextAction: "repair_test_suite" });
+    expect(body).toMatch(/says nothing about this change/);
+    expect(body).not.toMatch(/Ready for human review/);
+  });
+
+  it("never says every required check passed when one failed before this change", () => {
+    const { body, decision } = composeVerifiedReport({ ...base, checks: [install, scanners[0]!,
+      { name: "gitleaks", required: true, conclusion: "failed", evidenceComplete: true, preExisting: true }] });
+    expect(decision.status).toBe("checks_passed");
+    expect(body).not.toMatch(/All \d+ required checks? passed/);
+    expect(body).toMatch(/This change introduced no new failure in its 3 required checks/);
+  });
+});
+

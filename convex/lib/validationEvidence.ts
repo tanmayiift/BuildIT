@@ -1,7 +1,7 @@
 "use node";
 import { createHash } from "node:crypto";
 import { classifyRegression, diagnoseFlakiness, type CheckResult, type CommandPlan, type DiagnosticRun, type PackageManager } from "@buildit/runner";
-import { lockfileManager } from "@buildit/contracts";
+import { lockfileManager, passedTestCount } from "@buildit/contracts";
 
 export type ContextArtifact = { id: string; storageKey: string; checksum: string; size: number };
 export type ExecutionResult = { credentialTeardownProved: boolean; stopped: boolean; results: CheckResult[]; outputs: Array<{ planId: string; text: string; truncated: boolean; evidenceTruncated: boolean }> };
@@ -43,7 +43,7 @@ export function summarizeExecution(output: ExecutionResponse, baseSha: string, h
   if (!output.base.credentialTeardownProved || !output.head.credentialTeardownProved) throw new Error("credential_teardown_unproved");
   if (!output.base.stopped || !output.head.stopped) throw new Error("sandbox_stop_unproved");
   const proof = { credentialTeardownProved: true as const, sandboxStopped: true as const };
-  const summarize = (revision: "base" | "head", commitSha: string, result: ExecutionResult) => result.results.map(item => ({ revision, commitSha, ...proof, planId: item.planId, kind: item.kind, required: item.required, conclusion: item.conclusion, ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }), ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}), durationMs: item.durationMs, commandFingerprint: sha256Json({ planId: item.planId, origin: item.origin, executable: item.executable, args: item.args, limits: { timeoutMs: item.timeoutMs, cpuLimit: item.cpuLimit, memoryMb: item.memoryMb, outputBytes: item.outputBytes, fileBytes: item.fileBytes, network: item.network } }) }));
+  const summarize = (revision: "base" | "head", commitSha: string, result: ExecutionResult) => result.results.map(item => ({ revision, commitSha, ...proof, planId: item.planId, kind: item.kind, required: item.required, conclusion: item.conclusion, ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }), ...(item.notRunReason ? { notRunReason: item.notRunReason } : {}), ...(item.noPassingTests ? { noPassingTests: true as const } : {}), durationMs: item.durationMs, commandFingerprint: sha256Json({ planId: item.planId, origin: item.origin, executable: item.executable, args: item.args, limits: { timeoutMs: item.timeoutMs, cpuLimit: item.cpuLimit, memoryMb: item.memoryMb, outputBytes: item.outputBytes, fileBytes: item.fileBytes, network: item.network } }) }));
   const scanner = (revision: "base" | "head", commitSha: string, run: ScannerSummary) => {
     if (!run.complete || run.commitSha !== commitSha) throw new Error("scanner_evidence_incomplete");
     const runs = run.runs?.length ? run.runs : [{ scanner: run.scanner, scannerVersion: run.scannerVersion }];
@@ -76,5 +76,21 @@ export function withUntestableProject(output: ExecutionResponse, reason: "no_loc
     results: [...result.results, check],
     outputs: [...result.outputs, { planId: "test", text: untestableProjectExplanation, truncated: false, evidenceTruncated: false }],
   };
+  return { ...output, base: side(output.base), head: side(output.head) };
+}
+
+// A failed test suite whose own output shows no test passing. computeReviewDecision excuses a test
+// failure that was already on the base commit only when the suite otherwise ran; a suite that fails
+// entirely - buildit-demo-zod's 194 tests all failing to load - shows nothing about the change. Marked
+// on the broker's response, like the not-run test above, so every reader decides from the same flag.
+export function withTestSuiteEvidence(output: ExecutionResponse): ExecutionResponse {
+  const side = (result: ExecutionResult): ExecutionResult => ({
+    ...result,
+    results: result.results.map(item => {
+      if (item.kind !== "test" || item.conclusion !== "failed") return item;
+      const passed = passedTestCount(result.outputs.find(entry => entry.planId === item.planId)?.text);
+      return passed !== undefined && passed > 0 ? item : { ...item, noPassingTests: true as const };
+    }),
+  });
   return { ...output, base: side(output.base), head: side(output.head) };
 }

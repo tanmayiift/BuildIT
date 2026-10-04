@@ -2,7 +2,7 @@
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Component, useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
-import { comparisonRefusal, dismissalReasonLabel, notRunExplanation, dismissalReasons, dismissalRefusal, eventPresentation, evidenceRefusal, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
+import { comparisonRefusal, dismissalReasonLabel, notRunExplanation, preExistingFailurePresentation, dismissalReasons, dismissalRefusal, eventPresentation, evidenceRefusal, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, technicalLabel as label } from "./review-presentation";
 import type { DismissalReason, SuppressionScope } from "./review-presentation";
 // Why a stage saw less than everything. Named here rather than reusing the verdict reason map,
 // because a gap on the handoff record is a description of what was read - not a reason a verdict
@@ -271,10 +271,13 @@ function ReviewEvidence({ id }: { id: string }) {
       />
     );
   const { review, repository } = evidence;
-  const verdict = statusPresentation(review.status, review.isStale, review.statusReasonCode),
-    nextAction = nextActionPresentation(review.nextActionCode, review.isStale),
+  const checkSummaries = summarizeChecks(evidence.checks),
+    preExisting = preExistingFailurePresentation(review.status, checkSummaries),
+    baseVerdict = statusPresentation(review.status, review.isStale, review.statusReasonCode),
+    verdict = preExisting ? { ...baseVerdict, title: preExisting.title, summary: preExisting.summary } : baseVerdict,
+    baseNextAction = nextActionPresentation(review.nextActionCode, review.isStale),
+    nextAction = preExisting ? { ...baseNextAction, detail: preExisting.nextDetail } : baseNextAction,
     pullRequestUrl = pullRequestHref(repository.owner, repository.name, review.prNumber),
-    checkSummaries = summarizeChecks(evidence.checks),
     // The decrypted prose, joined to the rows it belongs to. The rows are the list: only a row
     // carries the fingerprint findings:dismiss identifies a finding by, and the resolution a
     // dismissal changes, so a findings panel built from the prose alone could show neither.
