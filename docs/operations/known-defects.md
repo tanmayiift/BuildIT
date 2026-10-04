@@ -379,6 +379,34 @@ send, which all three were. It now checks each one against the App's subscriptio
 installation events as always-delivered, and requires a handler for an unsubscribed event to be
 declared with what its absence costs. That list is currently empty, which is the point.
 
+## A required check failing on both commits is reported as "All required checks passed"
+
+**Status: open, found 4 October 2026** (`docs/evidence/review-measurement-2026-10-04.md`, second run).
+
+**What happened.** On `buildit-demo-zod#1`, the required `test` check (all 194 tests failing to load)
+and the required `gitleaks` check failed on the base and the head commit. The deliberate pre-existing
+rule says a failure already on the base commit does not block, so the verdict was `checks_passed`.
+
+**What the reader was told was false:**
+
+- The PR comment opened "All 5 required checks passed with complete evidence", then listed `test` and
+  `gitleaks` as already failing.
+- The GitHub check was `success`, "Ready for human review".
+- The review page heading read "All required checks passed — BuildIT found enough evidence for this
+  exact commit", above a table showing Test and Secret scan as Required · Failed.
+
+**Two separate questions:**
+
+1. **The wording is simply wrong** and should change whatever the policy. "All N required checks passed"
+   must not be printed when a required check failed, pre-existing or not. The page heading must say
+   what happened, for example "No new failures from this change — 2 required checks were already
+   failing on the base commit".
+2. **Policy:** should a required test suite that fails on both commits still end `checks_passed`? The
+   pre-existing rule was written for one unrelated failure in an otherwise working suite (a missing CA
+   bundle in `got`). A suite that fails entirely gives no evidence about the change. By the rule that
+   missing evidence is inconclusive, that case arguably should be `inconclusive`. This needs a decision
+   before it changes.
+
 ## A repository without a lockfile gets no tests, and the verdict reads as a pass
 
 **Status: fixed on 4 October 2026, found the same day** (`docs/evidence/review-measurement-2026-10-04.md`).

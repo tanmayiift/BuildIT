@@ -109,3 +109,81 @@ A review that falls back costs two validations.
 
 A test-running measurement needs a repository with a lockfile: `buildit-demo-zod`, `-express`,
 `-axios`, `-got` and `-date-fns` all have one; `-p-queue` and `-body-parser` do not.
+
+---
+
+## Second run: a review that runs the project's tests (`buildit-demo-zod#1`)
+
+Run after #89 was deployed, which records each scanner's real duration. The project has a
+`pnpm-lock.yaml`, so install, test, lint, typecheck and build all ran.
+
+- PR `tanmayiift/buildit-demo-zod#1`, `1a295bd → 7135ab8`, 8 files, +218 −1.
+- Provider OpenAI, ceiling $5. Gemini was skipped: it is out of credit and the fallback was already proven above.
+- Review `nx79yyxnsfs2xzvyez324zf6a18fn40d`: verdict `checks_passed`. See the finding at the end.
+
+### Timeline (UTC, real time)
+
+| Stage | Finished | Took |
+|---|---|---|
+| created on consent | 12:05:42.746 | — |
+| context | 12:06:11.703 | 29.0 s |
+| validation | 12:08:46.862 | 2 min 35.2 s |
+| analysis | 12:10:05.063 | 1 min 18.2 s |
+| decision | 12:10:11.490 | 6.4 s |
+
+**Consent to verdict: 4 min 28.7 s.**
+
+### Sandbox seconds, three ways, and now they agree
+
+| Measure | Value |
+|---|---|
+| Org / platform wall-clock counter delta | **149 s** (589 → 738, both counters) |
+| `executionJobs` created → completed | 149.6 s |
+| `usageLedger` `sandbox_seconds` | 153 s (sum of recorded command times, 152.9 s) |
+
+The per-review ledger is no longer 0: scanner durations are recorded since #89.
+
+| Check (base / head) | Duration | Result |
+|---|---|---|
+| test | 43.4 s / 46.5 s | failed on both (see finding) |
+| dependency audit (OSV-Scanner) | 16.1 s / 16.7 s | passed |
+| build | 10.3 s / 10.9 s | passed |
+| lint (advisory) | 2.3 s / 2.3 s | failed on both |
+| secret scan (Gitleaks) | 1.5 s / 1.6 s | failed on both |
+| typecheck (advisory) | 0.5 s / 0.5 s | not configured |
+| BuildIT static rules | 0.1 s / 0.1 s | passed |
+
+### Model calls and cost
+
+- Five calls on OpenAI: `gpt-5.4-mini` for plan, critic, arbitration and report; `gpt-5.4` for findings.
+- **Cost: $0.6708**, 476,956 tokens, 65 s of model time.
+- Coverage `partial` (`analysis_budget`): not every changed file fitted the model's window. The checks and
+  scanners still ran against all of them.
+
+### Capacity, now measured on a test-running review
+
+At **149 s of sandbox per review**:
+
+| Allowance | Reviews that fit |
+|---|---|
+| Per workspace, 3,600 s/month | ~24 |
+| Platform, 16,200 s usable | ~108 |
+| Vercel Hobby Active CPU, 5 h | ~120 (if Active CPU tracks this counter) |
+
+A review that falls back between providers costs two validations.
+
+### Finding: a required check failing on both commits is reported as "passed"
+
+- `test` and `gitleaks` are required, and both failed on the base and the head commit. The test suite
+  failed to load entirely: all 194 tests fail at `import("../../index.js")`.
+- BuildIT classified both as pre-existing, so they did not block. That is its deliberate rule: a failure
+  already on the base commit is not this pull request's fault.
+- What it then said is not true:
+  - the GitHub check is `success`, titled "Ready for human review";
+  - the comment opens "All 5 required checks passed with complete evidence", then lists `test` and
+    `gitleaks` as already failing;
+  - the review page heading reads "All required checks passed — BuildIT found enough evidence for this
+    exact commit", above a table showing both as Required · Failed.
+- A suite that fails on both commits gives no evidence about the change, whether or not the failure is
+  this pull request's fault.
+- Recorded in `docs/operations/known-defects.md`.
