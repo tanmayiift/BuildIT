@@ -20,6 +20,18 @@ describe("dedicated Convex production release target", () => {
     expect(() => convexProductionEnvironment({ CONVEX_DEPLOY_KEY: "prod:judicious-barracuda-968|a", CONVEX_DEPLOYMENT_TOKEN: "prod:judicious-barracuda-968|b" }))
       .toThrow("buildit_convex_deploy_key_target_refused");
   });
+  it("says which rule refused a key, without showing any of it", () => {
+    const refusal = (key: string) => { try { convexProductionEnvironment({ CONVEX_DEPLOY_KEY: key }); return "accepted"; } catch (error) { return (error as Error).message; } };
+    expect(refusal("dev:judicious-barracuda-968|fake-secret")).toBe("buildit_convex_deploy_key_target_refused:not_a_production_deploy_key");
+    expect(refusal("opaque-secret")).toBe("buildit_convex_deploy_key_target_refused:not_a_production_deploy_key");
+    expect(refusal("prod:unrelated|fake-secret")).toBe("buildit_convex_deploy_key_target_refused:key_for_another_deployment");
+    expect(refusal("prod:judicious-barracuda-968|fake secret")).toBe("buildit_convex_deploy_key_target_refused:malformed_key");
+    for (const key of ["dev:judicious-barracuda-968|fake-secret", "prod:unrelated|fake-secret"]) expect(refusal(key)).not.toContain("fake-secret");
+  });
+  it("accepts the production key with a pasted trailing newline, and passes it on trimmed", () => {
+    expect(convexProductionEnvironment({ CONVEX_DEPLOY_KEY: "prod:judicious-barracuda-968|fake-secret\n" }).CONVEX_DEPLOY_KEY).toBe("prod:judicious-barracuda-968|fake-secret");
+    expect(() => convexProductionEnvironment({ CONVEX_DEPLOY_KEY: "prod:unrelated|fake-secret\n" })).toThrow("buildit_convex_deploy_key_target_refused");
+  });
   it("verifies exact server deployment name, type and URL", () => {
     expect(assertConvexProductionTarget(convexProductionTarget)).toEqual(convexProductionTarget);
     for (const change of [{ deploymentName: "other" }, { deploymentType: "dev" }, { url: "https://other.convex.cloud" }, { url: "https://judicious-barracuda-968.convex.cloud.attacker.invalid" }]) {
