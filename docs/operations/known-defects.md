@@ -399,6 +399,22 @@ send, which all three were. It now checks each one against the App's subscriptio
 installation events as always-delivered, and requires a handler for an unsubscribed event to be
 declared with what its absence costs. That list is currently empty, which is the point.
 
+## Autofix died at the scanners segment on every round, and a retry hid why
+
+**Found live on 5 October 2026** (`tanmayiift/buildit-demo-axios#2`, review `nx78rt59…`), the first
+autofix run since execution was split into segments. The review ended `platform_failed` with
+`autofix_artifact_conflict`, which was the second failure, not the first.
+
+The first: autofix minted the artifact read grants for a round once and handed the same array to every
+segment. A read grant is single-use and lives sixty seconds. `prepare` spent them, and `scanners` -
+the next segment that reads the repository - presented spent grants, which the broker logged as an
+unclassified `execution_failed`. Validation has always minted per request and says why in a comment;
+autofix did not follow it. `segmentArtifacts` now mints per call.
+
+The second: the round was retried, the model wrote a different patch, and its candidate was stored
+under the round-only slot name the first attempt had used, so `reserveArtifact` refused it as a
+conflict and the conflict became the reported cause. Slots now carry the candidate commit.
+
 ## A required check failing on both commits is reported as "All required checks passed"
 
 **Status: fixed on 4 October 2026, found the same day** (`docs/evidence/review-measurement-2026-10-04.md`,
