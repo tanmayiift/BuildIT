@@ -24,7 +24,7 @@ The first useful result is the evidence attached to the exact pull-request commi
 ## Request a fix
 
 1. Inspect the findings and required checks.
-2. Explicitly request Autofix from the review or with the documented GitHub command.
+2. Request Autofix by commenting `@buildit autofix` on the pull request; the review page has no Autofix button.
 3. Review the separate stacked pull request. It targets the original pull-request branch, stops after three edit-and-test rounds, and cannot change protected paths or workflows.
 4. A human inspects and merges the stacked pull request. BuildIT never calls GitHub's merge operation.
 

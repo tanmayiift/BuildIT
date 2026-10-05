@@ -39,7 +39,7 @@ remain available, but their success does not certify deployed infrastructure.
 | Gate | Needs | Evidence |
 | --- | --- | --- |
 | `pnpm alerts:verify` | `BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN` with alert/folder read and datasource query access | Matching current rules, no legacy duplicates, and a scheduled snapshot within 15 minutes |
-| `pnpm release:wiring` | `BUILDIT_EXPECTED_CONVEX_URL` | Pinned BuildIT web/broker health responses identify this deployment and its public query API responds |
+| `pnpm release:wiring` | `BUILDIT_EXPECTED_CONVEX_URL` (the release workflow defaults it to the production deployment) | Pinned BuildIT web/broker health responses identify this deployment and its public query API responds |
 | `pnpm smoke:aws-boundary` | BuildIT AWS read credentials + `BUILDIT_AWS_STACK` | Observed encryption, public-access block, object versions, retention and key rotation |
 
 The AWS subprocess forwards a narrow authentication environment, including temporary session tokens
@@ -50,6 +50,13 @@ trust-policy condition or the inventory bucket. Those remain separate deployment
 legacy BuildIT rules as cleanup candidates, with exact UIDs and content fingerprints. A report does
 not authorize deletion. Unknown rules are retained and reported. See
 [Grafana reconciliation](grafana-reconciliation.md) for the approval and verification sequence.
+
+## Releases run from GitHub
+
+Every push to `main` runs `.github/workflows/release.yml`: the gates above, then `pnpm deploy:production`
+(broker, Convex, web) with the `CONVEX_DEPLOY_KEY` and `VERCEL_TOKEN` repository secrets, then a
+signed-out journey and a wiring check against the released alias. A dispatch can still release a
+single surface. A local `pnpm deploy:production` remains possible from a clean `main`.
 
 ## The trap this file exists to prevent
 
