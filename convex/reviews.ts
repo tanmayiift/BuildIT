@@ -79,7 +79,11 @@ export const getEvidence = query({
     const [requirements, findings, checks, rounds, events, stageRuns, ledger, runStates] = [
       collections[0].slice(0, evidenceCeiling), collections[1].slice(0, evidenceCeiling), collections[2].slice(0, evidenceCeiling), collections[3].slice(0, evidenceCeiling), collections[4].slice(0, evidenceCeiling), collections[5].slice(0, evidenceCeiling), collections[6].slice(0, evidenceCeiling), collections[7].slice(0, 50),
     ];
-    return { partial, review: { ...publicReview(review), baseSha: review.baseSha, baseRef: review.baseRef, mode: review.mode,
+    // Finding prose lives in the analysis artifact, which retention erases. Said here so the page can
+    // tell a reader the text is gone by policy, instead of failing to load it and blaming their access.
+    const findingArtifact = findings[0]?.contentArtifactId ? await ctx.db.get(findings[0].contentArtifactId) : null;
+    const findingTextErasedAt = findingArtifact?.deletedAt;
+    return { partial, ...(findingTextErasedAt ? { findingTextErasedAt } : {}), review: { ...publicReview(review), baseSha: review.baseSha, baseRef: review.baseRef, mode: review.mode,
       statusReasonCode: review.statusReasonCode, trigger: review.trigger, provider: review.provider, model: review.model,
       budgetLimit: review.budgetLimit, budgetConsumed: review.budgetConsumed, completedAt: review.completedAt },
       repository: { owner: access.repository.owner, name: access.repository.name },

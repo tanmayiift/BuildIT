@@ -11,6 +11,19 @@ import { isStored } from "./lib/artifactState";
 // it: it is already redacted and already published on the pull request, so an answer drawn from it
 // cannot say anything the comment did not. When it is gone the caller is told, rather than being
 // handed a path that would re-read the repository to cover the gap.
+// Where to reply when there is no review to answer from: the repository and its active installation,
+// nothing about any review. askScope returns null in that case, and the question used to go unanswered.
+export const askReplyScope = internalQuery({
+  args: { organizationId: v.id("organizations"), repositoryId: v.id("repositories") },
+  handler: async (ctx, args) => {
+    const repository = await ctx.db.get(args.repositoryId);
+    if (!repository || repository.organizationId !== args.organizationId || !repository.enabled) return null;
+    const installation = await ctx.db.get(repository.installationId);
+    if (!installation || installation.organizationId !== args.organizationId || installation.status !== "active") return null;
+    return { installationId: installation.installationId, githubRepositoryId: repository.githubRepositoryId };
+  },
+});
+
 export const askScope = internalQuery({
   args: { organizationId: v.id("organizations"), repositoryId: v.id("repositories"), prNumber: v.number(), now: v.number() },
   handler: async (ctx, args) => {

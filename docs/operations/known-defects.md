@@ -399,6 +399,16 @@ send, which all three were. It now checks each one against the App's subscriptio
 installation events as always-delivered, and requires a handler for an unsubscribed event to be
 declared with what its absence costs. That list is currently empty, which is the point.
 
+**Subscribing was not enough for threads (found live, 5 October 2026).** Resolving a BuildIT thread on
+`tanmayiift/buildit-demo-itsdangerous#3` delivered `pull_request_review_thread` and still recorded
+nothing, for two reasons. The inline comment's marker carried the model's own finding id (`F1`), which
+is neither a document id nor the stored fingerprint, so `findingFeedbackData.record` matched no
+finding - on every review, not just this one. And the route scheduled the feedback and then fell
+through to the final `else`, so the delivery was logged `rejected`. Inline comments now carry the
+fingerprint the analysis stores (`convex/lib/findingFingerprint.ts`, used by both), and the route
+completes the delivery as processed. Comments published before the fix still carry model ids and stay
+unattributable; a re-review replaces them.
+
 ## Autofix died at the scanners segment on every round, and a retry hid why
 
 **Found live on 5 October 2026** (`tanmayiift/buildit-demo-axios#2`, review `nx78rt59…`), the first

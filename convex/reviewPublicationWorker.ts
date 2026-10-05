@@ -8,6 +8,7 @@ import { GitHubAppClient, GitHubRepositoryWriter, inlineCommentMarker, reviewCom
 import { demotedByLearning, neverMergedSentence, safe, selectInlineFindings } from "@buildit/orchestrator";
 import { issueArtifactGrant } from "@buildit/security";
 import { platformFailureReport, type PlatformFailureReason } from "./lib/platformFailureReport";
+import { findingFingerprint } from "./lib/findingFingerprint";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 type Scope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; installationId: number; githubRepositoryId: number; prNumber: number; headSha: string; conclusion: "success" | "failure" | "neutral" | "action_required"; status: string; reason: string; report: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number }; reviewProfile?: "quiet" | "balanced" | "thorough"; analysis?: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number };};
@@ -37,6 +38,31 @@ export function reviewDetailsUrl(reviewId: string) {
   return new URL(`/reviews/${encodeURIComponent(reviewId)}`, "https://buildit-agentic-review.vercel.app").toString();
 }
 
+// One arbitrated finding as GitHub will show it inline.
+//
+// safe() per field, and before the join rather than after: it collapses whitespace, so running
+// it over the joined string would flatten the paragraph break between explanation and impact.
+// The summary comment has always been hardened this way; these three fields are the same model
+// prose, derived from repository content an outside contributor can influence, posted under
+// BuildIT's verified App identity - which is what makes an unescaped markdown link in them a
+// usable phishing surface rather than a cosmetic bug. `path` is deliberately not passed
+// through safe(): GitHub matches it against the diff, so it is validated in
+// GitHubRepositoryWriter.publishInlineFindings and the finding is skipped if it fails.
+//
+// The id becomes the comment's marker. It is the fingerprint the analysis stored, not the model's
+// own id, so resolving the thread finds the finding (findingFeedbackWorker.observe).
+export function inlineFinding(item: Record<string, unknown>, fingerprintKey: Buffer) {
+  const place = { id: String(item.id), path: String(item.path), startLine: Number(item.startLine), endLine: Number(item.endLine) };
+  return { ...place, id: findingFingerprint(place, fingerprintKey),
+    severity: String(item.severity ?? "warning"),
+    title: safe(String(item.title ?? "Finding")) || "Finding",
+    body: [item.explanation, item.impact]
+      .filter(text => typeof text === "string" && text)
+      .map(text => safe(String(text)))
+      .filter(text => text)
+      .join("\n\n") || "See the review summary for detail." };
+}
+
 // Inline delivery is best-effort by design: the verdict is already published on the check run and
 // the summary comment before this runs, so a GitHub hiccup here must not fail a review that has
 // already decided. It logs and moves on rather than throwing.
@@ -44,6 +70,7 @@ async function publishInlineFindings(scope: Scope, token: string, feedback: Read
   if (!scope.analysis) return;
   try {
     const brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""), secret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url");
+    const fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
     const grant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
       artifactId: String(scope.analysis.id), storageKey: scope.analysis.storageKey, operation: "read" }, secret, Date.now());
     const response = await fetch(`${brokerUrl}/api/artifacts`, { headers: { authorization: `Bearer ${grant}` } });
@@ -64,23 +91,7 @@ async function publishInlineFindings(scope: Scope, token: string, feedback: Read
     const demoted = (value.arbitrated ?? []).length - surviving.length;
     if (demoted > 0) console.info("buildit_learning_demoted", { demoted });
     const findings = selectInlineFindings(surviving as Array<Record<string, unknown> & { severity: string; blocking?: boolean; resolution?: string }>, scope.reviewProfile)
-
-      // safe() per field, and before the join rather than after: it collapses whitespace, so running
-      // it over the joined string would flatten the paragraph break between explanation and impact.
-      // The summary comment has always been hardened this way; these three fields are the same model
-      // prose, derived from repository content an outside contributor can influence, posted under
-      // BuildIT's verified App identity - which is what makes an unescaped markdown link in them a
-      // usable phishing surface rather than a cosmetic bug. `path` is deliberately not passed
-      // through safe(): GitHub matches it against the diff, so it is validated in
-      // GitHubRepositoryWriter.publishInlineFindings and the finding is skipped if it fails.
-      .map(item => ({ id: String(item.id), path: String(item.path), startLine: Number(item.startLine), endLine: Number(item.endLine),
-        severity: String(item.severity ?? "warning"),
-        title: safe(String(item.title ?? "Finding")) || "Finding",
-        body: [item.explanation, item.impact]
-          .filter(text => typeof text === "string" && text)
-          .map(text => safe(String(text)))
-          .filter(text => text)
-          .join("\n\n") || "See the review summary for detail." }));
+      .map(item => inlineFinding(item, fingerprintKey));
     if (!findings.length) return;
     const writer = new GitHubRepositoryWriter({ repositoryId: scope.githubRepositoryId, installationToken: token });
     await writer.publishInlineFindings({ prNumber: scope.prNumber, headSha: scope.headSha,
