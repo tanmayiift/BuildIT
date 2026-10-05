@@ -10,7 +10,7 @@ import {
   reviewPolicy,
 } from "@buildit/github";
 import type { WorkflowId } from "@convex-dev/workflow";
-import { requireExecutionEnabled } from "./lib/executionGate";
+import { executionEnabled, requireExecutionEnabled, reviewRuntimeReady } from "./lib/executionGate";
 
 
 // Every review starts here, whoever asked for it. The comment path grew this pipeline - fetch the
@@ -43,6 +43,11 @@ const refusalSummaries = {
 } as const;
 
 async function startReviewForPullRequest(ctx: ActionCtx, input: StartReviewInput) {
+    // The kill switch belongs here, on the one path every GitHub-triggered review takes. It used to
+    // be checked by the comment handler before calling this, so an automatic review - which spends
+    // the customer's key and runs their code without anyone asking - started even with untrusted
+    // execution switched off.
+    requireExecutionEnabled();
     const pullResponse = await input.client.withToken(
       {
         installationId: input.installationId,
@@ -310,7 +315,6 @@ export const processWebhook = internalAction({
         });
         return;
       }
-      requireExecutionEnabled();
       await startReviewForPullRequest(ctx, {
         deliveryId: args.deliveryId, installationId: args.installationId,
         githubRepositoryId: args.githubRepositoryId, prNumber: args.prNumber,
@@ -354,6 +358,9 @@ async function startAutomaticReview(ctx: ActionCtx, args: { deliveryId: string; 
     installationId: args.installationId, githubRepositoryId: args.githubRepositoryId });
   const appId = process.env.GITHUB_APP_ID, privateKey = process.env.GITHUB_APP_PRIVATE_KEY;
   if (!appId || !privateKey) return;
+  // Nobody asked for this review, so a switched-off or unconfigured runtime means it simply does not
+  // start. The delivery itself is still processed: the head was reconciled and a merge recorded.
+  if (!executionEnabled() || !reviewRuntimeReady()) return;
   await startReviewForPullRequest(ctx, {
     deliveryId: args.deliveryId, installationId: args.installationId,
     githubRepositoryId: args.githubRepositoryId, prNumber: args.prNumber,
