@@ -207,7 +207,7 @@
 .stepper li a {
   display: flex;
   align-items: center;
-  min-height: 44px;
+  min-height: var(--control-height);
   padding: 0 var(--space-1);
   color: inherit;
   text-decoration: none;
@@ -284,7 +284,7 @@
 .setup-card>summary {
   display: flex;
   align-items: center;
-  min-height: 44px;
+  min-height: var(--control-height);
   cursor: pointer;
   font-size: var(--text-base);
   font-weight: 700;
@@ -368,7 +368,7 @@
   margin-top: var(--space-5);
   color: var(--muted);
   font-size: var(--text-2xs);
-  line-height: 1.5;
+  line-height: var(--leading-normal);
 }
 
 .optional-heading {
@@ -723,7 +723,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  transition: border-color 120ms,box-shadow 120ms;
+  transition: border-color var(--duration-fast),box-shadow var(--duration-fast);
 }
 
 .repository-row:focus-within {
@@ -803,7 +803,7 @@
 
 .repository-policy-select {
   width: 100%;
-  min-height: 44px;
+  min-height: var(--control-height);
   padding: 0 var(--space-7) 0 var(--space-3);
   color: var(--ink);
   background-color: var(--workbench);
@@ -842,7 +842,7 @@
 .repository-actions {
   display: flex;
   align-items: center;
-  min-height: 44px;
+  min-height: var(--control-height);
 }
 
 .repository-actions .button {
@@ -994,7 +994,7 @@
 }
 
 .sample-route-exit {
-  min-height: 44px;
+  min-height: var(--control-height);
   display: inline-flex;
   align-items: center;
   color: var(--navy);
@@ -1041,7 +1041,7 @@
 
 .credential-form input,.credential-form select {
   width: 100%;
-  min-height: 44px;
+  min-height: var(--control-height);
   background: var(--surface);
 }
 
@@ -1112,7 +1112,7 @@
 
 .key-trust summary {
   display: flex;
-  min-height: 44px;
+  min-height: var(--control-height);
   align-items: center;
   padding: var(--space-2) var(--space-3);
   cursor: pointer;
@@ -1167,7 +1167,7 @@
   margin: 0;
   color: var(--muted);
   font-size: var(--text-xs);
-  line-height: 1.5;
+  line-height: var(--leading-normal);
 }
 
 .trust-intro {
@@ -1228,7 +1228,7 @@
   margin: var(--space-2) 0 0;
   color: var(--muted);
   font-size: var(--text-xs);
-  line-height: 1.5;
+  line-height: var(--leading-normal);
 }
 
 .saved-credentials {
@@ -1498,7 +1498,7 @@
 }
 
 .review-start-form .button {
-  min-height: 44px;
+  min-height: var(--control-height);
 }
 
 .review-consent {
@@ -2066,12 +2066,12 @@
   margin: 0;
   color: var(--ink-2);
   font-size: var(--text-sm);
-  line-height: 1.5;
+  line-height: var(--leading-normal);
 }
 
 .evidence-empty .button {
   justify-self: start;
-  min-height: 44px;
+  min-height: var(--control-height);
   margin-top: 3px;
 }
 
@@ -2200,7 +2200,7 @@
 }
 
 .technical-details summary {
-  min-height: 44px;
+  min-height: var(--control-height);
   display: flex;
   align-items: center;
   cursor: pointer;
@@ -2443,11 +2443,11 @@
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: var(--weight-medium);
 }
 
 .stage-table tbody th {
-  font-weight: 600;
+  font-weight: var(--weight-medium);
 }
 
 .stage-table tbody tr:last-child th, .stage-table tbody tr:last-child td {
@@ -2467,7 +2467,7 @@
 
 .stage-round {
   color: var(--muted);
-  font-weight: 400;
+  font-weight: var(--weight-regular);
 }
 
 .stage-outcome {
@@ -2498,18 +2498,18 @@
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: var(--weight-medium);
 }
 
 .run-select select {
-  min-height: 44px;
+  min-height: var(--control-height);
   max-width: 100%;
   padding: var(--space-2) var(--space-2);
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  font-weight: 600;
+  font-weight: var(--weight-medium);
 }
 
 .run-diff-summary {
@@ -2938,7 +2938,7 @@ p.evidence-foot {
 .finding-dismiss > summary {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
+  min-height: var(--control-height);
   width: max-content;
   color: var(--navy);
   font-size: var(--text-xs);
@@ -2963,12 +2963,12 @@ p.evidence-foot {
 }
 
 .finding-dismiss select {
-  min-height: 44px;
+  min-height: var(--control-height);
   background: var(--surface);
 }
 
 .finding-dismiss .button {
-  min-height: 44px;
+  min-height: var(--control-height);
 }
 
 .finding-dismiss .form-note, .finding-dismiss .form-result {
@@ -3006,7 +3006,7 @@ p.evidence-foot {
   font-weight: 800;
   letter-spacing: .02em;
   padding: var(--space-3) 0;
-  min-height: 44px;
+  min-height: var(--control-height);
   display: flex;
   align-items: center;
 }
@@ -3048,7 +3048,7 @@ p.evidence-foot {
 }
 
 .repository-filter input {
-  min-height: 44px;
+  min-height: var(--control-height);
   padding: 0 var(--space-3);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
