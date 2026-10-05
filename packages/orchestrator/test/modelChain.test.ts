@@ -36,6 +36,8 @@ describe("executable model review chain", () => {
     expect(systems.requirements).toContain("return an empty requirements array");
     expect(systems.findings).toContain("criterionId must be an exact id");
     expect(systems.findings).toContain("use the empty string");
+    // Memory left the prompt: its fingerprints are keyed hashes the model could never match.
+    expect(systems.findings).not.toMatch(/memory|fingerprint/i);
     expect(systems.critic).toContain("one decision for every supplied finding id");
     expect(systems.arbitration).toContain("Do not invent or rename finding ids");
     // The report stage is no longer a model call; the comment is composed in code.

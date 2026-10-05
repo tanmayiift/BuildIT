@@ -51,16 +51,54 @@ export function boundJson<T>(value: T, budget: number): { value: T | undefined; 
   return { value: undefined, truncated: true };
 }
 
+// What the findings model needs from validation, which is much less than the stored evidence: one row
+// per check, the head commit's output only where a check failed (its start and its end, cut on line
+// boundaries), never the base commit's output, and the scanner findings this pull request introduced.
+// The key stays `validation`, so injection scoping still files a signal in it under "checks". The
+// stored artifact keeps boundedValidationEvidence, because Autofix reads it.
+type CheckRow = { planId?: string; kind?: string; required?: boolean; conclusion?: string; testCounts?: unknown; notRunReason?: string };
+const lineTail = (text: string, bytes: number) => { const tail = text.slice(-bytes); const cut = tail.indexOf("\n"); return cut > 0 && tail.length < text.length ? tail.slice(cut + 1) : tail; };
+const lineHead = (text: string, bytes: number) => { const head = text.slice(0, bytes); const cut = head.lastIndexOf("\n"); return cut > 0 && head.length < text.length ? head.slice(0, cut) : head; };
+export function modelValidationView(value: ValidationArtifact, pinned: { headSha: string; baseSha: string }, changedPaths: ReadonlySet<string>, maxBytes = 24_000) {
+  if (value.version !== 1 || value.pinned?.headSha !== pinned.headSha || value.pinned?.baseSha !== pinned.baseSha || !value.output?.base || !value.output.head) throw new Error("validation_evidence_pinning_failed");
+  const headRows = (value.output.head.results ?? []) as CheckRow[], baseRows = (value.output.base.results ?? []) as CheckRow[];
+  const failed = (row?: CheckRow) => row?.conclusion === "failed" || row?.conclusion === "timed_out";
+  const checks = headRows.map(row => { const base = baseRows.find(item => item.planId === row.planId);
+    return { planId: row.planId, kind: row.kind, required: row.required, conclusion: row.conclusion, baseConclusion: base?.conclusion,
+      ...(failed(row) && failed(base) ? { preExisting: true } : {}), ...(row.testCounts ? { testCounts: row.testCounts } : {}), ...(row.notRunReason ? { notRunReason: row.notRunReason } : {}) }; });
+  const outputs = (value.output.head.outputs ?? []).flatMap(item => {
+    const row = headRows.find(candidate => candidate.planId === item.planId);
+    if (!failed(row) || typeof item.text !== "string") return [];
+    const text = redact(item.text), preExisting = failed(baseRows.find(candidate => candidate.planId === item.planId));
+    // A failure the base commit shares needs only its ending; a new one needs where it starts too.
+    const excerpt = preExisting ? lineTail(text, 1_500) : text.length <= 8_000 ? text : `${lineHead(text, 2_000)}\n…\n${lineTail(text, 6_000)}`;
+    return [{ planId: item.planId, text: excerpt, truncated: excerpt.length < text.length || Boolean(item.truncated || item.evidenceTruncated) }];
+  });
+  const scanners = value.output.scanners as { base?: { findings?: Parameters<typeof introducedScannerFindings>[0] }; head?: { findings?: Parameters<typeof introducedScannerFindings>[1] } } | undefined;
+  const introduced = introducedScannerFindings(scanners?.base?.findings ?? [], scanners?.head?.findings ?? [], changedPaths);
+  const view = { manager: value.manager, checks, outputs,
+    scanners: { introduced: introduced.slice(0, 20).map(item => ({ scanner: item.scanner, ruleId: item.ruleId, path: item.path, startLine: item.startLine, endLine: item.endLine, severity: item.severity, summary: item.summary })), introducedTotal: introduced.length } };
+  const bounded = boundJson(view, maxBytes);
+  return bounded.value ?? { manager: value.manager, checks, outputs: [], scanners: { introduced: [], introducedTotal: introduced.length }, truncated: true };
+}
+
 export function boundedValidationEvidence(value: ValidationArtifact, pinned: { headSha: string; baseSha: string }, maxOutputBytes = 60_000) {
   if (value.version !== 1 || value.pinned?.headSha !== pinned.headSha || value.pinned?.baseSha !== pinned.baseSha || !value.output?.base || !value.output.head) throw new Error("validation_evidence_pinning_failed");
+  // Head first, and every part charged to the budget. Base used to be evaluated first from the same
+  // budget, so a long base test log left the head's - the commit under review - empty; and results
+  // and scanners were sized against the budget without being subtracted from it.
   let remaining = maxOutputBytes;
-  const run = (input: NonNullable<ValidationArtifact["output"]>["base"]) => ({ results: boundJson(input?.results ?? [], Math.max(0, remaining)).value ?? [], outputs: (input?.outputs ?? []).map(item => {
-    const raw = typeof item.text === "string" ? redact(item.text) : "", text = raw.slice(0, Math.max(0, remaining)); remaining -= Buffer.byteLength(text);
-    return { planId: item.planId, text, truncated: Boolean(item.truncated || item.evidenceTruncated || text.length !== raw.length) };
-  }) });
+  const charge = (value: unknown) => { remaining -= value === undefined ? 0 : Buffer.byteLength(JSON.stringify(value)); };
+  const run = (input: NonNullable<ValidationArtifact["output"]>["base"]) => {
+    const results = boundJson(input?.results ?? [], Math.max(0, remaining)).value ?? []; charge(results);
+    return { results, outputs: (input?.outputs ?? []).map(item => {
+      const raw = typeof item.text === "string" ? redact(item.text) : "", text = raw.slice(0, Math.max(0, remaining)); remaining -= Buffer.byteLength(text);
+      return { planId: item.planId, text, truncated: Boolean(item.truncated || item.evidenceTruncated || text.length !== raw.length) };
+    }) };
+  };
+  const head = run(value.output.head), base = run(value.output.base);
   const boundedScanners = boundJson(value.output.scanners, Math.max(0, remaining));
-  return { manager: value.manager, base: run(value.output.base), head: run(value.output.head),
-    scanners: boundedScanners.value, scannersTruncated: boundedScanners.truncated };
+  return { manager: value.manager, base, head, scanners: boundedScanners.value, scannersTruncated: boundedScanners.truncated };
 }
 
 export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_000) {
@@ -267,7 +305,12 @@ export const analyze = internalAction({
     const findingsModel = selectFindingsModel(scope.provider, scope.model, availableModels);
     const criticRoute = selectCriticModel(scope.provider, findingsModel, availableModels);
     const memory = await ctx.runQuery(internal.repositoryMemory.forRepository, { repositoryId: scope.repositoryId });
-    const untrusted = { ...boundedAnalysisContext(chunks), validation: boundedValidationEvidence(validationValue, { headSha: scope.headSha, baseSha: scope.baseSha }), memory }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
+    // Memory stays out of the prompt: its fingerprints are keyed HMACs of model-chosen ids, which the
+    // model cannot match to anything, so they were ~27 KB of hex per call that informed nothing.
+    const context = boundedAnalysisContext(chunks), pinnedShas = { headSha: scope.headSha, baseSha: scope.baseSha };
+    const contextChangedPaths = new Set<string>([...context.pull.changes.map(change => change.path), ...context.exclusions.changedPaths]);
+    const storedValidation = boundedValidationEvidence(validationValue, pinnedShas);
+    const untrusted = { ...context, validation: modelValidationView(validationValue, pinnedShas, contextChangedPaths) }, usage: Array<{ inputTokens: number; outputTokens: number }> = [];
     let injectionUnscoped = false;
     const injectionSurfaces = new Set<"code" | "narrative" | "checks" | "unknown">();
     const analysisStartedAt = Date.now();
@@ -395,7 +438,7 @@ export const analyze = internalAction({
 
     const fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
     if (fingerprintKey.byteLength < 32) throw new Error("finding_fingerprint_secret_invalid");
-    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, coverage: untrusted.coverage, validation: untrusted.validation, records, arbitrated }));
+    const outputBody = Buffer.from(JSON.stringify({ version: 1, pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, coverage: untrusted.coverage, validation: storedValidation, records, arbitrated }));
     if (outputBody.byteLength > 4_000_000) throw new Error("analysis_output_too_large");
     const checksum = createHash("sha256").update(outputBody).digest("hex"), now = Date.now();
     const reserved: { artifactId: Id<"artifacts">; storageKey: string } = await ctx.runMutation(internal.reviewModelData.reserveOutput, { ...args, checksum, size: outputBody.byteLength, now });

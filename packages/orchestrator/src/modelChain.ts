@@ -44,7 +44,8 @@ function repairInput(input: string, repairOf: unknown) {
   return `${input}\n<buildit:invalid-output>\n${quoted}\n</buildit:invalid-output>\nCorrect only the invalid output above. Return exactly the requested schema; do not add prose or new evidence.`;
 }
 
-const stagePromptVersions: Partial<Record<PromptStage, string>> = { findings: "findings-v3", critic: "critic-v2", arbitration: "arbitration-v2" };
+// findings-v4: no repository memory in its input or policy, and a compact validation view.
+const stagePromptVersions: Partial<Record<PromptStage, string>> = { findings: "findings-v4", critic: "critic-v2", arbitration: "arbitration-v2" };
 function strictDefinition(stage: PromptStage): StageDefinition {
   const schema = stageSchemas[stage];
   return {

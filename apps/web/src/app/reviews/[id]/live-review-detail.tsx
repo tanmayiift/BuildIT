@@ -528,7 +528,7 @@ function ReviewEvidence({ id }: { id: string }) {
                     <><dt>Stages skipped</dt><dd>{item.skippedStages.map(skip => `${stagePresentation(skip.stage)} — ${skip.because}`).join("; ")}</dd></>
                   ) : null}
                   {item.memoryReviewsSeen === undefined ? null : (
-                    <><dt>Memory applied</dt><dd>{item.memoryDismissed ?? 0} dismissed and {item.memoryRecurring ?? 0} recurring findings from {item.memoryReviewsSeen} earlier {item.memoryReviewsSeen === 1 ? "review" : "reviews"} of this repository</dd></>
+                    <><dt>Memory on record</dt><dd>{item.memoryDismissed ?? 0} dismissed and {item.memoryRecurring ?? 0} recurring findings from {item.memoryReviewsSeen} earlier {item.memoryReviewsSeen === 1 ? "review" : "reviews"} of this repository</dd></>
                   )}
                   {item.decisions?.length ? (
                     <><dt>Decisions</dt><dd>{item.decisions.map(decision => `${decision.kind}: ${decision.reason}`).join("; ")}</dd></>
