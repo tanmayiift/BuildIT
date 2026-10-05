@@ -13,13 +13,15 @@ describe("executable model review chain", () => {
   it("keeps every provider schema compatible with OpenAI strict structured output", () => {
     for (const schema of Object.values(stageSchemas)) expect(() => assertStrictSchema(schema)).not.toThrow();
   });
-  it("invokes six strict review stages and never requests a patch", async () => {
+  // Four, since review_plan and report stopped being model calls: nothing read either output.
+  it("invokes four strict review stages, never review_plan or report, and never a patch", async () => {
     const usage: unknown[] = [];
     const invoke = vi.fn(async request => ({ value: values[request.stage], provider: "gemini" as const, model: "gemini-test", finishReason: "STOP", inputTokens: 10, outputTokens: 2, requestId: "request-1" }));
     const records = await runModelReviewChain({ invoke, pinned, untrusted: { source: "untrusted", requirements: [{ id: "REQ-1", text: "round tax to two decimals" }] }, onUsage: item => { usage.push(item); } });
     expect(invoke.mock.calls.map(([request]) => request.stage)).toEqual(reviewPromptStages);
-    expect(records).toHaveLength(6);
-    expect(usage).toHaveLength(6);
+    expect(invoke.mock.calls.map(([request]) => request.stage)).toEqual(["requirements", "findings", "critic", "arbitration"]);
+    expect(records).toHaveLength(4);
+    expect(usage).toHaveLength(4);
     expect(JSON.stringify(usage)).not.toContain("untrusted");
     expect(usage[0]).toMatchObject({ stage: "requirements", provider: "gemini", model: "gemini-test", promptVersion: "requirements-v1", schemaVersion: "requirements-schema-v1", finishReason: "STOP", inputTokens: 10, outputTokens: 2, attempt: 1, outcome: "valid" });
     expect((usage[0] as {requestFingerprint:string}).requestFingerprint).toMatch(/^[0-9a-f]{64}$/);
@@ -36,7 +38,8 @@ describe("executable model review chain", () => {
     expect(systems.findings).toContain("use the empty string");
     expect(systems.critic).toContain("one decision for every supplied finding id");
     expect(systems.arbitration).toContain("Do not invent or rename finding ids");
-    expect(systems.report).toContain("Do not claim a passing check without supplied stdout evidence");
+    // The report stage is no longer a model call; the comment is composed in code.
+    expect(Object.keys(systems)).toEqual(["requirements", "findings", "critic", "arbitration"]);
   });
 
   it("runs the patch stage only through the separate Autofix chain", async () => {

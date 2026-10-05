@@ -44,11 +44,14 @@ function repairInput(input: string, repairOf: unknown) {
   return `${input}\n<buildit:invalid-output>\n${quoted}\n</buildit:invalid-output>\nCorrect only the invalid output above. Return exactly the requested schema; do not add prose or new evidence.`;
 }
 
+const stagePromptVersions: Partial<Record<PromptStage, string>> = { findings: "findings-v3", critic: "critic-v2", arbitration: "arbitration-v2" };
 function strictDefinition(stage: PromptStage): StageDefinition {
   const schema = stageSchemas[stage];
   return {
     stage,
-    promptVersion: stage === "findings" ? "findings-v2" : `${stage}-v1`,
+    // Bumped where a stage's input changed: findings, critic and arbitration no longer receive a
+    // review_plan record among their validated priors.
+    promptVersion: stagePromptVersions[stage] ?? `${stage}-v1`,
     schemaVersion: `${stage}-schema-v1`,
     maxInputBytes: 250_000,
     validate(value) {
