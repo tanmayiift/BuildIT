@@ -28,6 +28,11 @@ describe("dedicated Convex production release target", () => {
     expect(refusal("prod:judicious-barracuda-968|fake secret")).toBe("buildit_convex_deploy_key_target_refused:malformed_key");
     for (const key of ["dev:judicious-barracuda-968|fake-secret", "prod:unrelated|fake-secret"]) expect(refusal(key)).not.toContain("fake-secret");
   });
+  it("lets a deploy key alone select the deployment, so CI never needs a signed-in user", () => {
+    const env = convexProductionEnvironment({ PATH: "/bin", CONVEX_DEPLOY_KEY: "prod:judicious-barracuda-968|fake-secret", CONVEX_DEPLOYMENT: "dev:another-project" });
+    expect(env).toEqual({ PATH: "/bin", CONVEX_DEPLOY_KEY: "prod:judicious-barracuda-968|fake-secret", NEXT_PUBLIC_CONVEX_URL: convexProductionTarget.url });
+    expect(env).not.toHaveProperty("CONVEX_DEPLOYMENT");
+  });
   it("accepts the production key with a pasted trailing newline, and passes it on trimmed", () => {
     expect(convexProductionEnvironment({ CONVEX_DEPLOY_KEY: "prod:judicious-barracuda-968|fake-secret\n" }).CONVEX_DEPLOY_KEY).toBe("prod:judicious-barracuda-968|fake-secret");
     expect(() => convexProductionEnvironment({ CONVEX_DEPLOY_KEY: "prod:unrelated|fake-secret\n" })).toThrow("buildit_convex_deploy_key_target_refused");

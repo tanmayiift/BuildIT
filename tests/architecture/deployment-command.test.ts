@@ -6,7 +6,7 @@ import {
   deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, probeWithRetry, resolveDeployLink,
 } from "../../scripts/deploy-buildit-web.mjs";
 import { assertBuildITBrokerDeployContext } from "../../scripts/deploy-buildit-broker.mjs";
-import { assertBrokerServesCommit, assertProductionDeployContext, brokerHealthUrl, checkOrder, deploymentOrder, runCoordinatedDeployment, uncommittedFileCount } from "../../scripts/deploy-buildit-production.mjs";
+import { assertBrokerServesCommit, assertProductionDeployContext, brokerHealthUrl, checkOrder, deploymentOrder, runCoordinatedDeployment, stepFor, uncommittedFileCount } from "../../scripts/deploy-buildit-production.mjs";
 
 const repoRoot = process.cwd();
 const correctLink = {
@@ -259,6 +259,11 @@ describe("BuildIT production deployment command", () => {
     expect(deploymentOrder.map(step => step.name)).toEqual(["broker", "convex", "web"]);
     expect(deploymentOrder[1]).toMatchObject({ command: "pnpm", args: ["exec", "convex", "deploy", "-y", "--env-file", "scripts/buildit-production.env"] });
     expect(deploymentOrder[0]).toMatchObject({ args: ["deploy:broker:production"] });
+    // With a deploy key (GitHub), the convex step drops the env file that would set CONVEX_DEPLOYMENT;
+    // without one (a local release), it is the step above, unchanged. Other steps are never touched.
+    expect(stepFor(deploymentOrder[1]!, { CONVEX_DEPLOY_KEY: "prod:judicious-barracuda-968|k" })).toMatchObject({ args: ["exec", "convex", "deploy", "-y"] });
+    expect(stepFor(deploymentOrder[1]!, {})).toBe(deploymentOrder[1]);
+    expect(stepFor(deploymentOrder[0]!, { CONVEX_DEPLOY_KEY: "prod:judicious-barracuda-968|k" })).toBe(deploymentOrder[0]);
   });
 
   it("runs both existing contract checks before touching production", () => {

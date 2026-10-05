@@ -19,6 +19,13 @@ export const deploymentOrder = Object.freeze([
   Object.freeze({ name: "web", command: "pnpm", args: ["deploy:web:production"] }),
 ]);
 
+// The same selector rule for the step: with a deploy key the env file - which only sets
+// CONVEX_DEPLOYMENT - would reintroduce the user-login lookup the key exists to avoid.
+export function stepFor(step, env) {
+  if (step.name !== "convex" || !env.CONVEX_DEPLOY_KEY) return step;
+  return { ...step, args: ["exec", "convex", "deploy", "-y"] };
+}
+
 export const checkOrder = Object.freeze([
   Object.freeze({ name: "web", command: "pnpm", args: ["deploy:web:check"] }),
   Object.freeze({ name: "broker", command: "pnpm", args: ["deploy:broker:check"] }),
@@ -85,7 +92,7 @@ async function main() {
 
   const expectedCommit = headCommit(repoRoot);
   await runCoordinatedDeployment({
-    runStep: step => run(step, repoRoot, releaseEnv),
+    runStep: step => run(stepFor(step, releaseEnv), repoRoot, releaseEnv),
     verifyConvex: () => verifyConvexProductionTarget({ env: releaseEnv }),
     verifyBroker: async () => {
       assertProbeOk({ status: await probeWithRetry(brokerHealthUrl), url: brokerHealthUrl });
