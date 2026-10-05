@@ -6,6 +6,7 @@ import type { WorkspaceMetricsSummary, WorkspaceUsageSummary } from "../../../..
 import { NoActiveWorkspace } from "./no-active-workspace";
 import { useSampleTour } from "./workspace-route-boundary";
 import { Metric } from "./metric";
+import { StatePanel } from "./state-panel";
 
 type Connection = { organization: null | { id: string; name: string; role?: string } };
 const connectionQuery = makeFunctionReference<"query", Record<string, never>, Connection>("repositoryConnections:current");
@@ -21,7 +22,7 @@ export function WorkspaceMetrics() {
   if (tour) return <NoLiveData noun="metrics"/>;
   if (connection && !connection.organization) return <NoActiveWorkspace heading="No workspace is active yet" detail="Outcome counts are scoped to one workspace, so there is nothing to count until one is active."/>;
   if (!connection?.organization || summary === undefined) return <Loading noun="metrics"/>;
-  if (!summary.totals) return <section className="live-state">Metrics are unavailable until the workspace service update is complete.</section>;
+  if (!summary.totals) return <StatePanel title="Metrics are unavailable until the workspace service update is complete." />;
   const { totals, truncated } = summary;
   const incomplete = new Set(summary.incompleteNames ?? []);
   const metric = (name: string, title: string, detail: string, hero = false) => <Metric title={title} value={incomplete.has(name) && !totals[name] ? "—" : (totals[name] ?? 0).toLocaleString()} detail={detail} hero={hero} note={truncated ? "Partial count" : incomplete.has(name) ? "Incomplete history" : undefined}/>;
@@ -122,5 +123,5 @@ function useReportingRefresh() {
   // Only invalidates a cached query at midnight. The server, not this browser, sets the period.
   return value;
 }
-function Loading({ noun }: { noun: string }) { return <section className="live-state" aria-live="polite"><span className="state-pulse"/><div><strong>Loading live {noun}…</strong><p>Checking the active organization on the server.</p></div></section>; }
+function Loading({ noun }: { noun: string }) { return <StatePanel loading title={`Loading live ${noun}…`} detail="Checking the active organization on the server." />; }
 function NoLiveData({ noun }: { noun: string }) { return <section className="empty-state compact-empty"><span className="empty-mark">—</span><h2>No sample {noun} are shown</h2><p>Connect a workspace to see tenant-scoped records. BuildIT does not present illustrative activity as customer data.</p></section>; }

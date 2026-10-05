@@ -1,5 +1,6 @@
 "use client";
 import { useConnection } from "./live-connections";
+import { StatePanel } from "./state-panel";
 
 // /policies was six paragraphs describing settings, and a comment recording that a disabled button
 // had been deleted from it rather than made real. Both halves were right: inventing a control that
@@ -14,7 +15,7 @@ import { useConnection } from "./live-connections";
 
 export function WorkspacePolicyState() {
   const connection = useConnection();
-  if (!connection) return <section className="live-state" aria-live="polite"><span className="state-pulse" /><div><strong>Reading this workspace&rsquo;s settings…</strong><p>These values are scoped to one workspace.</p></div></section>;
+  if (!connection) return <StatePanel loading title={"Reading this workspace\u2019s settings\u2026"} detail="These values are scoped to one workspace." />;
   if (connection.state !== "connected" || !connection.organization) {
     return <section className="empty-state compact-empty">
       <span className="empty-mark">—</span>

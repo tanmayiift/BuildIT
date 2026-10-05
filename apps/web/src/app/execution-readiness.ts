@@ -23,4 +23,4 @@ export function executionReadiness(readiness: RuntimeReadiness | undefined): Exe
 // blaming the reader again. The wording is the one dashboard-review-start.tsx already had for
 // review_runtime_configuration_missing.
 export const serviceUnconfiguredSummary = "BuildIT is missing part of its own review runtime configuration";
-export const serviceUnconfiguredDetail = "BuildIT is missing part of its own review runtime configuration, so no review can start. This is a BuildIT service problem, not a setting you can change: nothing in your workspace, your repositories or your model key caused it, and nothing you change there will clear it. Reviews resume without any action from you once we restore it. Tell us if it lasts.";
+export const serviceUnconfiguredDetail = "BuildIT is missing part of its own review runtime configuration, so no review can start. This is a BuildIT service problem, not a setting you can change; reviews resume once we restore it.";

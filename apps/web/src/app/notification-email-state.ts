@@ -11,7 +11,7 @@ export function notificationEmailState(preferences: NotificationEmailPreferences
       status: preferences.emailEnabled ? "Local capture" : "Local capture off",
       summary: "Test messages can be captured on this computer. No email is sent.",
       recipient: preferences.recipient.state === "verified" ? `${preferences.recipient.maskedEmail} · signed-in BuildIT member` : "Verify your BuildIT email before enabling capture",
-      boundary: "Local capture requires this member’s verified address and explicit opt-in. Access, consent, and repository muting are checked again before each capture. Captures stay on this computer; customer delivery is not connected.",
+      boundary: "Local capture needs this member’s verified address and opt-in; access, consent and muting are rechecked each time. Captures stay on this computer; email is not connected.",
     };
   }
   if (!preferences.deliveryAvailable) {
@@ -21,7 +21,7 @@ export function notificationEmailState(preferences: NotificationEmailPreferences
       recipient: preferences.recipient.state === "verified"
         ? `${preferences.recipient.maskedEmail} · signed-in BuildIT member`
         : "No separately verified BuildIT email",
-      boundary: "A future email can go only to this signed-in member after address verification and explicit opt-in. BuildIT never falls back to the GitHub App owner, installation account, workspace owner, or another member.",
+      boundary: "Email can go only to this signed-in member after address verification and opt-in; BuildIT never falls back to the GitHub App owner, installation account or another member.",
     };
   }
   return {

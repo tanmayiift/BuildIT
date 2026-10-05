@@ -223,7 +223,7 @@ export function ModelKeyForm() {
         <Heading />
         <div className="credential-state">
           <strong>Verify with GitHub before entering a key</strong>
-          <p>Your session and repository access are still active. BuildIT requires a fresh GitHub check only before an Owner or Admin changes a model key. Existing masked key status remains visible below.</p>
+          <p>Your session and repository access are still active. Only changing a model key needs a fresh GitHub check by an Owner or Admin; key status stays visible below.</p>
           <a className="button" href={reauthenticationHref}>Verify with GitHub</a>
         </div>
         {credentials?.length ? <SavedCredentials credentials={credentials} repositories={connection.repositories} working={working} confirmRevokeId={confirmRevokeId} manageHref={reauthenticationHref} onRotate={beginRotation} onAskRevoke={setConfirmRevokeId} onCancelRevoke={() => setConfirmRevokeId("")} onRevoke={(credential) => void revoke(credential)} /> : null}

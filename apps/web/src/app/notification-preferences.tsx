@@ -5,6 +5,7 @@ import { makeFunctionReference } from "convex/server";
 import { useState } from "react";
 import { NoActiveWorkspace } from "./no-active-workspace";
 import { notificationEmailState } from "./notification-email-state";
+import { StatePanel } from "./state-panel";
 
 type Connection = { organization: null | { id: string; name: string }; repositories: Array<{ id: string; owner: string; name: string }> };
 type Preferences = { emailEnabled: boolean; emailOptedIn?: boolean; deliveryAvailable: boolean; captureAvailable?: boolean; digestMode: "immediate" | "daily"; mutedRepositoryIds: string[]; updatedAt: number | null; recipient: { state: "verified"; maskedEmail: string } | { state: "verification_required" } };
@@ -18,7 +19,7 @@ export function NotificationPreferences() {
   // preferencesQuery stays skipped while no workspace is active, so `saved` never arrives and the
   // loading line below used to be the whole page for ever. Loaded-and-empty is its own answer.
   if (isAuthenticated && connection && !connection.organization) return <NoActiveWorkspace heading="No workspace is active yet" detail="Notification settings and repository muting belong to one workspace, so there is nothing to configure until one is active." />;
-  if (!organizationId || !saved) return <section className="live-state" aria-live="polite"><span className="state-pulse"/><div><strong>{isAuthenticated ? "Loading notification preferences…" : "Sign in to manage notifications"}</strong></div></section>;
+  if (!organizationId || !saved) return <StatePanel loading={isAuthenticated} title={isAuthenticated ? "Loading notification preferences…" : "Sign in to manage notifications"} {...(isAuthenticated ? {} : { action: { href: "/sign-in", label: "Sign in with GitHub" } })} />;
   async function save(next: Partial<Preferences>) { if (!organizationId || !saved) return; setWorking(true); setMessage(""); try { await update({ organizationId, emailEnabled: next.emailEnabled ?? saved.emailEnabled, digestMode: next.digestMode ?? saved.digestMode, mutedRepositoryIds: next.mutedRepositoryIds ?? saved.mutedRepositoryIds, requestId: crypto.randomUUID() }); setMessage("Notification preferences saved for this workspace."); } catch { setMessage("Preferences were not saved. Refresh your active workspace and try again."); } finally { setWorking(false); } }
   const email = notificationEmailState(saved), controlsAvailable = saved.deliveryAvailable || saved.captureAvailable, optedIn = saved.emailOptedIn ?? saved.emailEnabled;
   return <>

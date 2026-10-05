@@ -6,6 +6,7 @@ import { NoActiveWorkspace } from "./no-active-workspace";
 import { useSampleTour } from "./workspace-route-boundary";
 import { incompleteReasonLabel } from "./workspace-labels";
 import { dismissalReasonLabel } from "./reviews/[id]/review-presentation";
+import { StatePanel } from "./state-panel";
 
 // The evaluation loop recorded every missed verdict and every dismissed finding into a queue with
 // no reader. `pendingCandidates` and `markCurated` were written, tested, and called by nothing
@@ -41,7 +42,7 @@ export function WorkspaceQuality() {
   if (connection?.organization && !canCurate) return <section className="settings-list" aria-label="Evaluation queue">
     <article className="setting-row"><div><strong>Evaluation queue</strong><p>Only an owner or admin can review which reviews and dismissed findings are waiting to enter the evaluation set. Ask one of them if something should be curated.</p></div><span className="status neutral">Owner or admin manages this</span></article>
   </section>;
-  if (!organizationId || pending === undefined) return <section className="live-state" aria-live="polite"><span className="state-pulse"/><div><strong>Loading the evaluation queue…</strong><p>Checking the active organization for uncurated candidates.</p></div></section>;
+  if (!organizationId || pending === undefined) return <StatePanel loading title="Loading the evaluation queue…" detail="Checking the active organization for uncurated candidates." />;
   if (!pending.candidates.length) return <section className="empty-state compact-empty"><span className="empty-mark">0</span><h2>Nothing waiting to be curated</h2><p>A review that reaches no verdict, and a finding someone dismisses, both land here for a human to fold into the evaluation set.</p></section>;
 
   return <>

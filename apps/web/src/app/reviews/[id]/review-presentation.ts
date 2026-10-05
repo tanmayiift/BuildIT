@@ -75,11 +75,11 @@ const nextActions: Record<NextActionCode, NextAction> = {
   restore_installation: { title: "Restore GitHub access", detail: "The GitHub App installation is suspended or removed, so BuildIT cannot read this repository.", href: "/repositories", hrefLabel: "Check repository access" },
   grant_permission: { title: "Grant the missing permission", detail: "BuildIT is missing a repository permission it needs for this action.", href: "/repositories", hrefLabel: "Review GitHub access" },
   increase_budget: { title: "Increase the review budget", detail: "No further model call was made. Choose a higher ceiling, then start a new review." },
-  await_sandbox_reset: { title: "Wait for the sandbox allowance to reset", detail: "This workspace has used the sandbox time its plan allows this month, so no new review can run its checks. Retrying will not help. The allowance resets at the start of next month; ask BuildIT if you need it raised before then.", href: "/usage", hrefLabel: "Open workspace usage" },
+  await_sandbox_reset: { title: "Wait for the sandbox allowance to reset", detail: "This workspace has used this month's sandbox time, so no new review can run its checks. It resets next month; ask BuildIT to raise it sooner.", href: "/usage", hrefLabel: "Open workspace usage" },
   human_merge: { title: "Read it yourself before merging", detail: "BuildIT will not merge this and will not vouch for it. Check the change - and, if a fix was proposed, the separate pull request carrying it - and merge only if you agree." },
   start_new_review: { title: "Run a new review", detail: "This run ended without a decision." },
-  repair_test_suite: { title: "Make the test suite pass, then review again", detail: "The required test suite failed on this commit and on the base commit, and too little of it ran (no test passed, or most of its test files failed), so it says nothing about this change. Fix it on the default branch first; retrying the review cannot change the result." },
-  add_lockfile: { title: "Commit a lockfile, then review again", detail: "This repository has a test script, but no package-lock.json, pnpm-lock.yaml or yarn.lock at this commit, and BuildIT installs dependencies only from a lockfile. Its tests did not run, so the scanners alone are not a verdict. Retrying without a lockfile cannot change that." },
+  repair_test_suite: { title: "Make the test suite pass, then review again", detail: "The required tests failed on both commits and too little of them ran (no test passed, or most test files failed). Fix them on the default branch; retrying cannot change this." },
+  add_lockfile: { title: "Commit a lockfile, then review again", detail: "This repository has a test script but no lockfile (package-lock.json, pnpm-lock.yaml or yarn.lock), and BuildIT installs only from one. Commit a lockfile, then review again." },
 };
 
 // The sample tour renders its own synthetic codes; they are not part of the live enum but are
@@ -187,7 +187,7 @@ export function comparisonRefusal(error: unknown): string {
 // that throws again on the next render, because the answer is deterministic.
 const evidenceRefusals: Record<string, string> = {
   not_found_or_forbidden:
-    "This review is not in your active workspace, or it no longer exists. That also happens when your membership was removed, or when the BuildIT GitHub App was uninstalled or suspended on its repository. Open the review queue to see the reviews you can read.",
+    "This review is not in your active workspace, or no longer exists — for instance after access was removed or the App was uninstalled or suspended. See your review queue.",
 };
 
 export function evidenceRefusal(error: unknown): string {
@@ -199,7 +199,7 @@ export function evidenceRefusal(error: unknown): string {
   const known = Object.keys(evidenceRefusals).find(code => text.includes(code));
   return known
     ? evidenceRefusals[known]!
-    : "This review could not be loaded, so nothing about it is shown. Nothing about the review changed. Open the review queue and try it again from there.";
+    : "The review could not be loaded. Nothing about the review changed; try again from the review queue.";
 }
 
 // Every value of the suppressionScope union in convex/validators.ts, in the order a person narrows
@@ -240,7 +240,7 @@ export const dismissalReasonLabel = (value: string) => dismissalReasonLabels[val
 // after a refusal the question a person has is whether they half-dismissed something.
 const dismissalRefusals: Record<string, string> = {
   not_found_or_forbidden:
-    "This finding was not dismissed. Dismissing changes what a later review shows, so it needs developer access to this repository, and the finding has to belong to the review on screen. Nothing was recorded.",
+    "Not dismissed: dismissing needs developer access to this repository, and the finding must belong to the review on screen. Nothing was recorded.",
   finding_fingerprint_invalid:
     "This finding was not dismissed, because the reference this page holds for it is not one BuildIT recognises. Reload the review and try again. Nothing was recorded.",
   finding_dismissal_reason_invalid:
