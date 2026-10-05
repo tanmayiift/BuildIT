@@ -7,6 +7,7 @@ import { NoActiveWorkspace } from "./no-active-workspace";
 import { useSampleTour } from "./workspace-route-boundary";
 import { Metric } from "./metric";
 import { StatePanel } from "./state-panel";
+import { EmptyState } from "./empty-state";
 
 type Connection = { organization: null | { id: string; name: string; role?: string } };
 const connectionQuery = makeFunctionReference<"query", Record<string, never>, Connection>("repositoryConnections:current");
@@ -124,4 +125,4 @@ function useReportingRefresh() {
   return value;
 }
 function Loading({ noun }: { noun: string }) { return <StatePanel loading title={`Loading live ${noun}…`} detail="Checking the active organization on the server." />; }
-function NoLiveData({ noun }: { noun: string }) { return <section className="empty-state compact-empty"><span className="empty-mark">—</span><h2>No sample {noun} are shown</h2><p>Connect a workspace to see tenant-scoped records. BuildIT does not present illustrative activity as customer data.</p></section>; }
+function NoLiveData({ noun }: { noun: string }) { return <EmptyState mark="—" title={`No sample ${noun} are shown`} detail="Connect a workspace to see tenant-scoped records. BuildIT does not present illustrative activity as customer data." />; }

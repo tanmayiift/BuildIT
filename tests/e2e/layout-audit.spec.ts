@@ -14,7 +14,11 @@ async function layoutFaults(page: import("@playwright/test").Page): Promise<Faul
     if (root.scrollWidth > root.clientWidth + 1) faults.push({ kind: "overflow", detail: `page is ${root.scrollWidth}px wide in a ${root.clientWidth}px viewport` });
     // checkVisibility, not a box test: content inside a closed <details> still has layout boxes in
     // Chrome, and an audit that counted it reported buttons "overlapping" text nobody can see.
-    const visible = (element: Element) => { const box = element.getBoundingClientRect(); return box.width > 0 && box.height > 0 && element.checkVisibility({ visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true }); };
+    // A screen-reader-only label (.sr-only: 1px, clipped to nothing) is hidden on purpose, so it is not
+    // "clipped" text. Signed in, the workspace switcher's "Active organization" label tripped this on
+    // every workspace route.
+    const srOnly = (element: Element) => { const box = element.getBoundingClientRect(); return (box.width <= 1 && box.height <= 1) || getComputedStyle(element).clip === "rect(0px, 0px, 0px, 0px)"; };
+    const visible = (element: Element) => { const box = element.getBoundingClientRect(); return box.width > 0 && box.height > 0 && !srOnly(element) && element.checkVisibility({ visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true }); };
     const label = (element: Element) => (element.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
     // A button stacked above or below text must not touch it: under 4px reads as one block.
     const buttons = [...document.querySelectorAll("a.button, button")].filter(visible);

@@ -62,7 +62,8 @@ describe("permission receipt model-provider layout", () => {
   it("keeps the layout responsive instead of relying on unstyled inline spans", async () => {
     render(<PermissionReceipt />);
     await waitFor(() => expect(screen.getByRole("list", { name: "Active model-provider access" })).not.toBeNull());
-    const css = readFileSync("apps/web/src/app/flows.css", "utf8");
+    // Formatting whitespace and comments removed, so this pins the rule rather than how the file is laid out.
+    const css = readFileSync("apps/web/src/app/flows.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\s*([{}:;,>])\s*/g, "$1").replace(/;}/g, "}");
     expect(css).toContain(".permission-provider-list>li{display:grid");
     expect(css).toContain(".permission-provider-metadata{display:grid");
     expect(css).toContain("@media(max-width:640px){.permission-provider-heading");
