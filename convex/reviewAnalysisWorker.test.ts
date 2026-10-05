@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analysisSkipReason, boundedAnalysisContext, boundedValidationEvidence, introducedScannerFindings, redactModelOutput,requireIndependentCritic,selectCriticModel,selectFindingsModel } from "./reviewAnalysisWorker";
+import { analysisSkipReason, mergeSecondOpinion, rearbitrateAfterEscalation, selectEscalationModel, boundedAnalysisContext, boundedValidationEvidence, introducedScannerFindings, redactModelOutput,requireIndependentCritic,selectCriticModel,selectFindingsModel } from "./reviewAnalysisWorker";
 
 const pull = { title: "Fix transfer limit", body: "Must reject amounts above the daily limit", files: [{ path: "src/changed.ts", status: "modified", patch: "@@ guard" }], omitted: [], urlHash: "a".repeat(64) };
 describe("bounded model evidence selection", () => {
@@ -249,5 +249,35 @@ describe("skipping a model call that could not change the review", () => {
 
   it("never skips requirements or findings", () => {
     for (const stage of ["requirements", "findings"] as const) expect(analysisSkipReason(stage, [], gate, true)).toBeUndefined();
+  });
+});
+
+// The escalation ladder had two defects: the "second opinion" came from the first critic's own model
+// with an identical input, and re-arbitration reused the first pass's arbitration - which never saw
+// an escalated finding accepted - so a second critic could reject but never accept.
+describe("a second opinion on an unresolved finding", () => {
+  it("comes from a third approved model, or from nobody", () => {
+    expect(selectEscalationModel("openai", "gpt-5.4", "gpt-5.4-mini", ["gpt-5.4", "gpt-5", "gpt-5.4-mini"])).toBe("gpt-5");
+    expect(selectEscalationModel("openai", "gpt-5.4", "gpt-5.4-mini", ["gpt-5.4", "gpt-5.4-mini"])).toBeNull();
+    expect(selectEscalationModel("openai", "gpt-5.4", "gpt-5.4-mini", ["gpt-5.4", "gpt-5.4-mini", "gpt-4o-unapproved"])).toBeNull();
+    expect(selectEscalationModel("openai", "gpt-5.4", "gpt-5.4-mini", undefined)).toBeNull();
+  });
+
+  const decision = (findingId: string, verdict: "supported" | "unsupported" | "uncertain") => ({ findingId, verdict, missingEvidenceIds: [], injectionDetected: false, explanation: "" });
+  it("replaces only the escalated decisions, and never turns one into a rejection", () => {
+    const first = [decision("a", "uncertain"), decision("b", "uncertain"), decision("c", "supported")];
+    const merged = mergeSecondOpinion(first, [decision("a", "supported"), decision("b", "unsupported"), decision("c", "unsupported")], new Set(["a", "b"]));
+    expect(merged.map(item => [item.findingId, item.verdict])).toEqual([["a", "supported"], ["b", "uncertain"], ["c", "supported"]]);
+    // Two answers for one finding is no answer.
+    expect(mergeSecondOpinion([decision("a", "uncertain")], [decision("a", "supported"), decision("a", "supported")], new Set(["a"]))[0]!.verdict).toBe("uncertain");
+  });
+
+  it("can accept a finding the first critic could not resolve", () => {
+    const candidate = { id: "f1", title: "Off-by-one", category: "correctness", severity: "warning" as const, confidence: 0.8, criterionId: "", path: "src/a.ts",
+      startLine: 3, endLine: 4, evidenceIds: ["ev-1"], impact: "i", explanation: "e", origin: "model" as const };
+    // The first-pass arbitration never accepted f1, because it was uncertain at the time.
+    const staleArbitration = [{ id: "f1", resolution: "uncertain" as const, evidenceIds: ["ev-1"], reason: "critic uncertain" }];
+    const [result] = rearbitrateAfterEscalation([candidate], [decision("f1", "uncertain")], [decision("f1", "supported")], new Set(["f1"]), staleArbitration);
+    expect(result).toMatchObject({ id: "f1", resolution: "accepted" });
   });
 });
