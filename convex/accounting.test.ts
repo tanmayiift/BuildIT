@@ -164,6 +164,22 @@ describe("durable invocation accounting", () => {
     expect(await t.query(snapshotCall, { organizationId: scope.organizationId, now })).toMatchObject({ estimatedSpendUsd: 4.59, reconciliationComplete: true, legacyCostsMayBeIncomplete: true, accountingComplete: false });
     expect(await t.run(ctx => ctx.db.query("usageLedger").collect())).toHaveLength(451);
   });
+  it("records the cached part of a call's input and still charges every input token", async () => {
+    const t = convexTest(schema, modules), scope = await seed(t);
+    const plain = await t.mutation(reserveCall, reservation(scope, "plain")), cached = await t.mutation(reserveCall, reservation(scope, "cached"));
+    await t.mutation(settleCall, payment(scope.organizationId, plain.invocationId));
+    await t.mutation(settleCall, payment(scope.organizationId, cached.invocationId, { cachedInputTokens: 900 }));
+    const invocations = await t.run(ctx => ctx.db.query("modelInvocations").collect());
+    const rows = [plain, cached].map(item => invocations.find(row => row._id === item.invocationId));
+    expect(rows[1]).toMatchObject({ cachedInputTokens: 900, inputTokens: 1_000 });
+    expect(rows[0]).not.toHaveProperty("cachedInputTokens");
+    expect(rows[1]!.costMicros).toBe(rows[0]!.costMicros);
+  });
+  it("refuses a cached count larger than the input it is part of", async () => {
+    const t = convexTest(schema, modules), scope = await seed(t);
+    const reserved = await t.mutation(reserveCall, reservation(scope, "overcached"));
+    await expect(t.mutation(settleCall, payment(scope.organizationId, reserved.invocationId, { cachedInputTokens: 1_001 }))).rejects.toThrow("model_settlement_invalid");
+  });
   it("rejects a settlement against another organization's invocation", async () => {
     const t = convexTest(schema, modules), scope = await seed(t), other = await seed(t);
     const reserved = await t.mutation(reserveCall, reservation(scope, "first"));
@@ -183,6 +199,15 @@ function actionContext(t: ReturnType<typeof convexTest>): Pick<ActionCtx, "runMu
 }
 
 describe("worker accounting transport", () => {
+  it("carries the provider's cached count from the broker onto the invocation", async () => {
+    const t = convexTest(schema, modules), scope = await seed(t);
+    const http: typeof fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      return Response.json({ invocationId: body.invocationId, result: { provider: "anthropic", model: "claude-sonnet-4-5", value: {}, finishReason: "tool_use", inputTokens: 1_000, outputTokens: 10, cachedInputTokens: 600, usageKnown: true } });
+    };
+    await invokeAccountedModel(actionContext(t), { ...modelInput(scope), http });
+    expect(await t.run(ctx => ctx.db.query("modelInvocations").collect())).toEqual([expect.objectContaining({ inputTokens: 1_000, cachedInputTokens: 600 })]);
+  });
   it("uses a distinct reservation and signed grant for each retry", async () => {
     const t = convexTest(schema, modules), scope = await seed(t), ids: string[] = [], grants: string[] = [];
     const http: typeof fetch = async (_url, init) => {

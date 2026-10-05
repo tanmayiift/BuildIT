@@ -1,8 +1,11 @@
 export type ProviderName = "anthropic" | "openai" | "gemini";
 export type JsonSchema = Record<string, unknown>;
 export type ProviderRequest = { model: string; system: string; input: string; schemaName: string; schema: JsonSchema; maxOutputTokens: number };
-export type ProviderUsage = { inputTokens: number; outputTokens: number; usageKnown: boolean; requestId?: string | undefined };
-export type ProviderResult = { invocationId?: string | undefined; usageKnown?: boolean | undefined; value: unknown; provider: ProviderName; model: string; finishReason: string; inputTokens: number; outputTokens: number; requestId?: string | undefined };
+// cachedInputTokens: the part of inputTokens the provider served from its prompt cache. Recorded for
+// visibility only - settlement still charges every input token at the full rate, which is the
+// conservative side of a price nobody here can verify per call.
+export type ProviderUsage = { inputTokens: number; outputTokens: number; usageKnown: boolean; requestId?: string | undefined; cachedInputTokens?: number | undefined };
+export type ProviderResult = { invocationId?: string | undefined; usageKnown?: boolean | undefined; value: unknown; provider: ProviderName; model: string; finishReason: string; inputTokens: number; outputTokens: number; cachedInputTokens?: number | undefined; requestId?: string | undefined };
 export const approvedProviderModels:Record<ProviderName,ReadonlySet<string>>={anthropic:new Set(["claude-sonnet-4-5","claude-sonnet-4-6","claude-opus-4-6"]),openai:new Set(["gpt-5","gpt-5.4","gpt-5.4-mini"]),gemini:new Set(["gemini-2.5-pro","gemini-2.5-flash","gemini-3.1-pro-preview"])};
 const preferredProviderModels: Record<ProviderName, readonly string[]> = {
   anthropic: ["claude-sonnet-4-6", "claude-sonnet-4-5", "claude-opus-4-6"],
@@ -102,10 +105,17 @@ export async function checked(response: Response) {
 }
 function parseJson(value: unknown) { if (typeof value !== "string") throw new ProviderError("malformed_response"); try { return JSON.parse(value) as unknown; } catch { throw new ProviderError("malformed_response"); } }
 function usageNumber(value: unknown) { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0; }
-function usageCounts(input: unknown, output: unknown, requestId: string | null, thinking?: unknown): ProviderUsage {
+// OpenAI and Gemini count cached tokens inside their input total. Anthropic reports cache reads and
+// writes beside input_tokens, so they arrive as separateInput and are added: left out, a cached
+// Anthropic call would be accounted as nearly free.
+function usageCounts(input: unknown, output: unknown, requestId: string | null, thinking?: unknown, cached?: unknown, separateInput: unknown[] = []): ProviderUsage {
   const valid = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-  return { inputTokens: usageNumber(input), outputTokens: usageNumber(output) + usageNumber(thinking),
-    usageKnown: valid(input) && valid(output) && (thinking === undefined || valid(thinking)), ...(requestId ? { requestId } : {}) };
+  const optional = (value: unknown) => value === undefined || value === null || valid(value);
+  const inputTokens = separateInput.reduce<number>((total, value) => total + usageNumber(value), usageNumber(input));
+  const cachedInputTokens = Math.min(usageNumber(cached), inputTokens);
+  return { inputTokens, outputTokens: usageNumber(output) + usageNumber(thinking),
+    usageKnown: valid(input) && valid(output) && optional(thinking) && optional(cached) && separateInput.every(optional),
+    ...(cachedInputTokens > 0 ? { cachedInputTokens } : {}), ...(requestId ? { requestId } : {}) };
 }
 function paidError(code: ProviderError["code"], usage: ProviderUsage): never { throw new ProviderError(code, undefined, undefined, usage); }
 function parsePaidJson(value: unknown, usage: ProviderUsage) { try { return parseJson(value); } catch { return paidError("malformed_response", usage); } }
@@ -156,18 +166,22 @@ export class ProviderClient {
     const response = await this.http("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" }, body: JSON.stringify({ model: request.model, max_tokens: request.maxOutputTokens, temperature:0, system: request.system, messages: [{ role: "user", content: request.input }], tools: [{ name: request.schemaName, description: "Return the validated stage result", input_schema: request.schema, strict: true }], tool_choice: { type: "tool", name: request.schemaName } }), signal: AbortSignal.timeout(generateTimeoutMs) });
     const body = await checked(response), stop = String(body.stop_reason ?? "unknown");
     const rawUsage = body.usage as Record<string, unknown> | undefined;
-    const usage = usageCounts(rawUsage?.input_tokens, rawUsage?.output_tokens, response.headers.get("request-id"));
+    const usage = usageCounts(rawUsage?.input_tokens, rawUsage?.output_tokens, response.headers.get("request-id"), undefined,
+      rawUsage?.cache_read_input_tokens, [rawUsage?.cache_read_input_tokens, rawUsage?.cache_creation_input_tokens]);
     if (stop === "max_tokens") paidError("truncated", usage);
     const content = Array.isArray(body.content) ? body.content : [], tool = content.find((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && (item as Record<string, unknown>).type === "tool_use" && (item as Record<string, unknown>).name === request.schemaName));
     if (!tool || !("input" in tool)) paidError("malformed_response", usage);
     return { value: tool.input, provider: "anthropic", model: request.model, finishReason: stop, ...usage };
   }
 
+  // prompt_cache_key routes calls of one stage to the same cache, so a schema repair or a retry of the
+  // same prompt is served from it instead of being read again.
   private async openai(apiKey: string, request: ProviderRequest): Promise<ProviderResult> {
-    const response = await this.http("https://api.openai.com/v1/responses", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model: request.model, instructions: request.system, input: request.input, max_output_tokens: request.maxOutputTokens, text: { format: { type: "json_schema", name: request.schemaName, strict: true, schema: request.schema } } }), signal: AbortSignal.timeout(generateTimeoutMs) });
+    const response = await this.http("https://api.openai.com/v1/responses", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ model: request.model, prompt_cache_key: request.schemaName, instructions: request.system, input: request.input, max_output_tokens: request.maxOutputTokens, text: { format: { type: "json_schema", name: request.schemaName, strict: true, schema: request.schema } } }), signal: AbortSignal.timeout(generateTimeoutMs) });
     const body = await checked(response);
     const rawUsage = body.usage as Record<string, unknown> | undefined;
-    const usage = usageCounts(rawUsage?.input_tokens, rawUsage?.output_tokens, response.headers.get("x-request-id"));
+    const usage = usageCounts(rawUsage?.input_tokens, rawUsage?.output_tokens, response.headers.get("x-request-id"), undefined,
+      (rawUsage?.input_tokens_details as Record<string, unknown> | undefined)?.cached_tokens);
     if (body.status === "incomplete") paidError("truncated", usage);
     const output = Array.isArray(body.output) ? body.output : [], message = output.find((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && (item as Record<string, unknown>).type === "message")), content = Array.isArray(message?.content) ? message.content : [], refusal = content.find(item => item && typeof item === "object" && (item as Record<string, unknown>).type === "refusal"), text = content.find((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && (item as Record<string, unknown>).type === "output_text"));
     if (refusal) paidError("refused", usage);
@@ -178,7 +192,7 @@ export class ProviderClient {
     const response = await this.http(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": apiKey }, body: JSON.stringify({ systemInstruction: { parts: [{ text: request.system }] }, contents: [{ role: "user", parts: [{ text: request.input }] }], generationConfig: geminiGenerationConfig(request) }), signal: AbortSignal.timeout(generateTimeoutMs) });
     const body = await checked(response), feedback = body.promptFeedback as Record<string, unknown> | undefined;
     const rawUsage = body.usageMetadata as Record<string, unknown> | undefined;
-    const usage = usageCounts(rawUsage?.promptTokenCount, rawUsage?.candidatesTokenCount, response.headers.get("x-request-id"), rawUsage?.thoughtsTokenCount);
+    const usage = usageCounts(rawUsage?.promptTokenCount, rawUsage?.candidatesTokenCount, response.headers.get("x-request-id"), rawUsage?.thoughtsTokenCount, rawUsage?.cachedContentTokenCount);
     if (feedback?.blockReason) paidError("refused", usage);
     const candidates = Array.isArray(body.candidates) ? body.candidates : [], candidate = candidates[0] as Record<string, unknown> | undefined, finish = String(candidate?.finishReason ?? "unknown");
     if (finish === "MAX_TOKENS") paidError("truncated", usage);
