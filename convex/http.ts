@@ -54,6 +54,10 @@ http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(a
     // so renames and transfers converge through it too.
     await ctx.scheduler.runAfter(0, internal.githubInstallations.syncRepositories, { installationId: installation.id });
     await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId, disposition: "processed", status: "completed", now: Date.now() });
+  } else if (event === "installation" && typeof installation?.id === "number" && (action === "deleted" || action === "suspend" || action === "unsuspend")) {
+    await ctx.runMutation(internal.githubInstallationsData.recordInstallationStatus, { installationId: installation.id, action, deliveryId,
+      ...(typeof sender?.login === "string" ? { senderLogin: sender.login } : {}), now: Date.now() });
+    await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId, disposition: "processed", status: "completed", now: Date.now() });
   } else if (event === "push" && typeof installation?.id === "number" && typeof repository?.id === "number" && typeof pushRef === "string" && typeof pushAfter === "string") {
     await ctx.scheduler.runAfter(0, internal.githubWebhookProcessor.processPushWebhook, { deliveryId, installationId: installation.id, githubRepositoryId: repository.id, ref: pushRef, afterSha: pushAfter });
   } else await ctx.runMutation(internal.githubWebhookData.complete, { deliveryId, disposition: "rejected", status: "completed", now: Date.now() });
