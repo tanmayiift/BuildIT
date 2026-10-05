@@ -131,6 +131,64 @@ describe("critic independence",()=>{
   it("forces risky model findings uncertain when independence is unavailable",()=>{const findings=[{id:"f1",severity:"critical",origin:"model"},{id:"s1",severity:"critical",origin:"scanner"}] as never;const decisions=[{findingId:"f1",verdict:"supported",missingEvidenceIds:[],injectionDetected:false,explanation:"ok"},{findingId:"s1",verdict:"supported",missingEvidenceIds:[],injectionDetected:false,explanation:"ok"}] as never;expect(requireIndependentCritic(findings,decisions,false)).toEqual([expect.objectContaining({findingId:"f1",verdict:"uncertain"}),expect.objectContaining({findingId:"s1",verdict:"supported"})])});
 });
 
+// The model used to read the changed files and then the rest of the snapshot alphabetically until the
+// budget ran out. These pin what replaced it: the change, its import neighbours, nothing else.
+describe("what the model reads of the repository", () => {
+  const snapshot = (files: Array<{ path: string; content: string }>) => ({ coverage: "full", omitted: [], files: files.map(file => ({ ...file, size: file.content.length })) });
+  const complete = { ...pull, requirementCoverage: "complete" as const };
+
+  it("sends the changed file and its import neighbours, and nothing unrelated", () => {
+    const result = boundedAnalysisContext([{ pull: { ...complete, files: [{ path: "src/a.ts", status: "modified", patch: "@@ -1,2 +1,2 @@" }] }, snapshot: snapshot([
+      { path: "README.md", content: "# readme" },
+      { path: "src/a.ts", content: 'import { b } from "./b.js";\nexport const a = b + 1;' },
+      { path: "src/b.ts", content: "export const b = 1;" },
+      { path: "src/unrelated.ts", content: "export const z = 0;" },
+      { path: "test/a.test.ts", content: 'import { a } from "../src/a";\nexpect(a).toBe(2);' },
+    ]) }], 80_000);
+    expect(result.files.map(file => file.path)).toEqual(["src/a.ts", "src/b.ts", "test/a.test.ts"]);
+    expect(result.files.filter(file => file.related).map(file => file.path)).toEqual(["src/b.ts", "test/a.test.ts"]);
+    // Leaving out a file the change does not touch is not a gap in the review.
+    expect(result.coverage).toBe("full");
+  });
+
+  it("sends a large changed file as windows around each hunk, under the whole file's evidence id", () => {
+    const content = Array.from({ length: 3_000 }, (_, index) => `line ${index + 1}`).join("\n");
+    const patch = "@@ -100,3 +100,4 @@ one\n+x\n@@ -2000,2 +2001,2 @@ two\n-y\n+z";
+    const result = boundedAnalysisContext([{ pull: { ...complete, files: [{ path: "src/big.ts", status: "modified", patch }] }, snapshot: snapshot([{ path: "src/big.ts", content }]) }], 80_000);
+    expect(result.files.map(file => [file.startLine, file.endLine, file.excerpt])).toEqual([[60, 143, true], [1961, 2042, true]]);
+    expect(result.files[0]?.content.split("\n")[0]).toBe("line 60");
+    expect(new Set(result.files.map(file => file.evidenceId)).size).toBe(1);
+    expect(result.exclusions.totals).toMatchObject({ changedExcerpts: 1 });
+    // Every changed line was shown, so nothing was dropped.
+    expect(result.exclusions.totals.repositoryFiles).toBeUndefined();
+    expect(result.exclusions.paths).toEqual([]);
+  });
+
+  it("sends an added file once: as the file when it has it, as the patch when it does not", () => {
+    const added = { path: "src/new.ts", status: "added", patch: "@@ -0,0 +1,2 @@\n+export const x = 1;\n+export const y = 2;" };
+    const withFile = boundedAnalysisContext([{ pull: { ...complete, files: [added] }, snapshot: snapshot([{ path: "src/new.ts", content: "export const x = 1;\nexport const y = 2;" }]) }], 80_000);
+    expect(withFile.files.map(file => file.path)).toEqual(["src/new.ts"]);
+    expect(withFile.pull.changes[0]).toEqual({ path: "src/new.ts", status: "added" });
+    const withoutFile = boundedAnalysisContext([{ pull: { ...complete, files: [added] }, snapshot: snapshot([]) }], 80_000);
+    expect(withoutFile.pull.changes[0]?.patch).toContain("export const y = 2;");
+  });
+
+  it("offers a repository document's text only when a requirement was read out of it", () => {
+    const source = (id: string, type: "repository_document" | "github_issue", content: string) => ({ id, type, status: "available", version: "v1", urlHash: "c".repeat(64), content });
+    const result = boundedAnalysisContext([{ pull: { ...pull,
+      requirementSources: [source("doc-1", "repository_document", "## Usage"), source("doc-2", "repository_document", "Names must not be empty"), source("linked-1", "github_issue", "Reported: empty names save")],
+      requirements: [{ id: "req-doc-2-1", text: "Names must not be empty", sourceId: "doc-2", line: 1, evidenceHash: "d".repeat(64), certainty: "explicit" }] }, snapshot: snapshot([]) }], 80_000);
+    expect(Object.fromEntries(result.pull.requirementSources.map(item => [item.id, item.content]))).toEqual({ "doc-1": undefined, "doc-2": "Names must not be empty", "linked-1": "Reported: empty names save" });
+  });
+
+  it("keeps omission samples short and their totals exact", () => {
+    const omitted = Array.from({ length: 500 }, (_, index) => ({ path: `vendor/${index}.bin`, reason: "budget" }));
+    const result = boundedAnalysisContext([{ pull: { ...pull, omitted }, snapshot: { coverage: "partial", omitted, files: [] } }], 80_000);
+    expect([result.exclusions.source.length, result.exclusions.pull.length]).toEqual([20, 20]);
+    expect(result.exclusions.totals).toMatchObject({ sourceOmissions: 500, pullOmissions: 500 });
+  });
+});
+
 // BuildIT could not review its own repository. Every attempt reached the analysis stage - context
 // and validation both succeeded, the sandbox ran for four minutes - and then threw
 // analysis_context_too_large. The budget arithmetic was out by a byte, which only matters on a
@@ -138,13 +196,17 @@ describe("critic independence",()=>{
 describe("the context budget holds on a repository large enough to exhaust it", () => {
   const manyFiles = (count: number, bytes: number) =>
     Array.from({ length: count }, (_, index) => ({ path: `src/file-${index}.ts`, content: "x".repeat(bytes), size: bytes }));
+  // Only the files a pull request changed (and their import neighbours) are offered to the model, so
+  // a tree that exhausts the budget is one whose pull request touched all of it.
+  const changing = <T extends { path: string }>(base: typeof pull, files: T[]) =>
+    ({ ...base, files: files.map(file => ({ path: file.path, status: "modified", patch: "@@ -1 +1 @@" })) });
 
   it("never exceeds the ceiling, at any ceiling, however many files are offered", () => {
     // Sweeping the ceiling is the point: the leak was a single separator byte plus counter digits,
     // so it only surfaced at sizes where the loop packs the budget exactly full.
     for (const ceiling of [4_000, 8_000, 20_000, 50_000, 80_000]) {
       const result = boundedAnalysisContext(
-        [{ pull, snapshot: { coverage: "full", omitted: [], files: manyFiles(600, 300) } }], ceiling);
+        [{ pull: changing(pull, manyFiles(600, 300)), snapshot: { coverage: "full", omitted: [], files: manyFiles(600, 300) } }], ceiling);
       expect(Buffer.byteLength(JSON.stringify(result)), `ceiling ${ceiling}`).toBeLessThanOrEqual(ceiling);
       // It must still do its job - a budget that fits by returning nothing is not a fix.
       expect(result.files.length, `ceiling ${ceiling}`).toBeGreaterThan(0);
@@ -160,8 +222,10 @@ describe("the context budget holds on a repository large enough to exhaust it", 
     const requirementSources = Array.from({ length: 63 }, (_, index) => ({
       id: `req-${index}`, type: "repository_document" as const, status: "resolved", urlHash: `${index}`.padStart(64, "0"), version: "v1", content: "r".repeat(5_000),
     }));
-    const heavy = { ...pull, body: "b".repeat(20_000), requirementSources, requirementCoverage: "partial" as const };
+    // Each source has a requirement read out of it, or its text would not be offered at all.
+    const requirements = requirementSources.map(source => ({ id: `${source.id}-1`, text: "The handler must reject an empty name", sourceId: source.id, line: 1, evidenceHash: "e".repeat(64), certainty: "explicit" }));
     const files = Array.from({ length: 500 }, (_, index) => ({ path: `src/deeply/nested/module-${index}/index.ts`, content: "x".repeat(900), size: 900 }));
+    const heavy = { ...changing(pull, files), body: "b".repeat(20_000), requirementSources, requirements, requirementCoverage: "partial" as const };
     const result = boundedAnalysisContext([{ pull: heavy, snapshot: { coverage: "full", omitted: [], files } }], 80_000);
     expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(80_000);
     // The sample of paths may be trimmed, but the count of what was excluded must survive - that
@@ -175,7 +239,7 @@ describe("the context budget holds on a repository large enough to exhaust it", 
     // pop-on-overflow, so exclusion counters crossing 9 -> 10 -> 100 used to grow the payload with
     // nothing to undo it. Enough files to push every counter into three digits.
     const result = boundedAnalysisContext(
-      [{ pull, snapshot: { coverage: "full", omitted: [], files: manyFiles(1_500, 120) } }], 30_000);
+      [{ pull: changing(pull, manyFiles(1_500, 120)), snapshot: { coverage: "full", omitted: [], files: manyFiles(1_500, 120) } }], 30_000);
     expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(30_000);
     expect(result.exclusions.totals.repositoryFiles).toBeGreaterThan(99);
   });
