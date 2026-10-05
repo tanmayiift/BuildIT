@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { assertStrictSchema, checked, conservativeProviderModelCost, conservativeProviderStageCost, ProviderClient, ProviderError, selectProviderModel, validateSchemaValue } from "../src/index.js";
+import { assertStrictSchema, checked, conservativeProviderModelCost, conservativeProviderStageCost, geminiThinkingAllowance, ProviderClient, ProviderError, selectProviderModel, validateSchemaValue } from "../src/index.js";
 const request={model:"allowed",system:"policy",input:"data",schemaName:"result",schema:{type:"object",properties:{ok:{type:"boolean"}},required:["ok"],additionalProperties:false},maxOutputTokens:100};
 describe("provider adapters",()=>{
   // `key in record` walks the prototype chain, so "constructor", "toString" and "__proto__" are
@@ -46,6 +46,24 @@ describe("provider adapters",()=>{
   it("validates Gemini keys in a header, never a URL, and records only supported models",async()=>{const http=vi.fn(async(input:string|URL,init?:RequestInit)=>{expect(String(input)).not.toContain("secret-key-value");expect(new Headers(init?.headers).get("x-goog-api-key")).toBe("secret-key-value");return new Response(JSON.stringify({models:[{name:"models/gemini-2.5-pro",supportedGenerationMethods:["generateContent"]},{name:"models/gemini-2.5-flash",supportedGenerationMethods:["embedContent"]},{name:"models/not-approved",supportedGenerationMethods:["generateContent"]}]}))});await expect(new ProviderClient(http).validateKey("gemini","secret-key-value")).resolves.toEqual({availableModels:["gemini-2.5-pro"]})});
   it("normalizes Anthropic tool output",async()=>{const http=vi.fn(async()=>new Response(JSON.stringify({stop_reason:"tool_use",content:[{type:"tool_use",name:"result",input:{ok:true}}],usage:{input_tokens:4,output_tokens:2}})));await expect(new ProviderClient(http).generate("anthropic","key",request,new Set(["allowed"]))).resolves.toMatchObject({value:{ok:true},inputTokens:4,outputTokens:2})});
   it("normalizes OpenAI structured output",async()=>{const http=vi.fn(async()=>new Response(JSON.stringify({status:"completed",output:[{type:"message",content:[{type:"output_text",text:"{\"ok\":true}"}]}],usage:{input_tokens:3,output_tokens:1}})));await expect(new ProviderClient(http).generate("openai","key",request,new Set(["allowed"]))).resolves.toMatchObject({value:{ok:true},finishReason:"completed"})});
+  // 5 Oct 2026: gemini-3.1-pro-preview spent the findings stage's whole 8,000-token limit thinking and
+  // stopped at MAX_TOKENS three times, at temperature 0, which Google warns can make Gemini 3 loop.
+  it("gives Gemini 3 room to think beyond the answer, at low thinking and its default temperature",async()=>{
+    const bodies:Array<Record<string,any>>=[];
+    const client=new ProviderClient(async(_url:string|URL,init?:RequestInit)=>{bodies.push(JSON.parse(String(init?.body)));return new Response(JSON.stringify({candidates:[{finishReason:"STOP",content:{parts:[{text:"{\"ok\":true}"}]}}],usageMetadata:{promptTokenCount:1,candidatesTokenCount:1}}),{status:200});});
+    const ask={model:"gemini-3.1-pro-preview",system:"s",input:"i",schemaName:"r",schema:{type:"object",properties:{ok:{type:"boolean"}},required:["ok"],additionalProperties:false},maxOutputTokens:8_000};
+    await client.generate("gemini","key-value",ask,new Set(["gemini-3.1-pro-preview","gemini-2.5-pro"]));
+    await client.generate("gemini","key-value",{...ask,model:"gemini-2.5-pro"},new Set(["gemini-3.1-pro-preview","gemini-2.5-pro"]));
+    expect(bodies[0]!.generationConfig).toMatchObject({maxOutputTokens:8_000+geminiThinkingAllowance,thinkingConfig:{thinkingLevel:"low"}});
+    expect(bodies[0]!.generationConfig).not.toHaveProperty("temperature");
+    expect(bodies[1]!.generationConfig).toMatchObject({maxOutputTokens:8_000,temperature:0});
+    expect(bodies[1]!.generationConfig).not.toHaveProperty("thinkingConfig");
+  });
+  it("reserves the thinking allowance a Gemini call may spend, and nothing extra for other providers",()=>{
+    expect(conservativeProviderStageCost("gemini","gemini-3.1-pro-preview",1_000,8_000)).toBe(conservativeProviderModelCost("gemini","gemini-3.1-pro-preview",5_096,8_000+geminiThinkingAllowance));
+    expect(conservativeProviderStageCost("openai","gpt-5.4-mini",1_000,8_000)).toBe(conservativeProviderModelCost("openai","gpt-5.4-mini",5_096,8_000));
+    expect(conservativeProviderStageCost("gemini","gemini-2.5-pro",1_000,8_000)).toBe(conservativeProviderModelCost("gemini","gemini-2.5-pro",5_096,8_000));
+  });
   it("normalizes Gemini structured output",async()=>{const http=vi.fn(async(_url:string|URL,init?:RequestInit)=>{const body=JSON.parse(String(init?.body));expect(body.generationConfig.responseJsonSchema).toEqual(request.schema);expect(body.generationConfig.responseSchema).toBeUndefined();return new Response(JSON.stringify({candidates:[{finishReason:"STOP",content:{parts:[{text:"{\"ok\":true}"}]}}],usageMetadata:{promptTokenCount:3,candidatesTokenCount:1}}))});await expect(new ProviderClient(http).generate("gemini","key",request,new Set(["allowed"]))).resolves.toMatchObject({value:{ok:true},finishReason:"STOP"})});
   it("uses Gemini's final non-thought structured-output part",async()=>{const client=new ProviderClient(async()=>new Response(JSON.stringify({candidates:[{finishReason:"STOP",content:{parts:[{thought:true,text:"internal reasoning must not be parsed"},{text:"{\"ok\":true}"}]}}]})));await expect(client.generate("gemini","key",request,new Set(["allowed"]))).resolves.toMatchObject({value:{ok:true},finishReason:"STOP"})});
   it("uses sanitized provider errors",async()=>{const client=new ProviderClient(async()=>new Response(JSON.stringify({error:{message:"secret leaked upstream"}}),{status:401}));await expect(client.validateKey("gemini","secret-key-value")).rejects.toEqual(expect.objectContaining({message:"invalid_key"}));await expect(client.validateKey("gemini","short")).rejects.toBeInstanceOf(ProviderError)});

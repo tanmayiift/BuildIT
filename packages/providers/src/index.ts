@@ -40,9 +40,31 @@ export function conservativeProviderModelCost(provider: ProviderName, model: str
   if (!price) return inputTokens * genericCeiling.inputPerMillion / 1_000_000 + outputTokens * genericCeiling.outputPerMillion / 1_000_000;
   return (inputTokens * price.inputPerMillion / 1_000_000 + outputTokens * price.outputPerMillion / 1_000_000) * priceSafetyMargin;
 }
+// Gemini models think before they answer, and thinking tokens count against maxOutputTokens - Google:
+// "The max_output_tokens generation parameter sets the maximum number of tokens a response can
+// generate, including thought tokens." BuildIT sized each stage's limit for the answer alone, so on
+// 5 Oct 2026 gemini-3.1-pro-preview spent the findings stage's 8,000 tokens thinking, stopped at
+// MAX_TOKENS three times, and the review failed. Gemini 3 requests get this allowance on top, and the
+// reservation below counts it, so the budget still covers the worst case. (Gemini 2.5 thinks too, but
+// returned 404 for the only billed key on hand, so it is left as it was rather than changed untested.)
+export const geminiThinkingAllowance = 8_192;
+const thinksBeforeAnswering = (provider: ProviderName, model: string) => provider === "gemini" && model.startsWith("gemini-3");
+export function providerOutputLimit(provider: ProviderName, model: string, maxOutputTokens: number) {
+  return thinksBeforeAnswering(provider, model) ? maxOutputTokens + geminiThinkingAllowance : maxOutputTokens;
+}
+// Gemini 3 models: thinking at "low" rather than the default "high", and the default temperature.
+// Google "strongly recommend[s] keeping the temperature parameter at its default value of 1.0" for
+// them, warning that lower values "may lead to unexpected behavior, such as looping"; BuildIT sent 0.
+function geminiGenerationConfig(request: ProviderRequest) {
+  return {
+    ...(thinksBeforeAnswering("gemini", request.model) ? { thinkingConfig: { thinkingLevel: "low" } } : { temperature: 0 }),
+    maxOutputTokens: providerOutputLimit("gemini", request.model, request.maxOutputTokens),
+    responseMimeType: "application/json", responseJsonSchema: request.schema,
+  };
+}
 export function conservativeProviderStageCost(provider: ProviderName, model: string, inputBytes: number, maxOutputTokens: number, overheadTokens = 4_096) {
   if (!Number.isSafeInteger(inputBytes) || inputBytes < 0 || !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 0 || !Number.isSafeInteger(overheadTokens) || overheadTokens < 0) throw new Error("model_stage_cost_invalid");
-  return conservativeProviderModelCost(provider, model, inputBytes + overheadTokens, maxOutputTokens);
+  return conservativeProviderModelCost(provider, model, inputBytes + overheadTokens, providerOutputLimit(provider, model, maxOutputTokens));
 }
 type Http = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -153,7 +175,7 @@ export class ProviderClient {
   }
 
   private async gemini(apiKey: string, request: ProviderRequest): Promise<ProviderResult> {
-    const response = await this.http(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": apiKey }, body: JSON.stringify({ systemInstruction: { parts: [{ text: request.system }] }, contents: [{ role: "user", parts: [{ text: request.input }] }], generationConfig: { temperature:0,maxOutputTokens: request.maxOutputTokens, responseMimeType: "application/json", responseJsonSchema: request.schema } }), signal: AbortSignal.timeout(generateTimeoutMs) });
+    const response = await this.http(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": apiKey }, body: JSON.stringify({ systemInstruction: { parts: [{ text: request.system }] }, contents: [{ role: "user", parts: [{ text: request.input }] }], generationConfig: geminiGenerationConfig(request) }), signal: AbortSignal.timeout(generateTimeoutMs) });
     const body = await checked(response), feedback = body.promptFeedback as Record<string, unknown> | undefined;
     const rawUsage = body.usageMetadata as Record<string, unknown> | undefined;
     const usage = usageCounts(rawUsage?.promptTokenCount, rawUsage?.candidatesTokenCount, response.headers.get("x-request-id"), rawUsage?.thoughtsTokenCount);
