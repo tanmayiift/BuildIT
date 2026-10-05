@@ -111,7 +111,7 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   // repositoryFiles: a changed file whose content did not fit, which is what makes the review partial.
   // relatedFiles: an import neighbour that did not fit. Files outside both are not offered at all, so
   // they are not counted as left out.
-  type OmissionKind = "repositoryFiles" | "changedExcerpts" | "relatedFiles" | "patches" | "changedFiles" | "sourceOmissions" | "pullOmissions" | "requirementSources" | "requirements" | "requirementConflicts" | "truncatedTexts";
+  type OmissionKind = "repositoryFiles" | "changedExcerpts" | "relatedFiles" | "uncitedSources" | "patches" | "changedFiles" | "sourceOmissions" | "pullOmissions" | "requirementSources" | "requirements" | "requirementConflicts" | "truncatedTexts";
   const changes: Array<{ path: string; status: string; patch?: string }> = [];
   const requirementSources: ModelSource[] = [], requirements: ModelRequirement[] = [], requirementConflicts: ModelConflict[] = [];
   const files: Array<{ evidenceId: string; path: string; content: string; startLine: number; endLine: number; contentHash: string; excerpt?: true; related?: true }> = [];
@@ -143,19 +143,22 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
 
   let requirementBudget = 20_000;
   // Repository documents and tests are gathered wholesale as places a requirement might be written.
-  // Their text earns a place in the prompt only when a requirement was actually read out of it; the
-  // rest was up to 20 KB of README and test code on every review, informing nothing. A linked ticket
-  // keeps its text either way, because the author pointed at it.
+  // One earns a place in the prompt only when a requirement was actually read out of it; the rest
+  // were up to 20 KB of README and test code, and then - once their text was dropped - 18 KB of ids
+  // and hashes for zod's 120 of them, informing nothing. They are counted, not listed. A linked
+  // ticket stays either way, because the author pointed at it.
   const citedSources = new Set((pull.requirements ?? []).map(item => item.sourceId));
+  let uncited = 0;
   for (const source of pull.requirementSources ?? []) {
-    const gated = (source.type === "repository_document" || source.type === "test") && !citedSources.has(source.id);
+    if ((source.type === "repository_document" || source.type === "test") && !citedSources.has(source.id)) { uncited++; continue; }
     const { content: sourceContent, ...sourceMeta } = source as ModelSource;
-    const rawContent = gated ? undefined : sourceContent?.slice(0, Math.max(0, requirementBudget));
+    const rawContent = sourceContent?.slice(0, Math.max(0, requirementBudget));
     const contentTruncated = Boolean(sourceContent && rawContent !== undefined && rawContent.length !== sourceContent.length);
     const candidate = { ...sourceMeta, ...(rawContent === undefined ? {} : { content: redactForModel(rawContent) }) } as ModelSource;
     if (pushWithin(requirementSources, candidate)) { requirementBudget -= Buffer.byteLength(rawContent ?? ""); if (contentTruncated) increment("truncatedTexts"); }
     else increment("requirementSources");
   }
+  if (uncited) increment("uncitedSources", uncited);
   for (const item of pull.requirements ?? []) {
     const rawText = item.text.slice(0, 2_000), textTruncated = rawText.length !== item.text.length;
     if (pushWithin(requirements, { ...item, text: redactForModel(rawText), ...(textTruncated ? { textTruncated: true } : {}) } as ModelRequirement)) { if (textTruncated) increment("truncatedTexts"); }
@@ -247,9 +250,9 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
     if (bytes <= relatedBudget && admit({ ...sourceEvidence(path, file.content), content: redactForModel(file.content), related: true })) relatedBudget -= bytes;
     else increment("relatedFiles");
   }
-  // Related files are a courtesy; one that did not fit does not mean the model missed part of the
-  // code under review.
-  const excludedAnything = Object.entries(exclusions.totals).some(([kind, value]) => kind !== "relatedFiles" && (value ?? 0) > 0) || pull.requirementCoverage !== "complete" || headChunks.some(chunk => chunk.snapshot.coverage !== "full");
+  // Related files are a courtesy, and an uncited document held no requirement; neither means the
+  // model missed part of the code under review or its intent.
+  const excludedAnything = Object.entries(exclusions.totals).some(([kind, value]) => kind !== "relatedFiles" && kind !== "uncitedSources" && (value ?? 0) > 0) || pull.requirementCoverage !== "complete" || headChunks.some(chunk => chunk.snapshot.coverage !== "full");
   base.coverage = excludedAnything ? "partial" : "full";
   while (size() > maxBytes && exclusions.paths.length) exclusions.paths.pop();
   while (size() > maxBytes && exclusions.patchPaths.length) exclusions.patchPaths.pop();

@@ -173,12 +173,14 @@ describe("what the model reads of the repository", () => {
     expect(withoutFile.pull.changes[0]?.patch).toContain("export const y = 2;");
   });
 
-  it("offers a repository document's text only when a requirement was read out of it", () => {
+  it("offers a repository document only when a requirement was read out of it", () => {
     const source = (id: string, type: "repository_document" | "github_issue", content: string) => ({ id, type, status: "available", version: "v1", urlHash: "c".repeat(64), content });
     const result = boundedAnalysisContext([{ pull: { ...pull,
       requirementSources: [source("doc-1", "repository_document", "## Usage"), source("doc-2", "repository_document", "Names must not be empty"), source("linked-1", "github_issue", "Reported: empty names save")],
       requirements: [{ id: "req-doc-2-1", text: "Names must not be empty", sourceId: "doc-2", line: 1, evidenceHash: "d".repeat(64), certainty: "explicit" }] }, snapshot: snapshot([]) }], 80_000);
-    expect(Object.fromEntries(result.pull.requirementSources.map(item => [item.id, item.content]))).toEqual({ "doc-1": undefined, "doc-2": "Names must not be empty", "linked-1": "Reported: empty names save" });
+    expect(Object.fromEntries(result.pull.requirementSources.map(item => [item.id, item.content]))).toEqual({ "doc-2": "Names must not be empty", "linked-1": "Reported: empty names save" });
+    // Counted, so the model is told documents were looked at, without 150 bytes of ids for each.
+    expect(result.exclusions.totals.uncitedSources).toBe(1);
   });
 
   it("keeps omission samples short and their totals exact", () => {
