@@ -4,7 +4,13 @@ name: Release
 # left aliased to an older build with nothing to notice. This runs the same guarded scripts as
 # `pnpm deploy:*:production`: deploy, assign the production alias, read the alias back, and
 # probe it. The scripts fail the job if the alias did not move.
+#
+# Every push to main releases all three surfaces once the gates pass, so production is whatever
+# main is: until 5 Oct 2026 this ran only when dispatched, had never run on main, and every
+# release came from one laptop. A dispatch can still release a single surface.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       target:
@@ -22,6 +28,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # A push has no inputs; it releases everything.
+  TARGET: ${{ inputs.target || 'all' }}
   NEXT_PUBLIC_CONVEX_URL: https://judicious-barracuda-968.convex.cloud
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
@@ -90,22 +98,22 @@ jobs:
       - name: Confirm the deploy contract before touching production
         run: pnpm deploy:web:check && pnpm deploy:broker:check
       - name: Release the web app, alias it, and probe it
-        if: ${{ inputs.target == 'web' || inputs.target == 'both' }}
+        if: ${{ env.TARGET == 'web' || env.TARGET == 'both' }}
         run: pnpm deploy:web:production
       - name: Release the broker, alias it, and probe it
-        if: ${{ inputs.target == 'broker' || inputs.target == 'both' }}
+        if: ${{ env.TARGET == 'broker' || env.TARGET == 'both' }}
         run: pnpm deploy:broker:production
 
       - name: Refuse a full release without a Convex credential
-        if: ${{ inputs.target == 'all' }}
+        if: ${{ env.TARGET == 'all' }}
         run: test -n "$CONVEX_DEPLOY_KEY" || { echo "CONVEX_DEPLOY_KEY repository secret is not set, so CI cannot deploy the Convex backend. Run 'pnpm deploy:production' locally, or add the secret."; exit 1; }
       - name: Release all three and prove the broker serves this commit
-        if: ${{ inputs.target == 'all' }}
+        if: ${{ env.TARGET == 'all' }}
         run: pnpm deploy:production
 
       - name: Say which surfaces this release actually moved
         run: |
-          echo "target=${{ inputs.target }}"
+          echo "target=$TARGET"
           echo "Convex is deployed only by the 'all' target. 'web', 'broker' and 'both' leave the backend untouched."
 
   # The alias is what the GitHub App homepage, post-install redirect, and webhook URL resolve
@@ -130,7 +138,9 @@ jobs:
       # Read each deployed service's health metadata and query its shared public backend.
       - name: Web and broker agree on one Convex deployment
         env:
-          BUILDIT_EXPECTED_CONVEX_URL: ${{ secrets.BUILDIT_EXPECTED_CONVEX_URL }}
+          # The production deployment this workflow builds the web app against; a secret may
+          # override it. The check then reads what each running service actually uses.
+          BUILDIT_EXPECTED_CONVEX_URL: ${{ secrets.BUILDIT_EXPECTED_CONVEX_URL || 'https://judicious-barracuda-968.convex.cloud' }}
         run: |
           if [ -z "$BUILDIT_EXPECTED_CONVEX_URL" ]; then
             echo "buildit_wiring_not_configured: BUILDIT_EXPECTED_CONVEX_URL is unset, so web/broker Convex agreement was NOT checked."

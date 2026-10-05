@@ -10,9 +10,18 @@ export const convexProductionTarget = Object.freeze({
 // The CLI deploy command resolves a project's default production deployment. An ambient
 // dev project, deploy key or self-hosted selector must never redirect this release.
 export function convexProductionEnvironment(source = process.env) {
-  const keys = [source.CONVEX_DEPLOY_KEY, source.CONVEX_DEPLOYMENT_TOKEN].filter(Boolean);
-  if (keys.some(key => !/^prod:judicious-barracuda-968\|[^\s|]+$/.test(key)) || new Set(keys).size > 1) {
-    throw new Error("buildit_convex_deploy_key_target_refused");
+  // Surrounding whitespace is dropped first: a key pasted into a repository secret with its trailing
+  // newline would otherwise be refused outright. The first GitHub release (5 Oct 2026) was refused
+  // here with no reason given, which is why the refusal below now names one.
+  const keys = [source.CONVEX_DEPLOY_KEY, source.CONVEX_DEPLOYMENT_TOKEN].map(key => key?.trim()).filter(Boolean);
+  // The refusal names which rule failed - never any part of the key - so whoever holds the key knows
+  // whether to fix how it was pasted or to issue a production key for this deployment.
+  if (new Set(keys).size > 1) throw new Error("buildit_convex_deploy_key_target_refused:two_different_keys");
+  for (const key of keys) {
+    if (/^prod:judicious-barracuda-968\|[^\s|]+$/.test(key)) continue;
+    const reason = !key.startsWith("prod:") ? "not_a_production_deploy_key"
+      : !key.startsWith(`prod:${convexProductionTarget.deploymentName}|`) ? "key_for_another_deployment" : "malformed_key";
+    throw new Error(`buildit_convex_deploy_key_target_refused:${reason}`);
   }
   const env = Object.fromEntries(Object.entries(source).filter(([key]) => !key.startsWith("CONVEX_")));
   env.CONVEX_DEPLOYMENT = `prod:${convexProductionTarget.deploymentName}`;
