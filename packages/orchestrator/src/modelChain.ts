@@ -48,7 +48,8 @@ function repairInput(input: string, repairOf: unknown) {
 // critic-v3 and arbitration-v3: they now see only the cited evidence (stageContracts.ts).
 // findings-v4: no repository memory in its input or policy, and a compact validation view.
 // findings-v5: changed files may arrive as hunk excerpts, and unchanged files only as import neighbours.
-const stagePromptVersions: Partial<Record<PromptStage, string>> = { findings: "findings-v5", critic: "critic-v3", arbitration: "arbitration-v3" };
+// findings-v6: runs beside the requirements stage, so it cites canonical requirement ids directly.
+const stagePromptVersions: Partial<Record<PromptStage, string>> = { findings: "findings-v6", critic: "critic-v3", arbitration: "arbitration-v3" };
 const judgingStages = new Set<PromptStage>(["critic", "arbitration"]);
 const citedView = (untrusted: Record<string, unknown>) => (stage: PromptStage, records: ValidatedStage[]) => {
   if (!judgingStages.has(stage)) return undefined;
@@ -84,7 +85,7 @@ export async function runModelReviewChain(input: {
   onPlan?: (plan: ReviewPlan) => Promise<void> | void;
   skip?: (stage: PromptStage, records: ValidatedStage[]) => string | undefined;
 }) {
-  const attempts=new Map<PromptStage,Array<Omit<StageUsage,"promptVersion"|"schemaVersion"|"attempt"|"outcome">>>();
+  const attempts=new Map<string,Omit<StageUsage,"promptVersion"|"schemaVersion"|"attempt"|"outcome">>();
   const plan = input.plan ?? planReview(input.untrusted);
   const definitions = plan.stages.map(strictDefinition);
   const files = input.untrusted.files;
@@ -99,10 +100,13 @@ export async function runModelReviewChain(input: {
     untrusted: input.untrusted,
     maxSchemaRepairs: 1,
     ...(input.skip ? { skip: input.skip } : {}),
+    // Findings no longer reads the requirements stage's verdicts - it cites the canonical ids it is
+    // given directly - so the two calls run side by side instead of one waiting on the other.
+    concurrent: ["requirements", "findings"],
     view: citedView(input.untrusted),
     ...(slices.length > 1 ? { partition: (stage: PromptStage) => stage === "findings" ? slices : undefined } : {}),
     ...(input.onInjection ? { onInjection: input.onInjection } : {}),
-    onAttempt: async attempt=>{const queue=attempts.get(attempt.stage),usage=queue?.shift();if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},
+    onAttempt: async attempt=>{const usage=attempts.get(attempt.callId);attempts.delete(attempt.callId);if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},
     executor: async request => {
       const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);
       const startedAt = Date.now();
@@ -125,7 +129,7 @@ export async function runModelReviewChain(input: {
         durationMs: Math.max(0, Date.now() - startedAt),
         requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas[request.stage])).digest("hex"),
         ...(result.invocationId ? { invocationId: result.invocationId } : {}), ...(result.requestId ? { requestId: result.requestId } : {}),
-      };attempts.set(request.stage,[...(attempts.get(request.stage)??[]),usage]);
+      };attempts.set(request.callId,usage);
       return result.value;
     },
   });
@@ -153,7 +157,7 @@ export async function runEscalationCritic(input: {
   priorStages: readonly ValidatedStage[];
   onUsage?: (usage: StageUsage) => Promise<void> | void;
 }) {
-  const attempts: Array<Omit<StageUsage, "promptVersion" | "schemaVersion" | "attempt" | "outcome">> = [];
+  const attempts = new Map<string, Omit<StageUsage, "promptVersion" | "schemaVersion" | "attempt" | "outcome">>();
   return runPromptChain({
     definitions: [strictDefinition("critic")],
     expectedStages: ["critic"],
@@ -164,7 +168,8 @@ export async function runEscalationCritic(input: {
     view: citedView(input.untrusted),
     maxSchemaRepairs: 1,
     onAttempt: async attempt => {
-      const usage = attempts.shift();
+      const usage = attempts.get(attempt.callId);
+      attempts.delete(attempt.callId);
       if (!usage) throw new Error("model_stage_usage_missing");
       await input.onUsage?.({ ...usage, promptVersion: attempt.promptVersion, schemaVersion: attempt.schemaVersion, attempt: attempt.attempt, outcome: attempt.outcome });
     },
@@ -172,7 +177,7 @@ export async function runEscalationCritic(input: {
       const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);
       const startedAt = Date.now();
       const result = await input.invoke({ ...request, input: providerInput, schemaName: "buildit_critic_v1", schema: stageSchemas.critic, maxOutputTokens: 4_000 });
-      attempts.push({
+      attempts.set(request.callId, {
         stage: "critic", provider: result.provider, model: result.model, finishReason: result.finishReason,
         inputTokens: result.inputTokens, outputTokens: result.outputTokens,
         durationMs: Math.max(0, Date.now() - startedAt),
@@ -190,19 +195,19 @@ export async function runModelPatchChain(input: {
   untrusted: Record<string, unknown>;
   onUsage?: (usage: StageUsage) => Promise<void> | void;
 }) {
-  const attempts:Array<Omit<StageUsage,"promptVersion"|"schemaVersion"|"attempt"|"outcome">>=[];
+  const attempts=new Map<string,Omit<StageUsage,"promptVersion"|"schemaVersion"|"attempt"|"outcome">>();
   return runPromptChain({
     definitions: strictPatchChain,
     expectedStages: autofixPromptStages,
     pinned: input.pinned,
     untrusted: input.untrusted,
     maxSchemaRepairs: 1,
-    onAttempt: async attempt=>{const usage=attempts.shift();if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},
+    onAttempt: async attempt=>{const usage=attempts.get(attempt.callId);attempts.delete(attempt.callId);if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},
     executor: async request => {
       const providerInput = request.repairOf === undefined ? request.input : repairInput(request.input, request.repairOf);
       const startedAt = Date.now();
       const result = await input.invoke({ ...request, input: providerInput, schemaName: "buildit_patch_v1", schema: stageSchemas.patch, maxOutputTokens: 8_000 });
-      attempts.push({ stage: "patch", durationMs: Math.max(0, Date.now() - startedAt), provider: result.provider, model: result.model, finishReason: result.finishReason, inputTokens: result.inputTokens, outputTokens: result.outputTokens,requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas.patch)).digest("hex"), ...(result.invocationId ? { invocationId: result.invocationId } : {}), ...(result.requestId ? { requestId: result.requestId } : {}) });
+      attempts.set(request.callId, { stage: "patch", durationMs: Math.max(0, Date.now() - startedAt), provider: result.provider, model: result.model, finishReason: result.finishReason, inputTokens: result.inputTokens, outputTokens: result.outputTokens,requestFingerprint:createHash("sha256").update(request.system).update("\0").update(providerInput).update("\0").update(JSON.stringify(stageSchemas.patch)).digest("hex"), ...(result.invocationId ? { invocationId: result.invocationId } : {}), ...(result.requestId ? { requestId: result.requestId } : {}) });
       return result.value;
     },
   });
