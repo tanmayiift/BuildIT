@@ -172,6 +172,40 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   return base;
 }
 export function selectCriticModel(provider:ProviderName,primary:string,availableModels?:readonly string[]){const preferred=provider==="gemini"?(primary==="gemini-2.5-flash"?"gemini-2.5-pro":"gemini-2.5-flash"):provider==="openai"?(primary==="gpt-5.4-mini"?"gpt-5.4":"gpt-5.4-mini"):(primary==="claude-sonnet-4-5"?"claude-sonnet-4-6":"claude-sonnet-4-5"),available=availableModels?new Set(availableModels):approvedProviderModels[provider],independent=Boolean(availableModels)&&available.has(preferred)&&preferred!==primary;return{model:independent?preferred:primary,independent}}
+// The second opinion has to come from a model that gave neither the first findings nor the first
+// critique. It used to be criticRoute.model - the first critic itself, with an identical input - so
+// "escalation" re-rolled the same judge. The first approved model the key lists that is neither; or
+// none, in which case a person decides rather than anything pretending a second look happened.
+export function selectEscalationModel(provider: ProviderName, findingsModel: string, criticModel: string, availableModels?: readonly string[]) {
+  if (!availableModels) return null;
+  const approved = approvedProviderModels[provider];
+  return availableModels.find(model => approved.has(model) && model !== findingsModel && model !== criticModel) ?? null;
+}
+
+// Apply a second critic to the findings it was asked about, and nothing else. It may resolve an
+// uncertain finding to supported; an "unsupported" keeps it uncertain rather than rejecting it, so a
+// second look can never be the quieter route to dismissing a finding. Duplicate or missing second
+// decisions, and decisions about findings that were not escalated, change nothing.
+export function mergeSecondOpinion(first: CriticDecision[], second: CriticDecision[], escalatedIds: ReadonlySet<string>) {
+  const answers = new Map<string, CriticDecision[]>();
+  for (const decision of second) if (escalatedIds.has(decision.findingId)) answers.set(decision.findingId, [...(answers.get(decision.findingId) ?? []), decision]);
+  return first.map(decision => {
+    const replies = answers.get(decision.findingId);
+    if (!replies || replies.length !== 1) return decision;
+    const reply = replies[0]!;
+    return reply.verdict === "unsupported" ? { ...reply, verdict: "uncertain" as const } : reply;
+  });
+}
+
+// Re-arbitration after a second opinion, deterministically. The first pass's arbitration output only
+// ever saw the escalated findings while they were uncertain, so reconciling a now-supported one
+// against it demoted it straight back - escalation could reject but never accept. It still applies,
+// unchanged, to every finding that was not escalated.
+export function rearbitrateAfterEscalation(candidates: FindingCandidate[], firstCritic: CriticDecision[], secondOpinion: CriticDecision[], escalatedIds: ReadonlySet<string>, arbitration: ArbitrationDecision[]) {
+  const rearbitrated = arbitrateFindings(candidates, mergeSecondOpinion(firstCritic, secondOpinion, escalatedIds));
+  return dedupeSameDefect(rearbitrated.map(item => escalatedIds.has(item.id) ? item : reconcileArbitration([item], arbitration)[0]!));
+}
+
 export function selectFindingsModel(provider: ProviderName, primary: string, availableModels?: readonly string[]) {
   if (provider !== "openai" || primary !== "gpt-5.4-mini" || !availableModels?.includes("gpt-5.4")) return primary;
   return "gpt-5.4";
@@ -345,17 +379,16 @@ export const analyze = internalAction({
     // there genuinely is a different model to ask. If the sibling is unavailable the ladder stops
     // rather than pretending a second look happened.
     const escalation = await (async (): Promise<{ findings: typeof firstPass; decisions: Array<{ kind: string; reason: string; detail?: string }> }> => {
-      const unresolved = firstPass.filter(item => item.resolution === "uncertain");
+      // Only a model finding left uncertain by the critic is worth a second opinion. One the injection
+      // policy marked stays with a person: a model must not be the route back out of that taint.
+      const unresolved = firstPass.filter(item => item.resolution === "uncertain" && item.origin === "model" && item.reason !== "prompt_injection_detected");
       if (!unresolved.length) return { findings: firstPass, decisions: [] };
+      const escalationModel = selectEscalationModel(scope.provider, findingsModel, criticRoute.model, availableModels);
       // Against findingsModel, not scope.model. criticRoute is derived from findingsModel, and
-      // selectFindingsModel can move the findings stage off scope.model - so an OpenAI credential
-      // exposing gpt-5.4-mini and gpt-5.4 put findings on gpt-5.4 and the critic on gpt-5.4-mini,
-      // which equals scope.model. The ladder then switched itself off and recorded "no independent
-      // second model was available to ask", while requireIndependentCritic had simultaneously been
-      // told independent === true. The one configuration where a second opinion genuinely exists
-      // was exactly where this refused to ask for it.
-      if (!criticRoute.independent || criticRoute.model === findingsModel) {
-        return { findings: firstPass, decisions: [{ kind: "human_escalation", reason: "no independent second model was available to ask, so a person decides", detail: `${unresolved.length} uncertain` }] };
+      // selectFindingsModel can move the findings stage off scope.model - so the independence check
+      // has to compare against the model that actually wrote the findings.
+      if (!criticRoute.independent || criticRoute.model === findingsModel || !escalationModel) {
+        return { findings: firstPass, decisions: [{ kind: "human_escalation", reason: "no third independent model was available to ask, so a person decides", detail: `${unresolved.length} uncertain` }] };
       }
       try {
         const escalationRecords = await runEscalationCritic({
@@ -365,22 +398,20 @@ export const analyze = internalAction({
           // first-pass critic would see rather than a novel one whose output means something else.
           priorStages: records.filter(item => ["requirements", "findings"].includes(item.stage)),
           onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,...(item.invocationId?{invocationId:item.invocationId as Id<"modelInvocations">}:{}),stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,durationMs:item.durationMs,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); },
-          invoke: (stageRequest: ModelStageRequest): Promise<ProviderResult> => invokeStage(stageRequest, criticRoute.model),
+          invoke: (stageRequest: ModelStageRequest): Promise<ProviderResult> => invokeStage(stageRequest, escalationModel),
         });
         const secondOpinion = ((escalationRecords.find(item => item.stage === "critic")?.value?.decisions ?? []) as CriticDecision[]);
-        // Re-arbitrated over both opinions. arbitrateFindings already resolves a finding against its
-        // critic; handing it the second pass alongside the first is that same operation with more
-        // evidence, not a new rule invented for escalation.
-        const escalated = dedupeSameDefect(reconcileArbitration(arbitrateFindings(candidates, [...critic, ...secondOpinion]), arbitration));
+        const escalatedIds = new Set(unresolved.map(item => item.id));
+        const escalated = rearbitrateAfterEscalation(candidates, critic, secondOpinion, escalatedIds, arbitration);
         // A second opinion may resolve an uncertainty. It may never weaken a finding that was
         // already accepted: escalation exists to break a tie, not to argue a verdict down, and a
         // model asked twice must not become a route to a quieter answer.
         const weakened = escalated.some(item => firstPass.find(candidate => candidate.id === item.id)?.resolution === "accepted" && item.resolution !== "accepted");
         if (weakened) return { findings: firstPass, decisions: [{ kind: "critic_escalation_discarded", reason: "the second critic would have weakened an already accepted finding, so its opinion was not applied" }] };
-        const stillUnresolved = escalated.filter(item => item.resolution === "uncertain").length;
+        const stillUnresolved = escalated.filter(item => escalatedIds.has(item.id) && item.resolution === "uncertain").length;
         return { findings: escalated, decisions: [
           { kind: "critic_escalation", reason: `${unresolved.length} ${unresolved.length === 1 ? "finding was" : "findings were"} unresolved after the first critic`,
-            detail: `second opinion from ${criticRoute.model}: ${unresolved.length - stillUnresolved} resolved, ${stillUnresolved} still uncertain` },
+            detail: `second opinion from ${escalationModel}: ${unresolved.length - stillUnresolved} resolved, ${stillUnresolved} still uncertain` },
           ...(stillUnresolved ? [{ kind: "human_escalation", reason: "two independent critics could not resolve it, so a person decides", detail: `${stillUnresolved} still uncertain` }] : []),
         ] };
       } catch (error) {
