@@ -25,6 +25,12 @@ const input = () => ({
 });
 
 describe("verified report", () => {
+  it("says why an autofix request produced a review and no fix, and says nothing when none was asked for", () => {
+    const declined = composeVerifiedReport({ ...input(), autofixDecline: "checks_fail_on_base" });
+    expect(declined.body).toContain("> **No fix was opened.** Autofix stopped because a required check already fails on the base commit, so no fix could be shown to pass it.");
+    expect(composeVerifiedReport(input()).body).not.toContain("No fix was opened");
+  });
+
   it("leads with one plain decision, reason, and human next action", () => {
     const report = composeVerifiedReport(input());
     expect(report.decision.status).toBe("changes_requested");

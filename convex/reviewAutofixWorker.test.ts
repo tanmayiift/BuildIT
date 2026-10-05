@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autofixScannerLines, buildAutofixPromptContext, redactAutofixSources, segmentArtifacts } from "./reviewAutofixWorker";
+import { autofixScannerLines, buildAutofixPromptContext, redactAutofixSources, requiredChecksFailingOnBoth, segmentArtifacts } from "./reviewAutofixWorker";
 import { verifyArtifactGrant } from "@buildit/security";
 
 const run = (runs: Array<{ scanner: string; scannerVersion: string }>, findings: Array<{ scanner?: string; severity: "critical" | "warning" | "info" }> = []) => ({ scanner: "combined", scannerVersion: "v1", commitSha: "a".repeat(40), complete: true as const, runs, findings });
@@ -56,5 +56,22 @@ describe("what each execution segment is told to read", () => {
     }
     const strip = () => describe().map(({ readGrant: _, ...item }) => item);
     expect(strip()).toEqual(strip());
+  });
+});
+
+describe("whether autofix can ever prove a fix", () => {
+  const result = (planId: string, conclusion: string, required = true) => ({ planId, conclusion, required });
+
+  it("names a required check that fails on both commits, which no candidate can pass", () => {
+    expect(requiredChecksFailingOnBoth({ base: { results: [result("test", "failed"), result("install", "passed")] }, head: { results: [result("test", "failed"), result("install", "passed")] } })).toEqual(["test"]);
+  });
+
+  it("leaves a check the pull request broke to autofix, and ignores advisory checks", () => {
+    expect(requiredChecksFailingOnBoth({ base: { results: [result("test", "passed"), result("lint", "failed", false)] }, head: { results: [result("test", "failed"), result("lint", "failed", false)] } })).toEqual([]);
+  });
+
+  it("says nothing when there is no base evidence to compare", () => {
+    expect(requiredChecksFailingOnBoth({ head: { results: [result("test", "failed")] } })).toEqual([]);
+    expect(requiredChecksFailingOnBoth(undefined)).toEqual([]);
   });
 });

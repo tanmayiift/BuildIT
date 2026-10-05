@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { classifyAutofixStop } from "./autofixBounds";
+import { classifyAutofixStop, workflowErrorCode } from "./autofixBounds";
 
 describe("a bounded stop is not an outage", () => {
   it("maps each named bound to the value the schema has always declared", () => {
@@ -43,5 +43,14 @@ describe("every declared terminationBound is reachable", () => {
     const source = readFileSync(join(process.cwd(), "convex/reviewAutofixData.ts"), "utf8");
     expect(source, "a classifier nothing calls leaves the bug in place").toContain("classifyAutofixStop(args.code)");
     expect(source).toContain('status:"failed_after_bounds"');
+  });
+
+  it("classifies the message the workflow actually hands failPlatform, not only a bare code", () => {
+    const fromWorkflow = (code: string) => `Uncaught Error: ${code}\n    at handler (../convex/reviewAutofixWorker.ts:482:10)\n`;
+    expect(classifyAutofixStop(fromWorkflow("autofix_repeated_patch"))).toMatchObject({ kind: "bound", terminationBound: "repeated_patch" });
+    expect(classifyAutofixStop(fromWorkflow("autofix_worsened:required_check_regressed"))).toMatchObject({ kind: "bound" });
+    expect(classifyAutofixStop(fromWorkflow("autofix_spend_limit"))).toEqual({ kind: "budget" });
+    expect(classifyAutofixStop(fromWorkflow("autofix_execution_failed"))).toEqual({ kind: "platform" });
+    expect(workflowErrorCode("autofix_round_limit")).toBe("autofix_round_limit");
   });
 });

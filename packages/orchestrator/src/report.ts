@@ -72,7 +72,15 @@ function findingLines(finding: ReportFinding, index: number) {
 // than a phrase each report restates in its own words.
 export const neverMergedSentence = "BuildIT did not merge this pull request.";
 
-export function composeVerifiedReport(input: { repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "analysis_budget" | "requirements"; unreadableSources?: { total: number; unreadable: number; summary: string; nextStep: string }; changeSummary?: string; configNote?: string; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
+// Why `@buildit autofix` opened no fix, said once at the top. The person asked for a pull request
+// and got a review; without this they could not tell a decision from a fault.
+const autofixDeclineSentences = {
+  no_accepted_findings: "no finding was confirmed strongly enough to change code for",
+  checks_fail_on_base: "a required check already fails on the base commit, so no fix could be shown to pass it",
+  no_safe_patch: "the model could not produce an edit the patch policy would apply",
+} as const;
+
+export function composeVerifiedReport(input: { autofixDecline?: keyof typeof autofixDeclineSentences; repository: string; prNumber: number; headSha: string; baseSha: string; configRevision: string; coverage: "complete" | "partial"; coverageGap?: "changed_files" | "diff_truncated" | "analysis_budget" | "requirements"; unreadableSources?: { total: number; unreadable: number; summary: string; nextStep: string }; changeSummary?: string; configNote?: string; injectionSurfaces?: ReadonlyArray<"code" | "narrative" | "checks" | "unknown">; ecosystem?: "npm" | "pnpm" | "yarn" | "none"; injectionUnscoped?: boolean; checks: ReviewCheckDecision[]; findings: ReportFinding[]; claims: MaterialClaim[]; evidence: EvidenceRecord[]; environmentAvailable: boolean; isStale: boolean; costUsd: number; retentionExpiresAt: number }) {
   const decision = computeReviewDecision({ isStale: input.isStale, environmentAvailable: input.environmentAvailable, coverageComplete: input.coverage === "complete", ...(input.injectionUnscoped ? { injectionUnscoped: true } : {}), checks: input.checks, findings: input.findings });
   const claims = gateClaims(input.claims, input.evidence, input.headSha);
   const visibleFindings = input.findings.filter(finding => finding.resolution !== "rejected");
@@ -140,6 +148,7 @@ function checkExcerpt(check: ReviewCheckDecision) {
     `**Next step** — ${nextStep(decision.nextAction)}`,
     "",
     `> ${neverMergedSentence} A human owns the merge decision.`,
+    ...(input.autofixDecline ? ["", `> **No fix was opened.** Autofix stopped because ${autofixDeclineSentences[input.autofixDecline]}. The review below stands on its own.`] : []),
     ...(input.injectionSurfaces?.includes("narrative") && !input.injectionSurfaces.includes("unknown")
       ? ["", "> **Intent was not verified.** Instruction-like text appeared in this pull request's description or in a repository document, so BuildIT did not take either at face value when working out what the change is supposed to do. The checks and the cited findings below are unaffected: each one is tied to a file, a line and this exact commit."]
       : []),

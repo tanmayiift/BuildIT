@@ -425,6 +425,21 @@ The second: the round was retried, the model wrote a different patch, and its ca
 under the round-only slot name the first attempt had used, so `reserveArtifact` refused it as a
 conflict and the conflict became the reported cause. Slots now carry the candidate commit.
 
+**The re-run after #119 (review `nx7asw5a…`) got past every segment, and ended `platform_failed`
+for a reason that was not a fault.** axios's required `test` check fails on the base commit too
+(129 of 132 test files), so no candidate could ever pass. Round 1's candidate failed its checks; in
+round 2 the model returned the file unchanged (`patch_empty`), and that became "a required platform
+step failed". Two changes:
+- Autofix now declines before its first model call when a required check fails on both commits
+  (`requiredChecksFailingOnBoth`).
+- "The model could not produce a safe patch" is now a decline, not a fault.
+
+The report opens with "No fix was opened" and the reason. The run also showed that every
+classifier of autofix stops had been comparing the workflow's message, `Uncaught Error: <code>\n
+at …`, against bare codes. So even the existing "no accepted findings" decline and the
+repeated-patch bound had never matched in production. Both now read the code out of the message
+(`workflowErrorCode`).
+
 ## A required check failing on both commits is reported as "All required checks passed"
 
 **Status: fixed on 4 October 2026, found the same day** (`docs/evidence/review-measurement-2026-10-04.md`,

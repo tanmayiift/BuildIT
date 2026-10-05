@@ -171,6 +171,8 @@ export default defineSchema({
     configRevisionId: v.id("configRevisions"), configProvenance: value.configProvenance,
     provider: value.provider, model: v.string(), modelVersion: v.string(), promptVersion: v.string(),
     evalSetVersion: v.string(), coverageLevel: value.coverageLevel, coverageGap: v.optional(value.coverageGap),
+    // Set when `@buildit autofix` stopped with an answer rather than a fault (durableReview.autofixDeclineReason).
+    autofixDecline: v.optional(v.union(v.literal("no_accepted_findings"), v.literal("checks_fail_on_base"), v.literal("no_safe_patch"))),
     // Beside the gap it explains, because "requirements" alone is what made the receipt say
     // "One or more unreadable" and name neither which source nor why.
     unreadableSources: v.optional(v.object({ total: v.number(), unreadable: v.number(), summary: v.string(), nextStep: v.string() })),
