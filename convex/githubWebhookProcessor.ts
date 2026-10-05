@@ -256,11 +256,15 @@ export const processWebhook = internalAction({
         });
         return;
       }
+      // ask, dismiss, help, pause and resume hand their work to another function and return. They
+      // never marked the delivery done, so every one of them stayed "received" indefinitely.
+      const processed = () => ctx.runMutation(internal.githubWebhookData.complete, {
+        deliveryId: args.deliveryId, disposition: "processed", status: "completed", now: Date.now() });
       if (decision.kind === "dismiss") {
         await ctx.scheduler.runAfter(0, internal.findingFeedbackWorker.dismissByIndex, {
           githubRepositoryId: args.githubRepositoryId, prNumber: args.prNumber,
           findingIndex: decision.findingIndex, senderLogin: args.senderLogin });
-        return;
+        await processed(); return;
       }
       if (decision.kind === "help" || decision.kind === "pause" || decision.kind === "resume") {
         await ctx.scheduler.runAfter(0, internal.reviewCommandWorker.respond, {
@@ -270,7 +274,7 @@ export const processWebhook = internalAction({
           kind: decision.kind,
           actor: await sha256(args.senderLogin.toLowerCase()),
         });
-        return;
+        await processed(); return;
       }
       if (decision.kind === "ask") {
         await ctx.scheduler.runAfter(0, internal.reviewAskWorker.answer, {
@@ -280,7 +284,7 @@ export const processWebhook = internalAction({
           question: decision.question,
           askedBy: (await sha256(args.senderLogin.toLowerCase())) ?? "",
         });
-        return;
+        await processed(); return;
       }
       if (decision.kind === "cancel") {
         const actorId = await sha256(args.senderLogin.toLowerCase()),
