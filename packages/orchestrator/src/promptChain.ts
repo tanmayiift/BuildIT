@@ -1,6 +1,11 @@
 export const promptStages=["requirements","review_plan","findings","critic","arbitration","patch","report"] as const;
 export type PromptStage=typeof promptStages[number];
-export const reviewPromptStages=["requirements","review_plan","findings","critic","arbitration","report"] as const satisfies readonly PromptStage[];
+// review_plan and report stay in promptStages - stored rows, grants and accounting still name them -
+// but no review asks a model for either any more. Nothing read review_plan's output except later
+// stages, as text; planReview is already the plan, in code. The report stage's claims were never
+// read at all: the published comment is composed deterministically (reviewReportWorker passes
+// claims: []). Together they were two of five calls on every review, each re-sending ~95k tokens.
+export const reviewPromptStages=["requirements","findings","critic","arbitration"] as const satisfies readonly PromptStage[];
 export const autofixPromptStages=["patch"] as const satisfies readonly PromptStage[];
 export type ValidatedStage={stage:PromptStage;promptVersion:string;schemaVersion:string;value:Record<string,unknown>;attempts:number};
 export type StageDefinition={stage:PromptStage;promptVersion:string;schemaVersion:string;maxInputBytes:number;validate(value:unknown):Record<string,unknown>};
@@ -195,4 +200,4 @@ export async function runPromptChain(input:{definitions:StageDefinition[];expect
 }
 
 export function objectStage(stage:PromptStage,required:string[],maxInputBytes=250_000):StageDefinition{return{stage,promptVersion:`${stage}-v1`,schemaVersion:`${stage}-schema-v1`,maxInputBytes,validate(value){if(!value||typeof value!=="object"||Array.isArray(value))throw new Error("object_required");const record=value as Record<string,unknown>;for(const key of required)if(!(key in record))throw new Error(`missing:${key}`);return structuredClone(record)}}}
-export const defaultPromptChain:StageDefinition[]=reviewPromptStages.map(stage=>objectStage(stage,stage==="requirements"?["requirements"]:stage==="review_plan"?["checks"]:stage==="findings"||stage==="arbitration"?["findings"]:stage==="critic"?["accepted","rejected"]:["claims"]));
+export const defaultPromptChain:StageDefinition[]=reviewPromptStages.map(stage=>objectStage(stage,stage==="requirements"?["requirements"]:stage==="critic"?["accepted","rejected"]:["findings"]));
