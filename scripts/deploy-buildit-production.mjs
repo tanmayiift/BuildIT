@@ -26,6 +26,13 @@ export function stepFor(step, env) {
   return { ...step, args: ["exec", "convex", "deploy", "-y"] };
 }
 
+// `convex deploy` bundles the backend locally, and the backend imports the workspace packages from
+// their built dist/. On a fresh GitHub runner there is no dist/, so the first release with a working
+// deploy key failed with `Could not resolve "@buildit/contracts"`; and on a laptop dist/ is whatever
+// was last built, which can be older than the commit being released. So every release builds them
+// first. The broker and the web app build remotely on Vercel and do not depend on this.
+export const packageBuildStep = Object.freeze({ name: "packages", command: "pnpm", args: ["--filter", "./packages/**", "build"] });
+
 export const checkOrder = Object.freeze([
   Object.freeze({ name: "web", command: "pnpm", args: ["deploy:web:check"] }),
   Object.freeze({ name: "broker", command: "pnpm", args: ["deploy:broker:check"] }),
@@ -91,6 +98,7 @@ async function main() {
   }
 
   const expectedCommit = headCommit(repoRoot);
+  run(packageBuildStep, repoRoot, releaseEnv);
   await runCoordinatedDeployment({
     runStep: step => run(stepFor(step, releaseEnv), repoRoot, releaseEnv),
     verifyConvex: () => verifyConvexProductionTarget({ env: releaseEnv }),

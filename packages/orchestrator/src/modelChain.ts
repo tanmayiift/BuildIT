@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { validateSchemaValue, type JsonSchema, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { redactForModel } from "@buildit/security";
 import { partitionFiles, planReview, type ReviewPlan } from "./reviewPlan.js";
+import { citedEvidenceView } from "./stageContracts.js";
 import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type InjectionScope, type InjectionSignal, type PromptStage, type StageDefinition, type ValidatedStage } from "./promptChain.js";
 
 const string = { type: "string" } as const;
@@ -44,8 +45,15 @@ function repairInput(input: string, repairOf: unknown) {
   return `${input}\n<buildit:invalid-output>\n${quoted}\n</buildit:invalid-output>\nCorrect only the invalid output above. Return exactly the requested schema; do not add prose or new evidence.`;
 }
 
+// critic-v3 and arbitration-v3: they now see only the cited evidence (stageContracts.ts).
 // findings-v4: no repository memory in its input or policy, and a compact validation view.
-const stagePromptVersions: Partial<Record<PromptStage, string>> = { findings: "findings-v4", critic: "critic-v2", arbitration: "arbitration-v2" };
+const stagePromptVersions: Partial<Record<PromptStage, string>> = { findings: "findings-v4", critic: "critic-v3", arbitration: "arbitration-v3" };
+const judgingStages = new Set<PromptStage>(["critic", "arbitration"]);
+const citedView = (untrusted: Record<string, unknown>) => (stage: PromptStage, records: ValidatedStage[]) => {
+  if (!judgingStages.has(stage)) return undefined;
+  const findings = records.find(record => record.stage === "findings")?.value.findings;
+  return citedEvidenceView(untrusted, Array.isArray(findings) ? findings : []);
+};
 function strictDefinition(stage: PromptStage): StageDefinition {
   const schema = stageSchemas[stage];
   return {
@@ -90,6 +98,7 @@ export async function runModelReviewChain(input: {
     untrusted: input.untrusted,
     maxSchemaRepairs: 1,
     ...(input.skip ? { skip: input.skip } : {}),
+    view: citedView(input.untrusted),
     ...(slices.length > 1 ? { partition: (stage: PromptStage) => stage === "findings" ? slices : undefined } : {}),
     ...(input.onInjection ? { onInjection: input.onInjection } : {}),
     onAttempt: async attempt=>{const queue=attempts.get(attempt.stage),usage=queue?.shift();if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},
@@ -150,6 +159,8 @@ export async function runEscalationCritic(input: {
     pinned: input.pinned,
     untrusted: input.untrusted,
     priorStages: input.priorStages,
+    // The second opinion sees what the first critic saw: the cited evidence, not the whole context.
+    view: citedView(input.untrusted),
     maxSchemaRepairs: 1,
     onAttempt: async attempt => {
       const usage = attempts.shift();

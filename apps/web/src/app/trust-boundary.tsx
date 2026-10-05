@@ -20,12 +20,12 @@ const places: Place[] = [
   {
     id: "github", label: "GitHub", region: "Your repositories",
     holds: "Your source. BuildIT reads only the repositories you selected when you installed the GitHub App, and public and private repositories use the same installation boundary.",
-    refuses: "It may maintain one BuildIT check and one summary comment on the reviewed commit, and open a separate stacked pull request after Autofix consent. It has no merge authority and does not edit workflows or repository settings.",
+    refuses: "It keeps one BuildIT check and one summary comment on the reviewed commit, and opens a separate fix PR only after Autofix consent. It cannot merge or edit workflows or settings.",
     box: { x: 8, y: 118, width: 132, height: 64 },
   },
   {
     id: "buildit", label: "BuildIT", region: "Vercel",
-    holds: "The web app and an isolated credential broker. Your model key is sent to the broker for provider validation and AWS KMS encryption; BuildIT returns masked metadata and stores no plaintext key.",
+    holds: "The web app and an isolated credential broker. The broker validates your model key and encrypts it with AWS KMS; BuildIT stores no plaintext key.",
     refuses: "Product logs must not contain source or raw provider keys. Infrastructure providers may retain request metadata such as time, IP address and browser details under their own terms.",
     box: { x: 196, y: 118, width: 150, height: 64 },
   },
@@ -69,7 +69,7 @@ export function TrustBoundary() {
         WCAG 2.1.1 - so the container takes focus itself and names what it is. */}
     <div className="boundary-figure-scroll" tabIndex={0} role="group" aria-label="Trust boundary diagram, scrollable">
     <svg viewBox="0 0 720 268" className="boundary-figure" role="img"
-      aria-label="Your repositories on GitHub reach BuildIT on Vercel, which writes to Convex in Ireland, an encrypted artifact store in AWS Ireland, an isolated sandbox in Paris, and the model provider whose key you supplied. BuildIT writes one check, one comment and an optional stacked pull request back to GitHub.">
+      aria-label="Your repositories on GitHub reach BuildIT on Vercel, which uses Convex and AWS in Ireland, a sandbox in Paris and your model provider, and writes back one check, one comment and an optional fix PR.">
       <defs>
         <marker id={markerId} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0 0 L8 4 L0 8 z" fill="var(--line-strong)" />

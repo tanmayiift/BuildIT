@@ -44,6 +44,23 @@ describe("executable model review chain", () => {
     expect(Object.keys(systems)).toEqual(["requirements", "findings", "critic", "arbitration"]);
   });
 
+  // The critic used to re-read the whole context to rule on a few cited lines.
+  it("shows the critic and arbitration only the cited evidence", async () => {
+    const cited = { evidenceId: "source-a", path: "src/a.ts", content: "export const CITED_LINE = 1;", startLine: 1, endLine: 1, contentHash: "h" };
+    const other = { evidenceId: "source-b", path: "src/b.ts", content: "export const UNCITED_FILE = 2;", startLine: 1, endLine: 1, contentHash: "h" };
+    const untrusted = { pull: { title: "t", body: "b", changes: [{ path: "src/a.ts", status: "modified" }, { path: "src/b.ts", status: "modified" }], requirements: [] },
+      files: [cited, other], validation: { head: { outputs: [{ text: "VALIDATION_LOG" }] } }, memory: { dismissedFingerprints: ["MEMORY_PRINT"] } };
+    const finding = { id: "f1", title: "x", category: "correctness", severity: "warning", confidence: 0.8, criterionId: "", path: "src/a.ts", startLine: 1, endLine: 1, evidenceIds: ["source-a"], impact: "i", explanation: "e" };
+    const invoke = vi.fn(async request => ({ value: request.stage === "findings" ? { findings: [finding] } : values[request.stage], provider: "openai" as const, model: "m", finishReason: "completed", inputTokens: 1, outputTokens: 1 }));
+    await runModelReviewChain({ invoke, pinned, untrusted });
+    const inputOf = (stage: string) => invoke.mock.calls.find(([request]) => request.stage === stage)![0].input;
+    expect(inputOf("findings")).toContain("UNCITED_FILE");
+    for (const stage of ["critic", "arbitration"]) {
+      expect(inputOf(stage)).toContain("CITED_LINE");
+      for (const absent of ["UNCITED_FILE", "VALIDATION_LOG", "MEMORY_PRINT"]) expect(inputOf(stage)).not.toContain(absent);
+    }
+  });
+
   it("runs the patch stage only through the separate Autofix chain", async () => {
     const invoke = vi.fn(async request => ({ value: values[request.stage], provider: "gemini" as const, model: "gemini-test", finishReason: "STOP", inputTokens: 3, outputTokens: 2 }));
     const records = await runModelPatchChain({ invoke, pinned, untrusted: { authorized: true, acceptedFindings: [], files: [], latestChecks: [] } });

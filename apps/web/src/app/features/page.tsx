@@ -16,9 +16,9 @@ const boundaries = [
   ["It never merges", "Every verdict ends with a person deciding. BuildIT has no path to the merge button, by design."],
   ["Access is granted in steps", "Sign-in identifies you. Repository access is a separate choice in GitHub. A model key is requested only when AI analysis starts."],
   ["Source evidence is deleted", "Checked-out code and command output are encrypted, kept for the retention window you set, then deleted — with the deletion confirmed against storage, not assumed."],
-  ["A large repository is read selectively", "It fetches the files your pull request changed, your dependency manifests and the documents it cites. If GitHub truncates the file listing, BuildIT says so rather than reviewing part of your code and calling it done."],
+  ["A large repository is read selectively", "It fetches the changed files, your dependency manifests and cited documents. If GitHub truncates the file list, BuildIT says so instead of reviewing part and calling it done."],
   // The landing page's open-source answer links here, so this entry carries the anchor.
-  ["A fork cannot spend your key", "A pull request from a fork is reviewed only when a maintainer with write access comments @buildit review — never automatically, and never with a fix pushed back to it. The configuration it runs with is never read from the pull request itself, and text in it that tries to instruct the reviewer marks the affected finding uncertain for a person to judge.", "forks"],
+  ["A fork cannot spend your key", "A fork is reviewed only when a maintainer with write access comments @buildit review — never automatically, never with a fix pushed back, and never with its own configuration.", "forks"],
 ];
 
 export const metadata = { title: "Features · BuildIT" };

@@ -21,7 +21,7 @@ const stages = [
   {
     mark: "02", title: "Gather evidence", summary: "Real processes produce the facts, on both commits, before anything is judged.",
     claims: [
-      ["Real checks, base against head", "Install, test, lint, typecheck, gitleaks, osv-scanner and BuildIT's own rules run in an isolated sandbox with no network, on both commits, so a pre-existing failure is not blamed on your change."],
+      ["Real checks, base against head", "Install, test, lint, typecheck, gitleaks, osv-scanner and BuildIT's rules run in an offline sandbox on both commits, so an existing failure is not blamed on your change."],
       ["Evidence decides, not the model", "A finding must cite a file, a line and a content hash BuildIT verified at that commit. One that cannot is dropped before you see it."],
     ],
   },

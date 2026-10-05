@@ -18,14 +18,14 @@ export default function DataHandling() {
 
     <TrustBoundary />
 
-    <p className="boundary-caption">Source is transported as short-lived encrypted artifacts in AWS Ireland. Isolated checks run in a Vercel Sandbox in Paris, France. Convex Ireland stores references and source-free review metadata rather than plaintext source.</p>
+    <p className="boundary-caption">Source travels as short-lived encrypted artifacts in AWS Ireland. Isolated checks run in a Vercel Sandbox in Paris, France. Convex (Ireland) stores only references and metadata.</p>
 
     <h2>What is not promised</h2>
-    <p className="boundary-caption">BuildIT does not promise that AI makes code bug-free. Required test, scanner, commit, citation and staleness evidence decides the result, and missing or conflicting proof ends as inconclusive — never as ready to merge.</p>
+    <p className="boundary-caption">BuildIT does not promise that AI makes code bug-free. Tests, scanners, citations and freshness decide; missing or conflicting proof ends inconclusive, never ready to merge.</p>
     <p className="boundary-caption">What is still thin is the track record: {record.reviews} pull requests over {record.repositories} repositories, {record.platformFailed} of which failed on BuildIT&rsquo;s own side, and {record.sinceLastPlatformFailure} consecutive since the last of those on {record.lastPlatformFailureAt}. Enough to show the known failures are fixed; not enough to claim reliability on a codebase unlike those.</p>
 
     {/* This replaced a four-row list of the same four steps. The list said them at four times the
         length and the diagram above already draws them, so what is left is the one-line answer. */}
-    <div className="next"><strong>Plain answer:</strong> sign-in grants identity only and does not grant source-code access. Repository access needs a separate GitHub App installation. AI needs a separate model-provider key. Autofix needs separate consent. Merge always stays with a human.</div>
+    <div className="next"><strong>Plain answer:</strong> sign-in grants identity only and does not grant source-code access. Repositories need the GitHub App, AI your model key, Autofix separate consent; merging stays with a human.</div>
   </div>;
 }

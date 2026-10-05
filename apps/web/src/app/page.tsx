@@ -32,7 +32,7 @@ export default function Overview() {
       <aside className="landing-try" aria-labelledby="landing-try-title">
         <p className="eyebrow">One real review</p>
         <h2 id="landing-try-title">See what it hands you</h2>
-        <p className="landing-try-closed">One review BuildIT actually ran: the file and line it cites, the commit it read, the output of the check that proved the finding, and the pull request the fix was opened as. No account, and nothing to paste.</p>
+        <p className="landing-try-closed">One review BuildIT actually ran: the file and line it cites, the commit it read, the check output that proved it, and the fix pull request. No account, nothing to paste.</p>
         <a className="text-link" href="/scan">Read a real review &rarr;</a>
       </aside>
       <div className="landing-commit">

@@ -4,6 +4,7 @@ import { Component, useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
 import { comparisonRefusal, dismissalReasonLabel, notRunExplanation, preExistingFailurePresentation, dismissalReasons, dismissalRefusal, eventPresentation, evidenceRefusal, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, checkLabel, technicalLabel as label } from "./review-presentation";
 import type { DismissalReason, SuppressionScope } from "./review-presentation";
+import { StatePanel } from "../../state-panel";
 // Why a stage saw less than everything. Named here rather than reusing the verdict reason map,
 // because a gap on the handoff record is a description of what was read - not a reason a verdict
 // was withheld, and analysis_budget deliberately does not withhold one.
@@ -225,7 +226,7 @@ class EvidenceBoundary extends Component<{ children: React.ReactNode }, { messag
   }
   render() {
     if (!this.state.message) return this.props.children;
-    return <div className="content"><section className="live-state"><span className="state-pulse" /><div><strong>Review evidence is unavailable</strong><p>{this.state.message}</p><a className="button" href="/reviews">Open review queue</a></div></section></div>;
+    return <State title="Review evidence is unavailable" detail={this.state.message} action={{ href: "/reviews", label: "Open review queue" }} />;
   }
 }
 
@@ -255,6 +256,7 @@ function ReviewEvidence({ id }: { id: string }) {
       <State
         title="Loading exact review evidence…"
         detail="BuildIT is checking this review against your active workspace."
+        loading
       />
     );
   if (!isAuthenticated)
@@ -262,14 +264,15 @@ function ReviewEvidence({ id }: { id: string }) {
       <State
         title="Sign in to inspect this review"
         detail="Review evidence is visible only to members of its organization."
-        action="/sign-in"
+        action={{ href: "/sign-in", label: "Sign in with GitHub" }}
       />
     );
   if (!evidence)
     return (
       <State
         title="Review evidence is unavailable"
-        detail="No sample data was substituted. Return to the queue and confirm your active workspace."
+        detail="Nothing was substituted for it. Check your active workspace, then open the review from the queue."
+        action={{ href: "/reviews", label: "Open review queue" }}
       />
     );
   const { review, repository } = evidence;
@@ -388,7 +391,7 @@ function ReviewEvidence({ id }: { id: string }) {
         eyebrow="Decision support"
         title="Issues to fix"
         detail={`${evidence.findings.length} supported by evidence`}
-        foot="Finding prose is read from the encrypted report only after BuildIT rechecks your repository membership. Dismissing a finding records your team's judgement for the next review; it never silences one that blocks merge, a Critical finding, or a scanner result."
+        foot="Finding text is shown only after BuildIT rechecks your membership. Dismissing records the judgement for future reviews; it never silences a blocking, Critical or scanner finding."
       >
         {findingDetailError ? (
           <div className="finding-detail-state"><strong>Plain-language details could not be loaded</strong><p>No source was shown. The exact findings are listed below. Open the pull request for the published evidence, or refresh after checking your workspace access.</p></div>
@@ -453,7 +456,7 @@ function ReviewEvidence({ id }: { id: string }) {
           eyebrow={`Run trace · ${evidence.runId}`}
           title="What each stage did, cost, and how long it took"
           detail={`${evidence.spend.costPending ? "Cost pending; recorded " : ""}$${evidence.spend.costUsd.toFixed(4)} · ${(evidence.spend.inputTokens + evidence.spend.outputTokens).toLocaleString()} tokens · ${evidence.modelDurationMs === null ? "model time not measured" : `${formatDuration(evidence.modelDurationMs)} of measured model time`}`}
-          foot={`${evidence.stagesMissingDuration ? `${evidence.stagesMissingDuration} of ${evidence.stages.length} stages predate duration recording and show no time. ` : ""}Measured model time is the sum of the provider calls, not wall clock: the review record re-stamps its start on every retry, so no honest end-to-end figure exists for it. No prompt or repository source is stored here.`}
+          foot={`${evidence.stagesMissingDuration ? `${evidence.stagesMissingDuration} of ${evidence.stages.length} stages predate duration recording and show no time. ` : ""}Model time is the sum of the provider calls, not wall-clock time, because retries re-stamp the start. No prompt or repository source is stored here.`}
         >
           <div className="stage-table-scroll" tabIndex={0} role="region" aria-label="Stage details, scrolls horizontally">
             <table className="stage-table">
@@ -563,31 +566,8 @@ function ReviewEvidence({ id }: { id: string }) {
     </div>
   );
 }
-function State({
-  title,
-  detail,
-  action,
-}: {
-  title: string;
-  detail: string;
-  action?: string;
-}) {
-  return (
-    <div className="content">
-      <section className="live-state">
-        <span className="state-pulse" />
-        <div>
-          <strong>{title}</strong>
-          <p>{detail}</p>
-          {action ? (
-            <a className="button" href={action}>
-              Sign in with GitHub
-            </a>
-          ) : null}
-        </div>
-      </section>
-    </div>
-  );
+function State({ title, detail, action, loading = false }: { title: string; detail: string; action?: { href: string; label: string }; loading?: boolean }) {
+  return <div className="content"><StatePanel title={title} detail={detail} loading={loading} {...(action ? { action } : {})} /></div>;
 }
 function Fact({
   label: name,
@@ -703,7 +683,7 @@ function FindingDismissal({ reviewId, finding }: { reviewId: string; finding: Ev
           </select>
         </label>
         <button className="button secondary" type="submit" disabled={working}>{working ? "Recording…" : "Dismiss this finding"}</button>
-        <p className="form-note">Your decision and its scope are recorded, and this finding's fingerprint joins what the next review of this repository is told. Nothing here changes the pull request, the checks that ran, or the merge decision.{neverSilenced ? keepsAppearing : ""}</p>
+        <p className="form-note">Your decision and its scope are recorded, and the next review of this repository is told. Nothing here changes the pull request, its checks or the merge decision.{neverSilenced ? keepsAppearing : ""}</p>
         {refusal ? <p className="form-result error" role="alert">{refusal}</p> : null}
       </form>
     </details>
