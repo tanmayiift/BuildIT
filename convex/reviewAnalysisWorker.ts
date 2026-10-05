@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { runEscalationCritic, arbitrateFindings, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, type ReviewPlan, type ValidatedStage, validateFindingCandidates } from "@buildit/orchestrator";
+import { runEscalationCritic, arbitrateFindings, hunkWindows, relatedPaths, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, type ReviewPlan, type ValidatedStage, validateFindingCandidates } from "@buildit/orchestrator";
 import { approvedProviderModels, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { fingerprint, issueArtifactGrant, redact, redactForModel } from "@buildit/security";
 
@@ -108,10 +108,13 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   type ModelRequirement = NonNullable<NonNullable<SnapshotChunk["pull"]>["requirements"]>[number] & { textTruncated?: boolean };
   type ModelConflict = NonNullable<NonNullable<SnapshotChunk["pull"]>["requirementConflicts"]>[number] & { canonicalTruncated?: boolean };
   type OmissionSample = { path?: string; reason: string };
-  type OmissionKind = "repositoryFiles" | "patches" | "changedFiles" | "sourceOmissions" | "pullOmissions" | "requirementSources" | "requirements" | "requirementConflicts" | "truncatedTexts";
+  // repositoryFiles: a changed file whose content did not fit, which is what makes the review partial.
+  // relatedFiles: an import neighbour that did not fit. Files outside both are not offered at all, so
+  // they are not counted as left out.
+  type OmissionKind = "repositoryFiles" | "changedExcerpts" | "relatedFiles" | "uncitedSources" | "patches" | "changedFiles" | "sourceOmissions" | "pullOmissions" | "requirementSources" | "requirements" | "requirementConflicts" | "truncatedTexts";
   const changes: Array<{ path: string; status: string; patch?: string }> = [];
   const requirementSources: ModelSource[] = [], requirements: ModelRequirement[] = [], requirementConflicts: ModelConflict[] = [];
-  const files: Array<{ evidenceId: string; path: string; content: string; startLine: number; endLine: number; contentHash: string }> = [];
+  const files: Array<{ evidenceId: string; path: string; content: string; startLine: number; endLine: number; contentHash: string; excerpt?: true; related?: true }> = [];
   const exclusions = { paths: [] as string[], patchPaths: [] as string[], changedPaths: [] as string[], source: [] as OmissionSample[], pull: [] as OmissionSample[],
     totals: {} as Partial<Record<OmissionKind, number>> };
   const base = { pull: { title: "", titleTruncated: false, body: "", bodyTruncated: false, changes, urlHash: pull.urlHash,
@@ -139,13 +142,23 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   if (base.pull.bodyTruncated) increment("truncatedTexts");
 
   let requirementBudget = 20_000;
+  // Repository documents and tests are gathered wholesale as places a requirement might be written.
+  // One earns a place in the prompt only when a requirement was actually read out of it; the rest
+  // were up to 20 KB of README and test code, and then - once their text was dropped - 18 KB of ids
+  // and hashes for zod's 120 of them, informing nothing. They are counted, not listed. A linked
+  // ticket stays either way, because the author pointed at it.
+  const citedSources = new Set((pull.requirements ?? []).map(item => item.sourceId));
+  let uncited = 0;
   for (const source of pull.requirementSources ?? []) {
-    const rawContent = source.content?.slice(0, Math.max(0, requirementBudget));
-    const contentTruncated = Boolean(source.content && rawContent?.length !== source.content.length);
-    const candidate = { ...source, ...(rawContent === undefined ? {} : { content: redactForModel(rawContent) }) } as ModelSource;
+    if ((source.type === "repository_document" || source.type === "test") && !citedSources.has(source.id)) { uncited++; continue; }
+    const { content: sourceContent, ...sourceMeta } = source as ModelSource;
+    const rawContent = sourceContent?.slice(0, Math.max(0, requirementBudget));
+    const contentTruncated = Boolean(sourceContent && rawContent !== undefined && rawContent.length !== sourceContent.length);
+    const candidate = { ...sourceMeta, ...(rawContent === undefined ? {} : { content: redactForModel(rawContent) }) } as ModelSource;
     if (pushWithin(requirementSources, candidate)) { requirementBudget -= Buffer.byteLength(rawContent ?? ""); if (contentTruncated) increment("truncatedTexts"); }
     else increment("requirementSources");
   }
+  if (uncited) increment("uncitedSources", uncited);
   for (const item of pull.requirements ?? []) {
     const rawText = item.text.slice(0, 2_000), textTruncated = rawText.length !== item.text.length;
     if (pushWithin(requirements, { ...item, text: redactForModel(rawText), ...(textTruncated ? { textTruncated: true } : {}) } as ModelRequirement)) { if (textTruncated) increment("truncatedTexts"); }
@@ -162,20 +175,29 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
       pushWithin(exclusions.changedPaths, file.path);
     }
   }
+  // A sample is there to show the model what kind of thing was left out; the totals say how much.
+  // Unbounded, the samples were up to ~56 KB of paths on every call.
+  const sampleCap = 20;
+  const pushSample = <T>(target: T[], item: T, ceiling = baseCeiling) => target.length < sampleCap && pushWithin(target, item, ceiling);
   let patchBudget = 30_000;
   const omittedPatches = new Set<string>();
-  const omitPatch = (path: string) => { if (omittedPatches.has(path)) return; omittedPatches.add(path); increment("patches"); pushWithin(exclusions.patchPaths, path); };
-  for (const file of pull.files) {
-    if (!file.patch) continue;
+  const omitPatch = (path: string) => { if (omittedPatches.has(path)) return; omittedPatches.add(path); increment("patches"); pushSample(exclusions.patchPaths, path); };
+  const headFiles = headChunks.flatMap(chunk => chunk.snapshot.files), headByPath = new Map(headFiles.map(file => [file.path, file]));
+  const admitPatch = (file: { path: string; patch?: string }, ceiling: number) => {
+    if (!file.patch) return;
     const change = changes.find(item => item.path === file.path);
-    if (!change) { omitPatch(file.path); continue; }
+    if (!change) { omitPatch(file.path); return; }
     const rawPatch = file.patch.slice(0, Math.max(0, patchBudget));
     if (!rawPatch || rawPatch.length !== file.patch.length) omitPatch(file.path);
-    if (!rawPatch) continue;
+    if (!rawPatch) return;
     change.patch = redactForModel(rawPatch);
-    if (size() <= baseCeiling) patchBudget -= rawPatch.length;
+    if (size() <= ceiling) patchBudget -= rawPatch.length;
     else { delete change.patch; omitPatch(file.path); }
-  }
+  };
+  // An added file's patch is the file again, one "+" per line. It waits until the file itself has
+  // been offered, and is sent only if the file was not.
+  const isAdded = (file: { path: string; status: string }) => file.status === "added" && headByPath.has(file.path);
+  for (const file of pull.files) if (!isAdded(file)) admitPatch(file, baseCeiling);
   const sampleOmission = (value: unknown): OmissionSample => {
     if (!value || typeof value !== "object") return { reason: "omitted" };
     const item = value as { path?: unknown; reason?: unknown };
@@ -184,19 +206,53 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   const sourceOmissions = headChunks.flatMap(chunk => chunk.snapshot.omitted);
   if (sourceOmissions.length) increment("sourceOmissions", sourceOmissions.length);
   if (pull.omitted.length) increment("pullOmissions", pull.omitted.length);
-  for (const item of sourceOmissions) pushWithin(exclusions.source, sampleOmission(item));
-  for (const item of pull.omitted) pushWithin(exclusions.pull, sampleOmission(item));
+  for (const item of sourceOmissions.slice(0, sampleCap)) pushSample(exclusions.source, sampleOmission(item));
+  for (const item of pull.omitted.slice(0, sampleCap)) pushSample(exclusions.pull, sampleOmission(item));
 
-  const changed = new Set(pull.files.map(file => file.path));
-  for (const file of headChunks.flatMap(chunk => chunk.snapshot.files).sort((a, b) => Number(changed.has(b.path)) - Number(changed.has(a.path)) || a.path.localeCompare(b.path))) {
-    const evidence = sourceEvidence(file.path, file.content), item = { ...evidence, content: redactForModel(file.content) };
+  // What the model reads of the repository: the changed files, then the files they import and the
+  // files that import them, and nothing else. It used to be the changed files followed by the rest of
+  // the snapshot in alphabetical order until 80 KB were spent - documents, manifests, whatever sorted
+  // first - which was most of every prompt and none of the review.
+  //
+  // A changed file goes whole when it is small. A large one goes as windows around each hunk, cut on
+  // line boundaries and carrying the whole file's evidence id, so a finding cites it exactly as it
+  // would the whole file; it is skipped (and the review made partial) only when even that does not fit.
+  const admit = (item: (typeof files)[number]) => {
     // The comma JSON adds before a second element is real payload; omitting it undercounted by a
     // byte, which is all it took on a tree this size.
-    const size = Buffer.byteLength(JSON.stringify(item)) + (files.length ? 1 : 0);
-    if (Buffer.byteLength(JSON.stringify(base)) + size > maxBytes - counterReserve) { increment("repositoryFiles"); pushWithin(exclusions.paths, file.path, maxBytes); continue; }
+    const bytes = Buffer.byteLength(JSON.stringify(item)) + (files.length ? 1 : 0);
+    if (size() + bytes > maxBytes - counterReserve) return false;
     files.push(item);
+    return true;
+  };
+  const related = relatedPaths(pull.files.map(file => file.path), headFiles);
+  const wholeFileBytes = 16_000, hunkContext = 40, admittedWhole = new Set<string>();
+  const changedFiles = pull.files.flatMap(file => { const head = headByPath.get(file.path); return head ? [{ ...file, content: head.content }] : []; })
+    .sort((a, b) => a.content.length - b.content.length || a.path.localeCompare(b.path));
+  for (const file of changedFiles) {
+    const evidence = sourceEvidence(file.path, file.content), whole = { ...evidence, content: redactForModel(file.content) };
+    if (file.content.length <= wholeFileBytes && admit(whole)) { admittedWhole.add(file.path); continue; }
+    const windows = hunkWindows(file.content, file.patch, hunkContext)?.map(window => ({ ...evidence, content: redactForModel(window.text), startLine: window.startLine, endLine: window.endLine, excerpt: true as const }));
+    const windowBytes = windows ? windows.reduce((total, item) => total + Buffer.byteLength(JSON.stringify(item)) + 1, 0) : Infinity;
+    if (windows && windowBytes < Buffer.byteLength(JSON.stringify(whole))) {
+      // Counted first so its digits are inside the check: every window goes, or none does.
+      increment("changedExcerpts");
+      if (size() + windowBytes <= maxBytes - counterReserve) { for (const item of windows) admit(item); continue; }
+      if (!(exclusions.totals.changedExcerpts = (exclusions.totals.changedExcerpts ?? 1) - 1)) delete exclusions.totals.changedExcerpts;
+    }
+    if (admit(whole)) { admittedWhole.add(file.path); continue; }
+    increment("repositoryFiles"); pushSample(exclusions.paths, file.path, maxBytes);
   }
-  const excludedAnything = Object.values(exclusions.totals).some(value => value > 0) || pull.requirementCoverage !== "complete" || headChunks.some(chunk => chunk.snapshot.coverage !== "full");
+  for (const file of pull.files) if (isAdded(file) && !admittedWhole.has(file.path)) admitPatch(file, maxBytes - counterReserve);
+  let relatedBudget = 16_000;
+  for (const path of related) {
+    const file = headByPath.get(path)!, bytes = Buffer.byteLength(file.content);
+    if (bytes <= relatedBudget && admit({ ...sourceEvidence(path, file.content), content: redactForModel(file.content), related: true })) relatedBudget -= bytes;
+    else increment("relatedFiles");
+  }
+  // Related files are a courtesy, and an uncited document held no requirement; neither means the
+  // model missed part of the code under review or its intent.
+  const excludedAnything = Object.entries(exclusions.totals).some(([kind, value]) => kind !== "relatedFiles" && kind !== "uncitedSources" && (value ?? 0) > 0) || pull.requirementCoverage !== "complete" || headChunks.some(chunk => chunk.snapshot.coverage !== "full");
   base.coverage = excludedAnything ? "partial" : "full";
   while (size() > maxBytes && exclusions.paths.length) exclusions.paths.pop();
   while (size() > maxBytes && exclusions.patchPaths.length) exclusions.patchPaths.pop();
@@ -486,6 +542,7 @@ export const analyze = internalAction({
     // and "nothing left in the list" is indistinguishable from "nothing was ever dropped".
     const analysisDroppedChangedFile = untrusted.exclusions.changedPaths.length > 0
       || (untrusted.exclusions.totals?.changedFiles ?? 0) > 0
+      || (untrusted.exclusions.totals?.repositoryFiles ?? 0) > 0
       || untrusted.exclusions.paths.some(path => changedPathSet.has(path));
     // The handoff record for this stage: what it actually looked at, how completely, how long the
     // model work took, and which artifact carries the output. Written before the verdict mutation so
