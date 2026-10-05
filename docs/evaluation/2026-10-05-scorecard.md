@@ -14,7 +14,7 @@ Grades:
 | Product | **B** | Review, Ask, dismissal, isolation and release work live. Autofix and thread feedback were broken; both were found live and fixed, and await re-proof. |
 | Core customer | **B** | All four segments are named the same way everywhere. Each segment's first question has a working path, and solo-developer cost is now measured. |
 | QA | **B−** | 2,375 tests plus 888 release-gate tests run on every PR. Most architecture guards still read source text. |
-| CTO | **B** | Model cost fell 54% and tokens 80% on the reference PR. The release now runs from GitHub. Remaining risks are named below. |
+| CTO | **B+** | Model cost fell 84% and input tokens 93% on the reference PR, with the verdict unchanged. The release now runs from GitHub. Remaining risks are named below. |
 
 ## UI/UX
 
@@ -61,7 +61,7 @@ Grades:
   - solo developers;
   - open-source maintainers.
 - **Solo developer (BYOK cost):**
-  - zod#1, a medium PR, now costs **$0.31** of the developer's own OpenAI key. It cost $0.67 before PR-1/2.
+  - zod#1, a medium PR, now costs **$0.11** of the developer's own OpenAI key. It cost $0.67 on 4 October.
   - The Usage page shows every call.
 - **Open-source maintainer (fork safety):**
   - A fork is reviewed only when a maintainer with write access comments.
@@ -91,24 +91,34 @@ Grades:
 
 ## CTO
 
-**LLM pipeline on zod#1, OpenAI, read from production with `scripts/measure-review.mjs`:**
+**LLM pipeline on zod#1, OpenAI, read from production with `scripts/measure-review.mjs`.** All three
+runs are on the same PR and commit with the same key. The verdict and findings were identical every
+time: `inconclusive / test_suite_failing`, no findings.
 
-| | Before (`nx77q8d1`, 4 Oct) | After PR-1/2 (`nx716ncp`, 5 Oct) | Change |
-|---|---|---|---|
-| Model calls | 5 | 2 | −60% |
-| Input tokens | 473,999 | 95,330 | −79.9% |
-| Cost | $0.6675 | $0.3052 | −54.3% |
-| Model time | 62.9 s | 10.4 s | −83.5% |
-| Analysis stage | 76.6 s | 24.2 s | −68.4% |
-| Verdict / findings | inconclusive / none | inconclusive / none | unchanged |
+| | Before (`nx77q8d1`, 4 Oct) | After PR-1/2 (`nx716ncp`) | After PR-3/4 (`nx7ec2pe`) | Overall |
+|---|---|---|---|---|
+| Model calls for the review | 5 | 1 (findings) | 1 (findings) | −80% |
+| Input tokens | 473,999 | 94k (findings) | 31,434 | **−93%** |
+| Cost | $0.6675 | $0.3052 | **$0.1086** | **−84%** |
+| Analysis stage | 76.6 s | 24.2 s | 23.2 s | −70% |
+| Consent → verdict | 268.5 s | 303.9 s | 257.7 s | flat: dominated by the sandbox test run |
 
-The following PRs are measured after they deploy:
-- PR-3: critic and arbitration see only cited evidence (#108).
-- PR-4: a compact validation view, with memory out of the prompt (#109).
-- PR-5: changed files whole or as hunk windows, plus import neighbours, instead of alphabetical filler (#114).
-- PR-7: independent calls in parallel (#115).
-- PR-0b: cached-token accounting (#116).
-- PR-6: escalation to a genuinely different model (#113).
+What each step changed:
+- **PR-1/2 (#104, #106):** dropped the `review_plan` and `report` calls, and skips critic and
+  arbitration when nothing passed the evidence gate. (The `nx716ncp` row's measured total also
+  includes a 1k-token Ask I made on that review.)
+- **PR-3 (#108):** critic and arbitration see only the evidence a finding cites.
+- **PR-4 (#109):** the findings model gets a 24 KB validation view instead of the raw evidence, and
+  repository memory leaves the prompt.
+
+**Measured after they deploy:**
+- PR-5 (#114): changed files whole or as hunk windows, plus import neighbours. It targets the
+  remaining `partial (analysis_budget)` coverage that every run above still reports.
+- PR-7 (#115): parallel calls.
+- PR-0b (#116): cached-token accounting.
+- PR-6 (#113): escalation to a genuinely different model.
+
+**Gemini** (`nx7drheq`, p-queue#2): one call, $0.149, correct verdict.
 
 PR-9 (retiring the arbitration model call) waits for 30 production reviews of data, as planned.
 
@@ -116,6 +126,9 @@ PR-9 (retiring the arbitration model call) waits for 30 production reviews of da
 - `release.yml` deploys broker → Convex → web on every push to `main`, using a production deploy key created for it.
 - First green release job: run 37364150555 (`23e730a`).
 - Its `confirm` job never got a runner during GitHub's Actions incident (5 Oct, 19:12Z onward). The same checks were run by hand: the wiring matched and broker health reported `23e730a`.
+- During the same incident, the push release for `a99ea93` (#109) sat queued. `main` was deployed from
+  a clean checkout with `pnpm deploy:production` (broker, Convex, then web; broker health reported
+  `a99ea93`), as the release policy allows when CI cannot deploy.
 
 **Security invariants kept**
 - No secret-shaped literal anywhere in the tree; no long-lived cloud keys.
