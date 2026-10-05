@@ -111,6 +111,14 @@ What each step changed:
 - **PR-4 (#109):** the findings model gets a 24 KB validation view instead of the raw evidence, and
   repository memory leaves the prompt.
 
+**Coverage, the bigger finding.** An offline replay of zod#1 used the real public head commit, the
+context worker's own file selection, and both versions of `boundedAnalysisContext`. It showed that
+on `main` the findings model saw **2 of the 8 changed files**, both tests. The six changed source
+files did not fit after repository documents holding no requirement took 40 KB of the 80 KB window.
+With #114 the model sees **8 of 8** (six as hunk windows) plus four tests that import them, in 70 KB.
+So the cost numbers above were bought partly by not reading the change; #114 is the fix to measure
+next.
+
 **Measured after they deploy:**
 - PR-5 (#114): changed files whole or as hunk windows, plus import neighbours. It targets the
   remaining `partial (analysis_budget)` coverage that every run above still reports.
