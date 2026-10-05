@@ -112,6 +112,17 @@ export const completeDelivery = internalMutation({
   },
 });
 
+// An autofix that ends in an answer rather than a fault (durableReview.autofixDeclineReason). Stored so
+// the report can say why no fix pull request was opened, before the review's own decision is published.
+export const recordDecline = internalMutation({
+  args: { ...executionArgs, reason: v.union(v.literal("no_accepted_findings"), v.literal("checks_fail_on_base"), v.literal("no_safe_patch")) },
+  handler: async (ctx, args) => {
+    const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId);
+    if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale || review.mode !== "autofix") throw new ConvexError("autofix_decline_mismatch");
+    await ctx.db.patch(review._id, { autofixDecline: args.reason });
+  },
+});
+
 export const completeFailure = internalMutation({args:{...executionArgs,reportArtifactId:v.id("artifacts"),now:v.number()},handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId),report=await ctx.db.get(args.reportArtifactId),rounds=await ctx.db.query("autofixRounds").withIndex("by_review_round",q=>q.eq("reviewId",review._id)).collect(),effects=await ctx.db.query("githubSideEffects").withIndex("by_review",q=>q.eq("reviewId",review._id)).collect();if(review.status==="failed_after_bounds"&&review.completedAt)return review._id;if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||review.mode!=="autofix"||rounds.length!==3||rounds.some(item=>item.validationOutcome==="passed")||!report||report.organizationId!==args.organizationId||report.repositoryId!==review.repositoryId||report.reviewId!==review._id||report.type!=="review_message"||!isStored(report)||report.deletedAt||!effects.some(item=>item.type==="comment_update"&&item.status==="completed"&&item.externalId))throw new ConvexError("autofix_failure_handoff_mismatch");await ctx.db.patch(review._id,{status:"failed_after_bounds",terminationBound:"round_limit",statusReasonCode:"final_validation_incomplete",nextActionCode:"inspect_findings",githubCheckConclusion:"failure",currentStage:"complete",completedAt:args.now,updatedAt:args.now});const event=await ctx.db.query("reviewEvents").withIndex("by_review",q=>q.eq("reviewId",review._id).eq("sequence",5)).unique();if(!event)await ctx.db.insert("reviewEvents",{organizationId:args.organizationId,reviewId:review._id,sequence:5,type:"status_changed",stage:"complete",publicMessageArtifactId:report._id,internalCode:"autofix_round_limit",metadata:{count:3},createdAt:args.now});await queueReviewNotification(ctx,review._id,args.now);return review._id}});
 
 // The stored reason is classified, not flattened. This wrote the literal "platform_error" while

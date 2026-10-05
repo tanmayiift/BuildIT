@@ -26,7 +26,16 @@ const bounds: Record<string, "round_limit" | "attempt_limit" | "wall_clock_limit
   autofix_repeated_patch: "repeated_patch",
 };
 
-export function classifyAutofixStop(code: string): AutofixStop {
+// The code a worker threw, as the workflow hands it back: "Uncaught Error: <code>\n    at handler
+// (...)". Both classifiers here were written against bare codes and tested with bare codes, so in
+// production neither ever matched - a repeated patch and a worsened candidate were reported as
+// platform failures exactly as they were before these classifiers existed.
+export function workflowErrorCode(message: string) {
+  return message.match(/(?:^|Error:\s*)([a-z][a-z0-9_]*)/)?.[1] ?? message.trim();
+}
+
+export function classifyAutofixStop(raw: string): AutofixStop {
+  const code = workflowErrorCode(raw);
   if (code === "autofix_spend_limit") return { kind: "budget" };
   const bound = bounds[code];
   if (bound) return { kind: "bound", terminationBound: bound, statusReasonCode: "final_validation_incomplete" };

@@ -5,6 +5,7 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { fallbackWorthTrying } from "./lib/providerFallback";
+import { workflowErrorCode } from "./lib/autofixBounds";
 import { classifyPlatformFailure, isPlatformFailureReason, type PlatformFailureReason } from "./lib/platformFailureReport";
 import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { durableReviewStages, nextStageAfter } from "./lib/durableStages";
@@ -15,8 +16,23 @@ import { queueReviewNotification } from "./lib/queueNotification";
 import { getReviewBudgetSnapshot } from "./lib/budgetAccounting";
 import { reviewWorkflowManager, reviewWorkpool } from "./workflowManager";
 
+// Why an autofix stopped without a fix, when that is an answer rather than a fault. Compared on the
+// whole workflow message the first version never matched - "Uncaught Error: <code>\n at ..." - so
+// even "no finding was accepted" was published as a platform failure. Repeated and worsening patches
+// are bounded stops, not declines (lib/autofixBounds.ts), and keep that classification.
+export type AutofixDecline = "no_accepted_findings" | "checks_fail_on_base" | "no_safe_patch";
+export function autofixDeclineReason(error: unknown): AutofixDecline | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const code = workflowErrorCode(error.message);
+  if (code === "autofix_no_accepted_findings") return "no_accepted_findings";
+  if (code === "autofix_checks_fail_on_base") return "checks_fail_on_base";
+  // The model offered no patch, or only one the patch policy refuses: unchanged content, a
+  // protected path, a secret-shaped value, a finding it was not asked to fix, or past a size limit.
+  if (code === "autofix_patch_unavailable" || code.startsWith("patch_")) return "no_safe_patch";
+  return undefined;
+}
 export function isSafeAutofixDecline(error: unknown) {
-  return error instanceof Error && error.message === "autofix_no_accepted_findings";
+  return autofixDeclineReason(error) !== undefined;
 }
 import { assertReviewParent } from "./lib/parentConsistency";
 
@@ -138,7 +154,9 @@ export const execute = reviewWorkflowManager.define({
       if(mode==="autofix"){
         await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"started"});
         try{const result=await step.runAction(internal.reviewAutofixWorker.runConvergence,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});if(result.outcome==="passed")await step.runAction(internal.reviewAutofixWorker.deliverPassed,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});else await step.runAction(internal.reviewAutofixWorker.publishFailure,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});await step.runAction(internal.telemetryWorker.emit,{operation:"review.autofix",stage:"autofix",outcome:"succeeded"})}catch(error){
-          if(isSafeAutofixDecline(error)){
+          const decline=autofixDeclineReason(error);
+          if(decline){
+            await step.runMutation(internal.reviewAutofixData.recordDecline,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration,reason:decline});
             const report=await step.runAction(internal.reviewReportWorker.compose,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});
             await step.runMutation(internal.reviewValidationData.finalizeDecision,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration,reportArtifactId:report.artifactId,now:args.startedAt+index+3});
             await step.runAction(internal.reviewPublicationWorker.publish,{organizationId:args.organizationId,reviewId:args.reviewId,expectedHeadSha:args.expectedHeadSha,expectedGeneration:args.expectedGeneration});

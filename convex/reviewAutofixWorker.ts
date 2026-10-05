@@ -96,7 +96,7 @@ type Analysis = {
   version?: number;
   pinned?: { headSha?: string; baseSha?: string };
   records?: Array<{ stage?: string; value?: { patches?: PatchProposal[] } }>;
-  validation?: { head?: { results?: unknown[]; outputs?: Array<{ planId?: string; text?: string }> };scanners?:{head?:{findings?:Array<{severity?:string}>}} };
+  validation?: { base?: { results?: unknown[] }; head?: { results?: unknown[]; outputs?: Array<{ planId?: string; text?: string }> };scanners?:{head?:{findings?:Array<{severity?:string}>}} };
   arbitrated?: Array<{
     id?: string;
     resolution?: string;
@@ -185,6 +185,19 @@ export function segmentArtifacts(
       artifactSecret,
     ),
   }));
+}
+
+// Autofix delivers a fix only when every required check passes on the candidate. A required check that
+// already fails on the base commit is not the pull request's to fix, and it fails on every candidate
+// too, so no round can ever pass. buildit-demo-axios#2 spent four patch calls learning that: its test
+// suite fails 129 of 132 files on base. Asked before the first model call, not after the third.
+export function requiredChecksFailingOnBoth(validation: Analysis["validation"]) {
+  const failing = (side?: { results?: unknown[] }) => new Set((side?.results ?? []).flatMap(item => {
+    const result = item as { planId?: unknown; required?: unknown; conclusion?: unknown };
+    return result.required === true && result.conclusion === "failed" && typeof result.planId === "string" ? [result.planId] : [];
+  }));
+  const base = failing(validation?.base);
+  return [...failing(validation?.head)].filter(planId => base.has(planId)).sort();
 }
 
 async function storeArtifact(
@@ -356,6 +369,8 @@ export const runConvergence = internalAction({
       acceptedFindingIds = new Set(acceptedFindings.map((item) => item.id!));
     if (!acceptedFindingIds.size)
       throw new Error("autofix_no_accepted_findings");
+    if (requiredChecksFailingOnBoth(analysis.validation).length)
+      throw new Error("autofix_checks_fail_on_base");
     const github = new GitHubAppClient({
         appId: required("GITHUB_APP_ID"),
         privateKey: required("GITHUB_APP_PRIVATE_KEY"),
