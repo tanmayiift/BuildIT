@@ -7,7 +7,11 @@ export type PromptStage=typeof promptStages[number];
 // claims: []). Together they were two of five calls on every review, each re-sending ~95k tokens.
 export const reviewPromptStages=["requirements","findings","critic","arbitration"] as const satisfies readonly PromptStage[];
 export const autofixPromptStages=["patch"] as const satisfies readonly PromptStage[];
-export type ValidatedStage={stage:PromptStage;promptVersion:string;schemaVersion:string;value:Record<string,unknown>;attempts:number};
+// skipped: why the stage made no model call. Only a caller that can prove the call could not change
+// the result may skip it (see analysisSkipReason in convex/reviewAnalysisWorker.ts); the record stays,
+// with an empty value and attempts 0, so the stored chain still names every stage.
+export type ValidatedStage={stage:PromptStage;promptVersion:string;schemaVersion:string;value:Record<string,unknown>;attempts:number;skipped?:string};
+const emptyStageValues:Record<PromptStage,Record<string,unknown>>={requirements:{requirements:[]},review_plan:{checks:[],evidenceOperations:[],riskAreas:[],exclusions:[]},findings:{findings:[]},critic:{decisions:[]},arbitration:{findings:[]},patch:{patches:[]},report:{claims:[]}};
 export type StageDefinition={stage:PromptStage;promptVersion:string;schemaVersion:string;maxInputBytes:number;validate(value:unknown):Record<string,unknown>};
 export type StageExecutor=(request:{stage:PromptStage;system:string;input:string;repairOf?:unknown})=>Promise<unknown>;
 export type StageAttempt={stage:PromptStage;promptVersion:string;schemaVersion:string;attempt:number;outcome:"valid"|"schema_invalid"};
@@ -162,7 +166,7 @@ export function mergeStageValues(values:Array<Record<string,unknown>>):Record<st
  return merged;
 }
 
-export async function runPromptChain(input:{definitions:StageDefinition[];expectedStages?:readonly PromptStage[];executor:StageExecutor;partition?:(stage:PromptStage)=>Array<Record<string,unknown>>|undefined;onAttempt?:(attempt:StageAttempt)=>Promise<void>|void;onInjection?:(report:{signals:InjectionSignal[];scope:InjectionScope})=>Promise<void>|void;pinned:{headSha:string;baseSha:string;configRevision:string};untrusted:Record<string,unknown>;maxSchemaRepairs?:number;priorStages?:readonly ValidatedStage[]}){
+export async function runPromptChain(input:{skip?:(stage:PromptStage,records:ValidatedStage[])=>string|undefined;definitions:StageDefinition[];expectedStages?:readonly PromptStage[];executor:StageExecutor;partition?:(stage:PromptStage)=>Array<Record<string,unknown>>|undefined;onAttempt?:(attempt:StageAttempt)=>Promise<void>|void;onInjection?:(report:{signals:InjectionSignal[];scope:InjectionScope})=>Promise<void>|void;pinned:{headSha:string;baseSha:string;configRevision:string};untrusted:Record<string,unknown>;maxSchemaRepairs?:number;priorStages?:readonly ValidatedStage[]}){
  const expected=input.expectedStages??promptStages;
  if(input.definitions.length!==expected.length||input.definitions.some((definition,index)=>definition.stage!==expected[index]))throw new Error("invalid_prompt_chain_definition");
  const records:ValidatedStage[]=[...(input.priorStages??[])];
@@ -179,6 +183,8 @@ export async function runPromptChain(input:{definitions:StageDefinition[];expect
      ? [...injectionSignals, ...detectInjectionSignals(records.map(record => record.value), "$.prior")]
      : injectionSignals;
    const stageScope = scope;
+   const skipped=input.skip?.(definition.stage,records);
+   if(skipped){records.push({stage:definition.stage,promptVersion:definition.promptVersion,schemaVersion:definition.schemaVersion,value:structuredClone(emptyStageValues[definition.stage]),attempts:0,skipped});continue}
    const slices=input.partition?.(definition.stage)??[input.untrusted];
    const values:Array<Record<string,unknown>>=[];
    let attempts=0;
