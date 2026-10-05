@@ -141,19 +141,24 @@ export async function driveExecutionSegments(input: DriveSegmentsInput): Promise
     // and re-stamped onto every cursor after it. Before the split it travelled with the single
     // result object; now it has to survive six more HTTP requests to a stateless broker, and
     // re-probing per segment would make the claim cheap rather than durable.
+    // One clock reading for the whole checkpoint. `now` and `holdLeaseUntil` used to read the clock
+    // separately, so any millisecond between the two made the hold EXECUTION_LEASE_MS + 1 long, and
+    // applyExecutionCheckpoint refused it as execution_lease_hold_too_long - failing the review's
+    // validation at random (and the first push release, on 5 Oct 2026).
+    const at = now();
     const checkpoint = await input.checkpoint({
       requestKey: `${input.runId}:${executionSegmentCursor(segment)}`, expectedVersion: stateVersion,
       expectedStage: stage, nextStage: next.stage, cursor: stampCredentialTeardown(executionSegmentCursor(segment), revisions),
       // Not clamped to EXECUTION_STAGE_LIMIT_MS. A segment that overran is exactly what
       // assertExecutionStageDuration exists to refuse, and a clamp would hide the drift the way
       // vercel.json's maxDuration and the plan budget hid theirs from each other for a release.
-      durationMs: Math.max(0, now() - startedAt), now: now(),
+      durationMs: Math.max(0, at - startedAt), now: at,
       // Hold the lease across the gap to the next segment. Without this the job sits unleased
       // between invocations with this worker still driving it, and reconcileWorker's job sweep -
       // added to reap jobs nobody is driving - cannot tell the difference and kills a run that is
       // progressing normally. Re-claiming instead would spend an attempt per segment and exhaust
       // the six-attempt budget on a healthy run.
-      holdLeaseUntil: now() + EXECUTION_LEASE_MS,
+      holdLeaseUntil: at + EXECUTION_LEASE_MS,
     });
     stateVersion = checkpoint.stateVersion;
     stage = next.stage;

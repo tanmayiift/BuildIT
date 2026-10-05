@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultExecutionPlans } from "@buildit/runner";
+import { EXECUTION_LEASE_MS } from "@buildit/contracts";
 import { driveExecutionSegments, type SegmentCheckpoint } from "./executionSegmentDriver";
 
 const plans = defaultExecutionPlans("pnpm");
@@ -64,6 +65,16 @@ describe("the shared segment driver", () => {
     const cursors = checkpoints.map(item => item.cursor);
     expect(new Set(cursors).size).toBe(cursors.length);
     for (const item of checkpoints) expect(item.holdLeaseUntil).toBeGreaterThan(item.now);
+  });
+
+  // The harness clock advances on every read, as a real one does when anything takes a millisecond.
+  // The hold was computed from a second reading, so it came out longer than the lease and the real
+  // checkpoint (applyExecutionCheckpoint) refused it: execution_lease_hold_too_long, at random.
+  it("holds the lease for exactly one lease from the checkpoint's own time, however the clock moves", async () => {
+    const { input, checkpoints } = harness();
+    await driveExecutionSegments({ ...input, revisions: [...input.revisions] });
+    expect(checkpoints.length).toBeGreaterThan(0);
+    for (const item of checkpoints) expect(item.holdLeaseUntil - item.now).toBe(EXECUTION_LEASE_MS);
   });
 
   it("surfaces the broker's own error code, and falls back to the caller's prefix", async () => {
