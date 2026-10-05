@@ -7,6 +7,7 @@ import { executionReadiness, serviceUnconfiguredDetail, serviceUnconfiguredSumma
 import { useSampleTour } from "./workspace-route-boundary";
 import { useEffect, useState } from "react";
 import { primarySetupSteps } from "./setup-steps";
+import { StatePanel } from "./state-panel";
 
 type Connection = {
   state: "signed_out" | "no_workspace" | "installation_required" | "installation_unavailable" | "no_repositories_selected" | "connected";
@@ -245,7 +246,7 @@ export function RepositoryConnectionView() {
   const connection = useConnection();
   const sampleTour = useSampleTour();
   const updatePolicy = useMutation(setReviewPolicy), [policyMessage, setPolicyMessage] = useState(""), [savingRepositoryId, setSavingRepositoryId] = useState<string | null>(null);
-  if (!connection) return <section className="live-state" aria-live="polite"><span className="state-pulse" /><div><strong>Loading repository access…</strong><p>Checking your active workspace on the server.</p></div></section>;
+  if (!connection) return <StatePanel loading title="Loading repository access…" detail="Checking your active workspace on the server." />;
   const copy = stateCopy[connection.state];
   if (connection.state !== "connected") return <section className="split-layout"><article className="empty-state live-empty"><span className="empty-mark">GH</span><h2>{copy.title}</h2><p>{copy.body}</p><div className="button-row"><ConnectionAction connection={connection} /><ActionLink priority="tertiary" href="/data-handling">How isolation works</ActionLink></div></article><aside className="explain-panel"><p className="eyebrow">Current state</p><strong className="connection-state-name">{connection.state.replaceAll("_", " ")}</strong><p>Repository content is never inferred from public visibility. BuildIT requires the selected GitHub installation for both public and private repositories.</p></aside></section>;
   const installation = connection.installations.find(item => item.status === "active")!;
@@ -300,7 +301,7 @@ function RepositoryList({ repositories, canManage, savingRepositoryId, onSave }:
       <summary>What these settings do</summary>
       <dl>
         <dt>Autofix delivery</dt>
-        <dd>Whether BuildIT writes code. A separate fix pull request is opened for you to review and is never merged by BuildIT; suggestions only means it reports the change without writing it.</dd>
+        <dd>Whether BuildIT writes code. A fix pull request is opened for you to review and never merged by BuildIT; suggestions only reports the change without writing it.</dd>
         <dt>When to review</dt>
         <dd>Automatic reviews start on open and on every push and spend your model key; <code>@buildit pause</code> quietens one pull request. Manual runs nothing until someone comments <code>@buildit review</code>.</dd>
         <dt>Changelog on merge</dt>
@@ -310,7 +311,7 @@ function RepositoryList({ repositories, canManage, savingRepositoryId, onSave }:
         {/* Moved off the cards. It was the longest block on every row and identical on all of
             them; only which version is waiting differs, and that stays on the card. */}
         <dt>Repository configuration</dt>
-        <dd>A <code>.buildit.yml</code> on your default branch sets the review profile, path filters and per-path instructions. It is never read from a pull request head, and an admin approves each version before a review uses it — so editing the file produces a new version to approve.</dd>
+        <dd>A <code>.buildit.yml</code> on your default branch sets the review profile, path filters and per-path instructions. It is never read from a pull request head, and an admin approves each version before use.</dd>
       </dl>
     </details>
     {filterable ? <div className="repository-filter">
@@ -341,7 +342,7 @@ export function ModelIntegrationState() {
   // them dead-ended. The card said "1 connected" throughout, which is true and reads like enough.
   const singleProvider = ready && providerCount === 1;
   const body = singleProvider
-    ? "A validated key is stored for this workspace. Because it is the only provider connected, a rate limit or a refused key stops reviews until it clears — with a second provider, BuildIT restarts the review on that one instead."
+    ? "A validated key is stored. With one provider, a rate limit or refused key pauses reviews; add a second and BuildIT restarts the review on that one instead."
     : ready
       ? "A validated key is stored for this workspace. It is used only for the provider request you authorize."
       : "Your key is used only for the provider request you authorize.";
@@ -473,7 +474,7 @@ export function MembersWorkspaceState() {
   const membersSampleTour = useSampleTour();
   const invite = useMutation(inviteMember), changeRole = useMutation(changeMemberRole), remove = useMutation(removeMember);
   const [githubLogin, setGithubLogin] = useState(""), [inviteRole, setInviteRole] = useState<"viewer" | "developer" | "admin">("developer"), [message, setMessage] = useState(""), [working, setWorking] = useState(false);
-  if (!connection) return <section className="live-state"><span className="state-pulse" /><div><strong>Loading workspace access…</strong></div></section>;
+  if (!connection) return <StatePanel loading title="Loading workspace access…" />;
   if (!connection.organization) return <section className="empty-state compact-empty"><span className="empty-mark">ID</span><h2>{connection.state === "signed_out" ? "Sign in to manage members" : "No workspace selected"}</h2><p>Membership and roles are scoped to one workspace at a time.</p><ConnectionAction connection={connection} returnTo="/members" /></section>;
   const canManage = connection.organization.role === "owner" || connection.organization.role === "admin", requestId = () => crypto.randomUUID();
   async function submitInvite(event: React.FormEvent) { event.preventDefault(); if (!organizationId || !canManage) return; if (membersSampleTour) { setMessage("Sample tour: no invitation was sent. Sign in to manage a real workspace."); return; } setWorking(true); setMessage(""); try { await invite({ organizationId, githubLogin, role: inviteRole, requestId: requestId() }); setGithubLogin(""); setMessage("Invitation created. The person can accept it after signing in with that GitHub account."); } catch (error) { const code = error instanceof Error ? error.message : ""; setMessage(code.includes("member_must_sign_in_first") ? "That GitHub user must sign in to BuildIT once before you can invite them." : "The invitation was not created. Your access may have changed; refresh and try again."); } finally { setWorking(false); } }

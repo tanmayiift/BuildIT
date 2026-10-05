@@ -231,7 +231,12 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .top { min-height: 64px; display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-6); background: var(--top-bar); border-bottom: 1px solid var(--line); }
 .top-kicker { margin: 0; color: var(--muted); font-size: var(--text-2xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .top strong { font-size: var(--text-md); }
-.top-actions, .heading-actions, .button-row { display: flex; align-items: center; gap: var(--space-2); }
+/* Rows of actions wrap rather than overflow: two long labels side by side ran off a phone screen. */
+.top-actions, .heading-actions, .button-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+/* A readable measure for running text everywhere, at zero specificity so any component that needs a
+   different width still sets it. Workspace content is 1,440px wide; at 13px an unbounded paragraph ran
+   to ~180 characters a line. */
+:where(main, .content) p { max-width: 75ch; }
 .quiet-link { min-height: 44px; display: inline-flex; align-items: center; font-size: var(--text-sm); }
 .setup-state { min-height: 44px; display: inline-flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-2); color: var(--ink-2); background: var(--workbench); border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: var(--text-xs); font-weight: 700; }
 .setup-dot { width: 7px; height: 7px; background: var(--warning); border-radius: 50%; }
@@ -293,7 +298,7 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .eyebrow { margin: 0 0 var(--space-1); color: var(--muted); font-size: var(--text-2xs); font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .title { margin: 0; font-size: clamp(24px, 2.2vw, 34px); line-height: 1.12; letter-spacing: -.035em; text-wrap: balance; }
 .page-description, .lede { margin: var(--space-2) 0 0; color: var(--ink-2); font-size: var(--text-base); line-height: 1.55; text-wrap: pretty; }
-.button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1); padding: 0 var(--space-3); color: var(--ink-inverse); background: var(--navy); border: 1px solid var(--navy); border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 800; line-height: 1; cursor: pointer; transition: transform 120ms cubic-bezier(.23,1,.32,1), background-color 120ms, border-color 120ms, color 120ms; }
+.button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1); padding: 0 var(--space-3); color: var(--ink-inverse); background: var(--navy); border: 1px solid var(--navy); border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 800; line-height: var(--leading-tight); text-align: center; cursor: pointer; transition: transform 120ms cubic-bezier(.23,1,.32,1), background-color 120ms, border-color 120ms, color 120ms; }
 .button:hover { background: var(--navy-hover); }
 .button:active { transform: scale(.97); }
 .button.compact { min-height: 44px; padding: 0 var(--space-3); }

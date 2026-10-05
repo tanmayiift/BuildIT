@@ -6,6 +6,7 @@ import { sampleReviews } from "../sample-data";
 import { useSampleTour } from "../workspace-route-boundary";
 import { ActivationPath } from "./activation-path";
 import { DashboardReviewStart } from "./dashboard-review-start";
+import { StatePanel } from "../state-panel";
 import {
   groupQueueReviews,
   queueSection,
@@ -45,11 +46,11 @@ export default function ReviewQueue() {
   const connection = useQuery(connectionQuery, !tour && isAuthenticated ? {} : "skip");
   const reviews = useQuery(reviewsQuery, !tour && connection?.organization ? { organizationId: connection.organization.id } : "skip");
   if (tour) return <SampleQueue />;
-  if (!connection) return <div className="content"><Heading /><section className="live-state" aria-live="polite"><span className="state-pulse" /><div><strong>Loading your review queue…</strong><p>Checking the active organization on the server.</p></div></section></div>;
+  if (!connection) return <div className="content"><Heading /><StatePanel loading title="Loading your review queue…" detail="Checking the active organization on the server." /></div>;
   // Without an active organization the queue query stays skipped, so `reviews` never resolves.
   // Waiting on it renders a spinner that can never finish; say what is missing instead.
   if (!connection.organization) return <div className="content"><Heading /><section className="empty-state live-empty"><span className="empty-mark">GH</span><h2>Connect a repository to start reviewing</h2><p>You are signed in, but no workspace is active yet. Choose the repositories BuildIT may read in GitHub, and your review queue appears here.</p><div className="button-row"><a className="button" href="/setup/install">Choose repository access</a><a className="button secondary" href="/reviews?tour=1">View the sample tour</a></div></section></div>;
-  if (reviews === undefined) return <div className="content"><Heading connected /><section className="live-state" aria-live="polite"><span className="state-pulse" /><div><strong>Loading your review queue…</strong><p>Checking the active organization on the server.</p></div></section></div>;
+  if (reviews === undefined) return <div className="content"><Heading connected /><StatePanel loading title="Loading your review queue…" detail="Checking the active organization on the server." /></div>;
 
   const rows = [...reviews.rows].sort((a, b) => b.updatedAt - a.updatedAt);
   const groups = groupQueueReviews(rows);
