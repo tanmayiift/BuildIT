@@ -25,6 +25,18 @@ describe("provider adapters",()=>{
   it("prefers the cost-effective OpenAI review model when the key can use it",()=>{
     expect(selectProviderModel("openai",["gpt-5.4","gpt-5.4-mini"])).toBe("gpt-5.4-mini");
   });
+  // 5 Oct 2026: a billed Gemini key answered gemini-3.1-pro-preview and returned 404 for both 2.5 models.
+  it("prefers the Gemini model a current key answers, and still takes an older one when that is all it lists",()=>{
+    expect(selectProviderModel("gemini",["gemini-2.5-pro","gemini-3.1-pro-preview","gemini-2.5-flash"])).toBe("gemini-3.1-pro-preview");
+    expect(selectProviderModel("gemini",["gemini-2.5-pro"])).toBe("gemini-2.5-pro");
+  });
+  // Pinned at Google's >200k-token tier ($4/$18), so the ceiling holds at any prompt size; unpinned it was
+  // reserved at the generic $15/$75 and a zod-sized review could not fit a $5 ceiling.
+  it("reserves Gemini 3.1 Pro at its published price, not the generic ceiling",()=>{
+    expect(conservativeProviderModelCost("gemini","gemini-3.1-pro-preview",1_000_000,1_000_000)).toBe(27.5);
+    expect(conservativeProviderModelCost("gemini","gemini-3.1-pro-preview",95_000,1_000)).toBeLessThan(0.5);
+    expect(conservativeProviderModelCost("gemini","gemini-2.5-pro",1_000_000,1_000_000)).toBe(90);
+  });
   it("uses pinned model prices with a safety margin and a fail-closed fallback",()=>{
     expect(conservativeProviderModelCost("openai","gpt-5.4-mini",1_000_000,1_000_000)).toBe(6.5625);
     expect(conservativeProviderModelCost("openai","gpt-5.4",1_000_000,1_000_000)).toBe(21.875);

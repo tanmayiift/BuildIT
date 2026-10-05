@@ -7,7 +7,9 @@ export const approvedProviderModels:Record<ProviderName,ReadonlySet<string>>={an
 const preferredProviderModels: Record<ProviderName, readonly string[]> = {
   anthropic: ["claude-sonnet-4-6", "claude-sonnet-4-5", "claude-opus-4-6"],
   openai: ["gpt-5.4-mini", "gpt-5.4", "gpt-5"],
-  gemini: ["gemini-2.5-pro", "gemini-3.1-pro-preview", "gemini-2.5-flash"],
+  // gemini-3.1-pro-preview first: on 5 Oct 2026 a freshly billed key answered it and returned 404 for
+  // both 2.5 models, so leading with 2.5-pro spent a failed call on every stage before falling back.
+  gemini: ["gemini-3.1-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
 };
 const genericCeiling = { inputPerMillion: 15, outputPerMillion: 75 } as const;
 const pinnedPrices: Readonly<Record<string, { inputPerMillion: number; outputPerMillion: number }>> = {
@@ -18,6 +20,12 @@ const pinnedPrices: Readonly<Record<string, { inputPerMillion: number; outputPer
   // the older, higher ceiling.
   "openai:gpt-5.4-mini": { inputPerMillion: 0.75, outputPerMillion: 4.5 },
   "openai:gpt-5.4": { inputPerMillion: 2.5, outputPerMillion: 15 },
+  // Gemini API paid-tier prices, page last updated 2026-10-01:
+  // https://ai.google.dev/gemini-api/docs/pricing - $2/$12 for prompts up to 200k tokens and $4/$18
+  // above. The higher tier is pinned, so the ceiling holds whatever the prompt size. Unpinned, Gemini
+  // was reserved at the generic $15/$75, and a review the size of buildit-demo-zod's (five calls of
+  // ~95k tokens) could not fit a $5 ceiling at all.
+  "gemini:gemini-3.1-pro-preview": { inputPerMillion: 4, outputPerMillion: 18 },
 };
 const priceSafetyMargin = 1.25;
 export type ProviderKeyValidation = { availableModels: string[] };
