@@ -2,6 +2,29 @@ import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { DatabaseWriter } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { appendAuditEvent } from "./lib/audit";
+
+// GitHub tells an App when it is uninstalled, suspended or unsuspended, and BuildIT dropped all three:
+// the `installation` event had no route, so every one was logged as rejected. The status this
+// writes is what publication, autofix, commands, model accounting and artifact access already
+// check - and what the "installation unavailable" state on the repositories page reads - so a
+// removed or suspended App stops being acted on instead of failing call by call.
+const installationStatusFor = { deleted: "removed", suspend: "suspended", unsuspend: "active" } as const;
+export const recordInstallationStatus = internalMutation({
+  args: { installationId: v.number(), action: v.union(v.literal("deleted"), v.literal("suspend"), v.literal("unsuspend")),
+    deliveryId: v.string(), senderLogin: v.optional(v.string()), now: v.number() },
+  handler: async (ctx, args) => {
+    const installation = await ctx.db.query("githubInstallations").withIndex("by_installation", q => q.eq("installationId", args.installationId)).unique();
+    if (!installation) return { recorded: false as const };
+    const status = installationStatusFor[args.action];
+    if (installation.status === status) return { recorded: false as const };
+    await ctx.db.patch(installation._id, { status, suspendedAt: status === "suspended" ? args.now : undefined, updatedAt: args.now });
+    await appendAuditEvent(ctx, { organizationId: installation.organizationId, actorId: args.senderLogin ? `github:${args.senderLogin}` : "github",
+      action: `installation.${status}`, resourceType: "github_installation", resourceId: String(installation._id),
+      requestId: `installation:${args.deliveryId}`.slice(0, 128), result: "allowed", createdAt: args.now });
+    return { recorded: true as const, status };
+  },
+});
 
 
 // One place where the repository list is reconciled against what the installation can see, because
