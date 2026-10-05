@@ -24,6 +24,8 @@ function formatDuration(durationMs: number) {
 
 type Evidence = {
   partial: boolean;
+  // Set when retention erased the artifact the finding prose is decrypted from.
+  findingTextErasedAt?: number;
   review: {
     id: string;
     prNumber: number;
@@ -243,14 +245,14 @@ function ReviewEvidence({ id }: { id: string }) {
       isAuthenticated ? { reviewId: id } : "skip",
     ),
     runs = useQuery(runHistoryQuery, isAuthenticated ? { reviewId: id } : "skip");
-  const findingCount = evidence?.findings.length ?? 0;
+  const findingCount = evidence?.findings.length ?? 0, findingTextErased = Boolean(evidence?.findingTextErasedAt);
   useEffect(() => {
-    if (!isAuthenticated || findingCount === 0) { setFindingDetails(null); setFindingDetailError(false); return; }
+    if (!isAuthenticated || findingCount === 0 || findingTextErased) { setFindingDetails(null); setFindingDetailError(false); return; }
     let active = true;
     setFindingDetailError(false);
     void loadFindingDetails({ reviewId: id }).then(value => { if (active) setFindingDetails(value); }).catch(() => { if (active) { setFindingDetails(null); setFindingDetailError(true); } });
     return () => { active = false; };
-  }, [findingCount, id, isAuthenticated, loadFindingDetails]);
+  }, [findingCount, findingTextErased, id, isAuthenticated, loadFindingDetails]);
   if (isLoading || (isAuthenticated && evidence === undefined))
     return (
       <State
@@ -393,7 +395,9 @@ function ReviewEvidence({ id }: { id: string }) {
         detail={`${evidence.findings.length} supported by evidence`}
         foot="Finding text is shown only after BuildIT rechecks your membership. Dismissing records the judgement for future reviews; it never silences a blocking, Critical or scanner finding."
       >
-        {findingDetailError ? (
+        {evidence.findingTextErasedAt ? (
+          <div className="finding-detail-state"><strong>Finding text erased on {new Date(evidence.findingTextErasedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</strong><p>This workspace's retention setting removed the plain-language text with the rest of this review's evidence. Severity, lines and proof counts stay below.</p></div>
+        ) : findingDetailError ? (
           <div className="finding-detail-state"><strong>Plain-language details could not be loaded</strong><p>No source was shown. The exact findings are listed below. Open the pull request for the published evidence, or refresh after checking your workspace access.</p></div>
         ) : findingDetails === null ? (
           <div className="finding-detail-state"><strong>Loading the encrypted finding summary…</strong><p>BuildIT is rechecking repository access before decrypting the report. The exact findings are listed below meanwhile.</p></div>
