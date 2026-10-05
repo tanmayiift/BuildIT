@@ -112,3 +112,58 @@ describe("injection scanning cost", () => {
     expect(signals.map(signal => signal.kind)).toContain("encoded_instruction");
   });
 });
+
+describe("stages that run side by side", () => {
+  const gate = () => { let open!: () => void; const opened = new Promise<void>(resolve => { open = resolve; }); return { open, opened }; };
+
+  it("starts adjacent concurrent stages together, shows neither the other's output, and keeps chain order", async () => {
+    const started: string[] = [], inputs: Record<string, string> = {}, release = gate();
+    const records = await runPromptChain({ definitions: defaultPromptChain, expectedStages: reviewPromptStages, pinned, untrusted: {}, concurrent: ["requirements", "findings"],
+      executor: async ({ stage, input }) => {
+        started.push(stage); inputs[stage] = input;
+        // Requirements cannot finish until findings has started: sequential execution would hang here.
+        if (stage === "requirements") await release.opened;
+        if (stage === "findings") release.open();
+        return outputs[stage]!;
+      } });
+    expect(started.slice(0, 2).sort()).toEqual(["findings", "requirements"]);
+    expect(records.map(record => record.stage)).toEqual([...reviewPromptStages]);
+    expect(inputs.findings).not.toContain('"stage":"requirements"');
+    expect(inputs.critic).toContain('"stage":"requirements"');
+  });
+
+  it("runs findings specialists side by side and merges them in slice order", async () => {
+    const release = gate(), order: string[] = [];
+    const records = await runPromptChain({ definitions: defaultPromptChain, expectedStages: reviewPromptStages, pinned, untrusted: {},
+      partition: stage => stage === "findings" ? [{ part: "one" }, { part: "two" }] : undefined,
+      executor: async ({ stage, input }) => {
+        if (stage !== "findings") return outputs[stage]!;
+        const part = input.includes('"part":"one"') ? "one" : "two";
+        order.push(part);
+        if (part === "one") await release.opened; else release.open();
+        return { findings: [{ id: part }] };
+      } });
+    expect(order).toEqual(["one", "two"]);
+    expect(records.find(record => record.stage === "findings")?.value.findings).toEqual([{ id: "one" }, { id: "two" }]);
+  });
+
+  it("names every call, and reports each attempt under the call that produced it", async () => {
+    const executed: string[] = [], attempted: string[] = [];
+    await runPromptChain({ definitions: defaultPromptChain, expectedStages: reviewPromptStages, pinned, untrusted: {}, concurrent: ["requirements", "findings"],
+      executor: async ({ stage, callId }) => { executed.push(callId); return outputs[stage]!; }, onAttempt: attempt => { attempted.push(attempt.callId); } });
+    expect(new Set(executed).size).toBe(executed.length);
+    expect([...attempted].sort()).toEqual([...executed].sort());
+  });
+
+  it("lets a sibling settle before a failure is reported", async () => {
+    let findingsFinished = false;
+    await expect(runPromptChain({ definitions: defaultPromptChain, expectedStages: reviewPromptStages, pinned, untrusted: {}, concurrent: ["requirements", "findings"], maxSchemaRepairs: 0,
+      executor: async ({ stage }) => {
+        if (stage === "requirements") return {};
+        await new Promise(resolve => setTimeout(resolve, 5));
+        findingsFinished = true;
+        return outputs[stage]!;
+      } })).rejects.toThrow("stage_schema_invalid:requirements");
+    expect(findingsFinished).toBe(true);
+  });
+});

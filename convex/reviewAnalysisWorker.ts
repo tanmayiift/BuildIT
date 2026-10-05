@@ -374,22 +374,23 @@ export const analyze = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
   handler: async (ctx, args): Promise<{ artifactId: string; stages: number; inputTokens: number; outputTokens: number }> => {
     const scope: AnalysisScope = await ctx.runQuery(internal.reviewModelData.analysisScope, args), brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""), artifactSecret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url"), modelSecret = Buffer.from(required("MODEL_GRANT_SECRET"), "base64url");
-    const chunks: SnapshotChunk[] = [];
-    for (const artifact of scope.artifacts) {
+    // Every download is independent of the others. One after another they cost a broker round trip
+    // each before the first model call could start; together they cost the slowest one.
+    const download = async (artifact: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number }, kind: "context_artifact" | "validation_artifact") => {
       const grant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(artifact.id), storageKey: artifact.storageKey, operation: "read" }, artifactSecret);
       const response = await fetch(`${brokerUrl}/api/artifacts`, { headers: { authorization: `Bearer ${grant}` } });
-      if (!response.ok) throw new Error(`context_artifact_download_${response.status}`);
+      if (!response.ok) throw new Error(`${kind}_download_${response.status}`);
       const body = Buffer.from(await response.arrayBuffer());
-      if (body.byteLength !== artifact.size || createHash("sha256").update(body).digest("hex") !== artifact.checksum) throw new Error("context_artifact_integrity_failed");
-      chunks.push({ ...(JSON.parse(body.toString("utf8")) as SnapshotChunk), artifactId: artifact.id });
-    }
+      if (body.byteLength !== artifact.size || createHash("sha256").update(body).digest("hex") !== artifact.checksum) throw new Error(`${kind}_integrity_failed`);
+      return body;
+    };
+    const [contextBodies, validationBody] = await Promise.all([
+      Promise.all(scope.artifacts.map(artifact => download(artifact, "context_artifact"))),
+      download(scope.validationArtifact, "validation_artifact"),
+    ]);
+    const chunks: SnapshotChunk[] = contextBodies.map((body, index) => ({ ...(JSON.parse(body.toString("utf8")) as SnapshotChunk), artifactId: scope.artifacts[index]!.id }));
     const revisions = new Set(chunks.map(chunk => chunk.revision));
     if (!revisions.has("base") || !revisions.has("head")) throw new Error("base_head_context_incomplete");
-    const validation = scope.validationArtifact, validationGrant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(validation.id), storageKey: validation.storageKey, operation: "read" }, artifactSecret);
-    const validationResponse = await fetch(`${brokerUrl}/api/artifacts`, { headers: { authorization: `Bearer ${validationGrant}` } });
-    if (!validationResponse.ok) throw new Error(`validation_artifact_download_${validationResponse.status}`);
-    const validationBody = Buffer.from(await validationResponse.arrayBuffer());
-    if (validationBody.byteLength !== validation.size || createHash("sha256").update(validationBody).digest("hex") !== validation.checksum) throw new Error("validation_artifact_integrity_failed");
     const validationValue = JSON.parse(validationBody.toString("utf8")) as ValidationArtifact;
     const availableModels = scope.credential.availableModels.length ? scope.credential.availableModels : undefined;
     const findingsModel = selectFindingsModel(scope.provider, scope.model, availableModels);

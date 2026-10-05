@@ -85,7 +85,8 @@ describe("executable model review chain", () => {
     const secret = ["AIza", "SyA", "1234567890", "1234567890", "1234567890"].join(""), calls: string[] = [];
     let malformed = true;
     await runModelReviewChain({ invoke: async request => {
-      calls.push(request.input);
+      // Findings runs beside requirements, so only the requirements calls are in sequence.
+      if (request.stage === "requirements") calls.push(request.input);
       if (request.stage === "requirements" && malformed) { malformed = false; return { value: { leaked: secret }, provider: "gemini", model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 }; }
       return { value: values[request.stage], provider: "gemini", model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 };
     }, pinned, untrusted: { requirements: [{ id: "REQ-1", text: "round tax" }] } });
@@ -96,7 +97,8 @@ describe("executable model review chain", () => {
   it("does not resend an oversized invalid response", async () => {
     const invoke = vi.fn(async request => ({ value: request.stage === "requirements" ? { invalid: "x".repeat(16_001) } : values[request.stage], provider: "gemini" as const, model: "test", finishReason: "STOP", inputTokens: 1, outputTokens: 1 }));
     await expect(runModelReviewChain({ invoke, pinned, untrusted: { requirements: [{ id: "REQ-1", text: "round tax" }] } })).rejects.toThrow("schema_repair_output_too_large");
-    expect(invoke).toHaveBeenCalledTimes(1);
+    // One requirements call and the findings call that ran beside it; nothing was resent.
+    expect(invoke.mock.calls.map(([request]) => request.stage).sort()).toEqual(["findings", "requirements"]);
   });
 
   it("requires the critic to use a different model or credential", () => {
@@ -155,5 +157,20 @@ describe("the escalation critic", () => {
     const invoke = vi.fn(async (_request: { stage: string; input: string }) => ({ value: values.critic, provider: "openai" as const, model: "sibling", finishReason: "stop", inputTokens: 3, outputTokens: 4 }));
     await runEscalationCritic({ invoke, pinned, untrusted: { secret: "untrusted-marker" }, priorStages, onUsage: item => { usage.push(item); } });
     expect(JSON.stringify(usage)).not.toContain("untrusted-marker");
+  });
+});
+
+describe("usage from calls that finish out of order", () => {
+  it("credits each stage with its own tokens", async () => {
+    const usage: Array<{ stage: string; inputTokens: number }> = [];
+    await runModelReviewChain({ pinned, untrusted: { requirements: [{ id: "REQ-1", text: "round tax" }] },
+      onUsage: item => { usage.push({ stage: item.stage, inputTokens: item.inputTokens }); },
+      invoke: async request => {
+        // Requirements answers last although it was asked first.
+        if (request.stage === "requirements") await new Promise(resolve => setTimeout(resolve, 10));
+        return { value: values[request.stage], provider: "gemini", model: "test", finishReason: "STOP", inputTokens: request.stage === "requirements" ? 111 : 222, outputTokens: 1 };
+      } });
+    expect(usage.find(item => item.stage === "requirements")?.inputTokens).toBe(111);
+    expect(usage.find(item => item.stage === "findings")?.inputTokens).toBe(222);
   });
 });
