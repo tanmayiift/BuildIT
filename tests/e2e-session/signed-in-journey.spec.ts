@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../live-browser";
 import { reviewStatusLabels } from "../../apps/web/src/app/review-status";
 
-// Runs as the operator's real signed-in session (playwright.session.config.ts). The first test only
+// Runs in the operator's own signed-in Chrome window (playwright.session.config.ts). The first test only
 // reads. The other two change state and are opt-in, each naming the variable that enables it: one
 // saves a model key, the other spends sandbox time and a model call, so both run only against a
 // BuildIT-owned workspace and repository.
