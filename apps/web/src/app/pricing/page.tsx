@@ -2,7 +2,9 @@
 // not tell whether BuildIT is a prototype, a free tool or a paid service. That is the question a
 // design partner asks before the second conversation, and silence answers it badly.
 const plan = [
-  ["Who it is for", "Tech leads and builders shipping code with AI agents, who want proof before a merge rather than an incident after one."],
+  // The same four the landing page names (landing-segments.ts); the pricing page used to describe a
+  // fifth audience of its own.
+  ["Who it is for", "Startup teams, scale-ups, solo developers and open-source maintainers shipping code with AI agents, who want proof before a merge."],
   ["What it costs today", "Every review is free. There is no per-seat, per-repository or per-pull-request charge, and no trial clock counting down."],
   ["What you pay for", "Your own model key: you pay Anthropic, OpenAI or Google directly, and BuildIT adds nothing. The Usage page shows every rupee spent for you, per review and stage."],
   // Three limits are enforced in code and the page named none of them, so "no trial clock counting

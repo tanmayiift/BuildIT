@@ -1,0 +1,166 @@
+# BuildIT evaluation scorecard, 5 October 2026
+
+This scorecard judges the product from five angles: UI/UX, product, core customer, QA and CTO. Each angle has a grade, the evidence behind it, and what is still at risk. Every claim points at a production run, a pull request or a test. Plans are not counted as evidence.
+
+Grades:
+- **A**: done and proven live.
+- **B**: done, with a known gap.
+- **C**: partly done.
+- **D**: not done.
+
+| Angle | Grade | One line |
+|---|---|---|
+| UI/UX | **B+** | A live signed-in audit is clean on 34 of 34 page loads. Two primitives replaced 27 hand-made copies. One copy defect was found live and fixed. |
+| Product | **B+** | Review, Ask, both dismissals, isolation, Gemini and release work live. zod#1 now catches its seeded bug. Autofix is fixed through execution and waits on sandbox capacity for a stacked-PR proof. |
+| Core customer | **B** | All four segments are named the same way everywhere. Each segment's first question has a working path, and solo-developer cost is now measured. |
+| QA | **B−** | 2,375 tests plus 888 release-gate tests run on every PR. Most architecture guards still read source text. |
+| CTO | **B+** | Model cost fell 84% and input tokens 93% on the reference PR, with the verdict unchanged. The release now runs from GitHub. Remaining risks are named below. |
+
+## UI/UX
+
+**Evidence**
+- **Layout audit in CI:** `tests/e2e/layout-audit.spec.ts` runs on every PR (#107). It fails on:
+  - a button within 4px of text;
+  - paragraphs over 100 characters a line;
+  - horizontal overflow;
+  - clipped text.
+- **Live, signed in:** 14 workspace routes, two real reviews and another user's review, at 1440px and 375px. Result: **34 of 34 clean** (`docs/evidence/layout-audit-live-2026-10-05.md`). The one fault was the audit misreading a screen-reader-only label, and the audit is fixed (#117).
+- **Primitives:**
+  - `StatePanel` replaced 13 inline status panels (#107).
+  - `EmptyState` replaced 14 empty-state copies (#117). Most copies had read their decorative mark ("GH", "ER") aloud to screen readers.
+- **Copy:** the 32 longest strings were rewritten (#107). Phrases that tests pin were kept.
+- **Stylesheet:** `flows.css` went from minified lines up to 3,500 characters to one declaration per line, verified equivalent, with six dead rules removed. 53 literals now read their design tokens (#117).
+- **Found live and fixed (#120):** a review whose evidence retention had erased said "could not be loaded … check your workspace access". It now says the text was erased, and on which date.
+
+**Residual risk**
+- Visual snapshots are Linux-only, so a macOS developer can't refresh them locally. `pnpm snapshots:from-ci` covers this.
+- `PageHeader` and `Facts` were not extracted. They have 3 call sites and 1, and none had drifted.
+- Five tokens are pinned by the token-scale test but unused: `--duration-base`, `--ease-out`, `--line-subtle`, `--shadow-2`, `--text-3xl`.
+
+## Product: each journey, with its live proof
+
+| Journey | State | Proof |
+|---|---|---|
+| Sign in with GitHub → model key → review a PR | Live | Signed-in journey, 4 Oct (`docs/evidence/browser-evidence-2026-10-04.md`) |
+| `@buildit review` comment on a PR | Live | p-queue#2, review `nx7ck0sq…`, PR comment plus neutral check, 5 Oct |
+| Automatic review on push | Live | Review `nx7fbx37…`, 5 Oct |
+| `@buildit ask` | Live | Answered 9 s after the review finished, 5 Oct; a PR with no review now gets a reply (#112) |
+| Dismiss a finding from the UI | Live | gson#3 finding `m57a7gvg…` → `resolution: dismissed` plus a `findingFeedback` row at 20:17:21Z, 5 Oct |
+| Dismiss by resolving the BuildIT thread | Live (after #118) | zod#1 thread `PRRT_kwDOUOypWs6pPKfv`: resolved, so the delivery was `processed` and `dismissed` was recorded within 1 s; unresolved, so `accepted` was recorded. Before #118 nothing was recorded on any review |
+| `@buildit autofix` → stacked PR | **Partly proven; blocked on sandbox capacity** | After #119, axios#2 (`nx7asw5a…`) got through every execution segment. It then declined correctly in substance (its tests fail on base) but reported a platform error; #123 makes that a stated decline. The positive proof, public-fixture#22 (checks pass on base, the PR breaks them), was refused twice by the sandbox provider (`sandbox_unavailable`) after the day's runs |
+| Two-user isolation | Live | A and B in separate browsers, plus API probes (`docs/security/two-user-production-proof.md`) |
+| Gemini review | Live | p-queue#2, review `nx7drheq…`, 5 Oct. gemini-3.1-pro-preview, one call, $0.149, verdict correct. The last Gemini run before #98 failed `truncated` |
+| Uninstall or suspend recorded | Behavioural test | #101 (signed deliveries through the real route) |
+| Invite → accept → switch workspace | Not run | Needs a write to the other test user's workspace, which this evaluation was told not to make |
+
+## Core customer: four segments, one story
+
+- **Naming:** the landing page, pricing and README name the same four segments (pricing and README aligned in this change):
+  - startup teams;
+  - scale-ups;
+  - solo developers;
+  - open-source maintainers.
+- **Solo developer (BYOK cost):**
+  - zod#1, a medium PR, now costs **$0.11** of the developer's own OpenAI key. It cost $0.67 on 4 October.
+  - The Usage page shows every call.
+- **Open-source maintainer (fork safety):**
+  - A fork is reviewed only when a maintainer with write access comments.
+  - The kill switch now covers automatic reviews too (#100).
+- **Startups and scale-ups (team review):**
+  - Members, roles and an audit log are live.
+  - Invites are proven by tests, not live (see above).
+
+## QA
+
+- **Every PR runs:**
+  - `pnpm verify`: lint, typecheck, 2,375 tests, build;
+  - `pnpm security:release`: 888 tests plus the dependency audit;
+  - gitleaks;
+  - e2e with axe and visual snapshots.
+- **Behavioural tests added in this round:**
+  - installation events (#101);
+  - the kill switch on automatic reviews (#100);
+  - command deliveries and Ask replies (#112);
+  - thread feedback through the signed route (#118);
+  - autofix grant freshness against the broker's own `consume()` (#119);
+  - prompt-chain concurrency and usage pairing (#115);
+  - context selection (#114);
+  - cached-token accounting (#116).
+- **Risk:** 76 of 78 `tests/architecture` guards read source text. Many pin real invariants, but a text guard can pass while behaviour breaks. The two live defects above (#118, #119) both passed every existing test.
+- **Recommendation:** each new guard should drive the code, as #118 and #119 do.
+
+## CTO
+
+**LLM pipeline on zod#1, OpenAI, read from production with `scripts/measure-review.mjs`.** All three
+runs are on the same PR and commit with the same key. The verdict and findings were identical every
+time: `inconclusive / test_suite_failing`, no findings.
+
+| | Before (`nx77q8d1`, 4 Oct) | After PR-1/2 (`nx716ncp`) | After PR-3/4 (`nx7ec2pe`) | Overall |
+|---|---|---|---|---|
+| Model calls for the review | 5 | 1 (findings) | 1 (findings) | −80% |
+| Input tokens | 473,999 | 94k (findings) | 31,434 | **−93%** |
+| Cost | $0.6675 | $0.3052 | **$0.1086** | **−84%** |
+| Analysis stage | 76.6 s | 24.2 s | 23.2 s | −70% |
+| Consent → verdict | 268.5 s | 303.9 s | 257.7 s | flat: dominated by the sandbox test run |
+
+What each step changed:
+- **PR-1/2 (#104, #106):** dropped the `review_plan` and `report` calls, and skips critic and
+  arbitration when nothing passed the evidence gate. (The `nx716ncp` row's measured total also
+  includes a 1k-token Ask I made on that review.)
+- **PR-3 (#108):** critic and arbitration see only the evidence a finding cites.
+- **PR-4 (#109):** the findings model gets a 24 KB validation view instead of the raw evidence, and
+  repository memory leaves the prompt.
+
+**Coverage, the bigger finding.** An offline replay of zod#1 used the real public head commit, the
+context worker's own file selection, and both versions of `boundedAnalysisContext`. It showed that
+on `main` the findings model saw **2 of the 8 changed files**, both tests. The six changed source
+files did not fit after repository documents holding no requirement took 40 KB of the 80 KB window.
+With #114 the model sees **8 of 8** (six as hunk windows) plus four tests that import them, in 70 KB.
+So the cost numbers above were bought partly by not reading the change; #114 is the fix to measure
+next.
+
+**After #114 (`nx737vt2`, production `f0960b9`):**
+- **Calls:** three (findings, critic, arbitration), because a finding passed the evidence gate.
+- **Tokens and cost:** 46,656 input tokens; $0.1088, the same cost as before.
+- **Verdict:** `changes_requested`. It found the seeded defect: `int16: [-32768, 32768]` in
+  `core/util.ts:744-747`, which should end at 32767. It named the bad input (32768) and noted that
+  the compiled validator repeats the same bound.
+- **Before #114:** every earlier run reported no findings, because the model never saw that file.
+
+The headline LLM result is not the 84% cost cut. It is that the same budget now reads the changed code
+and catches the bug.
+
+**Measured after they deploy:**
+- PR-7 (#115): parallel calls.
+- PR-0b (#116): cached-token accounting.
+- PR-6 (#113): escalation to a genuinely different model.
+
+**Gemini** (`nx7drheq`, p-queue#2): one call, $0.149, correct verdict.
+
+PR-9 (retiring the arbitration model call) waits for 30 production reviews of data, as planned.
+
+**Release pipeline**
+- `release.yml` deploys broker → Convex → web on every push to `main`, using a production deploy key created for it.
+- First green release job: run 37364150555 (`23e730a`).
+- **First fully green release**, with verify, release and confirm: run 37377258459 (`f0960b9`, 22:00Z).
+  It carried every code PR from this round.
+- Its `confirm` job never got a runner during GitHub's Actions incident (5 Oct, 19:12Z onward). The same checks were run by hand: the wiring matched and broker health reported `23e730a`.
+- During the same incident, the push release for `a99ea93` (#109) sat queued. `main` was deployed from
+  a clean checkout with `pnpm deploy:production` (broker, Convex, then web; broker health reported
+  `a99ea93`), as the release policy allows when CI cannot deploy.
+
+**Security invariants kept**
+- No secret-shaped literal anywhere in the tree; no long-lived cloud keys.
+- CI holds no BuildIT login.
+- The injection scan still covers the full context, and narrowed views only show less.
+- Budget reservations still fail closed. Cached tokens are recorded but charged at the full rate.
+
+**Open risks**
+- **Vercel Hobby sandbox capacity is the binding limit.** After a day of live runs the provider refused
+  new sandboxes twice (`sandbox_unavailable`, 22:26 and 22:29Z). BuildIT's own workspace meter read
+  3,237 of 9,000 s. The Vercel usage page lags; it showed 2 h 49 m of the 5 h Active CPU at 15:30.
+  More sandbox time needs a Pro plan or the next billing cycle.
+- One fingerprint key with no per-tenant versioning (`known-defects.md`).
+- Email notifications are off.
+- `completedAt` is a logical workflow timestamp, so ordering by it can mislead.
+- Settling cost at cached prices is deliberately not done.
