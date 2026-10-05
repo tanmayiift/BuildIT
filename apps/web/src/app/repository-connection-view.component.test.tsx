@@ -69,7 +69,8 @@ describe("connected repository workspace", () => {
   it("keeps controls accessible and responsive in the shared stylesheet", async () => {
     render(<RepositoryConnectionView />);
     await waitFor(() => expect(screen.getAllByRole("article", { name: /Repository policy for/ })).toHaveLength(3));
-    const css = readFileSync("apps/web/src/app/flows.css", "utf8");
+    // Formatting whitespace and comments removed, so this pins the rule rather than how the file is laid out.
+    const css = readFileSync("apps/web/src/app/flows.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\s*([{}:;,>])\s*/g, "$1").replace(/;}/g, "}");
     expect(css).toMatch(/\.repository-policy-select[^}]*min-height:44px/);
     expect(css).toMatch(/\.repository-actions[^}]*min-height:44px/);
     expect(css).toMatch(/@media\(max-width:760px\)[\s\S]*\.repository-row\{grid-template-columns:1fr/);

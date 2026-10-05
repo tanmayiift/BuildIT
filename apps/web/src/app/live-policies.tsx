@@ -1,6 +1,7 @@
 "use client";
 import { useConnection } from "./live-connections";
 import { StatePanel } from "./state-panel";
+import { EmptyState } from "./empty-state";
 
 // /policies was six paragraphs describing settings, and a comment recording that a disabled button
 // had been deleted from it rather than made real. Both halves were right: inventing a control that
@@ -17,12 +18,9 @@ export function WorkspacePolicyState() {
   const connection = useConnection();
   if (!connection) return <StatePanel loading title={"Reading this workspace\u2019s settings\u2026"} detail="These values are scoped to one workspace." />;
   if (connection.state !== "connected" || !connection.organization) {
-    return <section className="empty-state compact-empty">
-      <span className="empty-mark">—</span>
-      <h2>No workspace settings to read yet</h2>
-      <p>Retention, autofix delivery and configuration approval are properties of a connected workspace, so BuildIT shows none of them until one exists.</p>
-      <div className="button-row"><a className="button secondary" href="/repositories">Connect a repository</a></div>
-    </section>;
+    return <EmptyState mark="—" title="No workspace settings to read yet"
+      detail="Retention, autofix delivery and configuration approval are properties of a connected workspace, so BuildIT shows none of them until one exists."
+      actions={<a className="button secondary" href="/repositories">Connect a repository</a>} />;
   }
   const { organization, repositories } = connection;
   const total = repositories.length;
