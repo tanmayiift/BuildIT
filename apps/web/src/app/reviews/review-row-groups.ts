@@ -78,7 +78,7 @@ const reasonLabels: Record<string, string> = {
   environment_unavailable: "The isolated runner was unavailable. No code decision was made.",
   review_timeout: "The review reached its time limit. No code decision was made.",
   final_validation_incomplete: "The fix candidate did not complete final validation.",
-  human_review_required: "The critic could not resolve a finding after two passes, so a person decides this one.",
+  human_review_required: "A serious finding could not be confirmed or ruled out, so a person decides this one.",
   stale_commit: "The commit moved while this review was running, so nothing it found is about the code that is there now.",
   prompt_injection_unscoped: "BuildIT found instruction-like text it could not attribute to a changed file, so it will not claim it reviewed the code rather than the instructions. Read the diff yourself before merging.",
   incomplete_coverage: "BuildIT could not read enough of the change to stand behind a verdict.",
