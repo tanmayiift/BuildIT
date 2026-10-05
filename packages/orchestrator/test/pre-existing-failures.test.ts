@@ -80,6 +80,14 @@ describe("what the report says about it", () => {
     expect(body).toContain("| test | Required | Failed · already failing on base · Tests: 7 passed, 5 failed · Test files: 6 passed, 192 failed |");
   });
 
+  it("says a person decides when a serious finding could not be resolved, under a neutral title", () => {
+    const { body, decision } = composeVerifiedReport({ ...base, checks: [check({ conclusion: "passed" })],
+      findings: [{ title: "Unchecked bound", severity: "critical", resolution: "uncertain", blocking: false, evidenceIds: ["e1"] }] });
+    expect(decision).toMatchObject({ status: "inconclusive", reason: "human_review_required" });
+    expect(body).toContain("could not be confirmed or ruled out");
+    expect(body).not.toMatch(/Ready for human review/);
+  });
+
   it("does not claim a required check failed when the only failure predates the change", () => {
     const { body } = composeVerifiedReport({ ...base, checks: [check({ preExisting: true })] });
     expect(body).not.toContain("required check failed");

@@ -154,3 +154,22 @@ describe("the verdict for a test suite failing on both commits", () => {
       .toBe("changes_requested");
   });
 });
+
+// An uncertain finding cannot block, so a critical one nobody could confirm or rule out used to fall
+// through to checks_passed: a green check over a possibly serious defect.
+describe("the verdict for a serious finding nobody could resolve", () => {
+  const check = { name: "test", required: true, conclusion: "passed" as const, evidenceComplete: true };
+  const decide = (findings: Array<{ resolution: "accepted" | "rejected" | "uncertain"; blocking: boolean; severity?: string }>) =>
+    computeReviewDecision({ isStale: false, environmentAvailable: true, checks: [check], findings });
+
+  it("is not a green check when a critical or high finding stays uncertain", () => {
+    for (const severity of ["critical", "high"]) expect(decide([{ resolution: "uncertain", blocking: false, severity }]))
+      .toMatchObject({ status: "inconclusive", reason: "human_review_required", nextAction: "inspect_findings" });
+  });
+
+  it("still passes over an unresolved warning, and still requests changes over a confirmed blocker", () => {
+    expect(decide([{ resolution: "uncertain", blocking: false, severity: "warning" }]).status).toBe("checks_passed");
+    expect(decide([{ resolution: "uncertain", blocking: false, severity: "critical" }, { resolution: "accepted", blocking: true, severity: "high" }]).status).toBe("changes_requested");
+    expect(decide([{ resolution: "rejected", blocking: false, severity: "critical" }]).status).toBe("checks_passed");
+  });
+});

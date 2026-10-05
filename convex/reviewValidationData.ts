@@ -124,7 +124,7 @@ export const finalizeDecision = internalMutation({
     // Record which condition made the evidence incomplete. Without this the review ends as a
     // flat "required check missing" and the real cause — partial context, a missing artifact,
     // a flaky rerun — is unrecoverable afterwards.
-    let incompleteReason: "injection_unscoped" | "uncertain_escalated" | "coverage_partial" | "no_required_check" | "evidence_missing" | "conclusion_unusable" | "tests_need_lockfile" | "test_suite_failing" | undefined;
+    let incompleteReason: "injection_unscoped" | "uncertain_escalated" | "uncertain_serious" | "coverage_partial" | "no_required_check" | "evidence_missing" | "conclusion_unusable" | "tests_need_lockfile" | "test_suite_failing" | undefined;
     // An injection signal that could not be attributed to a changed file downgraded every critic
     // decision to uncertain, which made blocking false, which landed the review on checks_passed
     // with a green check. The verdict has to fail closed: an unscoped signal means BuildIT does
@@ -182,13 +182,17 @@ export const finalizeDecision = internalMutation({
       ...(review.promptInjectionUnscopedAt ? { injectionUnscoped: true } : {}),
       ...(escalatedFinding ? { uncertainEscalated: true } : {}),
       checks: decisionChecks,
-      findings: findings.map(item => ({ resolution: item.resolution === "open" ? "accepted" as const : "rejected" as const, blocking: item.blocking })),
+      // "uncertain" is passed through rather than folded into rejected: an unresolved critical or high
+      // finding is what keeps a review off a green check.
+      findings: findings.map(item => ({ resolution: item.resolution === "open" ? "accepted" as const : item.resolution === "uncertain" ? "uncertain" as const : "rejected" as const,
+        blocking: item.blocking, severity: item.severity })),
     });
     const status = decision.status;
     const statusReasonCode = decision.reason;
     const nextActionCode = decision.nextAction;
     const incomplete = status === "inconclusive";
-    if (incomplete) incompleteReason ??= statusReasonCode === "test_suite_failing" ? "test_suite_failing" : "conclusion_unusable";
+    if (incomplete) incompleteReason ??= statusReasonCode === "test_suite_failing" ? "test_suite_failing"
+      : statusReasonCode === "human_review_required" ? "uncertain_serious" : "conclusion_unusable";
     const githubCheckConclusion = status === "checks_passed" ? "success" as const : status === "changes_requested" ? "failure" as const : "neutral" as const;
     await ctx.db.patch(review._id, { status, statusReasonCode, nextActionCode, githubCheckConclusion, currentStage: "complete", completedAt: args.now, updatedAt: args.now });
     await ctx.db.insert("reviewEvents", { organizationId: args.organizationId, reviewId: review._id, sequence: 5, type: "status_changed", stage: "complete", publicMessageArtifactId: report._id, internalCode: `decision_${statusReasonCode}`, metadata: { count: findings.length, ...(incompleteReason ? { reasonCode: incompleteReason } : {}) }, createdAt: args.now });
