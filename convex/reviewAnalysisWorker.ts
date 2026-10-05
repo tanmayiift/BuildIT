@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { runEscalationCritic, arbitrateFindings, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, validateFindingCandidates } from "@buildit/orchestrator";
+import { runEscalationCritic, arbitrateFindings, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, type ReviewPlan, type ValidatedStage, validateFindingCandidates } from "@buildit/orchestrator";
 import { approvedProviderModels, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { fingerprint, issueArtifactGrant, redact, redactForModel } from "@buildit/security";
 
@@ -214,6 +214,34 @@ export function introducedScannerFindings(base: ScannerFindingInput[], head: Sca
   return touched.filter(item => { const value = key(item); if (!value) return true; const count = remaining.get(value) ?? 0; if (!count) return true; if (count === 1) remaining.delete(value); else remaining.set(value, count - 1); return false; });
 }
 
+// The evidence gate every model finding passes, written once and used twice: to decide whether the
+// critic and arbitration calls could change the result at all, and for the result itself.
+export type FindingGate = { provenance: ReadonlyMap<string, unknown>; evidence: EvidenceRecord[]; allowedPaths: ReadonlySet<string>; headSha: string };
+export function gateModelFindings(records: ValidatedStage[], gate: FindingGate) {
+  const stage = (name: PromptStage) => records.find(item => item.stage === name)?.value ?? {};
+  const requirements = ((stage("requirements").requirements ?? []) as Array<{ id: string; status: "resolved" | "missing" | "inaccessible" | "conflicting" | "excluded"; confidence: number }>).filter(item => item && typeof item.id === "string" && gate.provenance.has(item.id) && Number.isFinite(item.confidence) && item.confidence >= 0 && item.confidence <= 1);
+  const criteriaIds = new Set(requirements.map(item => item.id));
+  const modelFindings = normalizeFindingCriteria(((stage("findings").findings ?? []) as FindingCandidate[]).map(item => ({ ...item, origin: "model" as const })), criteriaIds);
+  const validated = validateFindingCandidates({ findings: modelFindings, criteriaIds, allowedPaths: new Set(gate.allowedPaths), evidence: gate.evidence, pinnedCommit: gate.headSha });
+  return { requirements, criteriaIds, modelFindings, validated };
+}
+
+// Whether a model call could change anything, decided from what earlier stages returned - so a
+// review with nothing to judge stops paying for judges. Each skip is provably output-identical:
+// arbitrateFindings maps over validated candidates only, so with none the critic's decisions are
+// never read; and reconcileArbitration touches only model findings already accepted, so with none
+// the arbitration call is never read. Scanner findings never reach a model either way. On
+// buildit-demo-zod#1 - no findings - critic and arbitration were two of three calls, ~190k tokens.
+export function analysisSkipReason(stage: PromptStage, records: ValidatedStage[], gate: FindingGate, criticIndependent: boolean) {
+  if (stage !== "critic" && stage !== "arbitration") return undefined;
+  const { modelFindings, validated } = gateModelFindings(records, gate);
+  if (!validated.length) return "no model finding passed the evidence gate";
+  if (stage === "critic") return undefined;
+  const decisions = (records.find(item => item.stage === "critic")?.value.decisions ?? []) as CriticDecision[];
+  return arbitrateFindings(validated, requireIndependentCritic(modelFindings, decisions, criticIndependent)).some(item => item.origin === "model" && item.resolution === "accepted")
+    ? undefined : "no model finding was accepted";
+}
+
 export const analyze = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
   handler: async (ctx, args): Promise<{ artifactId: string; stages: number; inputTokens: number; outputTokens: number }> => {
@@ -254,13 +282,25 @@ export const analyze = internalAction({
         return invokeAccountedModel(ctx, { scope: args, repositoryId: scope.repositoryId, stage, provider: scope.provider,
           credential: scope.credential, request, brokerUrl, modelSecret });
     };
+    const headEvidence = new Map<string, { record: EvidenceRecord; artifactId: Id<"artifacts"> }>();
+    for (const chunk of chunks.filter(item => item.revision === "head")) for (const file of chunk.snapshot.files) {
+      if (!chunk.artifactId) throw new Error("context_artifact_reference_missing");
+      const item = sourceEvidence(file.path, file.content);
+      headEvidence.set(item.evidenceId, { artifactId: chunk.artifactId, record: { id: item.evidenceId, artifactExists: true, commitSha: scope.headSha, path: item.path, pathExists: true, startLine: item.startLine, endLine: item.endLine, contentHash: item.contentHash, lineHashMatches: true, truncated: false } });
+    }
+    const sourceById = new Map(untrusted.pull.requirementSources.map(source => [source.id, source]));
+    const provenanceByRequirementId = new Map(untrusted.pull.requirements.flatMap(requirement => { const source = sourceById.get(requirement.sourceId); return source ? [[requirement.id, source] as const] : []; }));
+    const findingGate: FindingGate = { provenance: provenanceByRequirementId, evidence: [...headEvidence.values()].map(item => item.record),
+      allowedPaths: new Set([...headEvidence.values()].flatMap(item => item.record.path ? [item.record.path] : [])), headSha: scope.headSha };
+    let plannedReview: ReviewPlan | undefined;
     const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
       onInjection: report => { injectionUnscoped ||= report.scope.unscoped; for (const surface of report.scope.surfaces) injectionSurfaces.add(surface); },
       // planReview runs on every review and its output was discarded on every review - the chain
       // recomputed it internally and nothing ever saw which stages were chosen, how many findings
       // specialists were spawned, or why a stage was skipped. Recording it is what makes the routing
       // a decision somebody can inspect rather than a claim in a README.
-      onPlan: async plan => { await ctx.runMutation(internal.runStateData.record, {
+      skip: (stageName, priorRecords) => analysisSkipReason(stageName, priorRecords, findingGate, criticRoute.independent),
+      onPlan: async plan => { plannedReview = plan; await ctx.runMutation(internal.runStateData.record, {
         ...args, stage: "analysis" as const,
         plannedStages: [...plan.stages],
         findingsSpecialists: plan.findingsSpecialists,
@@ -272,19 +312,11 @@ export const analyze = internalAction({
       }); },
       invoke: (stageRequest: ModelStageRequest): Promise<ProviderResult> => invokeStage(stageRequest),
       onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,...(item.invocationId?{invocationId:item.invocationId as Id<"modelInvocations">}:{}),stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,durationMs:item.durationMs,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); } }));
-    const headEvidence = new Map<string, { record: EvidenceRecord; artifactId: Id<"artifacts"> }>();
-    for (const chunk of chunks.filter(item => item.revision === "head")) for (const file of chunk.snapshot.files) {
-      if (!chunk.artifactId) throw new Error("context_artifact_reference_missing");
-      const item = sourceEvidence(file.path, file.content);
-      headEvidence.set(item.evidenceId, { artifactId: chunk.artifactId, record: { id: item.evidenceId, artifactExists: true, commitSha: scope.headSha, path: item.path, pathExists: true, startLine: item.startLine, endLine: item.endLine, contentHash: item.contentHash, lineHashMatches: true, truncated: false } });
-    }
-    const stage = (name: PromptStage) => records.find(item => item.stage === name)?.value ?? {};
-    const sourceById = new Map(untrusted.pull.requirementSources.map(source => [source.id, source]));
-    const provenanceByRequirementId = new Map(untrusted.pull.requirements.flatMap(requirement => { const source = sourceById.get(requirement.sourceId); return source ? [[requirement.id, source] as const] : []; }));
-    const requirements = ((stage("requirements").requirements ?? []) as Array<{ id: string; status: "resolved" | "missing" | "inaccessible" | "conflicting" | "excluded"; confidence: number }>).filter(item => item && typeof item.id === "string" && provenanceByRequirementId.has(item.id) && Number.isFinite(item.confidence) && item.confidence >= 0 && item.confidence <= 1);
-    const criteriaIds = new Set(requirements.map(item => item.id));
-    const modelFindings = normalizeFindingCriteria(((stage("findings").findings ?? []) as FindingCandidate[]).map(item => ({ ...item, origin: "model" as const })), criteriaIds);
-    const critic = requireIndependentCritic(modelFindings,((stage("critic").decisions ?? []) as CriticDecision[]),criticRoute.independent);
+    const { requirements, criteriaIds, modelFindings } = gateModelFindings(records, findingGate);
+    if (records.some(item => item.skipped)) await ctx.runMutation(internal.runStateData.record, { ...args, stage: "analysis" as const,
+      skippedStages: [...(plannedReview?.skipped ?? []), ...records.flatMap(item => item.skipped ? [{ stage: item.stage, because: item.skipped }] : [])].map(item => ({ stage: item.stage, because: item.because })),
+      now: Date.now() });
+    const critic = requireIndependentCritic(modelFindings,((records.find(item => item.stage === "critic")?.value.decisions ?? []) as CriticDecision[]),criticRoute.independent);
     const scannerRuns = validationValue.output?.scanners as { base?: { findings?: ScannerFindingInput[] }; head?: { findings?: ScannerFindingInput[] } } | undefined;
     // The union of what fit in the context and what was dropped for budget - the whole changed set,
     // because a file excluded for size is still a file the author touched.
@@ -300,7 +332,7 @@ export const analyze = internalAction({
       return [{ id: `scanner-${index}-${item.ruleId}`, title: item.summary ?? item.ruleId, category: "security", severity: item.severity, confidence: 1, path: item.path, startLine: item.startLine!, endLine: item.endLine!, evidenceIds: [evidence.record.id], impact: item.summary ?? "Deterministic scanner finding", explanation: `${item.ruleId} was detected by the pinned BuildIT scanner.`, origin: "scanner" as const }];
     });
     const candidates = validateFindingCandidates({ findings: [...modelFindings, ...scannerFindings], criteriaIds, allowedPaths: new Set([...headEvidence.values()].flatMap(item => item.record.path ? [item.record.path] : [])), evidence: [...headEvidence.values()].map(item => item.record), pinnedCommit: scope.headSha });
-    const arbitration = ((stage("arbitration").findings ?? []) as ArbitrationDecision[]);
+    const arbitration = ((records.find(item => item.stage === "arbitration")?.value.findings ?? []) as ArbitrationDecision[]);
     const firstPass = dedupeSameDefect(reconcileArbitration(arbitrateFindings(candidates, critic), arbitration));
 
     // The escalation ladder. A finding the critic could not resolve used to end right here:

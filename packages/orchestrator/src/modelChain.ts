@@ -69,6 +69,7 @@ export async function runModelReviewChain(input: {
   onInjection?: (report: { signals: InjectionSignal[]; scope: InjectionScope }) => Promise<void> | void;
   plan?: ReviewPlan;
   onPlan?: (plan: ReviewPlan) => Promise<void> | void;
+  skip?: (stage: PromptStage, records: ValidatedStage[]) => string | undefined;
 }) {
   const attempts=new Map<PromptStage,Array<Omit<StageUsage,"promptVersion"|"schemaVersion"|"attempt"|"outcome">>>();
   const plan = input.plan ?? planReview(input.untrusted);
@@ -84,6 +85,7 @@ export async function runModelReviewChain(input: {
     pinned: input.pinned,
     untrusted: input.untrusted,
     maxSchemaRepairs: 1,
+    ...(input.skip ? { skip: input.skip } : {}),
     ...(slices.length > 1 ? { partition: (stage: PromptStage) => stage === "findings" ? slices : undefined } : {}),
     ...(input.onInjection ? { onInjection: input.onInjection } : {}),
     onAttempt: async attempt=>{const queue=attempts.get(attempt.stage),usage=queue?.shift();if(!usage)throw new Error("model_stage_usage_missing");await input.onUsage?.({...usage,promptVersion:attempt.promptVersion,schemaVersion:attempt.schemaVersion,attempt:attempt.attempt,outcome:attempt.outcome})},

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundedAnalysisContext, boundedValidationEvidence, introducedScannerFindings, redactModelOutput,requireIndependentCritic,selectCriticModel,selectFindingsModel } from "./reviewAnalysisWorker";
+import { analysisSkipReason, boundedAnalysisContext, boundedValidationEvidence, introducedScannerFindings, redactModelOutput,requireIndependentCritic,selectCriticModel,selectFindingsModel } from "./reviewAnalysisWorker";
 
 const pull = { title: "Fix transfer limit", body: "Must reject amounts above the daily limit", files: [{ path: "src/changed.ts", status: "modified", patch: "@@ guard" }], omitted: [], urlHash: "a".repeat(64) };
 describe("bounded model evidence selection", () => {
@@ -214,5 +214,40 @@ describe("a scanner finding whose line moved", () => {
 
   it("still reports a match on a file the base never had", () => {
     expect(introducedScannerFindings([], [at(3)])).toHaveLength(1);
+  });
+});
+
+// Skipping is safe only when the call could not change the result. These pin the two proofs: with no
+// model finding past the evidence gate the critic's decisions are never read, and with no model
+// finding accepted the arbitration is never read.
+describe("skipping a model call that could not change the review", () => {
+  const head = "a".repeat(40);
+  const gate = { provenance: new Map(), headSha: head, allowedPaths: new Set(["src/a.ts"]),
+    evidence: [{ id: "ev-1", artifactExists: true, commitSha: head, path: "src/a.ts", pathExists: true, startLine: 1, endLine: 20, contentHash: "h", lineHashMatches: true, truncated: false }] };
+  const finding = { id: "f-1", title: "Off-by-one", category: "correctness", severity: "warning", confidence: 0.8, criterionId: "", path: "src/a.ts",
+    startLine: 3, endLine: 4, evidenceIds: ["ev-1"], impact: "Wrong bound", explanation: "Uses <= where < is meant" };
+  const record = (stage: string, value: Record<string, unknown>) => ({ stage, promptVersion: "v", schemaVersion: "v", value, attempts: 1 }) as never;
+  const findings = (items: unknown[]) => [record("findings", { findings: items })];
+  const withCritic = (items: unknown[], verdict: string) => [...findings(items), record("critic", { decisions: [{ findingId: "f-1", verdict, missingEvidenceIds: [], injectionDetected: false, explanation: "" }] })];
+
+  it("skips critic and arbitration when the model found nothing", () => {
+    expect(analysisSkipReason("critic", findings([]), gate, true)).toBe("no model finding passed the evidence gate");
+    expect(analysisSkipReason("arbitration", withCritic([], "supported"), gate, true)).toBe("no model finding passed the evidence gate");
+  });
+
+  it("skips the critic when every model finding failed the evidence gate", () => {
+    expect(analysisSkipReason("critic", findings([{ ...finding, path: "src/elsewhere.ts" }]), gate, true)).toBe("no model finding passed the evidence gate");
+    expect(analysisSkipReason("critic", findings([{ ...finding, evidenceIds: ["invented"] }]), gate, true)).toBe("no model finding passed the evidence gate");
+  });
+
+  it("runs the critic for a finding that passed, and arbitration only once one is accepted", () => {
+    expect(analysisSkipReason("critic", findings([finding]), gate, true)).toBeUndefined();
+    expect(analysisSkipReason("arbitration", withCritic([finding], "supported"), gate, true)).toBeUndefined();
+    expect(analysisSkipReason("arbitration", withCritic([finding], "unsupported"), gate, true)).toBe("no model finding was accepted");
+    expect(analysisSkipReason("arbitration", withCritic([finding], "uncertain"), gate, true)).toBe("no model finding was accepted");
+  });
+
+  it("never skips requirements or findings", () => {
+    for (const stage of ["requirements", "findings"] as const) expect(analysisSkipReason(stage, [], gate, true)).toBeUndefined();
   });
 });
