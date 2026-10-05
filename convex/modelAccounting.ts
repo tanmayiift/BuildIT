@@ -81,13 +81,14 @@ export const reserve = internalMutation({ args: {
 
 export const settle = internalMutation({ args: {
   organizationId: v.id("organizations"), invocationId: v.id("modelInvocations"), outcome: v.union(v.literal("estimated"), v.literal("unknown"), v.literal("not_charged")),
-  inputTokens: v.optional(v.number()), outputTokens: v.optional(v.number()), providerRequestId: v.optional(v.string()), finishReason: v.string(), failed: v.optional(v.boolean()), now: v.number(),
+  inputTokens: v.optional(v.number()), outputTokens: v.optional(v.number()), cachedInputTokens: v.optional(v.number()), providerRequestId: v.optional(v.string()), finishReason: v.string(), failed: v.optional(v.boolean()), now: v.number(),
 }, handler: async (ctx, args) => {
   const invocation = await ctx.db.get(args.invocationId);
   if (!invocation || invocation.organizationId !== args.organizationId) throw new ConvexError("not_found_or_forbidden");
   const review = await assertReviewParent(ctx.db, args.organizationId, invocation.reviewId);
   if (invocation.repositoryId !== review.repositoryId || args.finishReason.length > 100 || (args.providerRequestId?.length ?? 0) > 200) throw new ConvexError("model_settlement_invalid");
   if (args.outcome === "estimated" && ![args.inputTokens, args.outputTokens].every(value => Number.isSafeInteger(value) && value! >= 0)) throw new ConvexError("model_settlement_invalid");
+  if (args.cachedInputTokens !== undefined && (args.outcome !== "estimated" || !Number.isSafeInteger(args.cachedInputTokens) || args.cachedInputTokens < 0 || args.cachedInputTokens > args.inputTokens!)) throw new ConvexError("model_settlement_invalid");
   const inputTokens = args.outcome === "estimated" ? args.inputTokens! : 0, outputTokens = args.outcome === "estimated" ? args.outputTokens! : 0;
   const costMicros = args.outcome === "estimated" ? toMicros(conservativeProviderModelCost(invocation.provider, invocation.model, inputTokens, outputTokens)) : 0;
   const organization = await ctx.db.get(args.organizationId);
@@ -106,7 +107,7 @@ export const settle = internalMutation({ args: {
   }
   // Accounting survives cancellation, stale heads, output errors and over-limit results. Those
   // fences still protect publishing; they must never erase work a provider already performed.
-  await ctx.db.patch(invocation._id, { status: args.outcome, inputTokens, outputTokens, costMicros, ...details });
+  await ctx.db.patch(invocation._id, { status: args.outcome, inputTokens, outputTokens, costMicros, ...(args.cachedInputTokens ? { cachedInputTokens: args.cachedInputTokens } : {}), ...details });
   await ctx.db.patch(ledger._id, { inputTokens, outputTokens, quantity: inputTokens + outputTokens,
     unitCost: costMicros / 1_000_000 / Math.max(1, inputTokens + outputTokens), totalCostMicros: costMicros, costStatus: "estimated" });
   const updatedMonth = { ...row, estimatedMicros: row.estimatedMicros + costMicros,

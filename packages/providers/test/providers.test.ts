@@ -103,3 +103,35 @@ describe("telling a rate limit from an empty account", () => {
     expect(source).not.toContain('["rate_limited","quota_exhausted"');
   });
 });
+
+describe("tokens served from a provider's prompt cache", () => {
+  const anthropic = (usage: Record<string, unknown>) => new ProviderClient(vi.fn(async () => new Response(JSON.stringify({ stop_reason: "tool_use", content: [{ type: "tool_use", name: "result", input: { ok: true } }], usage }))));
+
+  it("adds Anthropic's cache reads and writes to the input it reports beside them", async () => {
+    // input_tokens excludes both; left out, a cached call would be accounted as nearly free.
+    await expect(anthropic({ input_tokens: 10, output_tokens: 2, cache_read_input_tokens: 100, cache_creation_input_tokens: 50 }).generate("anthropic", "key", request, new Set(["allowed"])))
+      .resolves.toMatchObject({ inputTokens: 160, cachedInputTokens: 100, outputTokens: 2, usageKnown: true });
+  });
+
+  it("refuses to call usage known when a cache count is malformed", async () => {
+    await expect(anthropic({ input_tokens: 10, output_tokens: 2, cache_read_input_tokens: -1 }).generate("anthropic", "key", request, new Set(["allowed"])))
+      .resolves.toMatchObject({ usageKnown: false });
+  });
+
+  it("reads OpenAI's cached count from inside its input total, and keys the cache by stage", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const client = new ProviderClient(async (_url: string | URL, init?: RequestInit) => { bodies.push(JSON.parse(String(init?.body))); return new Response(JSON.stringify({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: "{\"ok\":true}" }] }], usage: { input_tokens: 100, output_tokens: 1, input_tokens_details: { cached_tokens: 64 } } })); });
+    await expect(client.generate("openai", "key", request, new Set(["allowed"]))).resolves.toMatchObject({ inputTokens: 100, cachedInputTokens: 64 });
+    expect(bodies[0]?.prompt_cache_key).toBe(request.schemaName);
+  });
+
+  it("reads Gemini's cached count from inside its prompt total", async () => {
+    const client = new ProviderClient(async () => new Response(JSON.stringify({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: "{\"ok\":true}" }] } }], usageMetadata: { promptTokenCount: 80, candidatesTokenCount: 1, cachedContentTokenCount: 40 } })));
+    await expect(client.generate("gemini", "key", request, new Set(["allowed"]))).resolves.toMatchObject({ inputTokens: 80, cachedInputTokens: 40 });
+  });
+
+  it("reports nothing cached when nothing was", async () => {
+    const result = await anthropic({ input_tokens: 4, output_tokens: 2 }).generate("anthropic", "key", request, new Set(["allowed"]));
+    expect(result).not.toHaveProperty("cachedInputTokens");
+  });
+});

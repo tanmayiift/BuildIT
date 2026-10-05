@@ -12,7 +12,7 @@ type ReserveArgs = Scope & { invocationKey: string; requestHash: string; stage: 
 type Reservation = { allowed: boolean; reason?: string; invocationId?: Id<"modelInvocations"> };
 const reserve = makeFunctionReference<"mutation", ReserveArgs, Reservation>("modelAccounting:reserve");
 const settle = makeFunctionReference<"mutation", { organizationId: Id<"organizations">; invocationId: Id<"modelInvocations">; outcome: "estimated" | "unknown" | "not_charged";
-  inputTokens?: number; outputTokens?: number; providerRequestId?: string; finishReason: string; failed?: boolean; now: number }, { accounted: boolean; costUsd: number | null }>("modelAccounting:settle");
+  inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; providerRequestId?: string; finishReason: string; failed?: boolean; now: number }, { accounted: boolean; costUsd: number | null }>("modelAccounting:settle");
 
 export class AccountedModelError extends Error {
   constructor(message: string, readonly invocationId?: Id<"modelInvocations">) { super(message); this.name = "AccountedModelError"; }
@@ -67,6 +67,7 @@ export async function invokeAccountedModel(ctx: Pick<ActionCtx, "runMutation">, 
     await ctx.runMutation(settle, { organizationId: input.scope.organizationId, invocationId,
       outcome: known ? "estimated" : notCharged ? "not_charged" : "unknown",
       ...(known ? { inputTokens: usage!.inputTokens, outputTokens: usage!.outputTokens } : {}),
+      ...(known && Number.isSafeInteger(usage!.cachedInputTokens) && usage!.cachedInputTokens! > 0 && usage!.cachedInputTokens! <= usage!.inputTokens ? { cachedInputTokens: usage!.cachedInputTokens } : {}),
       ...(usage?.requestId ? { providerRequestId: usage.requestId.slice(0, 200) } : {}), finishReason: reason.slice(0, 100), failed: !result, now: now() });
     if (result) {
       return { ...result, invocationId: String(invocationId) };

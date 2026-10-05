@@ -17,6 +17,9 @@ export const accountingTables = {
     stage: v.string(), provider, model: v.string(), month: v.string(), reservedMicros: v.number(),
     status: v.union(v.literal("reserved"), v.literal("estimated"), v.literal("unknown"), v.literal("not_charged")),
     inputTokens: v.optional(v.number()), outputTokens: v.optional(v.number()), costMicros: v.optional(v.number()),
+    // The part of inputTokens served from the provider's prompt cache. Visibility only: cost is
+    // settled on every input token at the full rate.
+    cachedInputTokens: v.optional(v.number()),
     providerRequestId: v.optional(v.string()), finishReason: v.optional(v.string()),
     ledgerId: v.optional(v.id("usageLedger")), createdAt: v.number(), updatedAt: v.number(),
   }).index("by_key", ["invocationKey"]).index("by_review_status", ["reviewId", "status"])
