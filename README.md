@@ -2,6 +2,9 @@
 
 BuildIT is an autonomous pull-request reviewer and bounded Autofix system. It gathers requirements, checks a pinned commit, runs approved tests and scanners in an isolated environment, verifies AI claims against evidence, and can deliver fixes as a stacked pull request. A human always decides whether to merge.
 
+It is built for startup teams, scale-ups, solo developers and open-source maintainers who ship code with
+AI agents and want proof before a merge. Each brings their own model key; reviews are otherwise free.
+
 BuildIT is currently under development. The deployed interface is not evidence that repository access, sandbox execution, or AI review is production-ready.
 
 ## Local verification
