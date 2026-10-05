@@ -24,9 +24,14 @@ export function convexProductionEnvironment(source = process.env) {
     throw new Error(`buildit_convex_deploy_key_target_refused:${reason}`);
   }
   const env = Object.fromEntries(Object.entries(source).filter(([key]) => !key.startsWith("CONVEX_")));
-  env.CONVEX_DEPLOYMENT = `prod:${convexProductionTarget.deploymentName}`;
   env.NEXT_PUBLIC_CONVEX_URL = convexProductionTarget.url;
+  // With a deploy key the key is the selector - it names exactly one deployment, checked above. Also
+  // setting CONVEX_DEPLOYMENT made the CLI look that deployment up as a signed-in user, which on a
+  // GitHub runner has no login: the first push release got `401 MissingAccessToken` from
+  // team_and_project after the broker had already shipped. Without a key, a local release keeps the
+  // explicit selector and the operator's own login.
   if (keys[0]) env.CONVEX_DEPLOY_KEY = keys[0];
+  else env.CONVEX_DEPLOYMENT = `prod:${convexProductionTarget.deploymentName}`;
   return env;
 }
 
