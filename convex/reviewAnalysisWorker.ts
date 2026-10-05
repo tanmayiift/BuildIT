@@ -1,11 +1,12 @@
 "use node";
 import { invokeAccountedModel } from "./lib/accountedModel";
+import { findingFingerprint } from "./lib/findingFingerprint";
 import { createHash } from "node:crypto";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { runEscalationCritic, arbitrateFindings, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, type ReviewPlan, type ValidatedStage, validateFindingCandidates } from "@buildit/orchestrator";
+import { runEscalationCritic, arbitrateFindings, hunkWindows, relatedPaths, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, type ReviewPlan, type ValidatedStage, validateFindingCandidates } from "@buildit/orchestrator";
 import { approvedProviderModels, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { fingerprint, issueArtifactGrant, redact, redactForModel } from "@buildit/security";
 
@@ -108,10 +109,13 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   type ModelRequirement = NonNullable<NonNullable<SnapshotChunk["pull"]>["requirements"]>[number] & { textTruncated?: boolean };
   type ModelConflict = NonNullable<NonNullable<SnapshotChunk["pull"]>["requirementConflicts"]>[number] & { canonicalTruncated?: boolean };
   type OmissionSample = { path?: string; reason: string };
-  type OmissionKind = "repositoryFiles" | "patches" | "changedFiles" | "sourceOmissions" | "pullOmissions" | "requirementSources" | "requirements" | "requirementConflicts" | "truncatedTexts";
+  // repositoryFiles: a changed file whose content did not fit, which is what makes the review partial.
+  // relatedFiles: an import neighbour that did not fit. Files outside both are not offered at all, so
+  // they are not counted as left out.
+  type OmissionKind = "repositoryFiles" | "changedExcerpts" | "relatedFiles" | "uncitedSources" | "patches" | "changedFiles" | "sourceOmissions" | "pullOmissions" | "requirementSources" | "requirements" | "requirementConflicts" | "truncatedTexts";
   const changes: Array<{ path: string; status: string; patch?: string }> = [];
   const requirementSources: ModelSource[] = [], requirements: ModelRequirement[] = [], requirementConflicts: ModelConflict[] = [];
-  const files: Array<{ evidenceId: string; path: string; content: string; startLine: number; endLine: number; contentHash: string }> = [];
+  const files: Array<{ evidenceId: string; path: string; content: string; startLine: number; endLine: number; contentHash: string; excerpt?: true; related?: true }> = [];
   const exclusions = { paths: [] as string[], patchPaths: [] as string[], changedPaths: [] as string[], source: [] as OmissionSample[], pull: [] as OmissionSample[],
     totals: {} as Partial<Record<OmissionKind, number>> };
   const base = { pull: { title: "", titleTruncated: false, body: "", bodyTruncated: false, changes, urlHash: pull.urlHash,
@@ -139,13 +143,23 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   if (base.pull.bodyTruncated) increment("truncatedTexts");
 
   let requirementBudget = 20_000;
+  // Repository documents and tests are gathered wholesale as places a requirement might be written.
+  // One earns a place in the prompt only when a requirement was actually read out of it; the rest
+  // were up to 20 KB of README and test code, and then - once their text was dropped - 18 KB of ids
+  // and hashes for zod's 120 of them, informing nothing. They are counted, not listed. A linked
+  // ticket stays either way, because the author pointed at it.
+  const citedSources = new Set((pull.requirements ?? []).map(item => item.sourceId));
+  let uncited = 0;
   for (const source of pull.requirementSources ?? []) {
-    const rawContent = source.content?.slice(0, Math.max(0, requirementBudget));
-    const contentTruncated = Boolean(source.content && rawContent?.length !== source.content.length);
-    const candidate = { ...source, ...(rawContent === undefined ? {} : { content: redactForModel(rawContent) }) } as ModelSource;
+    if ((source.type === "repository_document" || source.type === "test") && !citedSources.has(source.id)) { uncited++; continue; }
+    const { content: sourceContent, ...sourceMeta } = source as ModelSource;
+    const rawContent = sourceContent?.slice(0, Math.max(0, requirementBudget));
+    const contentTruncated = Boolean(sourceContent && rawContent !== undefined && rawContent.length !== sourceContent.length);
+    const candidate = { ...sourceMeta, ...(rawContent === undefined ? {} : { content: redactForModel(rawContent) }) } as ModelSource;
     if (pushWithin(requirementSources, candidate)) { requirementBudget -= Buffer.byteLength(rawContent ?? ""); if (contentTruncated) increment("truncatedTexts"); }
     else increment("requirementSources");
   }
+  if (uncited) increment("uncitedSources", uncited);
   for (const item of pull.requirements ?? []) {
     const rawText = item.text.slice(0, 2_000), textTruncated = rawText.length !== item.text.length;
     if (pushWithin(requirements, { ...item, text: redactForModel(rawText), ...(textTruncated ? { textTruncated: true } : {}) } as ModelRequirement)) { if (textTruncated) increment("truncatedTexts"); }
@@ -162,20 +176,29 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
       pushWithin(exclusions.changedPaths, file.path);
     }
   }
+  // A sample is there to show the model what kind of thing was left out; the totals say how much.
+  // Unbounded, the samples were up to ~56 KB of paths on every call.
+  const sampleCap = 20;
+  const pushSample = <T>(target: T[], item: T, ceiling = baseCeiling) => target.length < sampleCap && pushWithin(target, item, ceiling);
   let patchBudget = 30_000;
   const omittedPatches = new Set<string>();
-  const omitPatch = (path: string) => { if (omittedPatches.has(path)) return; omittedPatches.add(path); increment("patches"); pushWithin(exclusions.patchPaths, path); };
-  for (const file of pull.files) {
-    if (!file.patch) continue;
+  const omitPatch = (path: string) => { if (omittedPatches.has(path)) return; omittedPatches.add(path); increment("patches"); pushSample(exclusions.patchPaths, path); };
+  const headFiles = headChunks.flatMap(chunk => chunk.snapshot.files), headByPath = new Map(headFiles.map(file => [file.path, file]));
+  const admitPatch = (file: { path: string; patch?: string }, ceiling: number) => {
+    if (!file.patch) return;
     const change = changes.find(item => item.path === file.path);
-    if (!change) { omitPatch(file.path); continue; }
+    if (!change) { omitPatch(file.path); return; }
     const rawPatch = file.patch.slice(0, Math.max(0, patchBudget));
     if (!rawPatch || rawPatch.length !== file.patch.length) omitPatch(file.path);
-    if (!rawPatch) continue;
+    if (!rawPatch) return;
     change.patch = redactForModel(rawPatch);
-    if (size() <= baseCeiling) patchBudget -= rawPatch.length;
+    if (size() <= ceiling) patchBudget -= rawPatch.length;
     else { delete change.patch; omitPatch(file.path); }
-  }
+  };
+  // An added file's patch is the file again, one "+" per line. It waits until the file itself has
+  // been offered, and is sent only if the file was not.
+  const isAdded = (file: { path: string; status: string }) => file.status === "added" && headByPath.has(file.path);
+  for (const file of pull.files) if (!isAdded(file)) admitPatch(file, baseCeiling);
   const sampleOmission = (value: unknown): OmissionSample => {
     if (!value || typeof value !== "object") return { reason: "omitted" };
     const item = value as { path?: unknown; reason?: unknown };
@@ -184,19 +207,53 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   const sourceOmissions = headChunks.flatMap(chunk => chunk.snapshot.omitted);
   if (sourceOmissions.length) increment("sourceOmissions", sourceOmissions.length);
   if (pull.omitted.length) increment("pullOmissions", pull.omitted.length);
-  for (const item of sourceOmissions) pushWithin(exclusions.source, sampleOmission(item));
-  for (const item of pull.omitted) pushWithin(exclusions.pull, sampleOmission(item));
+  for (const item of sourceOmissions.slice(0, sampleCap)) pushSample(exclusions.source, sampleOmission(item));
+  for (const item of pull.omitted.slice(0, sampleCap)) pushSample(exclusions.pull, sampleOmission(item));
 
-  const changed = new Set(pull.files.map(file => file.path));
-  for (const file of headChunks.flatMap(chunk => chunk.snapshot.files).sort((a, b) => Number(changed.has(b.path)) - Number(changed.has(a.path)) || a.path.localeCompare(b.path))) {
-    const evidence = sourceEvidence(file.path, file.content), item = { ...evidence, content: redactForModel(file.content) };
+  // What the model reads of the repository: the changed files, then the files they import and the
+  // files that import them, and nothing else. It used to be the changed files followed by the rest of
+  // the snapshot in alphabetical order until 80 KB were spent - documents, manifests, whatever sorted
+  // first - which was most of every prompt and none of the review.
+  //
+  // A changed file goes whole when it is small. A large one goes as windows around each hunk, cut on
+  // line boundaries and carrying the whole file's evidence id, so a finding cites it exactly as it
+  // would the whole file; it is skipped (and the review made partial) only when even that does not fit.
+  const admit = (item: (typeof files)[number]) => {
     // The comma JSON adds before a second element is real payload; omitting it undercounted by a
     // byte, which is all it took on a tree this size.
-    const size = Buffer.byteLength(JSON.stringify(item)) + (files.length ? 1 : 0);
-    if (Buffer.byteLength(JSON.stringify(base)) + size > maxBytes - counterReserve) { increment("repositoryFiles"); pushWithin(exclusions.paths, file.path, maxBytes); continue; }
+    const bytes = Buffer.byteLength(JSON.stringify(item)) + (files.length ? 1 : 0);
+    if (size() + bytes > maxBytes - counterReserve) return false;
     files.push(item);
+    return true;
+  };
+  const related = relatedPaths(pull.files.map(file => file.path), headFiles);
+  const wholeFileBytes = 16_000, hunkContext = 40, admittedWhole = new Set<string>();
+  const changedFiles = pull.files.flatMap(file => { const head = headByPath.get(file.path); return head ? [{ ...file, content: head.content }] : []; })
+    .sort((a, b) => a.content.length - b.content.length || a.path.localeCompare(b.path));
+  for (const file of changedFiles) {
+    const evidence = sourceEvidence(file.path, file.content), whole = { ...evidence, content: redactForModel(file.content) };
+    if (file.content.length <= wholeFileBytes && admit(whole)) { admittedWhole.add(file.path); continue; }
+    const windows = hunkWindows(file.content, file.patch, hunkContext)?.map(window => ({ ...evidence, content: redactForModel(window.text), startLine: window.startLine, endLine: window.endLine, excerpt: true as const }));
+    const windowBytes = windows ? windows.reduce((total, item) => total + Buffer.byteLength(JSON.stringify(item)) + 1, 0) : Infinity;
+    if (windows && windowBytes < Buffer.byteLength(JSON.stringify(whole))) {
+      // Counted first so its digits are inside the check: every window goes, or none does.
+      increment("changedExcerpts");
+      if (size() + windowBytes <= maxBytes - counterReserve) { for (const item of windows) admit(item); continue; }
+      if (!(exclusions.totals.changedExcerpts = (exclusions.totals.changedExcerpts ?? 1) - 1)) delete exclusions.totals.changedExcerpts;
+    }
+    if (admit(whole)) { admittedWhole.add(file.path); continue; }
+    increment("repositoryFiles"); pushSample(exclusions.paths, file.path, maxBytes);
   }
-  const excludedAnything = Object.values(exclusions.totals).some(value => value > 0) || pull.requirementCoverage !== "complete" || headChunks.some(chunk => chunk.snapshot.coverage !== "full");
+  for (const file of pull.files) if (isAdded(file) && !admittedWhole.has(file.path)) admitPatch(file, maxBytes - counterReserve);
+  let relatedBudget = 16_000;
+  for (const path of related) {
+    const file = headByPath.get(path)!, bytes = Buffer.byteLength(file.content);
+    if (bytes <= relatedBudget && admit({ ...sourceEvidence(path, file.content), content: redactForModel(file.content), related: true })) relatedBudget -= bytes;
+    else increment("relatedFiles");
+  }
+  // Related files are a courtesy, and an uncited document held no requirement; neither means the
+  // model missed part of the code under review or its intent.
+  const excludedAnything = Object.entries(exclusions.totals).some(([kind, value]) => kind !== "relatedFiles" && kind !== "uncitedSources" && (value ?? 0) > 0) || pull.requirementCoverage !== "complete" || headChunks.some(chunk => chunk.snapshot.coverage !== "full");
   base.coverage = excludedAnything ? "partial" : "full";
   while (size() > maxBytes && exclusions.paths.length) exclusions.paths.pop();
   while (size() > maxBytes && exclusions.patchPaths.length) exclusions.patchPaths.pop();
@@ -210,6 +267,40 @@ export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_00
   return base;
 }
 export function selectCriticModel(provider:ProviderName,primary:string,availableModels?:readonly string[]){const preferred=provider==="gemini"?(primary==="gemini-2.5-flash"?"gemini-2.5-pro":"gemini-2.5-flash"):provider==="openai"?(primary==="gpt-5.4-mini"?"gpt-5.4":"gpt-5.4-mini"):(primary==="claude-sonnet-4-5"?"claude-sonnet-4-6":"claude-sonnet-4-5"),available=availableModels?new Set(availableModels):approvedProviderModels[provider],independent=Boolean(availableModels)&&available.has(preferred)&&preferred!==primary;return{model:independent?preferred:primary,independent}}
+// The second opinion has to come from a model that gave neither the first findings nor the first
+// critique. It used to be criticRoute.model - the first critic itself, with an identical input - so
+// "escalation" re-rolled the same judge. The first approved model the key lists that is neither; or
+// none, in which case a person decides rather than anything pretending a second look happened.
+export function selectEscalationModel(provider: ProviderName, findingsModel: string, criticModel: string, availableModels?: readonly string[]) {
+  if (!availableModels) return null;
+  const approved = approvedProviderModels[provider];
+  return availableModels.find(model => approved.has(model) && model !== findingsModel && model !== criticModel) ?? null;
+}
+
+// Apply a second critic to the findings it was asked about, and nothing else. It may resolve an
+// uncertain finding to supported; an "unsupported" keeps it uncertain rather than rejecting it, so a
+// second look can never be the quieter route to dismissing a finding. Duplicate or missing second
+// decisions, and decisions about findings that were not escalated, change nothing.
+export function mergeSecondOpinion(first: CriticDecision[], second: CriticDecision[], escalatedIds: ReadonlySet<string>) {
+  const answers = new Map<string, CriticDecision[]>();
+  for (const decision of second) if (escalatedIds.has(decision.findingId)) answers.set(decision.findingId, [...(answers.get(decision.findingId) ?? []), decision]);
+  return first.map(decision => {
+    const replies = answers.get(decision.findingId);
+    if (!replies || replies.length !== 1) return decision;
+    const reply = replies[0]!;
+    return reply.verdict === "unsupported" ? { ...reply, verdict: "uncertain" as const } : reply;
+  });
+}
+
+// Re-arbitration after a second opinion, deterministically. The first pass's arbitration output only
+// ever saw the escalated findings while they were uncertain, so reconciling a now-supported one
+// against it demoted it straight back - escalation could reject but never accept. It still applies,
+// unchanged, to every finding that was not escalated.
+export function rearbitrateAfterEscalation(candidates: FindingCandidate[], firstCritic: CriticDecision[], secondOpinion: CriticDecision[], escalatedIds: ReadonlySet<string>, arbitration: ArbitrationDecision[]) {
+  const rearbitrated = arbitrateFindings(candidates, mergeSecondOpinion(firstCritic, secondOpinion, escalatedIds));
+  return dedupeSameDefect(rearbitrated.map(item => escalatedIds.has(item.id) ? item : reconcileArbitration([item], arbitration)[0]!));
+}
+
 export function selectFindingsModel(provider: ProviderName, primary: string, availableModels?: readonly string[]) {
   if (provider !== "openai" || primary !== "gpt-5.4-mini" || !availableModels?.includes("gpt-5.4")) return primary;
   return "gpt-5.4";
@@ -284,22 +375,23 @@ export const analyze = internalAction({
   args: { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() },
   handler: async (ctx, args): Promise<{ artifactId: string; stages: number; inputTokens: number; outputTokens: number }> => {
     const scope: AnalysisScope = await ctx.runQuery(internal.reviewModelData.analysisScope, args), brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""), artifactSecret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url"), modelSecret = Buffer.from(required("MODEL_GRANT_SECRET"), "base64url");
-    const chunks: SnapshotChunk[] = [];
-    for (const artifact of scope.artifacts) {
+    // Every download is independent of the others. One after another they cost a broker round trip
+    // each before the first model call could start; together they cost the slowest one.
+    const download = async (artifact: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number }, kind: "context_artifact" | "validation_artifact") => {
       const grant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(artifact.id), storageKey: artifact.storageKey, operation: "read" }, artifactSecret);
       const response = await fetch(`${brokerUrl}/api/artifacts`, { headers: { authorization: `Bearer ${grant}` } });
-      if (!response.ok) throw new Error(`context_artifact_download_${response.status}`);
+      if (!response.ok) throw new Error(`${kind}_download_${response.status}`);
       const body = Buffer.from(await response.arrayBuffer());
-      if (body.byteLength !== artifact.size || createHash("sha256").update(body).digest("hex") !== artifact.checksum) throw new Error("context_artifact_integrity_failed");
-      chunks.push({ ...(JSON.parse(body.toString("utf8")) as SnapshotChunk), artifactId: artifact.id });
-    }
+      if (body.byteLength !== artifact.size || createHash("sha256").update(body).digest("hex") !== artifact.checksum) throw new Error(`${kind}_integrity_failed`);
+      return body;
+    };
+    const [contextBodies, validationBody] = await Promise.all([
+      Promise.all(scope.artifacts.map(artifact => download(artifact, "context_artifact"))),
+      download(scope.validationArtifact, "validation_artifact"),
+    ]);
+    const chunks: SnapshotChunk[] = contextBodies.map((body, index) => ({ ...(JSON.parse(body.toString("utf8")) as SnapshotChunk), artifactId: scope.artifacts[index]!.id }));
     const revisions = new Set(chunks.map(chunk => chunk.revision));
     if (!revisions.has("base") || !revisions.has("head")) throw new Error("base_head_context_incomplete");
-    const validation = scope.validationArtifact, validationGrant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId), artifactId: String(validation.id), storageKey: validation.storageKey, operation: "read" }, artifactSecret);
-    const validationResponse = await fetch(`${brokerUrl}/api/artifacts`, { headers: { authorization: `Bearer ${validationGrant}` } });
-    if (!validationResponse.ok) throw new Error(`validation_artifact_download_${validationResponse.status}`);
-    const validationBody = Buffer.from(await validationResponse.arrayBuffer());
-    if (validationBody.byteLength !== validation.size || createHash("sha256").update(validationBody).digest("hex") !== validation.checksum) throw new Error("validation_artifact_integrity_failed");
     const validationValue = JSON.parse(validationBody.toString("utf8")) as ValidationArtifact;
     const availableModels = scope.credential.availableModels.length ? scope.credential.availableModels : undefined;
     const findingsModel = selectFindingsModel(scope.provider, scope.model, availableModels);
@@ -388,17 +480,16 @@ export const analyze = internalAction({
     // there genuinely is a different model to ask. If the sibling is unavailable the ladder stops
     // rather than pretending a second look happened.
     const escalation = await (async (): Promise<{ findings: typeof firstPass; decisions: Array<{ kind: string; reason: string; detail?: string }> }> => {
-      const unresolved = firstPass.filter(item => item.resolution === "uncertain");
+      // Only a model finding left uncertain by the critic is worth a second opinion. One the injection
+      // policy marked stays with a person: a model must not be the route back out of that taint.
+      const unresolved = firstPass.filter(item => item.resolution === "uncertain" && item.origin === "model" && item.reason !== "prompt_injection_detected");
       if (!unresolved.length) return { findings: firstPass, decisions: [] };
+      const escalationModel = selectEscalationModel(scope.provider, findingsModel, criticRoute.model, availableModels);
       // Against findingsModel, not scope.model. criticRoute is derived from findingsModel, and
-      // selectFindingsModel can move the findings stage off scope.model - so an OpenAI credential
-      // exposing gpt-5.4-mini and gpt-5.4 put findings on gpt-5.4 and the critic on gpt-5.4-mini,
-      // which equals scope.model. The ladder then switched itself off and recorded "no independent
-      // second model was available to ask", while requireIndependentCritic had simultaneously been
-      // told independent === true. The one configuration where a second opinion genuinely exists
-      // was exactly where this refused to ask for it.
-      if (!criticRoute.independent || criticRoute.model === findingsModel) {
-        return { findings: firstPass, decisions: [{ kind: "human_escalation", reason: "no independent second model was available to ask, so a person decides", detail: `${unresolved.length} uncertain` }] };
+      // selectFindingsModel can move the findings stage off scope.model - so the independence check
+      // has to compare against the model that actually wrote the findings.
+      if (!criticRoute.independent || criticRoute.model === findingsModel || !escalationModel) {
+        return { findings: firstPass, decisions: [{ kind: "human_escalation", reason: "no third independent model was available to ask, so a person decides", detail: `${unresolved.length} uncertain` }] };
       }
       try {
         const escalationRecords = await runEscalationCritic({
@@ -408,22 +499,20 @@ export const analyze = internalAction({
           // first-pass critic would see rather than a novel one whose output means something else.
           priorStages: records.filter(item => ["requirements", "findings"].includes(item.stage)),
           onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,...(item.invocationId?{invocationId:item.invocationId as Id<"modelInvocations">}:{}),stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,durationMs:item.durationMs,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); },
-          invoke: (stageRequest: ModelStageRequest): Promise<ProviderResult> => invokeStage(stageRequest, criticRoute.model),
+          invoke: (stageRequest: ModelStageRequest): Promise<ProviderResult> => invokeStage(stageRequest, escalationModel),
         });
         const secondOpinion = ((escalationRecords.find(item => item.stage === "critic")?.value?.decisions ?? []) as CriticDecision[]);
-        // Re-arbitrated over both opinions. arbitrateFindings already resolves a finding against its
-        // critic; handing it the second pass alongside the first is that same operation with more
-        // evidence, not a new rule invented for escalation.
-        const escalated = dedupeSameDefect(reconcileArbitration(arbitrateFindings(candidates, [...critic, ...secondOpinion]), arbitration));
+        const escalatedIds = new Set(unresolved.map(item => item.id));
+        const escalated = rearbitrateAfterEscalation(candidates, critic, secondOpinion, escalatedIds, arbitration);
         // A second opinion may resolve an uncertainty. It may never weaken a finding that was
         // already accepted: escalation exists to break a tie, not to argue a verdict down, and a
         // model asked twice must not become a route to a quieter answer.
         const weakened = escalated.some(item => firstPass.find(candidate => candidate.id === item.id)?.resolution === "accepted" && item.resolution !== "accepted");
         if (weakened) return { findings: firstPass, decisions: [{ kind: "critic_escalation_discarded", reason: "the second critic would have weakened an already accepted finding, so its opinion was not applied" }] };
-        const stillUnresolved = escalated.filter(item => item.resolution === "uncertain").length;
+        const stillUnresolved = escalated.filter(item => escalatedIds.has(item.id) && item.resolution === "uncertain").length;
         return { findings: escalated, decisions: [
           { kind: "critic_escalation", reason: `${unresolved.length} ${unresolved.length === 1 ? "finding was" : "findings were"} unresolved after the first critic`,
-            detail: `second opinion from ${criticRoute.model}: ${unresolved.length - stillUnresolved} resolved, ${stillUnresolved} still uncertain` },
+            detail: `second opinion from ${escalationModel}: ${unresolved.length - stillUnresolved} resolved, ${stillUnresolved} still uncertain` },
           ...(stillUnresolved ? [{ kind: "human_escalation", reason: "two independent critics could not resolve it, so a person decides", detail: `${stillUnresolved} still uncertain` }] : []),
         ] };
       } catch (error) {
@@ -455,6 +544,7 @@ export const analyze = internalAction({
     // and "nothing left in the list" is indistinguishable from "nothing was ever dropped".
     const analysisDroppedChangedFile = untrusted.exclusions.changedPaths.length > 0
       || (untrusted.exclusions.totals?.changedFiles ?? 0) > 0
+      || (untrusted.exclusions.totals?.repositoryFiles ?? 0) > 0
       || untrusted.exclusions.paths.some(path => changedPathSet.has(path));
     // The handoff record for this stage: what it actually looked at, how completely, how long the
     // model work took, and which artifact carries the output. Written before the verdict mutation so
@@ -472,7 +562,7 @@ export const analyze = internalAction({
     await ctx.runMutation(internal.reviewModelData.completeAnalysis, { ...args, ...(analysisDroppedChangedFile ? { analysisDroppedChangedFile: true } : {}), artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, credentialId: scope.credentialDocumentId, inputTokens, outputTokens,
       requirements: requirements.map(item => { const source = provenanceByRequirementId.get(item.id)!; return { externalIdHash: fingerprint(item.id, fingerprintKey), status: item.status, confidence: item.confidence,
         sourceType: source.type, sourceUrlHash: source.urlHash, fetchedVersion: source.version }; }),
-      findings: arbitrated.filter(item => item.resolution !== "rejected").map(item => ({ fingerprintHmac: fingerprint(`${item.id}\0${item.path}\0${item.startLine}\0${item.endLine}`, fingerprintKey), pathHmac: fingerprint(item.path, fingerprintKey),
+      findings: arbitrated.filter(item => item.resolution !== "rejected").map(item => ({ fingerprintHmac: findingFingerprint(item, fingerprintKey), pathHmac: fingerprint(item.path, fingerprintKey),
         category: item.category as "correctness" | "security" | "requirement" | "architecture" | "quality" | "dependency" | "test", severity: item.severity, confidence: item.confidence, blocking: item.blocking,
         evidenceIds: item.evidenceIds.map(id => headEvidence.get(id)!.artifactId), startLine: item.startLine, endLine: item.endLine, ...(item.origin === "scanner" ? { ruleId: item.id.split("-").slice(2).join("-") } : {}),
         ...(item.criterionId ? { requirementExternalIdHash: fingerprint(item.criterionId, fingerprintKey) } : {}), resolution: item.resolution === "accepted" ? "open" as const : "uncertain" as const, ...(item.reason === "prompt_injection_detected" ? { injectionSuspected: true } : {}) })), ...(injectionUnscoped ? { injectionUnscoped: true } : {}), ...(injectionSurfaces.size ? { injectionSurfaces: [...injectionSurfaces] } : {}), now: Date.now() });

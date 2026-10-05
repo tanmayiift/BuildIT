@@ -159,6 +159,34 @@ async function readArtifact(
   return body;
 }
 
+// What an execution segment is told to read: the same artifacts every time, under a read grant minted
+// for that request. A grant is single-use and lives sixty seconds, so a describe() that handed back
+// the grants it minted once let only the first segment read the repository.
+export function segmentArtifacts(
+  scope: { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews"> },
+  artifacts: ReadonlyArray<{ revision: "base" | "head"; id: Id<"artifacts">; storageKey: string; checksum: string; size: number }>,
+  artifactSecret: Buffer,
+) {
+  return () => artifacts.map(item => ({
+    revision: item.revision,
+    artifactId: String(item.id),
+    storageKey: item.storageKey,
+    checksum: item.checksum,
+    size: item.size,
+    readGrant: issueArtifactGrant(
+      {
+        organizationId: String(scope.organizationId),
+        repositoryId: String(scope.repositoryId),
+        reviewId: String(scope.reviewId),
+        artifactId: String(item.id),
+        storageKey: item.storageKey,
+        operation: "read",
+      },
+      artifactSecret,
+    ),
+  }));
+}
+
 async function storeArtifact(
   ctx: GenericActionCtx<DataModel>,
   scope: Scope,
@@ -494,7 +522,11 @@ export const runConvergence = internalAction({
               args,
               {
                 roundNumber,
-                slot: `candidate-${chunk.chunkIndex}`,
+                // Named for the candidate, not only the round. A round retried after a transient
+                // failure asks the model again and can commit a different candidate; under a
+                // round-only name its artifacts collided with the first attempt's, and the
+                // resulting autofix_artifact_conflict replaced the error that caused the retry.
+                slot: `${candidateCommitSha.slice(0, 12)}-candidate-${chunk.chunkIndex}`,
                 type: "patch",
                 body: Buffer.from(
                   JSON.stringify({
@@ -523,45 +555,18 @@ export const runConvergence = internalAction({
           manager = detectPackageManager(paths),
           { install, checks } = defaultExecutionPlans(manager ?? throwUnsupportedEcosystem()),
           runtime = "node24" as const;
-        const baseDescriptors = baseContexts.map(({ context }) => ({
-          revision: "base" as const,
-          artifactId: String(context.id),
-          storageKey: context.storageKey,
-          checksum: context.checksum,
-          size: context.size,
-          readGrant: issueArtifactGrant(
-            {
-              organizationId: String(scope.organizationId),
-              repositoryId: String(scope.repositoryId),
-              reviewId: String(scope.reviewId),
-              artifactId: String(context.id),
-              storageKey: context.storageKey,
-              operation: "read",
-            },
-            artifactSecret,
-          ),
-        }));
-        const candidateDescriptors = candidateArtifacts.map((item) => ({
-            revision: "head" as const,
-            artifactId: String(item.id),
-            storageKey: item.storageKey,
-            checksum: item.checksum,
-            size: item.size,
-            readGrant: issueArtifactGrant(
-              {
-                organizationId: String(scope.organizationId),
-                repositoryId: String(scope.repositoryId),
-                reviewId: String(scope.reviewId),
-                artifactId: String(item.id),
-                storageKey: item.storageKey,
-                operation: "read",
-              },
-              artifactSecret,
-            ),
-          })),
-          descriptors = [...baseDescriptors, ...candidateDescriptors];
+        // Read grants are single-use and live sixty seconds, so they are minted per segment request,
+        // exactly as validation does. Autofix minted them once for the whole round: `prepare` spent
+        // them, and `scanners` - the next segment that reads the repository - presented spent grants
+        // and failed as an unclassified execution_failed. That was every autofix round since the
+        // execution was split into segments.
+        const artifacts = [
+            ...baseContexts.map(({ context }) => ({ revision: "base" as const, id: context.id, storageKey: context.storageKey, checksum: context.checksum, size: context.size })),
+            ...candidateArtifacts.map(item => ({ revision: "head" as const, id: item.id, storageKey: item.storageKey, checksum: item.checksum, size: item.size })),
+          ],
+          describe = segmentArtifacts(scope, artifacts, artifactSecret);
         const artifactsHash = sha256Json(
-            descriptors.map(({ readGrant: _, ...item }) => item),
+            describe().map(({ readGrant: _, ...item }) => item),
           );
         // One execution job per round, driven through the same segment loop the normal review uses.
         // Before this, autofix sent the whole plan in a single `/api/execute` call - the shape that
@@ -589,7 +594,7 @@ export const runConvergence = internalAction({
         // `by_lease` with lt(leaseUntil, now), so it could never see the row - and sandboxReclaimAt
         // was never stamped, leaving both sandboxes live and billing until their own timeout.
         const driven = await driveExecutionSegments({
-          brokerUrl, executionSecret, describe: () => descriptors, artifactsHash,
+          brokerUrl, executionSecret, describe, artifactsHash,
           organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
           baseSha: scope.baseSha, headSha: candidateCommitSha, runnerImageVersion: scope.runnerImageVersion,
           runtime, install, checks, jobKey, runId, revisions: ["base", "head"],
@@ -659,7 +664,7 @@ export const runConvergence = internalAction({
             args,
             {
               roundNumber,
-              slot: "validation",
+              slot: `${candidateCommitSha.slice(0, 12)}-validation`,
               type: "command_output",
               body: validationBody,
             },

@@ -299,6 +299,31 @@ describe("dismissing a finding a person knows is wrong", () => {
 // The handoff record is the answer to "how does context move between stages, and is prior
 // knowledge reused" - a question the product could only answer by pointing at source code. These
 // assert the screen says it, and says it in numbers a person can read rather than table names.
+// A month-old review on a 24-hour retention workspace said its finding text "could not be loaded" and
+// told the reader to check their workspace access. The text had been erased by policy; access was fine.
+describe("finding text erased by retention", () => {
+  beforeEach(() => {
+    state.evidence = { ...evidence, findingTextErasedAt: Date.UTC(2026, 8, 6), findings: [findingRow()] };
+    state.runs = [run("run-current", 1_700_000_100_000)];
+    state.action.mockReset().mockResolvedValue([findingProse()]);
+  });
+
+  afterEach(cleanup);
+
+  it("says the text was erased and when, without asking the server to decrypt it or blaming access", async () => {
+    render(<LiveReviewDetail id="run-current" />);
+    expect(await screen.findByText(/^Finding text erased on/)).toBeTruthy();
+    expect(screen.queryByText(/workspace access/)).toBeNull();
+    expect(state.action).not.toHaveBeenCalled();
+  });
+
+  it("keeps the dismiss control on the finding row", async () => {
+    render(<LiveReviewDetail id="run-current" />);
+    await screen.findByText(/^Finding text erased on/);
+    expect(screen.getByRole("button", { name: "Dismiss this finding" })).toBeTruthy();
+  });
+});
+
 describe("the handoff record", () => {
   // afterEach(cleanup) at the top of this file is scoped to the describe it sits in, so without
   // this the second render finds the first one still mounted.

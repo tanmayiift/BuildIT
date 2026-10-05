@@ -9,7 +9,7 @@
   .top-actions { margin-left: auto; }
   .top-actions .quiet-link, .top-actions .setup-state { display: none; }
   .mobile-nav { position: relative; display: block; order: -1; }
-  .mobile-nav summary { min-height: 44px; display: grid; place-items: center; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); cursor: pointer; }
+  .mobile-nav summary { min-height: var(--control-height); display: grid; place-items: center; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); cursor: pointer; }
   .mobile-nav[open]::before { content: ""; position: fixed; inset: 0; z-index: 18; background: var(--overlay); }
   .mobile-nav[open] summary { position: relative; z-index: 21; background: var(--surface); }
   .mobile-nav nav { position: absolute; z-index: 20; top: calc(100% + 8px); left: -14px; width: 100vw; max-height: 70vh; padding: var(--space-2) var(--space-3) var(--space-4); overflow-y: auto; background: var(--surface); border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: var(--shadow-3); }

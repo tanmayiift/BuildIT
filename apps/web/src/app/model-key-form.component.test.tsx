@@ -119,7 +119,8 @@ describe("authenticated model-key controls", () => {
     render(<ModelKeyForm />);
     expect(await screen.findByLabelText("Key ending in nmiQ")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Replace" }).closest(".credential-actions")).not.toBeNull();
-    const css = readFileSync("apps/web/src/app/flows.css", "utf8");
+    // Formatting whitespace and comments removed, so this pins the rule rather than how the file is laid out.
+    const css = readFileSync("apps/web/src/app/flows.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\s*([{}:;,>])\s*/g, "$1").replace(/;}/g, "}");
     expect(css).toMatch(/@media\(max-width:640px\).*\.credential-row\{grid-template-columns:38px minmax\(0,1fr\)/s);
     expect(css).toMatch(/\.credential-actions,.credential-confirm\{grid-column:1\/-1/);
   });
