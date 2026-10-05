@@ -41,6 +41,8 @@ const answerSchema = {
   additionalProperties: false,
 } as const;
 
+export const noReviewToAnswerFrom = "**No finished review to answer from.** BuildIT answers only from the most recent review of this pull request that reached a verdict, and the latest one has not - it is still running, or it failed. Ask again once it finishes, or comment `@buildit review` to start one.";
+
 const answerInput = (report: string, question: string) => [
   "<published_review>", report, "</published_review>", "", "<question>", question, "</question>",
 ].join("\n");
@@ -51,7 +53,22 @@ export const answer = internalAction({
     const scope = await ctx.runQuery(internal.reviewAskData.askScope, {
       organizationId: args.organizationId, repositoryId: args.repositoryId, prNumber: args.prNumber, now: Date.now(),
     });
-    if (!scope) { console.error("buildit_ask_unanswered", { reason: "no_review" }); return { answered: false, reason: "no_review" }; }
+    if (!scope) {
+      // On 5 Oct 2026 a question asked while the newest review was still running got no reply at all:
+      // the latest completed review had failed, and answering across it is refused on purpose. The
+      // refusal stays; the silence does not.
+      console.error("buildit_ask_unanswered", { reason: "no_review" });
+      const reply = await ctx.runQuery(internal.reviewAskData.askReplyScope, { organizationId: args.organizationId, repositoryId: args.repositoryId });
+      if (reply) {
+        const github = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
+        const tokenScope = { installationId: reply.installationId, repositoryId: reply.githubRepositoryId, stage: "review" as const };
+        try {
+          await new GitHubRepositoryWriter({ repositoryId: reply.githubRepositoryId, installationToken: await github.tokenFor(tokenScope) })
+            .upsertIssueComment({ prNumber: args.prNumber, marker: `buildit-review:unanswerable-pr-${args.prNumber}`, body: noReviewToAnswerFrom });
+        } finally { await github.revoke(tokenScope); }
+      }
+      return { answered: false, reason: "no_review" };
+    }
 
     const github = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
     const tokenScope = { installationId: scope.installationId, repositoryId: scope.githubRepositoryId, stage: "review" as const };
