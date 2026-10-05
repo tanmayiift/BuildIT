@@ -2535,6 +2535,31 @@ describe("durable validation evidence", () => {
       stored.usage.filter((item) => item.kind === "sandbox_seconds"),
     ).toHaveLength(1);
   });
+  // finalizeDecision folded every non-accepted finding into "rejected", so an uncertain critical
+  // finding was invisible to the decision and the review published a green check over it.
+  it("does not publish a green check over a critical finding nobody could resolve", async () => {
+    const decide = async (severity: "critical" | "warning") => {
+      const t = convexTest(schema, modules), tenant = await seedTenant(t, `uncertain-${severity}`, "alice"), now = Date.now();
+      const { reportArtifactId } = await t.run(async (ctx) => {
+        await ctx.db.patch(tenant.reviewId, { coverageLevel: "full", status: "validating", currentStage: "analysis" });
+        const artifact = (type: "command_output" | "review_message", key: string) => ctx.db.insert("artifacts", { organizationId: tenant.organizationId,
+          repositoryId: tenant.repositoryId, reviewId: tenant.reviewId, type, storageKey: key, encrypted: true, checksum: "a".repeat(64), size: 10,
+          storageState: "stored", expiresAt: now + 60_000, deletionAttempts: 0 });
+        const artifactId = await artifact("command_output", `${severity}/validation.json`), reportArtifactId = await artifact("review_message", `${severity}/report.md`);
+        await ctx.db.insert("checkRuns", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, kind: "test", nameHash: "b".repeat(64),
+          required: true, status: "completed", conclusion: "passed", commandFingerprint: "c".repeat(64), commitSha: "a".repeat(40), exitCode: 0,
+          durationMs: 1, artifactId, credentialTeardownProved: true, sandboxStopped: true, startedAt: now - 1, completedAt: now });
+        await ctx.db.insert("findings", { organizationId: tenant.organizationId, reviewId: tenant.reviewId, fingerprintHmac: "f".repeat(64),
+          category: "correctness", severity, confidence: 0.6, blocking: false, contentArtifactId: artifactId, evidenceIds: [artifactId],
+          pathHmac: "p".repeat(64), startLine: 1, endLine: 2, resolution: "uncertain", uncertainPasses: 1, createdAt: now, updatedAt: now, expiresAt: now + 60_000 });
+        return { reportArtifactId };
+      });
+      return t.mutation(internal.reviewValidationData.finalizeDecision, { organizationId: tenant.organizationId, reviewId: tenant.reviewId,
+        expectedHeadSha: "a".repeat(40), expectedGeneration: 0, reportArtifactId, now });
+    };
+    await expect(decide("critical")).resolves.toMatchObject({ status: "inconclusive", statusReasonCode: "human_review_required" });
+    await expect(decide("warning")).resolves.toMatchObject({ status: "checks_passed" });
+  });
   it("derives a ready decision only from complete head evidence", async () => {
     const t = convexTest(schema, modules),
       tenant = await seedTenant(t, "decision", "alice"),
@@ -3939,10 +3964,18 @@ describe("a finding the critic cannot resolve reaches a person", () => {
     t.mutation(internal.reviewValidationData.finalizeDecision, { organizationId: tenant.organizationId, reviewId: tenant.reviewId,
       expectedHeadSha: "a".repeat(40), expectedGeneration: 0, reportArtifactId: reportArtifactId as never, now });
 
-  it("still passes after one uncertain pass, because the next round may resolve it", async () => {
+  // This test used to require checks_passed after one uncertain pass on a high finding - "the next
+  // round may resolve it". A review has no next round, so that was a green check over a possibly
+  // serious defect (docs/operations/known-defects.md). One unresolved pass is now enough for a person
+  // to decide, recorded under its own reason rather than as the two-pass escalation.
+  it("does not go green after one uncertain pass on a high finding", async () => {
     const t = convexTest(schema, modules), tenant = await seedTenant(t, "uncertain-once", "alice"), now = Date.now();
     const reportArtifactId = await uncertainReview(t, tenant, now, 1);
-    await expect(decide(t, tenant, reportArtifactId, now)).resolves.toMatchObject({ status: "checks_passed" });
+    await expect(decide(t, tenant, reportArtifactId, now))
+      .resolves.toMatchObject({ status: "inconclusive", statusReasonCode: "human_review_required", nextActionCode: "inspect_findings" });
+    expect(await t.run(ctx => ctx.db.get(tenant.reviewId))).toMatchObject({ githubCheckConclusion: "neutral" });
+    const event = await t.run(ctx => ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", tenant.reviewId)).filter(q => q.eq(q.field("sequence"), 5)).unique());
+    expect(event?.metadata).toMatchObject({ reasonCode: "uncertain_serious" });
   });
 
   it("stops going green once the same finding is uncertain twice", async () => {

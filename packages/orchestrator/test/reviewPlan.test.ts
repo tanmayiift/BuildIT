@@ -12,7 +12,8 @@ describe("the manager plans the run", () => {
   it("skips the requirements stage when the pull request supplied none", () => {
     const plan = planReview({ files: files(3) });
     expect(plan.stages).not.toContain("requirements");
-    expect(plan.stages[0]).toBe("review_plan");
+    expect(plan.stages[0]).toBe("findings");
+    expect(plan.stages).toEqual(["findings", "critic", "arbitration"]);
     // And says why, so a skipped stage is a decision rather than an absence.
     expect(plan.skipped.map(entry => entry.stage)).toEqual(["requirements"]);
     expect(plan.skipped[0]?.because).toMatch(/no canonical requirements/i);

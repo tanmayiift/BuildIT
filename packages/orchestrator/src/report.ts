@@ -99,6 +99,8 @@ export function composeVerifiedReport(input: { repository: string; prNumber: num
       ? `${requiredChecks.some(check => check.conclusion === "failed") ? `This change introduced no new failure in its ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"}` : `All ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"} passed with complete evidence`}${input.ecosystem === "none" ? ", and no test, lint or typecheck command was run because BuildIT recognised no package manager in this repository" : ""}`
       : decision.reason === "test_suite_failing"
         ? "The required test suite failed on this commit and on the base commit, and too little of it ran - no test passed, or most of its test files failed - so it says nothing about this change"
+        : decision.reason === "human_review_required"
+        ? "A critical or high finding below could not be confirmed or ruled out from the evidence, so a person decides before this merges"
         : decision.reason === "tests_need_lockfile"
         ? "The project's tests did not run: package.json declares a test script, but there is no lockfile at this commit and BuildIT installs only from one. The scanners alone are not enough to call this pull request ready"
         : "Complete evidence was not available");

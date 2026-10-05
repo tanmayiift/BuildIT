@@ -5,6 +5,21 @@ the next person does not spend the afternoon rediscovering it.
 
 ## The escalate-to-human verdict is unreachable
 
+**Status, 5 October 2026: the badge half is fixed; the escalation half is planned.**
+- **Fixed (badge).** `computeReviewDecision` no longer returns `checks_passed` while a critical or high
+  finding is `uncertain`. The review ends `inconclusive` / `human_review_required` / `inspect_findings`,
+  and its GitHub check is neutral. A confirmed blocking finding or a failed check still wins as
+  `changes_requested`.
+- **The reader-side bug.** `finalizeDecision` had folded `uncertain` into `rejected`, so the decision
+  never saw the finding at all.
+- **Accepted trade-off.** A workspace whose credential exposes one model has every serious finding
+  forced to uncertain. Its reviews with such findings are now "a person decides" rather than green.
+  That is the honest answer: nothing independent confirmed or refuted them.
+- **Still open.** The escalation ladder itself: a genuinely different second model, and
+  re-arbitration that can accept. That is Phase 1 PR-6 of the 5 Oct plan.
+
+The original analysis follows.
+
 **Where:** `convex/reviewValidationData.ts` — `uncertainPasses >= uncertainEscalationLimit`, with
 the limit set to 2 in `packages/orchestrator/src/reviewPlan.ts`.
 

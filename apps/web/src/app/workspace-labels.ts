@@ -12,6 +12,7 @@ export const incompleteReasonLabels: Record<string, string> = {
   tests_need_lockfile: "The project's tests need a lockfile BuildIT did not find",
   test_suite_failing: "The test suite failed on both commits and too little of it ran",
   uncertain_escalated: "A finding stayed unresolved after two passes",
+  uncertain_serious: "A serious finding could not be confirmed or ruled out",
   unknown: "The reason was not recorded",
 };
 

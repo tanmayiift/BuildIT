@@ -363,7 +363,7 @@ export const analyze = internalAction({
           untrusted,
           // The stages that produced the findings under dispute, so this renders the prompt a
           // first-pass critic would see rather than a novel one whose output means something else.
-          priorStages: records.filter(item => ["requirements", "review_plan", "findings"].includes(item.stage)),
+          priorStages: records.filter(item => ["requirements", "findings"].includes(item.stage)),
           onUsage: async item => { usage.push({ inputTokens: item.inputTokens, outputTokens: item.outputTokens });await ctx.runMutation(internal.reviewModelData.recordStageRun,{...args,...(item.invocationId?{invocationId:item.invocationId as Id<"modelInvocations">}:{}),stage:item.stage,provider:item.provider,model:item.model,promptVersion:item.promptVersion,schemaVersion:item.schemaVersion,finishReason:item.finishReason,requestHash:item.requestFingerprint,durationMs:item.durationMs,...(item.requestId?{requestId:item.requestId}:{}),attempt:item.attempt,outcome:item.outcome,inputTokens:item.inputTokens,outputTokens:item.outputTokens,now:Date.now()}); },
           invoke: (stageRequest: ModelStageRequest): Promise<ProviderResult> => invokeStage(stageRequest, criticRoute.model),
         });
