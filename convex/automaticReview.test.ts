@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { internal } from "./_generated/api";
 import schema from "./schema";
 
@@ -83,5 +83,28 @@ describe("when an automatic review may start", () => {
   it("does not when the repository itself is paused", async () => {
     const t = convexTest(schema, modules); await seed(t, { reviewTrigger: "automatic", pausedAt: 500 });
     expect(await ask(t)).toMatchObject({ eligible: false, reason: "repository_unavailable" });
+  });
+});
+
+// The kill switch was checked only by the dashboard and by the comment handler, so an automatic
+// review - the one nobody asked for - started even with untrusted execution switched off. It must
+// stop before BuildIT so much as reads the pull request, and the delivery must still be processed.
+describe("the untrusted-execution kill switch", () => {
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+
+  it("keeps an automatic review from starting, without failing the delivery", async () => {
+    const t = convexTest(schema, modules); await seed(t, { reviewTrigger: "automatic" });
+    vi.stubEnv("BUILDIT_UNTRUSTED_EXECUTION_ENABLED", "false");
+    vi.stubEnv("GITHUB_APP_ID", "1");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "test-app-key");
+    const fetches = vi.fn(async () => { throw new Error("pull request must not be read"); });
+    vi.stubGlobal("fetch", fetches);
+    await t.run(ctx => ctx.db.insert("webhookDeliveries", { deliveryId: "d-auto", event: "pull_request", action: "opened",
+      installationId: 123, signatureValid: true, disposition: "processed", status: "enqueued", receivedAt: 1 }));
+    await t.action(internal.githubWebhookProcessor.processPullRequestWebhook, { deliveryId: "d-auto", installationId: 123,
+      githubRepositoryId: 42, prNumber: 7, headSha: head, action: "opened", authorLogin: "author" });
+    expect(fetches).not.toHaveBeenCalled();
+    expect(await t.run(ctx => ctx.db.query("reviews").collect())).toHaveLength(0);
+    expect(await t.run(ctx => ctx.db.query("webhookDeliveries").collect())).toMatchObject([{ disposition: "processed", status: "completed" }]);
   });
 });
