@@ -82,3 +82,27 @@ did not fit the 80 KB window whole.
 
 Invite → accept → switch workspace. It needs a write into user B's workspace, which this evaluation was
 told not to make. Tests cover it (`convex/tenantIsolation.test.ts`, the invitation cases).
+
+## After the fixes deployed (`f0960b9`, released from GitHub at 22:00Z)
+
+- **Thread feedback (#118):** zod#1's new inline comment carried a 64-hex fingerprint marker.
+  - Resolving thread `PRRT_kwDOUOypWs6pPKfv` produced a delivery `resolved processed completed` at
+    22:19:26Z, and feedback `dismissed` at 22:19:27Z.
+  - Unresolving it recorded `accepted`.
+- **zod#1 with #114 (`nx737vt2…`):** `changes_requested`, with one high, blocking finding. It is the
+  PR's seeded defect: `int16: [-32768, 32768]` should end at 32767. Earlier runs never saw
+  `core/util.ts`.
+- **Autofix after #119, axios#2 (`nx7asw5a…`):**
+  1. Round 1 got past `prepare` and `scanners`, which #119 fixed, and on to `diagnostics`. That job
+     failed there with a broker `execution_failed`.
+  2. The retried round ran to `complete`, but its candidate failed the required `test` check. That
+     check also fails on the base commit (129 of 132 files).
+  3. In round 2 the model returned the file unchanged (`patch_empty`), which was reported as
+     `platform_failed`.
+
+  #123 makes autofix decline before spending in that situation, and say so in the report.
+- **Autofix positive proof, public-fixture#22:** checks pass on base, and the PR breaks `test` and
+  `static_analysis`. Two attempts (`nx7ec44e…`, `nx77yzwc…`) were refused by the sandbox provider with
+  `sandbox_unavailable` within 30 s of starting. The day's runs had exhausted the plan's sandbox
+  capacity. This proof waits for more capacity.
+

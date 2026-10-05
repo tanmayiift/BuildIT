@@ -11,7 +11,7 @@ Grades:
 | Angle | Grade | One line |
 |---|---|---|
 | UI/UX | **B+** | A live signed-in audit is clean on 34 of 34 page loads. Two primitives replaced 27 hand-made copies. One copy defect was found live and fixed. |
-| Product | **B** | Review, Ask, dismissal, isolation and release work live. Autofix and thread feedback were broken; both were found live and fixed, and await re-proof. |
+| Product | **B+** | Review, Ask, both dismissals, isolation, Gemini and release work live. zod#1 now catches its seeded bug. Autofix is fixed through execution and waits on sandbox capacity for a stacked-PR proof. |
 | Core customer | **B** | All four segments are named the same way everywhere. Each segment's first question has a working path, and solo-developer cost is now measured. |
 | QA | **B−** | 2,375 tests plus 888 release-gate tests run on every PR. Most architecture guards still read source text. |
 | CTO | **B+** | Model cost fell 84% and input tokens 93% on the reference PR, with the verdict unchanged. The release now runs from GitHub. Remaining risks are named below. |
@@ -46,8 +46,8 @@ Grades:
 | Automatic review on push | Live | Review `nx7fbx37…`, 5 Oct |
 | `@buildit ask` | Live | Answered 9 s after the review finished, 5 Oct; a PR with no review now gets a reply (#112) |
 | Dismiss a finding from the UI | Live | gson#3 finding `m57a7gvg…` → `resolution: dismissed` plus a `findingFeedback` row at 20:17:21Z, 5 Oct |
-| Dismiss by resolving the BuildIT thread | **Broken → fixed (#118)** | Delivery arrived, but the marker carried the model id "F1", so nothing matched. Inline comments now carry the stored fingerprint. To re-prove after deploy |
-| `@buildit autofix` → stacked PR | **Broken → fixed (#119)** | axios#2, review `nx78rt59…`: read grants were minted once and reused, so `scanners` failed on every round; a retry then masked the cause. To re-prove after deploy |
+| Dismiss by resolving the BuildIT thread | Live (after #118) | zod#1 thread `PRRT_kwDOUOypWs6pPKfv`: resolved, so the delivery was `processed` and `dismissed` was recorded within 1 s; unresolved, so `accepted` was recorded. Before #118 nothing was recorded on any review |
+| `@buildit autofix` → stacked PR | **Partly proven; blocked on sandbox capacity** | After #119, axios#2 (`nx7asw5a…`) got through every execution segment. It then declined correctly in substance (its tests fail on base) but reported a platform error; #123 makes that a stated decline. The positive proof, public-fixture#22 (checks pass on base, the PR breaks them), was refused twice by the sandbox provider (`sandbox_unavailable`) after the day's runs |
 | Two-user isolation | Live | A and B in separate browsers, plus API probes (`docs/security/two-user-production-proof.md`) |
 | Gemini review | Live | p-queue#2, review `nx7drheq…`, 5 Oct. gemini-3.1-pro-preview, one call, $0.149, verdict correct. The last Gemini run before #98 failed `truncated` |
 | Uninstall or suspend recorded | Behavioural test | #101 (signed deliveries through the real route) |
@@ -119,9 +119,18 @@ With #114 the model sees **8 of 8** (six as hunk windows) plus four tests that i
 So the cost numbers above were bought partly by not reading the change; #114 is the fix to measure
 next.
 
+**After #114 (`nx737vt2`, production `f0960b9`):**
+- **Calls:** three (findings, critic, arbitration), because a finding passed the evidence gate.
+- **Tokens and cost:** 46,656 input tokens; $0.1088, the same cost as before.
+- **Verdict:** `changes_requested`. It found the seeded defect: `int16: [-32768, 32768]` in
+  `core/util.ts:744-747`, which should end at 32767. It named the bad input (32768) and noted that
+  the compiled validator repeats the same bound.
+- **Before #114:** every earlier run reported no findings, because the model never saw that file.
+
+The headline LLM result is not the 84% cost cut. It is that the same budget now reads the changed code
+and catches the bug.
+
 **Measured after they deploy:**
-- PR-5 (#114): changed files whole or as hunk windows, plus import neighbours. It targets the
-  remaining `partial (analysis_budget)` coverage that every run above still reports.
 - PR-7 (#115): parallel calls.
 - PR-0b (#116): cached-token accounting.
 - PR-6 (#113): escalation to a genuinely different model.
@@ -133,6 +142,8 @@ PR-9 (retiring the arbitration model call) waits for 30 production reviews of da
 **Release pipeline**
 - `release.yml` deploys broker → Convex → web on every push to `main`, using a production deploy key created for it.
 - First green release job: run 37364150555 (`23e730a`).
+- **First fully green release**, with verify, release and confirm: run 37377258459 (`f0960b9`, 22:00Z).
+  It carried every code PR from this round.
 - Its `confirm` job never got a runner during GitHub's Actions incident (5 Oct, 19:12Z onward). The same checks were run by hand: the wiring matched and broker health reported `23e730a`.
 - During the same incident, the push release for `a99ea93` (#109) sat queued. `main` was deployed from
   a clean checkout with `pnpm deploy:production` (broker, Convex, then web; broker health reported
@@ -145,7 +156,10 @@ PR-9 (retiring the arbitration model call) waits for 30 production reviews of da
 - Budget reservations still fail closed. Cached tokens are recorded but charged at the full rate.
 
 **Open risks**
-- Vercel Hobby sandbox CPU quota: 5 h a month on the platform; tanmayiift's workspace was raised to 9,000 s.
+- **Vercel Hobby sandbox capacity is the binding limit.** After a day of live runs the provider refused
+  new sandboxes twice (`sandbox_unavailable`, 22:26 and 22:29Z). BuildIT's own workspace meter read
+  3,237 of 9,000 s. The Vercel usage page lags; it showed 2 h 49 m of the 5 h Active CPU at 15:30.
+  More sandbox time needs a Pro plan or the next billing cycle.
 - One fingerprint key with no per-tenant versioning (`known-defects.md`).
 - Email notifications are off.
 - `completedAt` is a logical workflow timestamp, so ordering by it can mislead.
