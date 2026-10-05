@@ -168,6 +168,13 @@ describe("history boundaries and incomplete evidence", () => {
     expect(rows).toHaveLength(1); expect(rows[0]?.verdict).toBe("accepted");
     expect((await t.run(ctx => ctx.db.get(id)))?.resolution).toBe("open");
   });
+  it("says when retention erased the artifact a review's finding text comes from", async () => {
+    const t = makeTest(), b = await seed(t);
+    await finding(t, b);
+    expect((await signed(t).query(api.reviews.getEvidence, { reviewId: b.reviewId })).findingTextErasedAt).toBeUndefined();
+    await t.run(ctx => ctx.db.patch(b.artifactId, { deletedAt: b.now }));
+    expect((await signed(t).query(api.reviews.getEvidence, { reviewId: b.reviewId })).findingTextErasedAt).toBe(b.now);
+  });
   it("marks too many finding rows partial and leaves missing provider time unknown", async () => {
     const t = makeTest(), b = await seed(t), first = await finding(t, b);
     await t.run(async ctx => {
