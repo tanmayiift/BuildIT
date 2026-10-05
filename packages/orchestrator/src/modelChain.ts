@@ -46,7 +46,8 @@ function repairInput(input: string, repairOf: unknown) {
 }
 
 // critic-v3 and arbitration-v3: they now see only the cited evidence (stageContracts.ts).
-const stagePromptVersions: Partial<Record<PromptStage, string>> = { findings: "findings-v3", critic: "critic-v3", arbitration: "arbitration-v3" };
+// findings-v4: no repository memory in its input or policy, and a compact validation view.
+const stagePromptVersions: Partial<Record<PromptStage, string>> = { findings: "findings-v4", critic: "critic-v3", arbitration: "arbitration-v3" };
 const judgingStages = new Set<PromptStage>(["critic", "arbitration"]);
 const citedView = (untrusted: Record<string, unknown>) => (stage: PromptStage, records: ValidatedStage[]) => {
   if (!judgingStages.has(stage)) return undefined;
