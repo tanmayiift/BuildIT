@@ -1,5 +1,6 @@
 "use node";
 import { invokeAccountedModel } from "./lib/accountedModel";
+import { findingFingerprint } from "./lib/findingFingerprint";
 import { createHash } from "node:crypto";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
@@ -560,7 +561,7 @@ export const analyze = internalAction({
     await ctx.runMutation(internal.reviewModelData.completeAnalysis, { ...args, ...(analysisDroppedChangedFile ? { analysisDroppedChangedFile: true } : {}), artifactId: reserved.artifactId, checksum, size: outputBody.byteLength, credentialId: scope.credentialDocumentId, inputTokens, outputTokens,
       requirements: requirements.map(item => { const source = provenanceByRequirementId.get(item.id)!; return { externalIdHash: fingerprint(item.id, fingerprintKey), status: item.status, confidence: item.confidence,
         sourceType: source.type, sourceUrlHash: source.urlHash, fetchedVersion: source.version }; }),
-      findings: arbitrated.filter(item => item.resolution !== "rejected").map(item => ({ fingerprintHmac: fingerprint(`${item.id}\0${item.path}\0${item.startLine}\0${item.endLine}`, fingerprintKey), pathHmac: fingerprint(item.path, fingerprintKey),
+      findings: arbitrated.filter(item => item.resolution !== "rejected").map(item => ({ fingerprintHmac: findingFingerprint(item, fingerprintKey), pathHmac: fingerprint(item.path, fingerprintKey),
         category: item.category as "correctness" | "security" | "requirement" | "architecture" | "quality" | "dependency" | "test", severity: item.severity, confidence: item.confidence, blocking: item.blocking,
         evidenceIds: item.evidenceIds.map(id => headEvidence.get(id)!.artifactId), startLine: item.startLine, endLine: item.endLine, ...(item.origin === "scanner" ? { ruleId: item.id.split("-").slice(2).join("-") } : {}),
         ...(item.criterionId ? { requirementExternalIdHash: fingerprint(item.criterionId, fingerprintKey) } : {}), resolution: item.resolution === "accepted" ? "open" as const : "uncertain" as const, ...(item.reason === "prompt_injection_detected" ? { injectionSuspected: true } : {}) })), ...(injectionUnscoped ? { injectionUnscoped: true } : {}), ...(injectionSurfaces.size ? { injectionSurfaces: [...injectionSurfaces] } : {}), now: Date.now() });
