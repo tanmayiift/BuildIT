@@ -10,9 +10,22 @@ Requirements: Node.js 22 or 24 and pnpm 10.15.0.
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm verify
+NEXT_PUBLIC_CONVEX_URL=https://example-deployment.convex.cloud pnpm verify
 pnpm test:e2e
 ```
+
+`pnpm verify` builds the web app, and the build needs `NEXT_PUBLIC_CONVEX_URL`; any HTTPS Convex URL
+works for the checks. `pnpm test:e2e` needs a deployment that serves `publicProof:summary` and says so
+before it builds.
+
+Useful commands beyond the checks:
+
+- `node scripts/measure-review.mjs <reviewId> [--compare <before…> -- <after…>]`: a review's model calls,
+  tokens, cost and time from production (read-only).
+- `pnpm evidence:browser`: the signed-in and two-user browser checks, in Chrome windows you sign into.
+- `pnpm snapshots:from-ci <ci-run-id>`: take visual baselines from CI's Linux renders.
+
+Releases run from GitHub on every push to `main` (see `docs/operations/ci-gates.md`).
 
 Copy `.env.example` to `.env.local` only when configuring local services. `.env.local` is ignored by Git and must never be committed.
 

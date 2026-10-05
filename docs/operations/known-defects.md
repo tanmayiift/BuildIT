@@ -57,6 +57,11 @@ badge. That is the current, known state.
 
 ## The AWS boundary check cannot run, and keeps `main` red
 
+**Status: resolved on 4 October 2026.** CI and the release workflow now reach AWS through GitHub's OIDC
+token and the read-only `buildit-ci-boundary-reader` role (`infra/aws/ci-reader.yaml`), with no stored
+key, and `pnpm smoke:aws-boundary` passes there. The stack itself was reconciled the same day. The
+original record follows.
+
 **Where:** the `AWS artifact boundary matches the template` step in `.github/workflows/ci.yml`, and
 `pnpm smoke:aws-boundary`.
 

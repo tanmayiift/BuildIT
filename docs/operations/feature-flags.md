@@ -28,63 +28,12 @@ Verify: `pnpm exec convex env list --prod`, then sign in and confirm the review 
 labelled *"Review execution safety-blocked"* — the UI reads the value live through
 `runtimeReadiness:current`.
 
-## `NEXT_PUBLIC_BUILDIT_PUBLIC_DEMO_ENABLED` — is the open scan offered to strangers
+## The public demo flag was removed
 
-Off by default, which is the state that ships. Turn it on for a demo; turn it off after.
-
-| | |
-| --- | --- |
-| Read by | `apps/web/src/app/public-demo-gate.ts` |
-| Lives in | **Vercel**, project `buildit-agentic-review` (the web app) |
-| Gates | `/api/scan` (404 `demo_closed`), the `ScanPanel` on `/`, `/features` and `/sandbox`, the "Try a scan" nav entry, and the `/proof` link |
-| Redeploy needed | **Yes** — see below |
-
-```bash
-vercel env add NEXT_PUBLIC_BUILDIT_PUBLIC_DEMO_ENABLED production   # value: true
-pnpm deploy:production
-```
-
-**Why this one needs a redeploy and the other does not.** `NEXT_PUBLIC_` variables are inlined into
-the client bundle at build time. The prefix is not decoration: `public-shell.tsx` (the nav, header
-*and* footer from one array) and `proof/page.tsx` are client components and cannot read a
-server-only variable. One variable both sides read beats a server flag plus a mirrored client flag
-that can silently disagree about whether the demo is open.
-
-For the same reason the default value in `publicDemoEnabled()` is written as a literal property
-access rather than `process.env[PUBLIC_DEMO_ENV]`. Next only inlines the variable where it can see
-the exact access at build time; a dynamic index compiles to `undefined` in the browser, and the nav
-entry would never appear however the variable was set.
-
-**What stays true when it is off**, because none of it should depend on a demo being open:
-
-- `/sandbox` still answers **200**. It stays in `publicRoutes`, so the Edge proxy, `route-map.ts`
-  and the three suites that assert the route table agrees with itself keep agreeing. The page shows
-  a short closed state and **keeps both call-to-action buttons** — the onboarding journey reaches
-  setup through that page, so a closed demo must not be a dead end.
-- The landing hero keeps its slot and copy, with the panel replaced rather than removed. The panel
-  posts to `/api/scan`; leaving it rendered against a 404 would put a guaranteed error in the first
-  thing a stranger sees.
-- The `/features` lede changes with it. It promised *"this page starts by doing it"*, which stops
-  being true the moment the control below it is gated.
-
-## Verifying a flip of the demo flag
-
-```bash
-pnpm test:e2e                 # the suite pins the flag ON - it describes the demo as demonstrated
-pnpm test:e2e:demo-closed     # the shipping default: coherent site, no dead links, /sandbox 200
-```
-
-The second exists because the main suite pins the flag on, so without it the default that actually
-ships would never be exercised end to end.
-
-Against production:
-
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' https://buildit-agentic-review.vercel.app/sandbox   # 200 either way
-curl -s -X POST https://buildit-agentic-review.vercel.app/api/scan \
-  -H 'content-type: application/json' -d '{"files":[{"path":"a.ts","content":"const a = 1;"}]}'
-# closed -> {"error":"demo_closed"} with 404;  open -> findings, and `ran` / `didNotRun`
-```
+`NEXT_PUBLIC_BUILDIT_PUBLIC_DEMO_ENABLED`, `public-demo-gate.ts`, `POST /api/scan` and
+`pnpm test:e2e:demo-closed` no longer exist (#67). `/scan` is a read-only proof of a review BuildIT
+actually ran, served to everyone, and `/sandbox` redirects to it. There is no demo to open or close,
+so there is no flag and nothing to redeploy.
 
 ## What is *not* a flag, and should not become one
 

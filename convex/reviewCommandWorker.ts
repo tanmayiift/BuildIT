@@ -18,6 +18,11 @@ const helpBody = [
   "| `@buildit ask <question>` | Answer from the review already published here | Triage |",
   "| `@buildit autofix` | Open a stacked pull request with a tested fix | Write |",
   "| `@buildit cancel` | Stop the review that is running | Write |",
+  "| `@buildit dismiss <n>` | Dismiss finding n from the latest review | Write |",
+  "| `@buildit pause` | Stop automatic reviews on this pull request | Write |",
+  "| `@buildit resume` | Start automatic reviews here again | Write |",
+  "",
+  "`review` and `autofix` take `provider=openai|anthropic|gemini` and `budget=1|2|3|5` (dollars).",
   "",
   `${neverMergedSentence} A human owns the merge decision.`,
 ].join("\n");
