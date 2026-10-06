@@ -360,6 +360,11 @@ export default defineSchema({
     // never a path. This is what lets delivery say which findings it actually fixed instead of
     // claiming every accepted one; see convex/lib/findingResolution.ts.
     candidateScannerFindings: v.optional(v.array(v.object({ ruleId: v.string(), pathHmac: v.string() }))),
+    // The round's validation evidence, by id. Delivery, the next round's failure context and the
+    // failure report all read it; they used to find it by file name, and when the writer started
+    // prefixing names with the candidate commit no reader found it again - so a round that passed
+    // could never be delivered. Optional only because rounds recorded before 6 Oct 2026 lack it.
+    validationArtifactId: v.optional(v.id("artifacts")),
     startedAt: v.number(), completedAt: v.optional(v.number()),
   }).index("by_review_round", ["reviewId", "roundNumber"])
     .index("by_attempt", ["attemptId"]),
