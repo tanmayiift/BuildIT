@@ -1,5 +1,10 @@
 # BuildIT evaluation scorecard, 5 October 2026
 
+> **Errata, 6 October 2026.** Superseded by `2026-10-06-scorecard.md`. Three things here were wrong:
+> - **Sandbox capacity.** The sandbox refusals were first blamed on Vercel's capacity. Capacity was ruled out; the cause is still unknown (see Open risks).
+> - **Autofix.** It is described as "fixed through execution". Delivery was in fact broken: from #119 until #130, every round that passed failed with `autofix_passed_round_missing`.
+> - **Grades.** They were generous. Product and UI/UX were graded B+ while autofix could not deliver, the homepage had no picture of the product, and the review prompts had never been benchmarked.
+
 This scorecard judges the product from five angles: UI/UX, product, core customer, QA and CTO. Each angle has a grade, the evidence behind it, and what is still at risk. Every claim points at a production run, a pull request or a test. Plans are not counted as evidence.
 
 Grades:
