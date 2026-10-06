@@ -3,7 +3,8 @@ import { validateSchemaValue, type JsonSchema, type ProviderName, type ProviderR
 import { redactForModel } from "@buildit/security";
 import { partitionFiles, planReview, type ReviewPlan } from "./reviewPlan.js";
 import { citedEvidenceView } from "./stageContracts.js";
-import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type InjectionScope, type InjectionSignal, type PromptStage, type StageDefinition, type ValidatedStage } from "./promptChain.js";
+import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type InjectionScope, type InjectionSignal, type PromptStage, type PromptVariant, type StageDefinition, type ValidatedStage } from "./promptChain.js";
+import { candidatePromptVersions } from "./candidatePrompts.js";
 
 const string = { type: "string" } as const;
 const stringArray = { type: "array", items: string } as const;
@@ -49,20 +50,25 @@ function repairInput(input: string, repairOf: unknown) {
 // findings-v4: no repository memory in its input or policy, and a compact validation view.
 // findings-v5: changed files may arrive as hunk excerpts, and unchanged files only as import neighbours.
 // findings-v6: runs beside the requirements stage, so it cites canonical requirement ids directly.
-const stagePromptVersions: Partial<Record<PromptStage, string>> = { findings: "findings-v6", critic: "critic-v3", arbitration: "arbitration-v3" };
+// findings-v7, critic-v4, arbitration-v4: the candidate wording (candidatePrompts.ts).
+const stagePromptVersions: Record<PromptVariant, Partial<Record<PromptStage, string>>> = {
+  current: { findings: "findings-v6", critic: "critic-v3", arbitration: "arbitration-v3" },
+  candidate: { findings: "findings-v6", critic: "critic-v3", arbitration: "arbitration-v3", ...candidatePromptVersions },
+};
 const judgingStages = new Set<PromptStage>(["critic", "arbitration"]);
 const citedView = (untrusted: Record<string, unknown>) => (stage: PromptStage, records: ValidatedStage[]) => {
   if (!judgingStages.has(stage)) return undefined;
   const findings = records.find(record => record.stage === "findings")?.value.findings;
   return citedEvidenceView(untrusted, Array.isArray(findings) ? findings : []);
 };
-function strictDefinition(stage: PromptStage): StageDefinition {
+function strictDefinition(stage: PromptStage, variant: PromptVariant = "current"): StageDefinition {
   const schema = stageSchemas[stage];
   return {
     stage,
     // Bumped where a stage's input changed: findings, critic and arbitration no longer receive a
     // review_plan record among their validated priors.
-    promptVersion: stagePromptVersions[stage] ?? `${stage}-v1`,
+    promptVersion: stagePromptVersions[variant][stage] ?? `${stage}-v1`,
+    variant,
     schemaVersion: `${stage}-schema-v1`,
     maxInputBytes: 250_000,
     validate(value) {
@@ -72,8 +78,8 @@ function strictDefinition(stage: PromptStage): StageDefinition {
   };
 }
 
-export const strictModelChain = reviewPromptStages.map(strictDefinition);
-export const strictPatchChain = autofixPromptStages.map(strictDefinition);
+export const strictModelChain = reviewPromptStages.map(stage => strictDefinition(stage));
+export const strictPatchChain = autofixPromptStages.map(stage => strictDefinition(stage));
 
 export async function runModelReviewChain(input: {
   invoke: ModelStageInvoker;
@@ -84,10 +90,11 @@ export async function runModelReviewChain(input: {
   plan?: ReviewPlan;
   onPlan?: (plan: ReviewPlan) => Promise<void> | void;
   skip?: (stage: PromptStage, records: ValidatedStage[]) => string | undefined;
+  variant?: PromptVariant;
 }) {
   const attempts=new Map<string,Omit<StageUsage,"promptVersion"|"schemaVersion"|"attempt"|"outcome">>();
   const plan = input.plan ?? planReview(input.untrusted);
-  const definitions = plan.stages.map(strictDefinition);
+  const definitions = plan.stages.map(stage => strictDefinition(stage, input.variant));
   const files = input.untrusted.files;
   const slices = plan.findingsSpecialists > 1 && Array.isArray(files)
     ? partitionFiles(files, plan.findingsSpecialists).map(part => ({ ...input.untrusted, files: part }))
@@ -156,10 +163,12 @@ export async function runEscalationCritic(input: {
   // different.
   priorStages: readonly ValidatedStage[];
   onUsage?: (usage: StageUsage) => Promise<void> | void;
+  // The first pass's variant: a second opinion asked a different question would not be one.
+  variant?: PromptVariant;
 }) {
   const attempts = new Map<string, Omit<StageUsage, "promptVersion" | "schemaVersion" | "attempt" | "outcome">>();
   return runPromptChain({
-    definitions: [strictDefinition("critic")],
+    definitions: [strictDefinition("critic", input.variant)],
     expectedStages: ["critic"],
     pinned: input.pinned,
     untrusted: input.untrusted,

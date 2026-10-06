@@ -128,7 +128,7 @@ export const analysisScope = internalQuery({
     const credential = credentials.find(item => item.repositoryId === review.repositoryId && item.provider === review.provider)
       ?? credentials.find(item => item.repositoryId === undefined && item.provider === review.provider);
     if (!credential || !credential.lastValidatedAt) throw new ConvexError("provider_credential_invalid");
-    return { organizationId: review.organizationId, repositoryId: review.repositoryId, reviewId: review._id,
+    return { organizationId: review.organizationId, repositoryId: review.repositoryId, reviewId: review._id, githubRepositoryId: review.githubRepositoryId,
       headSha: review.headSha, baseSha: review.baseSha, configRevision: String(review.configRevisionId), provider: review.provider, model: review.model,
       credential: { id: credential.credentialScopeId, organizationId: String(credential.organizationId), ...(credential.repositoryId ? { repositoryId: String(credential.repositoryId) } : {}),
         provider: credential.provider, ciphertext: credential.encryptedCiphertext, nonce: credential.nonce, tag: credential.authTag,
