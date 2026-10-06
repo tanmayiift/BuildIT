@@ -452,6 +452,7 @@ export const complete = internalMutation({
       v.literal("completed"),
       v.literal("failed"),
     ),
+    failureCode: v.optional(v.string()),
     now: v.number(),
   },
   handler: async (ctx, args) => {
@@ -464,6 +465,7 @@ export const complete = internalMutation({
         disposition: args.disposition,
         status: args.status,
         completedAt: args.status === "enqueued" ? undefined : args.now,
+        ...(args.failureCode && args.failureCode.length <= 64 && /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(args.failureCode) ? { failureCode: args.failureCode } : {}),
       });
     await ctx.scheduler.runAfter(0, internal.telemetryWorker.emit, webhookTelemetryOutcome(args.disposition, args.status));
   },
