@@ -8,7 +8,9 @@ export function CodeExcerpt({ path, lines, clipped }: { path: string; lines: rea
   return (
     <figure className="code-excerpt">
       <figcaption><code>{path}</code>{range ? <span> · {range} cited</span> : null}{clipped ? <span> · first 40 lines shown</span> : null}</figcaption>
-      <pre><code>{lines.map(line => (
+      {/* A long line scrolls inside the box, and a region that scrolls must be reachable from a
+          keyboard (WCAG 2.1.1), so the box takes focus and says what it holds. */}
+      <pre tabIndex={0} aria-label={`${path}${range ? `, ${range} cited` : ""}`}><code>{lines.map(line => (
         <span key={line.number} className={line.cited ? "code-line cited" : "code-line"}>
           <span className="code-line-number" aria-hidden="true">{line.number}</span>
           <span className="code-line-mark" aria-hidden="true">{line.cited ? "›" : " "}</span>

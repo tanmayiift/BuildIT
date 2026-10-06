@@ -4,7 +4,7 @@ export function CheckOutput({ name, lines, truncated }: { name: string; lines: r
   return (
     <figure className="check-output">
       <figcaption>{truncated ? `Last ${lines.length} lines of ${name}` : `Output of ${name}`}</figcaption>
-      <pre><code>{lines.join("\n")}</code></pre>
+      <pre tabIndex={0} aria-label={`Output of ${name}`}><code>{lines.join("\n")}</code></pre>
     </figure>
   );
 }

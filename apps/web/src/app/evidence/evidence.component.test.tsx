@@ -25,6 +25,16 @@ describe("the lines a finding cites", () => {
     expect(container.querySelector(".code-line-number")?.getAttribute("aria-hidden")).toBe("true");
   });
 
+  it("can be scrolled from a keyboard, and names what it holds when focused", () => {
+    const { container } = render(<CodeExcerpt path="src/total.js" lines={lines} clipped={false} />);
+    const box = container.querySelector("pre")!;
+    expect(box.tabIndex).toBe(0);
+    expect(box.getAttribute("aria-label")).toBe("src/total.js, lines 4 cited");
+    const output = render(<CheckOutput name="test" lines={["1 failing"]} truncated={false} />).container.querySelector("pre")!;
+    expect(output.tabIndex).toBe(0);
+    expect(output.getAttribute("aria-label")).toBe("Output of test");
+  });
+
   it("says when a long range was cut short", () => {
     const { container } = render(<CodeExcerpt path="a.js" lines={lines} clipped />);
     expect(container.querySelector("figcaption")?.textContent).toContain("first 40 lines shown");
