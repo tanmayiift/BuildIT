@@ -1,5 +1,6 @@
 import { OverviewReadiness } from "./live-connections";
 import { landingSegments } from "./landing-segments";
+import { HeroReviewCard } from "./visuals/hero-review-card";
 
 const layers = [
   { mark: "01", title: "Choose one pull request", body: "You choose the repositories. Unselected ones stay invisible." },
@@ -14,8 +15,8 @@ export default function Overview() {
       <div className="landing-promise">
         <p className="eyebrow">Autonomous pull request review</p>
         <h1 id="landing-title">Code review that shows its evidence&nbsp;— or says it couldn’t.</h1>
-        <p>Every finding cites a file, a line and the exact commit it read, next to the output of the check that proved it. When the proof is missing, the verdict is <strong>inconclusive</strong>, not a confident guess.</p>
-        <p className="landing-promise-line">It fixes what it finds as a stacked PR. It never merges. A human owns the merge decision.</p>
+        <p>Every finding cites the file, line and commit it read, beside the check that proved it. Then it opens the fix as a stacked pull request.</p>
+        <p className="landing-promise-line">It never merges. A human owns the merge decision.</p>
       </div>
       {/* The hero used to carry a working scanner that executed pasted code. It was the only surface
           in the product running attacker-supplied input with no account behind it, and once BuildIT
@@ -28,11 +29,15 @@ export default function Overview() {
           checkable against a public pull request.
 
           It stays its own grid child so that when the hero stacks on a phone the order is claim,
-          then the evidence, then the two actions that cost something. */}
+          then the evidence, then the two actions that cost something. The review is drawn now rather
+          than described: the field leads with the product doing its job, and so does this
+          (docs/design/visual-direction-2026-10.md). */}
       <aside className="landing-try" aria-labelledby="landing-try-title">
-        <p className="eyebrow">One real review</p>
-        <h2 id="landing-try-title">See what it hands you</h2>
-        <p className="landing-try-closed">One review BuildIT actually ran: the file and line it cites, the commit it read, the check output that proved it, and the fix pull request. No account, nothing to paste.</p>
+        <div className="landing-try-head">
+          <p className="eyebrow">One real review</p>
+          <h2 id="landing-try-title">See what it hands you</h2>
+        </div>
+        <HeroReviewCard />
         <a className="text-link" href="/scan">Read a real review &rarr;</a>
       </aside>
       <div className="landing-commit">

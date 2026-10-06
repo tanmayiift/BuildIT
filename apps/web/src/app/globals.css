@@ -53,6 +53,10 @@
   --code-gutter: #5f6978;
   --code-cited-bg: #fff4dc;
   --code-cited-mark: #875100;
+  --diff-add-bg: #eaf7ef;
+  --diff-add-mark: #18733d;
+  --diff-del-bg: #fff0ee;
+  --diff-del-mark: #b42318;
   /* The emphasis panels (.landing-trust, .readiness, .activation-path). They used --navy and the
      inverse inks, which in the dark scheme are tuned for buttons - so a panel became a slab of light
      blue on a dark page. A panel stays a deep ground with light text in both schemes. */
@@ -152,6 +156,10 @@
     --code-gutter: #8f9aaa;
     --code-cited-bg: #33270f;
     --code-cited-mark: #f0b44c;
+    --diff-add-bg: #10291c;
+    --diff-add-mark: #6fd39a;
+    --diff-del-bg: #3a1714;
+    --diff-del-mark: #ff8b7c;
     --ink: #e6eaf0;
     --ink-2: #c3cad5;
     --muted: #9aa4b2;
@@ -275,12 +283,31 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 /* Replaces the static decision mock-up that used to sit here. The mock-up asserted that BuildIT
    cites a file and a line; the panel below demonstrates it on the reader's own code, which is the
    same claim with evidence attached. */
-.landing-try { display: grid; gap: 2px; align-content: center; }
-.landing-try h2 { margin: 0 0 var(--space-3); font-size: var(--text-xl); letter-spacing: -.03em; }
+.landing-try { display: grid; gap: var(--space-3); align-content: center; min-width: 0; }
+.landing-try-head { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+.landing-try-head .eyebrow { margin: 0; }
+.landing-try h2 { margin: 0; font-size: var(--text-md); letter-spacing: -.02em; }
 .landing-try .text-link { justify-self: start; font-size: var(--text-sm); }
-/* Stands in for the scan panel when the open demo is closed, in the same hero slot: the column
-   already centres its content, so this only needs the body-copy treatment the panel supplied. */
-.landing-try-closed { margin: 0; font-size: var(--text-base); line-height: 1.55; color: var(--muted); }
+/* The real review, drawn in a window (visuals/hero-review-card.tsx). A tinted frame with the
+   repository bar on top reads as "this is a pull request", which is the claim it carries. */
+.hero-card { border: 1px solid var(--line-strong); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-2); overflow: hidden; min-width: 0; }
+.hero-card-bar { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); background: var(--surface-inset); color: var(--ink-2); font-size: var(--text-xs); }
+.hero-card-bar code { color: var(--muted); font-family: var(--font-mono); }
+.hero-card-bar .status { margin-left: auto; }
+.hero-card-body { display: grid; gap: var(--space-2); padding: var(--space-4); }
+.hero-card-verdict { margin: 0; color: var(--ink-2); font-size: var(--text-xs); font-weight: var(--weight-medium); }
+.hero-card-body h3 { margin: 0; font-size: var(--text-lg); letter-spacing: -.02em; }
+.hero-card-body .code-excerpt, .hero-card-body .check-output { margin: 0; }
+.hero-card-fix { display: grid; gap: var(--space-2); }
+.hero-card-fix p { margin: var(--space-2) 0 0; color: var(--ink-2); font-size: var(--text-xs); font-weight: var(--weight-medium); }
+.hero-card-fix .text-link { font-size: var(--text-xs); }
+/* The card is narrower than the review page, so its code is set a step smaller: the cited line is
+   the point of the picture and should not need scrolling to read. */
+.hero-card .code-excerpt pre, .hero-card .check-output pre, .hero-card .diff-view { font-size: var(--text-xs); }
+/* The card spans both left-column rows; without these the promise and the actions drift apart to
+   the card's full height. They meet at the gap instead. */
+.landing-hero .landing-promise { align-self: end; }
+.landing-hero .landing-commit { align-self: start; }
 .landing-flow>ol { display: grid; grid-template-columns: repeat(4,1fr); grid-template-rows: auto auto auto; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-lg); list-style: none; overflow: hidden; }
 .landing-flow li { display: grid; grid-row: span 3; grid-template-rows: subgrid; gap: var(--space-2); padding: var(--space-5); border-right: 1px solid var(--line); }
 .landing-flow li:last-child { border-right: 0; }
