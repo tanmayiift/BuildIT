@@ -15,6 +15,9 @@ export type DetectionExpectation = {
   // Any one of these phrases, matched case-insensitively, shows the reviewer understood the defect
   // rather than pattern-matching the file name.
   anyOf: readonly string[];
+  // A blocking expectation is high or critical: only those severities block a merge (severityPolicy.ts).
+  // Money rounded wrong, a retry that never ends and an excluded qualifying age were labelled
+  // "warning" while warnings blocked; each breaks what the code promises, which is high.
   severityAtLeast: "info" | "warning" | "high" | "critical";
   blocking: boolean;
 };
@@ -50,7 +53,7 @@ export const detectionCases: ReadonlyArray<DetectionCase> = Object.freeze([
         "",
       ].join("\n"),
     }],
-    expect: { path: "src/currency.js", anyOf: ["1.005", "floating point", "floating-point", "half", "round"], severityAtLeast: "warning", blocking: true },
+    expect: { path: "src/currency.js", anyOf: ["1.005", "floating point", "floating-point", "half", "round"], severityAtLeast: "high", blocking: true },
   },
   {
     id: "det-unbounded-retry",
@@ -72,7 +75,7 @@ export const detectionCases: ReadonlyArray<DetectionCase> = Object.freeze([
         "",
       ].join("\n"),
     }],
-    expect: { path: "src/retry.js", anyOf: ["forever", "infinite", "unbounded", "never terminat", "no limit", "swallow"], severityAtLeast: "warning", blocking: true },
+    expect: { path: "src/retry.js", anyOf: ["forever", "infinite", "unbounded", "never terminat", "no limit", "swallow"], severityAtLeast: "high", blocking: true },
   },
   {
     id: "det-tls-disabled",
@@ -109,7 +112,7 @@ export const detectionCases: ReadonlyArray<DetectionCase> = Object.freeze([
         "",
       ].join("\n"),
     }],
-    expect: { path: "src/discount.js", anyOf: ["60", "off-by-one", "off by one", "boundary", "qualifying"], severityAtLeast: "warning", blocking: true },
+    expect: { path: "src/discount.js", anyOf: ["60", "off-by-one", "off by one", "boundary", "qualifying"], severityAtLeast: "high", blocking: true },
   },
   {
     id: "det-credentials-in-log",

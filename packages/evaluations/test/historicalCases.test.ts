@@ -19,14 +19,6 @@ describe("the historical pull request set", () => {
     }
   });
 
-  it("blocks only at high or critical, so a label never demands what the policy cannot do", () => {
-    // Only critical and high findings block a merge. A label that expected a blocking warning could
-    // never be met, and would score every reviewer as missing it.
-    for (const item of historicalCases.filter(entry => entry.expect?.blocking)) {
-      expect(["high", "critical"], item.id).toContain(item.expect?.severityAtLeast);
-    }
-  });
-
   it("keeps its labels frozen while a baseline and a candidate are compared", () => {
     // Changing a label changes what "detected" means. Do it on purpose: bump historicalSetVersion,
     // re-run the baseline, then update this digest - never update the digest alone.

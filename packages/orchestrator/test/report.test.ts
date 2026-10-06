@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { composeVerifiedReport, type EvidenceRecord } from "../src/index.js";
+import { severityPolicySentence } from "@buildit/contracts";
+import { arbitrateFindings, composeVerifiedReport, type EvidenceRecord } from "../src/index.js";
 
 const head = "a".repeat(40);
 const evidence: EvidenceRecord = { id: "ev-1", artifactExists: true, commitSha: head, path: "src/a.ts", pathExists: true, startLine: 1, endLine: 2, contentHash: "hash", lineHashMatches: true, truncated: false, stdout: true };
@@ -25,6 +26,22 @@ const input = () => ({
 });
 
 describe("verified report", () => {
+  // Only critical and high block. A confirmed warning is still shown, as advice, under a sentence that
+  // says so - a reader should not need to know the policy to tell a decision from a suggestion.
+  it("lets a confirmed warning advise without blocking, and says which severities block", () => {
+    const supported = (severity: "warning" | "high") => arbitrateFindings(
+      [{ id: "f-1", title: "Empty input bypass", category: "logic", severity, confidence: 0.9, path: "src/guard.ts", startLine: 12, endLine: 14, evidenceIds: ["ev-1"], impact: "Invalid records can pass validation.", explanation: "Check the guard.", origin: "model" }],
+      [{ findingId: "f-1", verdict: "supported", missingEvidenceIds: [], injectionDetected: false }]);
+    const warning = composeVerifiedReport({ ...input(), findings: supported("warning") });
+    expect(warning.decision.status).toBe("checks_passed");
+    expect(warning.body).toContain("**Warning · Advisory · Confirmed by evidence**");
+    expect(warning.body).toContain(severityPolicySentence);
+    const high = composeVerifiedReport({ ...input(), findings: supported("high") });
+    expect(high.decision.status).toBe("changes_requested");
+    expect(high.body).toContain("**High · Blocking · Confirmed by evidence**");
+    expect(composeVerifiedReport({ ...input(), findings: [] }).body).not.toContain(severityPolicySentence);
+  });
+
   it("says why an autofix request produced a review and no fix, and says nothing when none was asked for", () => {
     const declined = composeVerifiedReport({ ...input(), autofixDecline: "checks_fail_on_base" });
     expect(declined.body).toContain("> **No fix was opened.** Autofix stopped because a required check already fails on the base commit, so no fix could be shown to pass it.");
