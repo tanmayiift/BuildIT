@@ -66,6 +66,10 @@
   --panel-ink-muted: #9db8d5;
   --panel-tint: rgba(255, 255, 255, .12);
   --panel-line: rgba(255, 255, 255, .22);
+  /* The illustration on the panel (visuals/evidence-sieve.tsx): the cited line and the check that
+     proved it. The panel is a deep ground in both schemes, so these are tuned to it, not to --canvas. */
+  --panel-accent: #f2c14e;
+  --panel-ok: #7fdca4;
   --pattern: rgba(255, 255, 255, .6);
   --top-bar: rgba(255, 255, 255, .96);
   /* Two rules named var(--mono), which nothing defined, and fell back to the system monospace while
@@ -324,11 +328,13 @@ code, .mono, time { font-family: var(--font-mono); font-variant-numeric: tabular
 .landing-segment-question { margin: 0; color: var(--navy); font-size: var(--text-md); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-tight); line-height: 1.3; text-wrap: balance; }
 .landing-segments li>p:not(.landing-segment-question) { margin: 0; color: var(--ink-2); font-size: var(--text-sm); line-height: 1.6; text-wrap: pretty; }
 .landing-segments .text-link { align-self: end; justify-self: start; font-size: var(--text-sm); }
-.landing-trust { display: grid; grid-template-columns: minmax(230px,.65fr) minmax(360px,1.2fr) auto; gap: var(--space-7); align-items: center; padding: var(--space-6); color: var(--panel-ink); background: var(--panel); border-radius: var(--radius-lg); }
+.landing-trust { display: grid; grid-template-columns: minmax(200px,.6fr) minmax(320px,1.1fr) minmax(200px,.6fr); gap: var(--space-7); align-items: center; padding: var(--space-6); color: var(--panel-ink); background: var(--panel); border-radius: var(--radius-lg); }
 .landing-trust h2 { margin: 0; font-size: var(--text-2xl); letter-spacing: -.03em; }
 .landing-trust .eyebrow { color: var(--panel-ink-muted); }
 .landing-trust p { margin: 0; color: var(--panel-ink-2); font-size: var(--text-base); line-height: 1.65; }
 .landing-trust a { color: var(--panel-ink); white-space: nowrap; }
+.landing-trust-body { display: grid; gap: var(--space-3); justify-items: start; }
+.evidence-sieve { width: 100%; max-width: 320px; height: auto; justify-self: end; }
 .landing-pricing { display: grid; grid-template-columns: minmax(230px,.65fr) minmax(360px,1.2fr) auto; gap: var(--space-7); align-items: center; padding: var(--space-6); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 .landing-pricing h2 { margin: 0; font-size: var(--text-2xl); letter-spacing: -.03em; }
 .landing-pricing p { margin: 0; color: var(--ink-2); font-size: var(--text-base); line-height: 1.65; }
