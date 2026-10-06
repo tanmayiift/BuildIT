@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { composeVerifiedReport, neverMergedSentence } from "@buildit/orchestrator";
-import { assertReportPublicationContract, publicationTitle, reviewDetailsUrl } from "./reviewPublicationWorker";
+import { assertReportPublicationContract, inlineFailureReason, publicationTitle, reviewDetailsUrl } from "./reviewPublicationWorker";
 
 const head = "a".repeat(40);
 
@@ -88,5 +88,18 @@ describe("the publication contract checks a shared sentence", () => {
     expect(bodies, "no review_message artifacts found - did the worker change?").toBeGreaterThan(0);
     const occurrences = source.split("neverMergedSentence").length - 1;
     expect(occurrences, `${bodies} review_message bodies but ${occurrences} use the shared sentence`).toBeGreaterThanOrEqual(bodies);
+  });
+});
+
+// Every way out of inline publication used to be silent. The reason is now a closed code, so a log
+// line can say why a review left no inline comment without carrying anything GitHub wrote.
+describe("why inline comments were not posted", () => {
+  it("names GitHub's status, an expired token, a refused write, bad input - and nothing else", () => {
+    expect(inlineFailureReason(new Error("github_write_422"))).toBe("github_422");
+    expect(inlineFailureReason(new Error("installation_token_expired"))).toBe("github_token_expired");
+    expect(inlineFailureReason(new Error("repository_write_unavailable"))).toBe("github_write_unavailable");
+    expect(inlineFailureReason(new Error("inline_findings_input_invalid"))).toBe("input_invalid");
+    expect(inlineFailureReason(new SyntaxError("Unexpected token < in JSON at position 0: <html>secret"))).toBe("unexpected");
+    expect(inlineFailureReason("github_write_500")).toBe("unexpected");
   });
 });

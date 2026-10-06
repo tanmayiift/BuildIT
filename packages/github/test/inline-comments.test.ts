@@ -102,3 +102,38 @@ describe("publishing findings on the lines they cite", () => {
     expect(calls.some(call => call.path === "/pulls/comments/56")).toBe(false);
   });
 });
+
+// GitHub answers a DELETE with 204 and no body. The mock above answered 200 with JSON, so nothing
+// noticed that request() parsed every 2xx as JSON: deleting an earlier BuildIT comment threw, the
+// worker swallowed it, the old comment was already gone and the new ones were never posted. That is
+// what happened on buildit-demo-itsdangerous#3 on 5 Oct 2026 - a re-review left no inline comment
+// at all, while zod#1, with nothing earlier to delete, posted fine.
+describe("re-publishing over earlier comments, with GitHub's real responses", () => {
+  function github(options: { reviewStatus?: number } = {}) {
+    const calls: Array<{ path: string; method: string }> = [];
+    const http = vi.fn(async (url: string, init: RequestInit = {}) => {
+      const path = url.replace(/^https:\/\/api\.github\.com\/repositories\/\d+/, ""), method = init.method ?? "GET";
+      calls.push({ path, method });
+      if (method === "DELETE") return new Response(null, { status: 204 });
+      if (path.startsWith("/pulls/1/comments")) return Response.json([{ id: 55, user: { type: "Bot" }, body: `<!-- buildit-review:inline-pr-1:${"b".repeat(64)} -->\nold` }]);
+      if (path === "/pulls/1/reviews") return options.reviewStatus && options.reviewStatus >= 400 ? new Response("{}", { status: options.reviewStatus }) : Response.json({ id: 900 });
+      return Response.json({});
+    });
+    return { calls, instance: new GitHubRepositoryWriter({ installationToken: "t", repositoryId: 7, http: http as never }) };
+  }
+
+  it("posts the new comments and then removes the old one, through a 204", async () => {
+    const { calls, instance } = github();
+    await expect(instance.publishInlineFindings({ prNumber: 1, headSha: sha, marker: "buildit-review:inline-pr-1", findings: [finding()] })).resolves.toEqual({ posted: 1, skipped: 0 });
+    const posted = calls.findIndex(call => call.path === "/pulls/1/reviews" && call.method === "POST");
+    const removed = calls.findIndex(call => call.path === "/pulls/comments/55" && call.method === "DELETE");
+    expect(posted).toBeGreaterThan(-1);
+    expect(removed).toBeGreaterThan(posted);
+  });
+
+  it("keeps the earlier comments when the new ones cannot be posted", async () => {
+    const { calls, instance } = github({ reviewStatus: 422 });
+    await expect(instance.publishInlineFindings({ prNumber: 1, headSha: sha, marker: "buildit-review:inline-pr-1", findings: [finding()] })).rejects.toThrow("github_write_422");
+    expect(calls.some(call => call.method === "DELETE")).toBe(false);
+  });
+});

@@ -138,9 +138,14 @@ describe("what a real sandbox failure is logged as", () => {
     try {
       const result = await execute(async () => { throw exception; });
       expect(result).toEqual({ status: 503, body: { error: "sandbox_unavailable" } });
-      expect(logged.mock.calls).toEqual([["buildit_execute_failure", {
-        category: "runner_or_scanner", code: "sandbox_unavailable", reason: "sandbox_unavailable",
-      }]]);
+      // The failure now also says which provider call failed, on which revision, in which segment -
+      // and nothing else: the exact key set is pinned so no field can carry the message or the name.
+      expect(logged.mock.calls).toHaveLength(1);
+      const [event, fields] = logged.mock.calls[0] as [string, Record<string, unknown>];
+      expect(event).toBe("buildit_execute_failure");
+      expect(fields).toMatchObject({ category: "provider", code: "sandbox_unavailable", reason: "sandbox_unavailable", stage: "prepare", operation: "acquire", errorClass: "error" });
+      expect(Object.keys(fields).sort()).toEqual(["category", "code", "errorClass", "operation", "reason", "revision", "stage"]);
+      expect(["base", "head"]).toContain(fields.revision);
       const serialized = JSON.stringify(logged.mock.calls);
       for (const value of [shortToken, "s3://", "org-a", "/src/a.ts", "private snippet", "authorization="]) expect(serialized).not.toContain(value);
     } finally { logged.mockRestore(); }

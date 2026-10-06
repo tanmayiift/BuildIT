@@ -23,6 +23,9 @@ export class GitHubRepositoryWriter {
     if (response.status === 401) throw new Error("installation_token_expired");
     if (response.status === 403 || response.status === 404) throw new Error("repository_write_unavailable");
     if (!response.ok) throw new Error(`github_write_${response.status}`);
+    // GitHub answers a DELETE with 204 and no body. Parsing it as JSON threw on every successful
+    // deletion, and the inline publisher's catch hid it (see publishInlineFindings below).
+    if (response.status === 204) return {};
     return response.json() as Promise<Record<string, unknown>>;
   }
   async branchHead(branch: string) {
@@ -136,19 +139,20 @@ export class GitHubRepositoryWriter {
     }
     if (!comments.length) return { posted: 0, skipped };
 
-    // Clear BuildIT's own comments for this marker first, so a re-review of the same commit
-    // replaces its findings instead of stacking a second copy on every line. A comment written by
-    // a person is never touched.
+    // BuildIT's own earlier comments for this marker are replaced, so a re-review of the same commit
+    // does not stack a second copy on every line. They are noted first and removed only once the new
+    // ones are posted: removing them first meant any failure posting left the pull request with no
+    // inline comments at all. A comment written by a person is never touched.
     const existing = await this.request(`/pulls/${input.prNumber}/comments?per_page=100`);
-    for (const item of (Array.isArray(existing) ? existing : []) as Array<{ id?: unknown; body?: unknown; user?: { type?: unknown } }>) {
-      if (item.user?.type !== "Bot" || typeof item.body !== "string" || !item.body.includes(`<!-- ${input.marker}:`) || typeof item.id !== "number") continue;
-      await this.request(`/pulls/comments/${item.id}`, { method: "DELETE" });
-    }
+    const earlier = ((Array.isArray(existing) ? existing : []) as Array<{ id?: unknown; body?: unknown; user?: { type?: unknown } }>)
+      .filter(item => item.user?.type === "Bot" && typeof item.body === "string" && item.body.includes(`<!-- ${input.marker}:`) && typeof item.id === "number")
+      .map(item => item.id as number);
 
     // COMMENT, never REQUEST_CHANGES. The check run carries the verdict; BuildIT does not reach for
     // the merge button through the review API either.
     await this.request(`/pulls/${input.prNumber}/reviews`, { method: "POST",
       body: JSON.stringify({ commit_id: input.headSha, event: "COMMENT", comments }) });
+    for (const id of earlier) await this.request(`/pulls/comments/${id}`, { method: "DELETE" });
     return { posted: comments.length, skipped };
   }
 
