@@ -29,7 +29,7 @@ export const repositoryAccessFlow: readonly FlowStep[] = [
 ];
 
 export const modelKeyFlow: readonly FlowStep[] = [
-  { label: "Your key", detail: "Sent from this browser straight to BuildIT's separate credential broker." },
+  { label: "Your key", detail: "Goes directly from this browser to BuildIT's credential broker." },
   { label: "Validated", detail: "Checked with your provider before anything is saved." },
   { label: "Encrypted", detail: "With AWS KMS in Ireland. Never returned to the browser or stored as plaintext." },
   { label: "Used per review", detail: "Only when AI analysis starts, within the cost limit you approve. Every call shows on Usage." },
