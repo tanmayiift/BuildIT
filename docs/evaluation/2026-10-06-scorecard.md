@@ -12,7 +12,7 @@ Grades:
 
 | Angle | Grade | One line |
 |---|---|---|
-| UI/UX | **B** | The homepage leads with a drawn real review. Setup steps draw what they hand over. The review page shows cited lines and failing output. Accessibility passes 136 of 136 page checks. The review queue and the review page are still text-dense. |
+| UI/UX | **B** | The homepage leads with a drawn real review. Setup steps draw what they hand over. The review queue opens with its verdicts and folds superseded commits. The review page shows cited lines and failing output. Accessibility passes 136 of 136 page checks. The review page is still text-dense. |
 | Product | **B** | Review, inline comments and autofix are proven live today: fix PR `buildit-public-fixture#25`. Platform capacity is about 80 reviews a month in total. |
 | Core customer | **C+** | A solo developer's path works and its cost is measured. A team cannot adopt a product capped at about 80 reviews a month across every customer. |
 | QA | **B** | The new tests drive code. Today's two live defects both had tests, and the tests encoded the wrong expectation. |
@@ -30,12 +30,13 @@ Grades:
   It uses the review page's own components, and the copy around it is one line. The structure is measured against seven competitors in `docs/design/visual-direction-2026-10.md`. It is checked at 1440 px light and dark, and at 375 px (where a sideways scroll was found and fixed).
 - **Illustration (#131).** The accuracy panel carries one illustration, drawn as SVG from the panel's tokens.
 - **Setup (#132).** The GitHub-access and model-key steps open with a four-step drawn flow of where the access or key goes.
-- **Review page (#129).** "Show the cited lines" reads the lines from the reviewed commit, redacted, and "Show where test failed" shows the last 30 lines of a failed check. Both load only when opened.
+- **Review page (#129).** "Show the cited lines" reads the lines from the reviewed commit, redacted, and "Show where test failed" shows the last 30 lines of a failed check. Both load only when opened. Live, it shows `signer.py` lines 215–218 for itsdangerous#3.
+- **Review queue (#132).** It opens with the current results split by verdict, as a bar and legend, and folds each section's results for commits a pull request has moved past.
 - **Accessibility.** axe passes on all 136 route checks, desktop and mobile, light and dark. That includes a keyboard-scroll defect in the new code boxes, found by CI and fixed. New colours are measured at WCAG AA in both schemes.
 
 **Still not done**
 - **Generated illustration.** Google AI Studio refused image generation on this account, with "permission denied" on both Nano Banana Pro and Nano Banana 2 Lite. It needs a paid API key, which only the account owner can set up. The one illustration is drawn instead.
-- **Text density.** The review queue (~1,500 words) and the review page have no visual summary yet. Their density is unchanged.
+- **Text density.** The review page (~830 words) has no visual summary of its own yet. The queue now has one (#132): a verdict bar and legend, with 30 superseded results folded away live.
 
 ## Product: B
 

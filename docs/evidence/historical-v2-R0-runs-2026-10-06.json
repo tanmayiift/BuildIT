@@ -1,0 +1,73 @@
+{
+  "kind": "buildit-production-benchmark-runs",
+  "setVersion": "historical-v2",
+  "labelDigest": "a4cc04541a6e903356f3fa06004d26ca8614497a9960997f119f6dd9dacbfe10",
+  "label": "R0",
+  "provider": "openai",
+  "runsPerCase": 3,
+  "startedAt": "2026-10-06T06:01:00.933Z",
+  "runs": [
+    {
+      "caseId": "hist-itsdangerous-salt-ignored",
+      "run": 1,
+      "attempt": 1,
+      "at": "2026-10-06T06:01:00.939Z",
+      "reviewId": "nx73n7q476r6d20s805hq9d2b98fsz78",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.077306,
+      "inputTokens": 35874,
+      "cachedInputTokens": 16128,
+      "consentToVerdictSeconds": 56.6,
+      "validity": "invalid_parse",
+      "because": "published_not_stored:high|true|accepted"
+    },
+    {
+      "caseId": "hist-p-queue-weighted-concurrency",
+      "run": 1,
+      "attempt": 1,
+      "at": "2026-10-06T06:01:00.936Z",
+      "reviewId": "nx702kh35bmn306hbtgz64kkcn8frk74",
+      "status": "inconclusive",
+      "reason": "tests_need_lockfile",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.080452,
+      "inputTokens": 31365,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 55.8,
+      "validity": "valid",
+      "findings": []
+    },
+    {
+      "caseId": "hist-body-parser-async-verify-bypass",
+      "run": 1,
+      "attempt": 1,
+      "at": "2026-10-06T06:01:00.937Z",
+      "reviewId": "nx7ackg0dz8qy3g3sd1jd1q8kh8frjxr",
+      "status": "inconclusive",
+      "reason": "tests_need_lockfile",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.055386,
+      "inputTokens": 21456,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 60.1,
+      "validity": "invalid_parse",
+      "because": "published_not_stored:high|true|accepted"
+    }
+  ]
+}
