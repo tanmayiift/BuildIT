@@ -6,14 +6,14 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { runEscalationCritic, arbitrateFindings, hunkWindows, relatedPaths, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, reconcileArbitration, runModelReviewChain, type ReviewPlan, type ValidatedStage, validateFindingCandidates } from "@buildit/orchestrator";
+import { runEscalationCritic, arbitrateFindings, hunkWindows, relatedPaths, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, type PromptVariant, reconcileArbitration, runModelReviewChain, type ReviewPlan, type ValidatedStage, validateFindingCandidates } from "@buildit/orchestrator";
 import { approvedProviderModels, type ProviderName, type ProviderResult } from "@buildit/providers";
 import { fingerprint, issueArtifactGrant, redact, redactForModel } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 type RequirementSourceType = "pull_request" | "github_issue" | "linear" | "jira" | "repository_document" | "test";
 type SnapshotChunk = { artifactId?: Id<"artifacts">; revision?: "base" | "head"; pull?: { reviewInstructions?: string[]; title: string; body: string; files: Array<{ path: string; patch?: string; status: string }>; omitted: unknown[]; urlHash: string; requirementCoverage?: "complete" | "partial"; requirementSources?: Array<{ id: string; type: RequirementSourceType; status: string; version: string; urlHash: string; content?: string }>; requirements?: Array<{ id: string; text: string; sourceId: string; line: number; evidenceHash: string; certainty: string }>;requirementConflicts?:Array<{canonical:string;requirementIds:string[];sourceIds:string[]}> }; snapshot: { files: Array<{ path: string; content: string; size: number }>; omitted: unknown[]; coverage: string } };
-type AnalysisScope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; headSha: string; baseSha: string; configRevision: string; provider: ProviderName; model: string;
+type AnalysisScope = { organizationId: Id<"organizations">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; githubRepositoryId: number; headSha: string; baseSha: string; configRevision: string; provider: ProviderName; model: string;
   credential: { id: string; organizationId: string; repositoryId?: string; provider: ProviderName; ciphertext: string; nonce: string; tag: string; wrappedDataKey: string; kmsKeyId: string; envelopeVersion: 1; keyVersion: number; aadDigest: string; maskedSuffix: string; availableModels: string[]; status: "valid"; createdBy: string; createdAt: number; lastValidatedAt: number };
   credentialDocumentId: Id<"providerCredentials">; artifacts: Array<{ id: Id<"artifacts">; storageKey: string; checksum: string; size: number }>;
   validationArtifact: { id: Id<"artifacts">; storageKey: string; checksum: string; size: number } };
@@ -345,6 +345,14 @@ export function introducedScannerFindings(base: ScannerFindingInput[], head: Sca
 
 // The evidence gate every model finding passes, written once and used twice: to decide whether the
 // critic and arbitration calls could change the result at all, and for the result itself.
+// Repositories that run the candidate prompts (packages/orchestrator/src/candidatePrompts.ts), as
+// GitHub repository ids so a rename cannot move one in or out. Unset means none: the candidate is
+// opt-in until the historical benchmark shows it does no worse, and then it becomes the default.
+export function promptVariantFor(githubRepositoryId: number, allowlist = process.env.BUILDIT_PROMPT_CANDIDATE_REPOSITORIES): PromptVariant {
+  const ids = (allowlist ?? "").split(",").map(value => value.trim()).filter(value => /^[1-9]\d{0,15}$/.test(value));
+  return ids.includes(String(githubRepositoryId)) ? "candidate" : "current";
+}
+
 export type FindingGate = { provenance: ReadonlyMap<string, unknown>; evidence: EvidenceRecord[]; allowedPaths: ReadonlySet<string>; headSha: string };
 export function gateModelFindings(records: ValidatedStage[], gate: FindingGate) {
   const stage = (name: PromptStage) => records.find(item => item.stage === name)?.value ?? {};
@@ -428,7 +436,8 @@ export const analyze = internalAction({
     const findingGate: FindingGate = { provenance: provenanceByRequirementId, evidence: [...headEvidence.values()].map(item => item.record),
       allowedPaths: new Set([...headEvidence.values()].flatMap(item => item.record.path ? [item.record.path] : [])), headSha: scope.headSha };
     let plannedReview: ReviewPlan | undefined;
-    const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted,
+    const variant = promptVariantFor(scope.githubRepositoryId);
+    const records = redactModelOutput(await runModelReviewChain({ pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision }, untrusted, variant,
       onInjection: report => { injectionUnscoped ||= report.scope.unscoped; for (const surface of report.scope.surfaces) injectionSurfaces.add(surface); },
       // planReview runs on every review and its output was discarded on every review - the chain
       // recomputed it internally and nothing ever saw which stages were chosen, how many findings
@@ -494,7 +503,7 @@ export const analyze = internalAction({
       try {
         const escalationRecords = await runEscalationCritic({
           pinned: { headSha: scope.headSha, baseSha: scope.baseSha, configRevision: scope.configRevision },
-          untrusted,
+          untrusted, variant,
           // The stages that produced the findings under dispute, so this renders the prompt a
           // first-pass critic would see rather than a novel one whose output means something else.
           priorStages: records.filter(item => ["requirements", "findings"].includes(item.stage)),

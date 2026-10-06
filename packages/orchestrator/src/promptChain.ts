@@ -1,3 +1,4 @@
+import {candidateStagePolicies} from "./candidatePrompts.js";
 export const promptStages=["requirements","review_plan","findings","critic","arbitration","patch","report"] as const;
 export type PromptStage=typeof promptStages[number];
 // review_plan and report stay in promptStages - stored rows, grants and accounting still name them -
@@ -12,7 +13,10 @@ export const autofixPromptStages=["patch"] as const satisfies readonly PromptSta
 // with an empty value and attempts 0, so the stored chain still names every stage.
 export type ValidatedStage={stage:PromptStage;promptVersion:string;schemaVersion:string;value:Record<string,unknown>;attempts:number;skipped?:string};
 const emptyStageValues:Record<PromptStage,Record<string,unknown>>={requirements:{requirements:[]},review_plan:{checks:[],evidenceOperations:[],riskAreas:[],exclusions:[]},findings:{findings:[]},critic:{decisions:[]},arbitration:{findings:[]},patch:{patches:[]},report:{claims:[]}};
-export type StageDefinition={stage:PromptStage;promptVersion:string;schemaVersion:string;maxInputBytes:number;validate(value:unknown):Record<string,unknown>};
+// variant: which wording of the stage task to send. "candidate" is a prompt under evaluation
+// (candidatePrompts.ts); a stage with no candidate wording falls back to the current one.
+export type PromptVariant="current"|"candidate";
+export type StageDefinition={stage:PromptStage;promptVersion:string;schemaVersion:string;maxInputBytes:number;variant?:PromptVariant;validate(value:unknown):Record<string,unknown>};
 // callId names one provider call and the attempt record it produces. Calls can run concurrently, so a
 // caller pairing usage with attempts by arrival order would credit one call's tokens to another.
 export type StageExecutor=(request:{stage:PromptStage;system:string;input:string;repairOf?:unknown;callId:string})=>Promise<unknown>;
@@ -27,6 +31,13 @@ const stagePolicies: Record<PromptStage,string> = {
  patch:"Produce bounded replacements only for supplied accepted findings and exact expected content hashes. Do not edit protected paths, add unrelated changes, weaken tests, or claim validation. Return no patch when the supplied evidence cannot support a safe edit.",
  report:"Summarize only supplied accepted or uncertain findings and completed validation evidence. Every material claim must cite exact supplied evidenceIds. Do not claim a passing check without supplied stdout evidence, and do not claim the pull request is bug-free, fully secure, or safe to merge.",
 };
+
+// The system text one stage call receives. fixedSystemPolicy comes first and never varies, so the
+// untrusted-data rule reaches every stage of every variant word for word.
+export function stageSystemPrompt(stage:PromptStage,variant:PromptVariant="current"){
+ const task=(variant==="candidate"?candidateStagePolicies[stage]:undefined)??stagePolicies[stage];
+ return `${fixedSystemPolicy}\n\nStage task: ${task}`;
+}
 
 export type InjectionSignal={path:string;kind:"authority_override"|"role_marker"|"delimiter_collision"|"encoded_instruction"};
 const authorityPatterns=[
@@ -193,7 +204,7 @@ export async function runPromptChain(input:{view?:(stage:PromptStage,records:Val
    for(let attempt=0;attempt<=repairs;attempt++){
      attempts++;
      const callId=`${definition.stage}:${++calls}`;
-     raw=await input.executor({stage:definition.stage,system:`${fixedSystemPolicy}\n\nStage task: ${stagePolicies[definition.stage]}`,input:rendered,repairOf:attempt?raw:undefined,callId});
+     raw=await input.executor({stage:definition.stage,system:stageSystemPrompt(definition.stage,definition.variant),input:rendered,repairOf:attempt?raw:undefined,callId});
      let validated:Record<string,unknown>|undefined;
      try{validated=definition.validate(raw)}catch(error){lastError=error}
      await input.onAttempt?.({stage:definition.stage,promptVersion:definition.promptVersion,schemaVersion:definition.schemaVersion,attempt:attempt+1,outcome:validated?"valid":"schema_invalid",callId});
