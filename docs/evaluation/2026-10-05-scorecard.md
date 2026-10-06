@@ -11,7 +11,7 @@ Grades:
 | Angle | Grade | One line |
 |---|---|---|
 | UI/UX | **B+** | A live signed-in audit is clean on 34 of 34 page loads. Two primitives replaced 27 hand-made copies. One copy defect was found live and fixed. |
-| Product | **B+** | Review, Ask, both dismissals, isolation, Gemini and release work live. zod#1 now catches its seeded bug. Autofix is fixed through execution and waits on sandbox capacity for a stacked-PR proof. |
+| Product | **B+** | Review, Ask, both dismissals, isolation, Gemini and release work live. zod#1 now catches its seeded bug. Autofix is fixed through execution and waits on an unexplained sandbox refusal (not capacity) for a stacked-PR proof. |
 | Core customer | **B** | All four segments are named the same way everywhere. Each segment's first question has a working path, and solo-developer cost is now measured. |
 | QA | **B−** | 2,375 tests plus 888 release-gate tests run on every PR. Most architecture guards still read source text. |
 | CTO | **B+** | Model cost fell 84% and input tokens 93% on the reference PR, with the verdict unchanged. The release now runs from GitHub. Remaining risks are named below. |
@@ -47,7 +47,7 @@ Grades:
 | `@buildit ask` | Live | Answered 9 s after the review finished, 5 Oct; a PR with no review now gets a reply (#112) |
 | Dismiss a finding from the UI | Live | gson#3 finding `m57a7gvg…` → `resolution: dismissed` plus a `findingFeedback` row at 20:17:21Z, 5 Oct |
 | Dismiss by resolving the BuildIT thread | Live (after #118) | zod#1 thread `PRRT_kwDOUOypWs6pPKfv`: resolved, so the delivery was `processed` and `dismissed` was recorded within 1 s; unresolved, so `accepted` was recorded. Before #118 nothing was recorded on any review |
-| `@buildit autofix` → stacked PR | **Partly proven; blocked on sandbox capacity** | After #119, axios#2 (`nx7asw5a…`) got through every execution segment. It then declined correctly in substance (its tests fail on base) but reported a platform error; #123 makes that a stated decline. The positive proof, public-fixture#22 (checks pass on base, the PR breaks them), was refused twice by the sandbox provider (`sandbox_unavailable`) after the day's runs |
+| `@buildit autofix` → stacked PR | **Partly proven; blocked on an unexplained sandbox refusal** | After #119, axios#2 (`nx7asw5a…`) got through every execution segment. It then declined correctly in substance (its tests fail on base) but reported a platform error; #123 makes that a stated decline. The positive proof, public-fixture#22 (checks pass on base, the PR breaks them), was refused twice by the sandbox provider with an error BuildIT could not classify (not capacity; see Open risks) |
 | Two-user isolation | Live | A and B in separate browsers, plus API probes (`docs/security/two-user-production-proof.md`) |
 | Gemini review | Live | p-queue#2, review `nx7drheq…`, 5 Oct. gemini-3.1-pro-preview, one call, $0.149, verdict correct. The last Gemini run before #98 failed `truncated` |
 | Uninstall or suspend recorded | Behavioural test | #101 (signed deliveries through the real route) |
@@ -156,10 +156,14 @@ PR-9 (retiring the arbitration model call) waits for 30 production reviews of da
 - Budget reservations still fail closed. Cached tokens are recorded but charged at the full rate.
 
 **Open risks**
-- **Vercel Hobby sandbox capacity is the binding limit.** After a day of live runs the provider refused
-  new sandboxes twice (`sandbox_unavailable`, 22:26 and 22:29Z). BuildIT's own workspace meter read
-  3,237 of 9,000 s. The Vercel usage page lags; it showed 2 h 49 m of the 5 h Active CPU at 15:30.
-  More sandbox time needs a Pro plan or the next billing cycle.
+- **Two sandbox refusals with no recorded cause (corrected 6 Oct).** This entry first said Vercel's
+  Hobby capacity was used up. That was wrong:
+  - a plan limit arrives as a 402 or "usage limit exceeded" and is logged as `capacity`;
+  - these were logged `unexpected`;
+  - Vercel showed 68 of 5K creations and no sandbox running.
+
+  The broker never logged what the provider said, so the cause is unknown. The broker now records the
+  provider's status and identifier code, never its text.
 - One fingerprint key with no per-tenant versioning (`known-defects.md`).
 - Email notifications are off.
 - `completedAt` is a logical workflow timestamp, so ordering by it can mislead.

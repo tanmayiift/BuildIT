@@ -66,17 +66,31 @@ export function inlineFinding(item: Record<string, unknown>, fingerprintKey: Buf
 // Inline delivery is best-effort by design: the verdict is already published on the check run and
 // the summary comment before this runs, so a GitHub hiccup here must not fail a review that has
 // already decided. It logs and moves on rather than throwing.
-async function publishInlineFindings(scope: Scope, token: string, feedback: ReadonlyArray<{ ruleKey: string; pathPrefixHmac: string; verdict: "accepted" | "dismissed" }>) {
-  if (!scope.analysis) return;
+// What happened to the inline comments, as a closed reason - never repository or provider text.
+// Every way out of publishInlineFindings used to be silent, so a review that published no inline
+// comment (buildit-demo-itsdangerous#3, 5 Oct 2026) left nothing to say why.
+export type InlinePublication = { outcome: "posted" | "skipped" | "failed"; reason?: string; selected?: number; posted?: number; skipped?: number };
+export function inlineFailureReason(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  const status = message.match(/^github_write_(\d{3})$/)?.[1];
+  if (status) return `github_${status}`;
+  if (message === "installation_token_expired") return "github_token_expired";
+  if (message === "repository_write_unavailable") return "github_write_unavailable";
+  if (message === "inline_findings_input_invalid") return "input_invalid";
+  return "unexpected";
+}
+
+async function publishInlineFindings(scope: Scope, token: string, feedback: ReadonlyArray<{ ruleKey: string; pathPrefixHmac: string; verdict: "accepted" | "dismissed" }>): Promise<InlinePublication> {
+  if (!scope.analysis) return { outcome: "skipped", reason: "no_analysis" };
   try {
     const brokerUrl = required("BUILDIT_BROKER_URL").replace(/\/$/, ""), secret = Buffer.from(required("ARTIFACT_GRANT_SECRET"), "base64url");
     const fingerprintKey = Buffer.from(required("FINDING_FINGERPRINT_SECRET"), "base64url");
     const grant = issueArtifactGrant({ organizationId: String(scope.organizationId), repositoryId: String(scope.repositoryId), reviewId: String(scope.reviewId),
       artifactId: String(scope.analysis.id), storageKey: scope.analysis.storageKey, operation: "read" }, secret, Date.now());
     const response = await fetch(`${brokerUrl}/api/artifacts`, { headers: { authorization: `Bearer ${grant}` } });
-    if (!response.ok) return;
+    if (!response.ok) return { outcome: "skipped", reason: `artifact_download_${response.status}` };
     const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.byteLength !== scope.analysis.size || createHash("sha256").update(buffer).digest("hex") !== scope.analysis.checksum) return;
+    if (buffer.byteLength !== scope.analysis.size || createHash("sha256").update(buffer).digest("hex") !== scope.analysis.checksum) return { outcome: "skipped", reason: "artifact_integrity" };
     const value = JSON.parse(buffer.toString("utf8")) as { arbitrated?: Array<Record<string, unknown>> };
     // Learning removes before the profile decides what is loud, because it works on the raw shape -
     // the rule, the path and where the finding came from - which the GitHub-facing form drops.
@@ -92,12 +106,14 @@ async function publishInlineFindings(scope: Scope, token: string, feedback: Read
     if (demoted > 0) console.info("buildit_learning_demoted", { demoted });
     const findings = selectInlineFindings(surviving as Array<Record<string, unknown> & { severity: string; blocking?: boolean; resolution?: string }>, scope.reviewProfile)
       .map(item => inlineFinding(item, fingerprintKey));
-    if (!findings.length) return;
+    if (!findings.length) return { outcome: "skipped", reason: "none_selected", selected: 0 };
     const writer = new GitHubRepositoryWriter({ repositoryId: scope.githubRepositoryId, installationToken: token });
-    await writer.publishInlineFindings({ prNumber: scope.prNumber, headSha: scope.headSha,
+    const result = await writer.publishInlineFindings({ prNumber: scope.prNumber, headSha: scope.headSha,
       marker: inlineCommentMarker(scope.prNumber), findings });
-  } catch {
-    // Deliberately swallowed: see above. The review has already been published.
+    return { outcome: result.posted ? "posted" : "skipped", ...(result.posted ? {} : { reason: "all_unanchorable" }), selected: findings.length, posted: result.posted, skipped: result.skipped };
+  } catch (error) {
+    // Still not a review failure - the verdict is already published - but no longer silent.
+    return { outcome: "failed", reason: inlineFailureReason(error) };
   }
 }
 
@@ -131,7 +147,8 @@ export const publish = internalAction({
       // line it cites - the thing the headline has always promised and never delivered. Only
       // findings that survived arbitration reach here, so nothing the validator dropped lands on a
       // line, and they are anchored to the pinned commit rather than to whatever HEAD is now.
-      await publishInlineFindings(scope, token, await ctx.runQuery(internal.findingFeedbackData.feedbackForRepository, { repositoryId: scope.repositoryId }));
+      const inline = await publishInlineFindings(scope, token, await ctx.runQuery(internal.findingFeedbackData.feedbackForRepository, { repositoryId: scope.repositoryId }));
+      console.info("buildit_inline_publication", inline);
       await ctx.runMutation(internal.reviewPublicationData.completeSideEffect, { ...args, sideEffectId: commentEffect, requestHash, externalId: String(comment.id), status: "completed", now: Date.now() });
       return { checkId: String(check.id), commentId: String(comment.id) };
     } finally { await github.revoke(tokenScope); }

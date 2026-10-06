@@ -102,7 +102,9 @@ told not to make. Tests cover it (`convex/tenantIsolation.test.ts`, the invitati
 
   #123 makes autofix decline before spending in that situation, and say so in the report.
 - **Autofix positive proof, public-fixture#22:** checks pass on base, and the PR breaks `test` and
-  `static_analysis`. Two attempts (`nx7ec44e…`, `nx77yzwc…`) were refused by the sandbox provider with
-  `sandbox_unavailable` within 30 s of starting. The day's runs had exhausted the plan's sandbox
-  capacity. This proof waits for more capacity.
+  `static_analysis`. Two attempts (`nx7ec44e…`, `nx77yzwc…`) were refused by the sandbox provider with an error BuildIT could not classify (`sandbox_unavailable`, category `unexpected`) within 30 s
+  of starting.
+  - *Corrected 6 Oct:* the first version of this note blamed the plan's sandbox capacity. That was
+    wrong: there was no 402, 68 of 5K creations, and no sandbox running. The cause is unknown, because
+    the broker logged none of what the provider said; it now records the status and identifier code.
 

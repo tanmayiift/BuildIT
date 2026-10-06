@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { assertExecutionSegment, EXECUTION_JOB_PLAN_BUDGET_MS, EXECUTION_JOB_WORK_BUDGET_MS, executionSandboxName, isUnsafeInstallControlPath, SANDBOX_DIAGNOSTIC_RERUN_LIMIT, SANDBOX_SCANNER_TIMEOUT_MS, validatePlan, VercelSandboxRunner, type CommandPlan, type ExecutionRevision, type ExecutionSegment, type SandboxCredentials, type SegmentOutcome } from "@buildit/runner";
+import { assertExecutionSegment, providerFailureOf, EXECUTION_JOB_PLAN_BUDGET_MS, EXECUTION_JOB_WORK_BUDGET_MS, executionSandboxName, isUnsafeInstallControlPath, SANDBOX_DIAGNOSTIC_RERUN_LIMIT, SANDBOX_SCANNER_TIMEOUT_MS, validatePlan, VercelSandboxRunner, type CommandPlan, type ExecutionRevision, type ExecutionSegment, type SandboxCredentials, type SegmentOutcome } from "@buildit/runner";
 import { combineScannerRuns, parseGitleaks, parseOsv, scanBuildITRules, scannerInventory } from "@buildit/scanners";
 import { verifyExecutionGrant } from "@buildit/security";
 import type { ArtifactBroker } from "./artifacts.js";
@@ -96,6 +96,8 @@ export function safeExecutionErrorCategory(error: unknown) {
 }
 
 export async function handleExecution(request: Request, input: { artifactBroker: ArtifactBroker; grantSecret: Uint8Array; consume: (id: string, expiresAt: number) => Promise<boolean>; runner?: Runner; sandboxCredentials?: SandboxCredentials; now?: number }) {
+  // Which segment was running when it failed, for the failure log. Set once the segment is known.
+  let failedStage: string | undefined;
   try {
     if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
     const token = bearer(request), raw = await request.text();
@@ -125,7 +127,7 @@ export async function handleExecution(request: Request, input: { artifactBroker:
     // malformed, which is a different accusation about a different party. Past this line the segment
     // is signed, so anything wrong with it is BuildIT's own worker sending nonsense.
     let segment: ExecutionSegment;
-    try { segment = assertExecutionSegment(body.segment, { ...(install ? { install } : {}), checks }, SANDBOX_SCANNER_TIMEOUT_MS); }
+    try { segment = assertExecutionSegment(body.segment, { ...(install ? { install } : {}), checks }, SANDBOX_SCANNER_TIMEOUT_MS); failedStage = segment.stage; }
     catch { throw new Error("invalid_execution_request"); }
     const revisions: ExecutionRevision[] = segment.revisions ?? ["base", "head"];
     const files = { base: new Map<string, string>(), head: new Map<string, string>() };
@@ -186,8 +188,16 @@ export async function handleExecution(request: Request, input: { artifactBroker:
   // message - that stays out of logs on purpose. Logging which bucket matched is what lets the
   // 23-entry set be extended from evidence instead of by guessing, which is the only way to learn
   // what an unmatched failure actually said.
-  console.error("buildit_execute_failure", { category: safeExecutionErrorCategory(error), code: mapped.code,
-      reason: executionFailureDiagnostic(error) });
+  // A provider failure adds what the runner recorded about the call (providerFailure.ts): which call,
+  // which revision, the HTTP status and the provider's identifier code - never its message.
+  const provider = providerFailureOf(error);
+  console.error("buildit_execute_failure", { category: provider ? "provider" : safeExecutionErrorCategory(error), code: mapped.code,
+      reason: executionFailureDiagnostic(error),
+      ...(failedStage ? { stage: failedStage } : {}),
+      ...(provider ? { operation: provider.operation, errorClass: provider.errorClass,
+        ...(provider.revision ? { revision: provider.revision } : {}),
+        ...(provider.httpStatus ? { httpStatus: provider.httpStatus } : {}),
+        ...(provider.providerCode ? { providerCode: provider.providerCode } : {}) } : {}) });
     // The body is unchanged. The header only tells BuildIT's own telemetry which 503 this was, so a
     // spent plan raises a ticket instead of paging someone about an outage they cannot fix.
     return json(mapped.status, { error: mapped.code },

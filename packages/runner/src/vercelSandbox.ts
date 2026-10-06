@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Sandbox } from "@vercel/sandbox";
+import { tagProviderFailure } from "./providerFailure.js";
 import { type CheckResult, classifyCheckConclusion, type CommandPlan, diagnoseFlakiness, type DiagnosticRun, executionReady, SANDBOX_ENV_PROBE_TIMEOUT_MS, SANDBOX_JOB_LIFETIME_MS, SANDBOX_SCANNER_TIMEOUT_MS, type Workspace } from "./index.js";
 import { executionRevisions, executionSandboxName, type ExecutionRevision, type ExecutionSegment } from "./executionSegments.js";
 
@@ -122,6 +123,20 @@ export type SegmentInput = {
 /** Finds an existing sandbox by name. Returns null when there is none, which is the goal state. */
 export type SandboxLookup = (input: { name: string } & Partial<SandboxCredentials>) => Promise<SandboxLike | null>;
 
+// Every provider call made through the sandbox records, on failure, which call it was - and nothing
+// of what the provider said (providerFailure.ts). Wrapped once here rather than at each call site.
+function instrumented(sandbox: SandboxLike, revision?: "base" | "head"): SandboxLike {
+  const at = (operation: Parameters<typeof tagProviderFailure>[0]["operation"]) => ({ operation, ...(revision ? { revision } : {}) });
+  return {
+    writeFiles: files => tagProviderFailure(at("write_files"), () => sandbox.writeFiles(files)),
+    readFileToBuffer: file => tagProviderFailure(at("read_file"), () => sandbox.readFileToBuffer(file)),
+    runCommand: command => tagProviderFailure(at("run_command"), () => sandbox.runCommand(command)),
+    updateNetworkPolicy: policy => tagProviderFailure(at("network_policy"), () => sandbox.updateNetworkPolicy(policy)),
+    stop: () => tagProviderFailure(at("stop"), () => sandbox.stop()),
+    ...(sandbox.delete ? { delete: () => tagProviderFailure(at("delete"), () => sandbox.delete!()) } : {}),
+  };
+}
+
 export class VercelSandboxRunner {
   constructor(private readonly open: SandboxFactory = async input => {
     const { image, runtime, ...environment } = input;
@@ -159,8 +174,9 @@ export class VercelSandboxRunner {
     const revisions: Array<{ revision: ExecutionRevision; outcome: "deleted" | "stopped" | "absent" }> = [];
     for (const revision of executionRevisions) {
       const name = executionSandboxName(input.jobKey, revision);
-      const sandbox = await this.lookup({ name, ...(input.credentials ?? {}) });
-      if (!sandbox) { revisions.push({ revision, outcome: "absent" }); continue; }
+      const found = await tagProviderFailure({ operation: "lookup", revision }, () => this.lookup({ name, ...(input.credentials ?? {}) }));
+      if (!found) { revisions.push({ revision, outcome: "absent" }); continue; }
+      const sandbox = instrumented(found, revision);
       if (sandbox.delete) { await sandbox.delete(); revisions.push({ revision, outcome: "deleted" }); }
       else { await sandbox.stop(); revisions.push({ revision, outcome: "stopped" }); }
     }
@@ -206,7 +222,9 @@ export class VercelSandboxRunner {
       // Tagged so an orphan is findable by Sandbox.list without knowing which review made it.
       tags: { buildit: "execution" },
     };
-    return this.open(input.image ? { ...environment, image: input.image, ...(input.credentials ?? {}) } : { ...environment, runtime: input.runtime, ...(input.credentials ?? {}) });
+    const opened = await tagProviderFailure({ operation: "acquire", revision: input.revision },
+      () => this.open(input.image ? { ...environment, image: input.image, ...(input.credentials ?? {}) } : { ...environment, runtime: input.runtime, ...(input.credentials ?? {}) }));
+    return instrumented(opened, input.revision);
   }
 
   private async prepare(sandbox: SandboxLike, files: Array<{ path: string; content: string }>) {
