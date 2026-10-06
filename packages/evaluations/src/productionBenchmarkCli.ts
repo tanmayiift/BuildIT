@@ -1,5 +1,5 @@
 // pnpm eval:production plan                      pins, projected cost and sandbox time (default)
-// pnpm eval:production post --label R0 --runs 3 --cpu-hours-left <n>
+// pnpm eval:production post --label R0 --runs 3 --cpu-hours-left <n> [--concurrency 1] [--pause-seconds 120]
 // pnpm eval:production revalidate <runs.json>   re-check unparseable runs from their saved reports
 // pnpm eval:production score <runs.json> [--policy published|critical-high]
 //
@@ -205,6 +205,10 @@ async function post() {
   save();
   const read = await reader();
   const concurrency = Number(flag("concurrency") ?? 3);
+  // Each review reads a few hundred files through the GitHub App installation, which allows 5,000
+  // requests an hour. R0 used that up in about thirty reviews; a pause between runs keeps a whole
+  // benchmark inside it.
+  const pauseMs = Math.max(0, Number(flag("pause-seconds") ?? 0)) * 1_000;
   // Repositories run side by side; everything within one runs in sequence. A second comment on the
   // same commit while a review is in flight joins that review instead of starting one, and each demo
   // repository admits one review at a time - express holds two cases.
@@ -220,6 +224,7 @@ async function post() {
           file.runs.push(record);
           save();
           console.log(`${record.validity.padEnd(16)} ${item.id} run ${number}.${attempt} ${record.status ?? ""} ${record.because ?? ""} ${record.costUsd !== undefined ? `$${record.costUsd}` : ""}`);
+          if (pauseMs) await sleep(pauseMs);
         }
       }
     }
