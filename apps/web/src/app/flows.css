@@ -1924,6 +1924,9 @@
 
 .code-excerpt pre,
 .check-output pre {
+  /* Positioned so the screen-reader labels inside (absolutely positioned) scroll with the code
+     instead of widening the page on a phone. */
+  position: relative;
   margin: 0;
   padding: var(--space-2) 0;
   overflow-x: auto;
@@ -1960,6 +1963,49 @@
   color: var(--code-gutter);
   text-align: right;
   user-select: none;
+}
+
+.diff-view {
+  position: relative;
+  margin: 0;
+  padding: var(--space-2) 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--code-bg);
+  color: var(--code-ink);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.diff-line {
+  display: block;
+  padding-right: var(--space-3);
+  white-space: pre;
+}
+
+.diff-line.add {
+  background: var(--diff-add-bg);
+}
+
+.diff-line.del {
+  background: var(--diff-del-bg);
+}
+
+.diff-mark {
+  display: inline-block;
+  width: 3ch;
+  text-align: center;
+  font-weight: var(--weight-bold);
+}
+
+.diff-line.add .diff-mark {
+  color: var(--diff-add-mark);
+}
+
+.diff-line.del .diff-mark {
+  color: var(--diff-del-mark);
 }
 
 .code-line-mark {

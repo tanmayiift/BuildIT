@@ -48,11 +48,14 @@ describe("B2B interface accessibility contract", () => {
       // text on the navy panels and buttons, links on every ground, and each state's ink on its tint.
       ["ink-inverse", "navy"], ["ink-inverse-muted", "navy"], ["ink-inverse", "navy-hover"],
       ["panel-ink", "panel"], ["panel-ink-2", "panel"], ["panel-ink-muted", "panel"],
+      // The panel illustration's cited line and check mark, held to the text ratio although graphics need only 3:1.
+      ["panel-accent", "panel"], ["panel-ok", "panel"], ["panel", "panel-ok"],
       ["navy", "canvas"], ["navy", "surface"], ["navy", "navy-soft"], ["ink-2", "surface"], ["muted", "surface"], ["muted", "workbench"],
       ["danger", "danger-bg"], ["success", "success-bg"], ["warning", "warning-bg"], ["info", "info-bg"],
       ["warning-ink", "warning-strong"], ["success-ink", "success-bright"], ["ink", "hover"],
       // Cited source and check output: code, its line numbers and the cited-line marker on both grounds.
       ["code-ink", "code-bg"], ["code-gutter", "code-bg"], ["code-ink", "code-cited-bg"], ["code-gutter", "code-cited-bg"], ["code-cited-mark", "code-cited-bg"],
+      ["code-ink", "diff-add-bg"], ["diff-add-mark", "diff-add-bg"], ["code-ink", "diff-del-bg"], ["diff-del-mark", "diff-del-bg"],
     ];
     for (const [scheme, map] of schemes) {
       for (const [foreground, background] of pairs) {
