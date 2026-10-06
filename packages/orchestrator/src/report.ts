@@ -1,5 +1,5 @@
 import { redact } from "@buildit/security";
-import { testCountsSummary } from "@buildit/contracts";
+import { severityPolicySentence, testCountsSummary } from "@buildit/contracts";
 import { computeReviewDecision, gateClaims, type EvidenceRecord, type MaterialClaim, type ReviewCheckDecision } from "./index.js";
 
 type ReportFinding = { title: string; severity: "critical" | "high" | "warning" | "info"; resolution: "accepted" | "rejected" | "uncertain"; blocking: boolean; evidenceIds: string[]; path?: string; startLine?: number; endLine?: number; impact?: string; explanation?: string };
@@ -164,7 +164,7 @@ function checkExcerpt(check: ReviewCheckDecision) {
         ? `> **Intent was not verified.** ${input.unreadableSources.unreadable} of ${input.unreadableSources.total} requirement sources could not be read: ${input.unreadableSources.summary}. ${input.unreadableSources.nextStep} Everything above is about the code and its checks. Whether the change does what was asked is still an open question for a person.`
         : "> **Intent was not verified.** A requirement source linked from this pull request could not be read. Everything above is about the code and its checks. Whether the change does what was asked is still an open question for a person."]
       : []),
-    ...(visibleFindings.length ? ["", "### What needs attention", "", ...visibleFindings.flatMap(findingLines)] : []),
+    ...(visibleFindings.length ? ["", "### What needs attention", "", severityPolicySentence, "", ...visibleFindings.flatMap(findingLines)] : []),
     "",
     "### Validation checks",
     "",
