@@ -2980,6 +2980,9 @@ describe("durable Autofix evidence", () => {
         now,
       };
     await t.mutation(internal.reviewAutofixData.completeRound, roundArgs);
+    // Delivery finds the round's evidence by this id, never by file name (autofixRoundEvidence.test.ts).
+    const recorded = await t.run(ctx => ctx.db.query("autofixRounds").withIndex("by_review_round", q => q.eq("reviewId", tenant.reviewId).eq("roundNumber", 1)).unique());
+    expect(recorded?.validationArtifactId).toBe(validationArtifactId);
     for (const [index, type] of (
       [
         "branch_create",

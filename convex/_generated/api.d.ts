@@ -46,6 +46,7 @@ import type * as lib_credentialRevocation from "../lib/credentialRevocation.js";
 import type * as lib_durableStages from "../lib/durableStages.js";
 import type * as lib_executionGate from "../lib/executionGate.js";
 import type * as lib_executionSegmentDriver from "../lib/executionSegmentDriver.js";
+import type * as lib_findingFingerprint from "../lib/findingFingerprint.js";
 import type * as lib_findingOpinions from "../lib/findingOpinions.js";
 import type * as lib_findingResolution from "../lib/findingResolution.js";
 import type * as lib_githubProfile from "../lib/githubProfile.js";
@@ -169,6 +170,7 @@ declare const fullApi: ApiFromModules<{
   "lib/durableStages": typeof lib_durableStages;
   "lib/executionGate": typeof lib_executionGate;
   "lib/executionSegmentDriver": typeof lib_executionSegmentDriver;
+  "lib/findingFingerprint": typeof lib_findingFingerprint;
   "lib/findingOpinions": typeof lib_findingOpinions;
   "lib/findingResolution": typeof lib_findingResolution;
   "lib/githubProfile": typeof lib_githubProfile;

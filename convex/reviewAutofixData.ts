@@ -14,6 +14,20 @@ import { isPending, isStored } from "./lib/artifactState";
 const executionArgs = { organizationId: v.id("organizations"), reviewId: v.id("reviews"), expectedHeadSha: v.string(), expectedGeneration: v.number() };
 const hash = v.string();
 
+// A round's validation evidence. By id: the round records it when it completes. Delivery, the next
+// round's failure context and the failure report all read it, and they used to find it by file name;
+// when the writer began prefixing that name with the candidate commit, no reader found it, and every
+// round that passed failed delivery with autofix_passed_round_missing. Rounds recorded before the id
+// was stored fall back to the one name they were ever written under.
+export function roundValidationArtifact<A extends { _id: string; type: string; storageKey: string; storageState: "pending" | "stored"; deletedAt?: number }>(
+  round: { roundNumber: number; validationArtifactId?: string }, artifacts: readonly A[],
+): A | undefined {
+  const usable = (artifact: A) => artifact.type === "command_output" && isStored(artifact) && !artifact.deletedAt;
+  return round.validationArtifactId
+    ? artifacts.find(artifact => artifact._id === round.validationArtifactId && usable(artifact))
+    : artifacts.find(artifact => usable(artifact) && artifact.storageKey.endsWith(`/autofix-${round.roundNumber}-validation.json`));
+}
+
 export const mode = internalQuery({args:executionArgs,handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale)throw new ConvexError("stale_or_replaced_review");return review.mode}});
 export const assertActive = internalQuery({args:executionArgs,handler:async(ctx,args)=>{const review=await assertReviewParent(ctx.db,args.organizationId,args.reviewId);if(review.headSha!==args.expectedHeadSha||review.executionGeneration!==args.expectedGeneration||review.isStale||review.mode!=="autofix"||review.cancellationRequestedAt||!["validating","autofixing"].includes(review.status))throw new ConvexError("autofix_cancelled_or_replaced");return true}});
 
@@ -34,7 +48,7 @@ export const scope = internalQuery({
       headSha: review.headSha, baseSha: review.baseSha, createdAt: review.createdAt, startedAt:review.startedAt??review.createdAt,budgetLimit:review.budgetLimit,budgetConsumed:review.budgetConsumed,configRevisionId: review.configRevisionId, runnerImageVersion: review.runnerImageVersion,
       analysis: { id: analysis._id, storageKey: analysis.storageKey, checksum: analysis.checksum, size: analysis.size },
       provider: review.provider, model: review.model, credentialDocumentId: credential._id, credential: { id: credential.credentialScopeId, organizationId: String(credential.organizationId), ...(credential.repositoryId ? { repositoryId: String(credential.repositoryId) } : {}), provider: credential.provider, ciphertext: credential.encryptedCiphertext, nonce: credential.nonce, tag: credential.authTag, wrappedDataKey: credential.wrappedDataKey, kmsKeyId: credential.kmsKeyId, envelopeVersion: credential.envelopeVersion, keyVersion: credential.keyVersion, aadDigest: credential.aadDigest, maskedSuffix: credential.maskedSuffix, availableModels: credential.availableModels ?? [], status: "valid" as const, createdBy: credential.createdBy, createdAt: credential.createdAt, lastValidatedAt: credential.lastValidatedAt },
-      contexts: contexts.map(item => ({ id: item._id, storageKey: item.storageKey, checksum: item.checksum, size: item.size })), patchFingerprints: attempts.map(item => item.patchFingerprint), rounds: rounds.map(item => { const validation = artifacts.find(artifact => artifact.type === "command_output" && isStored(artifact) && !artifact.deletedAt && artifact.storageKey.endsWith(`/autofix-${item.roundNumber}-validation.json`)); return { roundNumber: item.roundNumber, candidateCommitSha: item.candidateCommitSha, outcome: item.validationOutcome, ...(validation ? { validation: { id: validation._id, storageKey: validation.storageKey, checksum: validation.checksum, size: validation.size } } : {}) }; }) };
+      contexts: contexts.map(item => ({ id: item._id, storageKey: item.storageKey, checksum: item.checksum, size: item.size })), patchFingerprints: attempts.map(item => item.patchFingerprint), rounds: rounds.map(item => { const validation = roundValidationArtifact(item, artifacts); return { roundNumber: item.roundNumber, candidateCommitSha: item.candidateCommitSha, outcome: item.validationOutcome, ...(validation ? { validation: { id: validation._id, storageKey: validation.storageKey, checksum: validation.checksum, size: validation.size } } : {}) }; }) };
   },
 });
 
@@ -66,7 +80,7 @@ export const completeRound = internalMutation({
     const existing = await ctx.db.query("autofixRounds").withIndex("by_review_round", q => q.eq("reviewId", review._id).eq("roundNumber", args.roundNumber)).unique();
     if (existing) { if (existing.candidateCommitSha !== args.candidateCommitSha || existing.validationOutcome !== args.outcome) throw new ConvexError("autofix_round_conflict"); return existing._id; }
     const attemptId = await ctx.db.insert("autofixAttempts", { organizationId: args.organizationId, reviewId: review._id, attemptNumber: args.roundNumber, patchFingerprint: args.patchFingerprint, patchArtifactId: patch._id, outcome: "applied", promptVersion: "patch-v1", startedAt: args.now, completedAt: args.now });
-    const roundId = await ctx.db.insert("autofixRounds", { organizationId: args.organizationId, reviewId: review._id, roundNumber: args.roundNumber, attemptId, candidateCommitSha: args.candidateCommitSha, validationScope: "final_validation", validationOutcome: args.outcome, completedValidation: true, ...(args.candidateScannerFindings ? { candidateScannerFindings: args.candidateScannerFindings } : {}), startedAt: args.now, completedAt: args.now });
+    const roundId = await ctx.db.insert("autofixRounds", { organizationId: args.organizationId, reviewId: review._id, roundNumber: args.roundNumber, attemptId, candidateCommitSha: args.candidateCommitSha, validationScope: "final_validation", validationOutcome: args.outcome, completedValidation: true, validationArtifactId: args.validationArtifactId, ...(args.candidateScannerFindings ? { candidateScannerFindings: args.candidateScannerFindings } : {}), startedAt: args.now, completedAt: args.now });
     if (!args.summaries.length || (args.outcome === "passed" && args.summaries.some(item => item.required && item.conclusion !== "passed"))) throw new ConvexError("autofix_summary_invalid");
     for (const item of args.summaries) { if (item.commitSha !== args.candidateCommitSha || !/^[0-9a-f]{64}$/.test(item.commandFingerprint) || !/^[0-9a-f]{64}$/.test(item.nameHash)) throw new ConvexError("autofix_summary_invalid"); await ctx.db.insert("checkRuns", { organizationId: args.organizationId, reviewId: review._id, roundId, kind: item.kind, nameHash: item.nameHash, required: item.required, status: "completed", conclusion: item.conclusion, commandFingerprint: item.commandFingerprint, commitSha: item.commitSha, ...(item.exitCode === undefined ? {} : { exitCode: item.exitCode }), durationMs: item.durationMs, artifactId: validation._id, credentialTeardownProved: item.credentialTeardownProved, sandboxStopped: item.sandboxStopped, ...(item.conclusion === "failed" ? { failureClass: "code" as const } : {}), startedAt: Math.max(0, args.now - item.durationMs), completedAt: args.now }); }
     // A round that settled after the spend ceiling stopped the review must not patch it back to
