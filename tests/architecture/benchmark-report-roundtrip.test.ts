@@ -49,8 +49,12 @@ describe("reading a published report back", () => {
   it("trusts a parse only when it agrees with what the review stored", () => {
     const { body } = report([{ title: "A", severity: "high", resolution: "accepted", blocking: true, evidenceIds: ["ev-1"], path: "a.ts", startLine: 3, endLine: 5 }]);
     const parsed = parseReportFindings(body);
-    const stored = { status: "changes_requested", findings: [{ severity: "high", blocking: true, resolution: "accepted", lines: [3, 5] }] };
+    // The table stores a confirmed finding as "open" - the value production actually writes.
+    const stored = { status: "changes_requested", findings: [{ severity: "high", blocking: true, resolution: "open", lines: [3, 5] }] };
     expect(crossCheck(parsed, stored)).toBeUndefined();
+    // And as people act on it, "dismissed" or "fixed" - still the finding the report published as confirmed.
+    for (const resolution of ["accepted", "dismissed", "fixed"]) expect(crossCheck(parsed, { ...stored, findings: [{ ...stored.findings[0]!, resolution }] })).toBeUndefined();
+    expect(crossCheck(parsed, { ...stored, findings: [{ ...stored.findings[0]!, resolution: "uncertain" }] })).toMatch(/^published_not_stored/);
     // A rejected row is never published, so it is not a disagreement.
     expect(crossCheck(parsed, { ...stored, findings: [...stored.findings, { severity: "critical", blocking: false, resolution: "rejected", lines: [1, 1] }] })).toBeUndefined();
     expect(crossCheck(parsed, { ...stored, status: "checks_passed" })).toMatch(/^status:/);

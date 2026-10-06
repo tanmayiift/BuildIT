@@ -1,5 +1,6 @@
 // pnpm eval:production plan                      pins, projected cost and sandbox time (default)
 // pnpm eval:production post --label R0 --runs 3 --cpu-hours-left <n>
+// pnpm eval:production revalidate <runs.json>   re-check unparseable runs from their saved reports
 // pnpm eval:production score <runs.json> [--policy published|critical-high]
 //
 // Runs the historical set against production exactly as a user would: a `@buildit review` comment
@@ -30,7 +31,7 @@ type StoredRow = {
   stageRuns: Array<{ stage: string; promptVersion: string; attempt: number }>;
   findings: Array<{ severity: string; blocking: boolean; resolution: string; lines: [number?, number?] }>;
 };
-type Reader = (selector: { githubRepositoryId: number; prNumber: number; since: number }) => Promise<StoredRow[]>;
+type Reader = (selector: { githubRepositoryId: number; prNumber: number; since: number } | { ids: string[] }) => Promise<StoredRow[]>;
 
 // The shared read lives with the scripts that use it (scripts/lib), outside this package's build.
 async function reader(): Promise<Reader> {
@@ -226,6 +227,34 @@ async function post() {
   console.log(`\nwrote ${out}`);
 }
 
+// Re-checks runs recorded as unparseable, from the report each one saved and the review's stored rows.
+// Both are fixed once a review completes, so this answers what the run would have recorded had the
+// check been right - it never re-posts or re-reviews. Run it only when no `post` is writing the file.
+async function revalidate() {
+  const path = process.argv[3];
+  if (!path || path.startsWith("--")) throw new Error("usage: pnpm eval:production revalidate <runs.json>");
+  const file = JSON.parse(readFileSync(resolve(path), "utf8")) as RunsFile;
+  const read = await reader();
+  const replaced = new Map<RunRecord, RunRecord>();
+  for (const record of file.runs.filter(item => item.validity === "invalid_parse" && item.reviewId)) {
+    const item = historicalCases.find(entry => entry.id === record.caseId);
+    const raw = resolve(repoRoot, ".eval-runs", file.label, `${record.caseId}-${record.run}-${record.attempt}.md`);
+    if (!item || !existsSync(raw)) continue;
+    let published;
+    try { published = parseReportFindings(readFileSync(raw, "utf8")); } catch (error) { replaced.set(record, { ...record, because: (error as Error).message }); continue; }
+    const [stored] = await read({ ids: [record.reviewId!] });
+    const disagreement = stored ? crossCheck(published, stored) : "stored review unreadable";
+    if (disagreement) { replaced.set(record, { ...record, because: disagreement }); continue; }
+    const { because: _discarded, ...rest } = record;
+    replaced.set(record, { ...rest, validity: "valid", findings: published.findings.map(finding => recordFinding(item, finding)), revalidatedAt: new Date().toISOString() });
+  }
+  file.runs = file.runs.map(record => replaced.get(record) ?? record);
+  const fixed = [...replaced.values()].filter(record => record.validity === "valid").length;
+  const still = file.runs.filter(record => record.validity === "invalid_parse").length;
+  writeFileSync(resolve(path), `${JSON.stringify(file, null, 2)}\n`);
+  console.log(`revalidated ${fixed} run(s); ${still} still unparseable`);
+}
+
 function score() {
   const path = process.argv[3];
   if (!path || path.startsWith("--")) throw new Error("usage: pnpm eval:production score <runs.json> [--policy published|critical-high]");
@@ -242,7 +271,7 @@ function score() {
 }
 
 const command = process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : "plan";
-const commands: Record<string, () => unknown> = { plan, post, score };
+const commands: Record<string, () => unknown> = { plan, post, revalidate, score };
 if (!commands[command]) {
   console.error("usage: pnpm eval:production [plan|post|score] …");
   process.exit(2);
