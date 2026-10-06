@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 import {
@@ -6,7 +8,7 @@ import {
   deployArgs, inspectArgs, parseAliasTarget, parseDeploymentUrl, probeWithRetry, resolveDeployLink,
 } from "../../scripts/deploy-buildit-web.mjs";
 import { assertBuildITBrokerDeployContext } from "../../scripts/deploy-buildit-broker.mjs";
-import { assertBrokerServesCommit, assertProductionDeployContext, brokerHealthUrl, checkOrder, deploymentOrder, runCoordinatedDeployment, stepFor, packageBuildStep, uncommittedFileCount } from "../../scripts/deploy-buildit-production.mjs";
+import { assertBrokerServesCommit, assertDeployPlan, assertProductionDeployContext, assertWorkspacePackagesResolve, brokerHealthUrl, checkOrder, deploymentOrder, plannedDeployment, runCoordinatedDeployment, stepFor, packageBuildStep, uncommittedFileCount } from "../../scripts/deploy-buildit-production.mjs";
 
 const repoRoot = process.cwd();
 const correctLink = {
@@ -412,5 +414,39 @@ describe("checked Vercel authorization retry", () => {
     expect(() => helper.run(deployArgs(), repoRoot)).toThrow(`buildit_${surface}_deploy_spawn_failed:unknown`);
     expect(helper.calls).toHaveLength(1);
     expect(helper.diagnostics).toEqual([]);
+  });
+});
+
+// The dry-run used to return before anything that broke a real release: it never built the
+// workspace packages (#111: "Could not resolve @buildit/contracts" on the first GitHub release) and
+// never constructed the commands a keyed release runs (#105: --env-file made the CLI look for a
+// signed-in user and get 401). It now does both, so either mistake fails the pull request.
+describe("the release dry-run checks what a release actually does", () => {
+  it("builds and resolves the workspace packages before reporting valid", () => {
+    const source = readFileSync(`${repoRoot}/scripts/deploy-buildit-production.mjs`, "utf8");
+    const main = source.slice(source.indexOf("async function main()"));
+    expect(main.indexOf("run(packageBuildStep")).toBeGreaterThan(-1);
+    expect(main.indexOf("run(packageBuildStep")).toBeLessThan(main.indexOf("if (dryRun)"));
+    expect(main.indexOf("assertWorkspacePackagesResolve(")).toBeLessThan(main.indexOf("if (dryRun)"));
+    expect(main.indexOf("assertDeployPlan(")).toBeLessThan(main.indexOf("if (dryRun)"));
+  });
+
+  it("refuses a package whose export points at a build that does not exist", () => {
+    const root = mkdtempSync(join(tmpdir(), "buildit-packages-"));
+    mkdirSync(join(root, "packages", "contracts"), { recursive: true });
+    writeFileSync(join(root, "packages", "contracts", "package.json"), JSON.stringify({ name: "@buildit/contracts", exports: { ".": { types: "./src/index.ts", default: "./dist/src/index.js" } } }));
+    expect(() => assertWorkspacePackagesResolve(root)).toThrow("buildit_production_packages_unresolvable:@buildit/contracts:./dist/src/index.js");
+    mkdirSync(join(root, "packages", "contracts", "dist", "src"), { recursive: true });
+    writeFileSync(join(root, "packages", "contracts", "dist", "src", "index.js"), "export {};\n");
+    expect(assertWorkspacePackagesResolve(root)).toEqual(["@buildit/contracts"]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("plans a keyed release with no env file and no login selector, and a keyless one with the env file", () => {
+    const planned = assertDeployPlan(repoRoot);
+    expect(planned.keyed).toContain("pnpm exec convex deploy -y");
+    expect(planned.keyed.join(" ")).not.toContain("--env-file");
+    expect(planned.keyless).toContain("pnpm exec convex deploy -y --env-file scripts/buildit-production.env");
+    expect(plannedDeployment({}).map(step => step.name)).toEqual(["broker", "convex", "web"]);
   });
 });

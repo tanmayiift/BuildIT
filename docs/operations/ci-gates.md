@@ -51,12 +51,38 @@ legacy BuildIT rules as cleanup candidates, with exact UIDs and content fingerpr
 not authorize deletion. Unknown rules are retained and reported. See
 [Grafana reconciliation](grafana-reconciliation.md) for the approval and verification sequence.
 
-## Releases run from GitHub
+## Releases run from GitHub, after CI
 
-Every push to `main` runs `.github/workflows/release.yml`: the gates above, then `pnpm deploy:production`
-(broker, Convex, web) with the `CONVEX_DEPLOY_KEY` and `VERCEL_TOKEN` repository secrets, then a
-signed-out journey and a wiring check against the released alias. A dispatch can still release a
-single surface. A local `pnpm deploy:production` remains possible from a clean `main`.
+`.github/workflows/release.yml` runs when "Build and test" completes successfully for a push to `main`,
+and it releases **exactly the commit CI tested** (`workflow_run.head_sha`, checked out in every job).
+The jobs are:
+
+1. **`preflight`** does three things:
+   - skips a commit that `main` has already moved past, because the newer commit's release deploys it;
+   - verifies the deployed monitoring (`alerts:verify`);
+   - verifies the AWS boundary through the read-only OIDC role.
+2. **`release`** runs `pnpm deploy:production` (broker, Convex, web) with the `CONVEX_DEPLOY_KEY` and
+   `VERCEL_TOKEN` secrets.
+3. **`confirm`** runs the signed-out journey and the wiring check against the released alias.
+
+CI's verify, security, reliability and browser gates are not repeated here; they already passed on that commit.
+
+A dispatch can still release a single surface, but only for a commit whose CI passed. A local
+`pnpm deploy:production` remains possible from a clean `main`.
+
+Every pull request also runs **`deploy-contract`** (`pnpm deploy:check`), with no secrets, so fork
+PRs run it too. It does the following:
+
+- builds the workspace packages;
+- resolves each one the way `convex deploy` will;
+- checks the keyed and keyless deploy commands.
+
+Both release failures that reached `main` on 5 Oct 2026 fail there instead:
+
+- **#111:** the packages had never been built, so `@buildit/contracts` could not be resolved.
+- **#105:** a keyed release was given `--env-file`, so the CLI looked for a signed-in user and got a 401.
+
+CI never cancels a run on `main`. Only a newer push to a pull request replaces an older run.
 
 ## The trap this file exists to prevent
 
