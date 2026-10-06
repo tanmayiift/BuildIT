@@ -1873,6 +1873,102 @@
   font-size: var(--text-sm);
 }
 
+/* The cited lines and a failed check's output (apps/web/src/app/evidence). Opened on request, so the
+   source is read only by someone who asked to see it. */
+.evidence-disclosure {
+  margin: var(--space-3) 0 0 var(--space-7);
+}
+
+.evidence-disclosure summary {
+  cursor: pointer;
+  color: var(--navy);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  min-height: var(--control-height);
+  display: flex;
+  align-items: center;
+}
+
+.check-disclosure {
+  margin: 0 0 var(--space-3);
+}
+
+.evidence-disclosure>p {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.code-excerpt,
+.check-output {
+  margin: var(--space-2) 0 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--code-bg);
+  color: var(--code-ink);
+  overflow: hidden;
+}
+
+.code-excerpt figcaption,
+.check-output figcaption {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--code-gutter);
+  font-size: var(--text-xs);
+}
+
+.code-excerpt figcaption code {
+  color: var(--code-ink);
+  font-family: var(--font-mono);
+}
+
+.code-excerpt pre,
+.check-output pre {
+  margin: 0;
+  padding: var(--space-2) 0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.check-output pre {
+  padding: var(--space-2) var(--space-3);
+  white-space: pre;
+}
+
+/* The boxes clip their corners, so the focus ring is drawn inside them rather than cut off. */
+.code-excerpt pre:focus-visible,
+.check-output pre:focus-visible {
+  outline-offset: -3px;
+}
+
+.code-line {
+  display: block;
+  padding-right: var(--space-3);
+  white-space: pre;
+}
+
+.code-line.cited {
+  background: var(--code-cited-bg);
+}
+
+.code-line-number {
+  display: inline-block;
+  width: 5ch;
+  padding-right: var(--space-2);
+  color: var(--code-gutter);
+  text-align: right;
+  user-select: none;
+}
+
+.code-line-mark {
+  display: inline-block;
+  width: 2ch;
+  color: var(--code-cited-mark);
+  font-weight: var(--weight-bold);
+}
+
 .review-detail .verdict-card {
   display: grid;
   grid-template-columns: minmax(0,1fr) max-content;

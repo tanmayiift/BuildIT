@@ -51,6 +51,8 @@ describe("B2B interface accessibility contract", () => {
       ["navy", "canvas"], ["navy", "surface"], ["navy", "navy-soft"], ["ink-2", "surface"], ["muted", "surface"], ["muted", "workbench"],
       ["danger", "danger-bg"], ["success", "success-bg"], ["warning", "warning-bg"], ["info", "info-bg"],
       ["warning-ink", "warning-strong"], ["success-ink", "success-bright"], ["ink", "hover"],
+      // Cited source and check output: code, its line numbers and the cited-line marker on both grounds.
+      ["code-ink", "code-bg"], ["code-gutter", "code-bg"], ["code-ink", "code-cited-bg"], ["code-gutter", "code-cited-bg"], ["code-cited-mark", "code-cited-bg"],
     ];
     for (const [scheme, map] of schemes) {
       for (const [foreground, background] of pairs) {

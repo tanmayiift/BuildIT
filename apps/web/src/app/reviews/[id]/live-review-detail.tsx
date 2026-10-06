@@ -1,10 +1,12 @@
 "use client";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
-import { Component, useEffect, useState } from "react";
+import { Component, Fragment, useCallback, useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
 import { comparisonRefusal, dismissalReasonLabel, notRunExplanation, preExistingFailurePresentation, dismissalReasons, dismissalRefusal, eventPresentation, evidenceRefusal, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, checkLabel, technicalLabel as label } from "./review-presentation";
 import type { DismissalReason, SuppressionScope } from "./review-presentation";
 import { StatePanel } from "../../state-panel";
+import { CheckOutput } from "../../evidence/check-output";
+import { CodeExcerpt, type ExcerptLine } from "../../evidence/code-excerpt";
 // Why a stage saw less than everything. Named here rather than reusing the verdict reason map,
 // because a gap on the handoff record is a description of what was read - not a reason a verdict
 // was withheld, and analysis_budget deliberately does not withhold one.
@@ -21,6 +23,12 @@ function formatDuration(durationMs: number) {
   if (durationMs < 60_000) return `${(durationMs / 1_000).toFixed(1)}s`;
   return `${Math.floor(durationMs / 60_000)}m ${Math.round((durationMs % 60_000) / 1_000)}s`;
 }
+
+type SourceEvidence =
+  | { state: "erased"; erasedAt: number }
+  | { state: "unavailable" }
+  | { state: "shown"; excerpts: Array<{ findingId: string; path: string; lines?: ExcerptLine[]; clipped?: boolean; withheld?: "secret" | "unavailable" }>; checks: Array<{ planId: string; lines: string[]; truncated: boolean }> };
+type SourceState = SourceEvidence | "loading" | "failed" | null;
 
 type Evidence = {
   partial: boolean;
@@ -181,6 +189,9 @@ const evidenceQuery = makeFunctionReference<
     { status: "cancelled" | "already_finished" }
   >("dashboardReviews:cancel"),
   findingDetailsAction = makeFunctionReference<"action", { reviewId: string }, FindingDetail[]>("reviewEvidenceActions:getFindingDetails"),
+  // The lines each finding cites and the end of each failed check's output. Loaded the first time a
+  // reader opens one, so a page view that never asks reads no source.
+  sourceEvidenceAction = makeFunctionReference<"action", { reviewId: string }, SourceEvidence>("reviewEvidenceActions:getFindingEvidence"),
   // findingSuppressions has existed since the first schema and nothing in the product ever wrote to
   // it, so a person who read a finding and knew it was wrong had no way to say so and the next
   // review started as cold as this one. This is the only caller.
@@ -236,6 +247,8 @@ function ReviewEvidence({ id }: { id: string }) {
   const { isAuthenticated, isLoading } = useConvexAuth(),
     cancel = useAction(cancelAction),
     loadFindingDetails = useAction(findingDetailsAction),
+    loadSourceEvidence = useAction(sourceEvidenceAction),
+    [source, setSource] = useState<SourceState>(null),
     [cancelling, setCancelling] = useState(false),
     [cancelError, setCancelError] = useState(""),
     [findingDetails, setFindingDetails] = useState<FindingDetail[] | null>(null),
@@ -253,6 +266,11 @@ function ReviewEvidence({ id }: { id: string }) {
     void loadFindingDetails({ reviewId: id }).then(value => { if (active) setFindingDetails(value); }).catch(() => { if (active) { setFindingDetails(null); setFindingDetailError(true); } });
     return () => { active = false; };
   }, [findingCount, findingTextErased, id, isAuthenticated, loadFindingDetails]);
+  const showSource = useCallback(() => {
+    if (source !== null && source !== "failed") return;
+    setSource("loading");
+    void loadSourceEvidence({ reviewId: id }).then(setSource).catch(() => setSource("failed"));
+  }, [id, loadSourceEvidence, source]);
   if (isLoading || (isAuthenticated && evidence === undefined))
     return (
       <State
@@ -398,12 +416,12 @@ function ReviewEvidence({ id }: { id: string }) {
         {evidence.findingTextErasedAt ? (
           <div className="finding-detail-state"><strong>Finding text erased on {new Date(evidence.findingTextErasedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</strong><p>This workspace's retention setting removed the plain-language text with the rest of this review's evidence. Severity, lines and proof counts stay below.</p></div>
         ) : findingDetailError ? (
-          <div className="finding-detail-state"><strong>Plain-language details could not be loaded</strong><p>No source was shown. The exact findings are listed below. Open the pull request for the published evidence, or refresh after checking your workspace access.</p></div>
+          <div className="finding-detail-state"><strong>Finding details could not be loaded</strong><p>Each finding is still listed below with its line range. Refresh after checking your workspace access, or open the pull request to read the published report.</p></div>
         ) : findingDetails === null ? (
           <div className="finding-detail-state"><strong>Loading the encrypted finding summary…</strong><p>BuildIT is rechecking repository access before decrypting the report. The exact findings are listed below meanwhile.</p></div>
         ) : null}
         {evidence.findings.map(item => (
-          <Finding key={item.id} reviewId={id} finding={item} detail={findingProse.get(item.id)} />
+          <Finding key={item.id} reviewId={id} finding={item} detail={findingProse.get(item.id)} source={source} onShowSource={showSource} />
         ))}
       </Section> : null}
       {evidence.checks.length ? <Section
@@ -414,7 +432,8 @@ function ReviewEvidence({ id }: { id: string }) {
       >
         {checkSummaries.length ? (
           checkSummaries.map((item) => (
-            <div className="validation-row" key={`${item.planId ?? item.kind}-${item.required}`}>
+            <Fragment key={`${item.planId ?? item.kind}-${item.required}`}>
+            <div className="validation-row">
               <strong>{checkLabel(item)}</strong>
               <span>{item.required ? "Required" : "Optional"}</span>
               <span className={`status ${tone(item.conclusion)}`}>
@@ -428,6 +447,13 @@ function ReviewEvidence({ id }: { id: string }) {
                   : `${item.executions} ${item.executions === 1 ? "execution" : "executions"} · output incomplete${item.executions > 1 ? ` · ${item.outcomeSummary}` : ""}`)}
               </span>
             </div>
+            {item.planId && (item.conclusion === "failed" || item.conclusion === "timed_out") ? (
+              <details className="evidence-disclosure check-disclosure" onToggle={event => { if (event.currentTarget.open) showSource(); }}>
+                <summary>Show where {checkLabel(item)} failed</summary>
+                <FailedCheckOutput source={source} planId={item.planId} name={checkLabel(item)} />
+              </details>
+            ) : null}
+            </Fragment>
           ))
         ) : null}
       </Section> : null}
@@ -620,7 +646,7 @@ function Section({
     </section>
   );
 }
-function Finding({ reviewId, finding, detail }: { reviewId: string; finding: Evidence["findings"][number]; detail?: FindingDetail | undefined }) {
+function Finding({ reviewId, finding, detail, source, onShowSource }: { reviewId: string; finding: Evidence["findings"][number]; detail?: FindingDetail | undefined; source: SourceState; onShowSource: () => void }) {
   const title = detail?.title ?? `${findingCategoryLabel(finding.category)} · ${lineRange(finding.startLine, finding.endLine)}`,
     where = detail
       ? `${detail.path} · ${lineRange(finding.startLine, finding.endLine)}`
@@ -636,9 +662,36 @@ function Finding({ reviewId, finding, detail }: { reviewId: string; finding: Evi
         <span className={`finding-resolution ${finding.blocking ? "blocking" : ""}`}>{finding.blocking ? "Blocks merge" : findingResolutionLabel(finding.resolution)}</span>
       </div>
       {detail ? <div className="finding-summary-body"><div><small>Why it matters</small><p>{detail.impact}</p></div><div><small>What to inspect and correct</small><p>{detail.explanation}</p></div></div> : null}
+      {detail ? (
+        <details className="evidence-disclosure" onToggle={event => { if (event.currentTarget.open) onShowSource(); }}>
+          <summary>Show the cited lines</summary>
+          <CitedLines source={source} findingId={detail.id} />
+        </details>
+      ) : null}
       <FindingDismissal reviewId={reviewId} finding={finding} />
     </article>
   );
+}
+const erasedOn = (at: number) => new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+// Every state says what the reader is looking at, or why there is nothing to look at and what to do.
+function SourceMessage({ source }: { source: Exclude<SourceState, { state: "shown" }> }) {
+  if (source === null || source === "loading") return <p>Loading the lines from the reviewed commit…</p>;
+  if (source === "failed") return <p>The source could not be loaded. Close this and open it again to retry, or read the file in the pull request.</p>;
+  if (source.state === "erased") return <p>This workspace&apos;s retention setting erased the reviewed source on {erasedOn(source.erasedAt)}.</p>;
+  return <p>The reviewed snapshot is no longer stored, so the source cannot be shown. The pull request still has it.</p>;
+}
+function CitedLines({ source, findingId }: { source: SourceState; findingId: string }) {
+  if (source === null || typeof source === "string" || source.state !== "shown") return <SourceMessage source={source as Exclude<SourceState, { state: "shown" }>} />;
+  const excerpt = source.excerpts.find(item => item.findingId === findingId);
+  if (!excerpt || excerpt.withheld === "unavailable" || !excerpt.lines) return <p>The reviewed snapshot does not hold these lines, so nothing is shown in their place.</p>;
+  if (excerpt.withheld === "secret") return <p>Not shown: these lines contain what looks like a credential.</p>;
+  return <CodeExcerpt path={excerpt.path} lines={excerpt.lines} clipped={excerpt.clipped === true} />;
+}
+function FailedCheckOutput({ source, planId, name }: { source: SourceState; planId: string; name: string }) {
+  if (source === null || typeof source === "string" || source.state !== "shown") return <SourceMessage source={source as Exclude<SourceState, { state: "shown" }>} />;
+  const output = source.checks.find(item => item.planId === planId);
+  if (!output || !output.lines.length) return <p>No output was recorded for this check on the reviewed commit.</p>;
+  return <CheckOutput name={name} lines={output.lines} truncated={output.truncated} />;
 }
 // The correction a reader could never make. What it may claim is bounded by what
 // packages/orchestrator/src/learning.ts will do, and that function is demote-only: it refuses to
