@@ -12,9 +12,11 @@ permissions:
 env:
   NEXT_PUBLIC_CONVEX_URL: https://judicious-barracuda-968.convex.cloud
 
+# A newer push to a pull request replaces the older run. A push to main never cancels: every commit
+# on main gets its own verdict, and the release waits on that verdict for exactly that commit.
 concurrency:
   group: buildit-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   quality:
@@ -33,6 +35,23 @@ jobs:
       - run: npm install --global pnpm@10.15.0
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
+
+  # The release plan, exercised on every pull request rather than discovered on main: it builds the
+  # workspace packages, resolves every one of them the way `convex deploy` will, and checks the keyed
+  # and keyless deploy commands. Both release failures that reached main (#105, #111) fail here. It
+  # needs no secret, so a fork's pull request runs it too.
+  deploy-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.15.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm deploy:check
 
   browser:
     runs-on: ubuntu-latest

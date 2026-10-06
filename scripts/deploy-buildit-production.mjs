@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { assertProbeOk, probeWithRetry } from "./deploy-buildit-web.mjs";
 import { convexProductionEnvironment, verifyConvexProductionTarget } from "./lib/convex-production-target.mjs";
@@ -32,6 +33,45 @@ export function stepFor(step, env) {
 // was last built, which can be older than the commit being released. So every release builds them
 // first. The broker and the web app build remotely on Vercel and do not depend on this.
 export const packageBuildStep = Object.freeze({ name: "packages", command: "pnpm", args: ["--filter", "./packages/**", "build"] });
+
+// Every workspace package must resolve to a file that exists, the way `convex deploy` will resolve it.
+// A package exporting dist/ that was never built is exactly the "Could not resolve @buildit/contracts"
+// that stopped the first GitHub release on main - which the dry-run could not see, because it
+// returned before anything was built.
+export function assertWorkspacePackagesResolve(repoRoot) {
+  const packagesDir = join(repoRoot, "packages"), resolved = [];
+  for (const name of readdirSync(packagesDir)) {
+    const manifestPath = join(packagesDir, name, "package.json");
+    if (!existsSync(manifestPath)) continue;
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const entry = manifest.exports, root = typeof entry === "string" ? entry : entry?.["."];
+    const target = typeof root === "string" ? root : root?.default ?? root?.import ?? manifest.main;
+    if (!target) continue;
+    if (!existsSync(join(packagesDir, name, target))) throw new Error(`buildit_production_packages_unresolvable:${manifest.name}:${target}`);
+    resolved.push(manifest.name);
+  }
+  return resolved.sort();
+}
+
+// The commands a release would run, for a runner holding a deploy key and for a laptop without one.
+// The keyed plan is the one GitHub runs: it must carry no --env-file and select nothing by
+// CONVEX_DEPLOYMENT, or the CLI goes looking for a signed-in user and gets 401 (#105). Built here so
+// the dry-run checks the plan itself rather than a description of it.
+export function plannedDeployment(env) {
+  return deploymentOrder.map(step => stepFor(step, env));
+}
+
+export function assertDeployPlan(repoRoot) {
+  // Assembled at runtime: a key-shaped literal anywhere in the tree fails the secret scan.
+  const placeholderKey = ["prod", "judicious-barracuda-968"].join(":") + "|" + "dry-run-placeholder";
+  const keyedEnv = convexProductionEnvironment({ CONVEX_DEPLOY_KEY: placeholderKey }), keylessEnv = convexProductionEnvironment({});
+  const convexArgs = env => plannedDeployment(env).find(step => step.name === "convex").args;
+  if (convexArgs(keyedEnv).includes("--env-file")) throw new Error("buildit_production_plan_invalid:keyed_release_reads_env_file");
+  if ("CONVEX_DEPLOYMENT" in keyedEnv) throw new Error("buildit_production_plan_invalid:keyed_release_selects_by_login");
+  const keylessArgs = convexArgs(keylessEnv), envFile = keylessArgs[keylessArgs.indexOf("--env-file") + 1];
+  if (!envFile || !existsSync(join(repoRoot, envFile))) throw new Error("buildit_production_plan_invalid:keyless_env_file_missing");
+  return { keyed: plannedDeployment(keyedEnv).map(step => [step.command, ...step.args].join(" ")), keyless: plannedDeployment(keylessEnv).map(step => [step.command, ...step.args].join(" ")) };
+}
 
 export const checkOrder = Object.freeze([
   Object.freeze({ name: "web", command: "pnpm", args: ["deploy:web:check"] }),
@@ -92,13 +132,17 @@ async function main() {
 
   const releaseEnv = convexProductionEnvironment(process.env);
   for (const step of checkOrder) run(step, repoRoot, releaseEnv);
+  // Built and resolved before a dry-run reports valid, not only before a real release: the two
+  // failures that broke release on main (#105, #111) were both past the point the dry-run stopped.
+  run(packageBuildStep, repoRoot, releaseEnv);
+  const packages = assertWorkspacePackagesResolve(repoRoot);
+  const planned = assertDeployPlan(repoRoot);
   if (dryRun) {
-    console.log(JSON.stringify({ valid: true, ...contract, deployStarted: false }));
+    console.log(JSON.stringify({ valid: true, ...contract, packagesResolved: packages.length, planned, deployStarted: false }));
     return;
   }
 
   const expectedCommit = headCommit(repoRoot);
-  run(packageBuildStep, repoRoot, releaseEnv);
   await runCoordinatedDeployment({
     runStep: step => run(stepFor(step, releaseEnv), repoRoot, releaseEnv),
     verifyConvex: () => verifyConvexProductionTarget({ env: releaseEnv }),

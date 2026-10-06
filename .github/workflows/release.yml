@@ -5,11 +5,16 @@ name: Release
 # `pnpm deploy:*:production`: deploy, assign the production alias, read the alias back, and
 # probe it. The scripts fail the job if the alias did not move.
 #
-# Every push to main releases all three surfaces once the gates pass, so production is whatever
-# main is: until 5 Oct 2026 this ran only when dispatched, had never run on main, and every
-# release came from one laptop. A dispatch can still release a single surface.
+# A release runs after "Build and test" has passed on a push to main, for exactly the commit it
+# tested - never on the push itself. Releasing on push meant every release repeated CI's full
+# verify in parallel with it, and a release-configuration mistake surfaced as a red run on main of
+# a public repository instead of in the pull request that made it (deploy-contract in ci.yml now
+# exercises the plan on every pull request). A dispatch can still release a single surface, and
+# then checks CI passed for the commit first.
 on:
-  push:
+  workflow_run:
+    workflows: ["Build and test"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -23,13 +28,18 @@ on:
 permissions:
   contents: read
 
+# One release at a time. A newer commit queued behind this one supersedes any older one still
+# pending, and preflight refuses to deploy a commit main has already moved past.
 concurrency:
   group: buildit-release
   cancel-in-progress: false
 
 env:
-  # A push has no inputs; it releases everything.
+  # A CI-triggered release has no inputs; it releases everything.
   TARGET: ${{ inputs.target || 'all' }}
+  # The commit CI tested. Without this, workflow_run checks out the tip of main, which can be a
+  # newer commit CI has not finished with.
+  RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
   NEXT_PUBLIC_CONVEX_URL: https://judicious-barracuda-968.convex.cloud
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
   CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
@@ -37,24 +47,46 @@ env:
   VERCEL_ORG_ID: team_0C3dsIfWxzBINeWinBvtOLMC
 
 jobs:
-  # A release must never ship something the gates would have rejected.
-  verify:
+  # CI already ran verify, security, reliability and the browser suite on this commit. What is left
+  # is what only production can answer: the monitoring and the AWS boundary as deployed.
+  preflight:
+    # Only a successful CI run of a push to main, from this repository - never a pull request's run
+    # and never a fork's. Nothing is downloaded from the CI run.
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-    timeout-minutes: 25
+      actions: read
+    timeout-minutes: 15
+    outputs:
+      current: ${{ steps.current.outputs.current }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+      # Two quick merges finish CI out of order. Deploying the older one after the newer would roll
+      # production back, so a commit main has moved past is skipped: the newer commit's release
+      # deploys it.
+      - name: Refuse a commit main has already moved past
+        id: current
+        run: |
+          tip=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$tip" = "$RELEASE_SHA" ]; then echo "current=true" >> "$GITHUB_OUTPUT"
+          else echo "Skipping $RELEASE_SHA: main is at $tip, whose release deploys it."; echo "current=false" >> "$GITHUB_OUTPUT"; fi
+      - name: A dispatched release ships only a commit CI passed
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list --workflow ci.yml --commit "$RELEASE_SHA" --json conclusion --jq '.[] | select(.conclusion == "success")' | grep -q . \
+            || { echo "Build and test has not passed for $RELEASE_SHA"; exit 1; }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           package-manager-cache: false
       - run: npm install --global pnpm@10.15.0
       - run: pnpm install --frozen-lockfile
-      - run: pnpm verify
-      - run: pnpm security:release
-      - run: pnpm reliability:release
       - name: Verify deployed monitoring before releasing
         env:
           BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.BUILDIT_GRAFANA_SERVICE_ACCOUNT_TOKEN }}
@@ -76,16 +108,17 @@ jobs:
           BUILDIT_AWS_REGION: ${{ vars.BUILDIT_AWS_REGION }}
           BUILDIT_AWS_STACK: ${{ vars.BUILDIT_AWS_STACK }}
         run: pnpm smoke:aws-boundary
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:e2e
 
   release:
-    needs: verify
+    needs: preflight
+    if: ${{ needs.preflight.outputs.current == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: production
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_SHA }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
@@ -124,6 +157,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_SHA }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
