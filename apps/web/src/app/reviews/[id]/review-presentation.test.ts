@@ -171,3 +171,28 @@ describe("a pass with required checks that were already failing", () => {
     expect(preExistingFailurePresentation("changes_requested", checks)).toBeUndefined();
   });
 });
+
+describe("the evidence chain under a verdict", () => {
+  const verdict = { label: "Changes requested", tone: "danger" };
+  it("reads commit, checks, findings and verdict, and links to the sections that hold them", async () => {
+    const { evidenceChain } = await import("./review-presentation");
+    const links = evidenceChain({ headSha: "93d85abc05113ae977b9185e4d35001105ed2a37", verdict,
+      checks: [{ conclusion: "passed" }, { conclusion: "passed" }, { conclusion: "failed" }, { conclusion: "not_run" }],
+      findings: [{ blocking: true, resolution: "open" }, { blocking: false, resolution: "uncertain" }, { blocking: false, resolution: "rejected" }] });
+    expect(links).toEqual([
+      { label: "Commit", value: "93d85ab", tone: "neutral" },
+      { label: "Checks", value: "2 passed · 1 failed · 1 not run", tone: "danger", href: "#checks" },
+      { label: "Findings", value: "1 blocking · 1 advisory", tone: "danger", href: "#findings" },
+      { label: "Verdict", value: "Changes requested", tone: "danger" },
+    ]);
+  });
+
+  it("says plainly when there was nothing to link to", async () => {
+    const { evidenceChain } = await import("./review-presentation");
+    const [, checks, findings, last] = evidenceChain({ headSha: "a".repeat(40), checks: [], findings: [], verdict: { label: "Stopped", tone: "info" } });
+    expect(checks).toEqual({ label: "Checks", value: "none ran", tone: "neutral" });
+    expect(findings).toEqual({ label: "Findings", value: "none", tone: "success" });
+    // A tone the chain has no colour for reads as neutral rather than borrowing one.
+    expect(last?.tone).toBe("neutral");
+  });
+});

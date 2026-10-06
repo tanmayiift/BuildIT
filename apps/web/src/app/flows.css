@@ -3379,3 +3379,70 @@ p.evidence-foot {
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
 }
+
+/* The review page's evidence chain (live-review-detail.tsx EvidenceChain): commit → checks →
+   findings → verdict. The stripe repeats each link's state; the words carry it on their own. */
+.evidence-chain {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-5);
+  margin: var(--space-4) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence-chain li {
+  position: relative;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.evidence-chain li.success {
+  border-top-color: var(--success);
+}
+
+.evidence-chain li.danger {
+  border-top-color: var(--danger);
+}
+
+.evidence-chain li.warning {
+  border-top-color: var(--warning);
+}
+
+.evidence-chain li:not(:last-child)::after {
+  content: "→";
+  position: absolute;
+  top: 50%;
+  right: calc(var(--space-5) / -2);
+  transform: translate(50%, -50%);
+  color: var(--muted);
+}
+
+.evidence-chain small {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.evidence-chain strong,
+.evidence-chain a {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
+@media (max-width: 900px) {
+  .evidence-chain {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .evidence-chain li::after {
+    display: none;
+  }
+}
