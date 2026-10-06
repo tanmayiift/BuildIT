@@ -43,6 +43,11 @@ jobs:
   deploy-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The production project link, as release.yml carries it. Identifiers, not credentials: a runner
+    # has no gitignored .vercel/project.json, and these are what the deploy checks read in its place.
+    env:
+      VERCEL_PROJECT_ID: prj_rU8IPaf1laMTTmQEhGun9mRxXmGA
+      VERCEL_ORG_ID: team_0C3dsIfWxzBINeWinBvtOLMC
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
