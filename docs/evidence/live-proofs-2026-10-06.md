@@ -49,11 +49,24 @@ What was shown to work in production on 6 October, and what is still unproven. E
   - The last 7 days used 1 h 43 min over 27 reviews, **about 3.8 CPU-minutes a review**.
   - That is about 80 reviews a month for the whole platform.
 
+## 5. The review page shows the lines a finding cites (#129)
+
+Production web was deployed at 11:13:58 IST with release 37419719273. The signed-in review page for `nx76d4bbv4ct0jsvehj6gm07qd8fr5cc` (itsdangerous#3) now has "Show the cited lines". Opening it rendered:
+- **The excerpt:** `src/itsdangerous/signer.py`, captioned "lines 215–218 cited". Ten lines in all: the cited range plus three either side, read from the reviewed commit's snapshot.
+- **The cited lines:** marked `›`. They are the `django-concat` branch that derives the key from `self.salt` and ignores the per-call salt, which is the finding's claim.
+
+Before #129, that page said "No source was shown" and the reader had to find the lines themselves.
+
+## 6. Vercel Pro, and BuildIT's own sandbox allowance
+
+- **Vercel plan.** At 11:20 IST the owner moved the Vercel team to Pro. Sandbox CPU is now metered at about $0.13 an hour, instead of the 5-hour monthly cap.
+- **Workspace allowance.** BuildIT's own per-workspace allowance for the owner's workspace was raised from 9,000 to 18,000 sandbox-seconds this month, for the R0/R1 benchmark. This was done through the audited operator mutation `organizations:setCapacityLimits`; audit request `sandbox-allowance-benchmark-2026-10-06`.
+- **Platform ceiling.** It is still the Hobby figure in code (`platformMonthlySandboxSeconds = 18,000`), which now caps BuildIT well below what Vercel allows. See the scorecard.
+
 ## Not yet proven live
 
 | Claim | What is waiting |
 |---|---|
 | A warning-only finding is published as Advisory (#127) | #127 deploying, then one review with a warning-only finding |
 | Cached input tokens above 0 (#128) | the candidate prompts enabled for a repository, then two reviews of it |
-| The review page shows cited lines and check output (#129) | a signed-in check of a deployed review |
 | Prompt v7 does no worse than v6 on the historical set | R0 and R1: 66 reviews, about 4.2 sandbox CPU-hours, more than the plan has left this month |
