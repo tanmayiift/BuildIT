@@ -33,6 +33,7 @@
     "lint:fix": "eslint . --fix",
     "eval:compare": "tsx packages/evaluations/src/versionComparisonCli.ts",
     "eval:detection": "tsx packages/evaluations/src/detectionCli.ts",
+    "eval:production": "tsx packages/evaluations/src/productionBenchmarkCli.ts",
     "evidence:track-record": "node scripts/track-record.mjs",
     "evidence:browser": "node scripts/browser-evidence.mjs",
     "snapshots:from-ci": "node scripts/snapshots-from-ci.mjs",

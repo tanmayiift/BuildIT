@@ -9,6 +9,9 @@
 export type DetectionExpectation = {
   // The file the finding must cite. A finding on the wrong file is not a detection.
   path: string;
+  // Other files the same planted defect lives in, when it was planted in more than one place. Each is
+  // justified by where the defect is, never by where a reviewer happened to point.
+  alsoPaths?: readonly string[];
   // Any one of these phrases, matched case-insensitively, shows the reviewer understood the defect
   // rather than pattern-matching the file name.
   anyOf: readonly string[];
