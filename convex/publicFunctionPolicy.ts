@@ -63,6 +63,7 @@ export const publicFunctionPolicies = {
   "reviews:get": { authorization: "active_organization_viewer", response: "metadata" },
   "reviews:getEvidence": { authorization: "active_organization_viewer", response: "metadata" },
   "reviewEvidenceActions:getFindingDetails": { authorization: "active_organization_viewer", response: "authorized_source_derived" },
+  "reviewEvidenceActions:getFindingEvidence": { authorization: "active_organization_viewer", response: "authorized_source_derived" },
   "users:viewer": { authorization: "authenticated_user", response: "personal_identity" },
   "users:sessions": { authorization: "authenticated_user", response: "metadata" },
   "users:revokeOtherSessions": { authorization: "authenticated_user", response: "metadata" },

@@ -45,6 +45,14 @@
   --focus-ring: #7ca7d7;
   --ink-inverse-muted: #9db8d5;
   --inverse-line-strong: rgba(255, 255, 255, .7);
+  /* Source as a finding cites it (evidence/code-excerpt.tsx) and the end of a failed check's output
+     (evidence/check-output.tsx). The cited lines carry a marker glyph as well as this tint, so the
+     highlight never rests on colour alone. */
+  --code-bg: #f5f7fa;
+  --code-ink: #151a22;
+  --code-gutter: #5f6978;
+  --code-cited-bg: #fff4dc;
+  --code-cited-mark: #875100;
   /* The emphasis panels (.landing-trust, .readiness, .activation-path). They used --navy and the
      inverse inks, which in the dark scheme are tuned for buttons - so a panel became a slab of light
      blue on a dark page. A panel stays a deep ground with light text in both schemes. */
@@ -139,6 +147,11 @@
     --workbench: #0b0f15;
     --surface: #151b24;
     --surface-inset: #1c2430;
+    --code-bg: #0f141b;
+    --code-ink: #e6eaf0;
+    --code-gutter: #8f9aaa;
+    --code-cited-bg: #33270f;
+    --code-cited-mark: #f0b44c;
     --ink: #e6eaf0;
     --ink-2: #c3cad5;
     --muted: #9aa4b2;

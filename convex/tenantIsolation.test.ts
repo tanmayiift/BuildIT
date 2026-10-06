@@ -681,6 +681,25 @@ describe("Convex tenant isolation", () => {
     ).rejects.toThrow(/authentication_required|not_found_or_forbidden/);
   });
 
+  // getFindingEvidence returns the cited source lines themselves, so its scope gets the same pin.
+  it("refuses a finding's cited lines to anyone outside the review's tenant", async () => {
+    const t = convexTest(schema, modules),
+      alpha = await seedTenant(t, "lines-alpha", "alice"),
+      beta = await seedTenant(t, "lines-beta", "bob");
+    await expect(
+      t.withIdentity({ subject: "alice|session" })
+        .query(internal.reviewEvidenceData.findingEvidenceScope, { reviewId: beta.reviewId }),
+    ).rejects.toThrow("not_found_or_forbidden");
+    await expect(
+      t.query(internal.reviewEvidenceData.findingEvidenceScope, { reviewId: alpha.reviewId }),
+    ).rejects.toThrow(/authentication_required|not_found_or_forbidden/);
+    // Its own tenant gets an answer - here, that the evidence is not there - never another's artifacts.
+    await expect(
+      t.withIdentity({ subject: "alice|session" })
+        .query(internal.reviewEvidenceData.findingEvidenceScope, { reviewId: alpha.reviewId }),
+    ).resolves.toMatchObject({ state: expect.stringMatching(/^(unavailable|available)$/) });
+  });
+
   it("returns source-free live review evidence only to the review tenant", async () => {
     const t = convexTest(schema, modules),
       alpha = await seedTenant(t, "evidence-alpha", "alice");
