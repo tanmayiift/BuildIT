@@ -57,7 +57,22 @@ Production web was deployed at 11:13:58 IST with release 37419719273. The signed
 
 Before #129, that page said "No source was shown" and the reader had to find the lines themselves.
 
-## 6. Vercel Pro, and BuildIT's own sandbox allowance
+## 6. The homepage and the review queue, as deployed (#131, #132)
+
+Production web at `20fa09c` (release completed 11:31 IST):
+- **Homepage `/`.** It renders the hero review card, with the cited line `4 › export const agentOptions = { rejectUnauthorized: false };`, and the drawn accuracy-panel illustration.
+- **Review queue `/reviews`, signed in.** It opens with the current results split by verdict:
+  - Changes requested 16;
+  - Checks passed 8;
+  - Running checks 3;
+  - Inconclusive 3;
+  - BuildIT failed 2;
+  - Fix delivered 2;
+  - Reading context 1.
+
+  It notes that "30 more results are for commits a pull request has since moved past, folded under each section". Before, the same queue listed every one of those rows inline.
+
+## 7. Vercel Pro, and BuildIT's own sandbox allowance
 
 - **Vercel plan.** At 11:20 IST the owner moved the Vercel team to Pro. Sandbox CPU is now metered at about $0.13 an hour, instead of the 5-hour monthly cap.
 - **Workspace allowance.** BuildIT's own per-workspace allowance for the owner's workspace was raised from 9,000 to 18,000 sandbox-seconds this month, for the R0/R1 benchmark. This was done through the audited operator mutation `organizations:setCapacityLimits`; audit request `sandbox-allowance-benchmark-2026-10-06`.
