@@ -204,11 +204,14 @@ async function post() {
   save();
   const read = await reader();
   const concurrency = Number(flag("concurrency") ?? 3);
-  const queue = [...cases];
-  // Cases run side by side; runs of one case run in sequence, because a second comment on the same
-  // commit while a review is in flight joins that review instead of starting one.
+  // Repositories run side by side; everything within one runs in sequence. A second comment on the
+  // same commit while a review is in flight joins that review instead of starting one, and each demo
+  // repository admits one review at a time - express holds two cases.
+  const byRepository = new Map<string, HistoricalCase[]>();
+  for (const item of cases) byRepository.set(target(item).repository, [...(byRepository.get(target(item).repository) ?? []), item]);
+  const queue = [...byRepository.values()];
   await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-    for (let item = queue.shift(); item; item = queue.shift()) {
+    for (let group = queue.shift(); group; group = queue.shift()) for (const item of group) {
       for (let number = 1; number <= runs; number += 1) {
         while (!runIsSettled(file.runs, item.id, number)) {
           const attempt = file.runs.filter(entry => entry.caseId === item.id && entry.run === number).length + 1;
