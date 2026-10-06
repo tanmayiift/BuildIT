@@ -3299,3 +3299,83 @@ p.evidence-foot {
     transform: translate(50%, 50%);
   }
 }
+
+/* The review queue's verdict summary (reviews/page.tsx QueueSummary): one bar, its legend beside it,
+   and the count of results folded away for commits a pull request has moved past. */
+.queue-summary {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-5) 0;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.queue-summary-bar {
+  display: flex;
+  gap: 2px;
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.queue-summary-segment {
+  min-width: var(--space-1);
+  background: var(--line-strong);
+}
+
+.queue-summary-segment.danger {
+  background: var(--danger);
+}
+
+.queue-summary-segment.success {
+  background: var(--success);
+}
+
+.queue-summary-segment.warning {
+  background: var(--warning);
+}
+
+.queue-summary-segment.running {
+  background: var(--info);
+}
+
+.queue-summary ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queue-summary li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.queue-summary li strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-summary>p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.queue-superseded {
+  margin-top: var(--space-3);
+}
+
+.queue-superseded summary {
+  cursor: pointer;
+  min-height: var(--control-height);
+  display: flex;
+  align-items: center;
+  color: var(--navy);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}

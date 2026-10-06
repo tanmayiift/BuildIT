@@ -9,6 +9,8 @@ import { DashboardReviewStart } from "./dashboard-review-start";
 import { StatePanel } from "../state-panel";
 import {
   groupQueueReviews,
+  queueSummary,
+  splitSuperseded,
   queueSection,
   queueStatusDetail,
   queueStatusLabel,
@@ -65,6 +67,7 @@ export default function ReviewQueue() {
     {connection.organization ? <ActivationPath organizationId={connection.organization.id} /> : null}
     <DashboardReviewStart repositories={connection.repositories} canStartReview={connection.organization.role !== "viewer"} />
     {reviews.truncated ? <p role="status">Showing the latest {reviews.limit} review attempts. Counts and earlier attempts below cover this subset.</p> : null}
+    {groups.length ? <QueueSummary items={queueSummary(groups)} superseded={splitSuperseded(groups).superseded.length} /> : null}
     <div id="review-results">
       {(["decision", "running", "retry"] as const).map(section => <LiveGroup key={section} copy={groupCopy[section]} groups={sections.get(section)!} connection={connection} />)}
     </div>
@@ -76,12 +79,29 @@ function Heading({ connected = false }: { connected?: boolean }) {
   return <div className="page-heading"><div><p className="eyebrow">{connected ? "Live workspace · active organization" : "Sample evidence · no repository connected"}</p><h1 className="title">Review queue</h1><p className="page-description">One current result per pull request and exact commit. Earlier attempts stay in the audit trail.</p></div><div className="heading-actions"><a className="button" href={connected ? "/repositories" : "/setup/install"}>{connected ? "View repositories" : "Connect repository"}</a></div></div>;
 }
 
-function LiveGroup({ copy, groups, connection }: { copy: { title: string; description: string }; groups: QueueReviewGroup[]; connection: Connection }) {
-  if (!groups.length) return null;
-  const earlierAttempts = groups.reduce((sum, group) => sum + group.attemptCount - 1, 0);
+// The verdicts of the current results as one bar and its legend, before any row. The bar is a
+// picture of the legend beside it, so it is hidden from assistive technology and the legend is not.
+function QueueSummary({ items, superseded }: { items: ReturnType<typeof queueSummary>; superseded: number }) {
+  return <section className="queue-summary" aria-label="Current results by verdict">
+    <div className="queue-summary-bar" aria-hidden="true">{items.map(item => <span key={item.label} className={`queue-summary-segment ${tone(item.status)}`} style={{ flexGrow: item.count }} />)}</div>
+    <ul>{items.map(item => <li key={item.label}><span className={`status ${tone(item.status)}`}>{item.label}</span><strong>{item.count}</strong></li>)}</ul>
+    {superseded ? <p>{superseded} more {superseded === 1 ? "result is" : "results are"} for commits a pull request has since moved past, folded under each section.</p> : null}
+  </section>;
+}
+
+function LiveGroup({ copy, groups: all, connection }: { copy: { title: string; description: string }; groups: QueueReviewGroup[]; connection: Connection }) {
+  if (!all.length) return null;
+  const { current: groups, superseded } = splitSuperseded(all);
+  const earlierAttempts = all.reduce((sum, group) => sum + group.attemptCount - 1, 0);
   return <section className="review-group">
     <div className="section-heading compact review-group-heading"><div><h2>{copy.title}</h2><p>{copy.description}</p></div><div className="review-group-counts"><span className="count">{groups.length} current</span>{earlierAttempts ? <a href="/audit">{earlierAttempts} earlier {earlierAttempts === 1 ? "attempt" : "attempts"} in audit log</a> : null}</div></div>
-    <div className="review-table" role="table" aria-label={copy.title}>
+    {groups.length ? <QueueRows label={copy.title} groups={groups} connection={connection} /> : null}
+    {superseded.length ? <details className="queue-superseded"><summary>{superseded.length} {superseded.length === 1 ? "result" : "results"} for commits the pull request has moved past</summary><QueueRows label={`${copy.title}: earlier commits`} groups={superseded} connection={connection} /></details> : null}
+  </section>;
+}
+
+function QueueRows({ label, groups, connection }: { label: string; groups: QueueReviewGroup[]; connection: Connection }) {
+  return <div className="review-table" role="table" aria-label={label}>
       {groups.map(({ review, attemptCount, latestAttempt }) => {
         const repository = connection.repositories.find(item => item.id === review.repositoryId);
         const updated = new Date(review.updatedAt);
@@ -96,8 +116,7 @@ function LiveGroup({ copy, groups, connection }: { copy: { title: string; descri
           <span className="row-arrow" aria-hidden="true">→</span>
         </Link>;
       })}
-    </div>
-  </section>;
+    </div>;
 }
 
 function SampleQueue() {

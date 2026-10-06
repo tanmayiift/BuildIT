@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupQueueReviews, queueSection, queueStatusDetail, queueStatusLabel, type QueueReview } from "./review-row-groups.js";
+import { groupQueueReviews, queueSection, queueStatusDetail, queueStatusLabel, queueSummary, splitSuperseded, type QueueReview } from "./review-row-groups.js";
 
 const retry = (id: string, updatedAt: number): QueueReview => ({ id, repositoryId: "repo-a", prNumber: 2, headSha: "a".repeat(40), status: "platform_failed", statusReasonCode: "provider_rate_limited", isStale: false, coverageLevel: "full", currentStage: "complete", nextActionCode: "retry_review", updatedAt });
 
@@ -36,5 +36,22 @@ describe("review queue presentation", () => {
     const [group] = groupQueueReviews([decision, running]);
     expect(group).toMatchObject({ review: running, latestAttempt: running });
     expect(queueSection(group!.review)).toBe("running");
+  });
+});
+
+describe("the queue's summary of what needs attention", () => {
+  const result = (id: string, status: string, over: Partial<QueueReview> = {}): QueueReview => ({ ...retry(id, Number(id.replace(/\D/g, "")) || 1), status, statusReasonCode: "checks_complete", headSha: id.padEnd(40, "0").slice(0, 40), ...over });
+
+  it("folds results for commits a pull request has moved past, and keeps every one", () => {
+    const groups = groupQueueReviews([result("a1", "changes_requested"), result("a2", "checks_passed", { isStale: true }), result("a3", "changes_requested", { isStale: true })]);
+    const { current, superseded } = splitSuperseded(groups);
+    expect(current.map(group => group.review.id)).toEqual(["a1"]);
+    expect(superseded.map(group => group.review.id).sort()).toEqual(["a2", "a3"]);
+    expect(current.length + superseded.length).toBe(groups.length);
+  });
+
+  it("counts current results by verdict, decisions to act on first", () => {
+    const groups = groupQueueReviews([result("b1", "checks_passed"), result("b2", "changes_requested"), result("b3", "changes_requested"), result("b4", "platform_failed"), result("b5", "checks_passed", { isStale: true })]);
+    expect(queueSummary(groups).map(item => [item.label, item.count])).toEqual([["Changes requested", 2], ["BuildIT failed", 1], ["Checks passed", 1]]);
   });
 });

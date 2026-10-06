@@ -107,3 +107,22 @@ export function queueStatusDetail(review: QueueReview) {
   if (review.isStale) return "The pull request changed. Start a review at the latest commit.";
   return review.statusReasonCode ? reasonLabels[review.statusReasonCode] ?? "Open the result for details." : "Open the result for details.";
 }
+
+// A result for a commit its pull request has since moved past. It stays one click away, but it is
+// not what a reader came to decide on: the live queue listed fixture #22 four times, three of them
+// for commits nobody could merge any more.
+export function splitSuperseded(groups: readonly QueueReviewGroup[]) {
+  return { current: groups.filter(group => !group.review.isStale), superseded: groups.filter(group => group.review.isStale) };
+}
+
+// How the current results divide by verdict, in the order a reader acts on them. The queue said "51
+// current" and nothing else; this is the same number, split so the work is visible before any row.
+export function queueSummary(groups: readonly QueueReviewGroup[]) {
+  const counts = new Map<string, { label: string; status: string; count: number }>();
+  for (const { review } of splitSuperseded(groups).current) {
+    const label = queueStatusLabel(review), entry = counts.get(label);
+    if (entry) entry.count += 1; else counts.set(label, { label, status: review.status, count: 1 });
+  }
+  const order = (status: string) => queueSection({ status } as QueueReview) === "running" ? 1 : queueSection({ status } as QueueReview) === "retry" ? 2 : status === "changes_requested" ? 0 : 3;
+  return [...counts.values()].sort((a, b) => order(a.status) - order(b.status) || b.count - a.count);
+}
