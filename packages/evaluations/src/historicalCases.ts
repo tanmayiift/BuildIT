@@ -18,6 +18,7 @@
 // failures looked like: got's retry test asserted `attempts >= 1`, which a correct implementation
 // and a broken one both satisfy.
 
+import { createHash } from "node:crypto";
 import type { DetectionExpectation } from "./detectionCases.js";
 
 export type DefectFamily =
@@ -31,7 +32,14 @@ export type HistoricalCase = {
   url: string;
   repository: string;
   upstream: string;
-  upstreamSha: string;
+  // The upstream commit the demo repository was snapshotted from, recorded only where it was verified
+  // to exist upstream. Four v1 values did not exist anywhere (their tails repeated "...e0a5e1c9e0...")
+  // and were removed in v2 rather than replaced with a guess.
+  upstreamSha?: string;
+  // The exact commits a run reviews. A benchmark run refuses to start if the pull request's head has
+  // moved, because a different head is a different case.
+  headSha: string;
+  baseSha: string;
   language: "typescript" | "javascript" | "python" | "java";
   kind: "defect" | "clean";
   defectFamily?: DefectFamily;
@@ -45,12 +53,17 @@ export type HistoricalCase = {
   expect?: DetectionExpectation;
 };
 
-export const historicalSetVersion = "historical-v1";
+// v2 (6 Oct 2026): every case pins its pull request's head and base; zod's expectation moved to where
+// the defect is planted (util.ts, compile.ts - v1 named checks.ts, which never contained it) and to
+// "high", because only critical and high findings block; four fabricated upstream SHAs were removed.
+export const historicalSetVersion = "historical-v2";
 
 export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
   {
     id: "hist-p-queue-weighted-concurrency",
     url: "https://github.com/tanmayiift/buildit-demo-p-queue/pull/2",
+    headSha: "9e3b575d34337096376546a7bf93075aec6dbfc0",
+    baseSha: "6b1578284fe3bc9dc09a72c6475988d04eb3cabc",
     repository: "tanmayiift/buildit-demo-p-queue",
     upstream: "sindresorhus/p-queue@v9.3.3",
     upstreamSha: "180ab9e25cd10b6f548767d7176076b50d25e188",
@@ -65,6 +78,8 @@ export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
   {
     id: "hist-body-parser-async-verify-bypass",
     url: "https://github.com/tanmayiift/buildit-demo-body-parser/pull/6",
+    headSha: "b6485bc3ffc80565968c034a1d4b6a8836dd68a3",
+    baseSha: "b47739fcb5b6003961eb6b304f0d882390670935",
     repository: "tanmayiift/buildit-demo-body-parser",
     upstream: "expressjs/body-parser@v2.3.0",
     upstreamSha: "d0f2ace6c74769da7d19b8661b9a01c01bdb0bf7",
@@ -79,6 +94,8 @@ export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
   {
     id: "hist-requests-env-ca-override",
     url: "https://github.com/tanmayiift/buildit-demo-requests/pull/3",
+    headSha: "b15a9957ed9b6d9f2f714e8df5b18b519974d5ba",
+    baseSha: "52187cd6f52f61ca94a0661a773dafcbe77067d0",
     repository: "tanmayiift/buildit-demo-requests",
     upstream: "psf/requests@v2.34.2",
     upstreamSha: "6e83187b8feb273ed4c6cdab5efd8d54901dfab3",
@@ -93,6 +110,8 @@ export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
   {
     id: "hist-itsdangerous-salt-ignored",
     url: "https://github.com/tanmayiift/buildit-demo-itsdangerous/pull/3",
+    headSha: "93d85abc05113ae977b9185e4d35001105ed2a37",
+    baseSha: "56804ea4a23ba4215bd30d4fa2ea4160e8b4b20a",
     repository: "tanmayiift/buildit-demo-itsdangerous",
     upstream: "pallets/itsdangerous@2.2.0",
     upstreamSha: "096c8d42545d3b68ea21a4f890fb2b2d8979c0bd",
@@ -107,6 +126,8 @@ export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
   {
     id: "hist-gson-millisecond-carry",
     url: "https://github.com/tanmayiift/buildit-demo-gson/pull/3",
+    headSha: "436ddbc3f2e3eb1183991f140dc11bd54332571a",
+    baseSha: "ae80259aef40b98f321f29f3077d44fce8b4077f",
     repository: "tanmayiift/buildit-demo-gson",
     upstream: "google/gson@gson-parent-2.14.0",
     upstreamSha: "3ff35d6269894901ab8006258395aafc4b9765cd",
@@ -121,6 +142,8 @@ export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
   {
     id: "hist-axios-evicted-session-leak",
     url: "https://github.com/tanmayiift/buildit-demo-axios/pull/2",
+    headSha: "f0c6fed4a4f6a0c22638b1e94b18e8dbf7372a7c",
+    baseSha: "03bd1b593a4601fcc972f4e763665297ba223eb8",
     repository: "tanmayiift/buildit-demo-axios",
     upstream: "axios/axios@v1.20.0",
     upstreamSha: "84a9f3b9a4f3244b8c8e818f557d64c7b964fb25",
@@ -135,9 +158,10 @@ export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
   {
     id: "hist-got-retry-budget",
     url: "https://github.com/tanmayiift/buildit-demo-got/pull/1",
+    headSha: "fda2b11203db8abac683e1c190bc536dbfb05a38",
+    baseSha: "bc0655188b888a62e521966ad21a891f81b0554e",
     repository: "tanmayiift/buildit-demo-got",
     upstream: "sindresorhus/got",
-    upstreamSha: "bc0655188b8827a2e4c0d4a0b8b1b8f7a5a4a3a2",
     language: "typescript",
     kind: "defect",
     defectFamily: "regression",
@@ -149,6 +173,8 @@ export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
   {
     id: "hist-express-view-cache-key",
     url: "https://github.com/tanmayiift/buildit-demo-express/pull/7",
+    headSha: "b7676205c25e56ba7188a9143f58b9c853b0886a",
+    baseSha: "9323e2578c602d9a588f07183450b937de39aa4d",
     repository: "tanmayiift/buildit-demo-express",
     upstream: "expressjs/express",
     upstreamSha: "f540c3b0195393974d4875a410f4c00a07a2ab60",
@@ -163,23 +189,28 @@ export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
   {
     id: "hist-zod-int16-off-by-one",
     url: "https://github.com/tanmayiift/buildit-demo-zod/pull/1",
+    headSha: "7135ab84a53917ed78739a52efdc9186401d345c",
+    baseSha: "1a295bdeca5b9cd676b8897b3c1ccd9f301bfbb4",
     repository: "tanmayiift/buildit-demo-zod",
     upstream: "colinhacks/zod",
-    upstreamSha: "1a295bdeca5b0d9c0a0e0a5e1c9e0e0a5e1c9e0e",
     language: "typescript",
     kind: "defect",
     defectFamily: "logic_edge_case",
     summary: "int16's upper bound is written as 32768 rather than 32767, in both the bounds table and the compiled fast path, so z.int16() accepts a value one past the type's maximum.",
     mustUnderstand: "A signed 16-bit integer's maximum is 2^15 - 1. The same off-by-one appears twice, so a fix in one place leaves the other wrong, and the compiled path is the one that runs.",
     testBlindSpot: "The added tests assert 32767 parses and never assert 32768 is rejected.",
-    expect: { path: "packages/zod/src/v4/core/checks.ts", anyOf: ["32767", "32768", "off-by-one", "int16", "bound"], severityAtLeast: "warning", blocking: true },
+    // The defect is planted in the bounds table (util.ts NUMBER_FORMAT_RANGES) and repeated in the
+    // compiled fast path (compile.ts), as the summary says; v1 named checks.ts, which never held it.
+    // High: z.int16() accepting a value outside int16 breaks the validator's core contract.
+    expect: { path: "packages/zod/src/v4/core/util.ts", alsoPaths: ["packages/zod/src/v4/core/compile.ts"], anyOf: ["32767", "32768", "off-by-one", "int16", "bound", "NUMBER_FORMAT_RANGES"], severityAtLeast: "high", blocking: true },
   },
   {
     id: "hist-date-fns-holiday-whole-week",
     url: "https://github.com/tanmayiift/buildit-demo-date-fns/pull/1",
+    headSha: "c2c5b8436cf510ccf5ee9fcbf08ab8dc233f3489",
+    baseSha: "5b96b04f15d200b3d57184756e15db27a2d66300",
     repository: "tanmayiift/buildit-demo-date-fns",
     upstream: "date-fns/date-fns",
-    upstreamSha: "9d1b4dc6a4b0a2c1c0e0a5e1c9e0e0a5e1c9e0e0",
     language: "typescript",
     // Labelled "clean" when this set was written, and that label was wrong. I read the diff, saw
     // holidays normalized through the right context and a weekend holiday correctly not
@@ -202,9 +233,10 @@ export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
   {
     id: "hist-express-utils-unit-coverage",
     url: "https://github.com/tanmayiift/buildit-demo-express/pull/9",
+    headSha: "4c36848048f7db2114252ab994e499ca0fc983a3",
+    baseSha: "9323e2578c602d9a588f07183450b937de39aa4d",
     repository: "tanmayiift/buildit-demo-express",
     upstream: "expressjs/express",
-    upstreamSha: "023767fe98729f2ec0f4a0e1e2e9c0e0a5e1c9e0",
     language: "javascript",
     // The clean control, replacing the date-fns case that turned out to be a defect. Without one
     // the set rewards a reviewer that flags everything, and false blocking - the outcome scored as
@@ -226,3 +258,11 @@ export const historicalCases: ReadonlyArray<HistoricalCase> = Object.freeze([
 
 export const historicalDefectCount = historicalCases.filter(item => item.kind === "defect").length;
 export const historicalCleanCount = historicalCases.filter(item => item.kind === "clean").length;
+
+// What a benchmark run was scored against: every field that decides an outcome, hashed. A run file
+// records it and scoring refuses a file whose digest differs, so a label edited between a baseline
+// and a candidate run cannot pass for a prompt improvement.
+export function historicalLabelDigest(cases: ReadonlyArray<HistoricalCase> = historicalCases) {
+  const labels = cases.map(item => ({ id: item.id, url: item.url, headSha: item.headSha, baseSha: item.baseSha, kind: item.kind, expect: item.expect ?? null }));
+  return createHash("sha256").update(JSON.stringify(labels)).digest("hex");
+}

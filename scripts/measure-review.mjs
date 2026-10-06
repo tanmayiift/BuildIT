@@ -4,9 +4,9 @@
 //   node scripts/measure-review.mjs <reviewId> [...]
 //   node scripts/measure-review.mjs --compare <before…> -- <after…>
 //
-// Read-only (`convex run --prod --inline-query`). It prints counts, durations, hashes and verdict
-// codes only: no source, no finding text, no model output.
-import { execFileSync } from "node:child_process";
+// Read-only, through the same read the production benchmark uses. It prints counts, durations,
+// hashes and verdict codes only: no source, no finding text, no model output.
+import { readProductionReviews } from "./lib/production-review-read.mjs";
 
 const args = process.argv.slice(2);
 const compare = args[0] === "--compare";
@@ -16,41 +16,7 @@ if (!ids.length || ids.some(id => !/^[a-z0-9]{20,40}$/.test(id))) {
   process.exit(2);
 }
 
-const query = `
-import { query } from "convex:/_system/repl/wrappers.js";
-export default query(async (ctx) => {
-  const ids = ${JSON.stringify(ids)};
-  const rows = [];
-  for (const id of ids) {
-    const review = await ctx.db.get(id);
-    if (!review) { rows.push({ id, missing: true }); continue; }
-    const calls = await ctx.db.query("modelInvocations").withIndex("by_review_status", q => q.eq("reviewId", review._id)).collect();
-    const stages = await ctx.db.query("modelStageRuns").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
-    const events = await ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
-    const findings = await ctx.db.query("findings").withIndex("by_review_severity", q => q.eq("reviewId", review._id)).collect();
-    const runs = await ctx.db.query("runState").withIndex("by_review", q => q.eq("reviewId", review._id)).collect();
-    const analysis = runs.find(run => run.stage === "analysis");
-    const at = type => events.filter(event => event.type === type).map(event => event._creationTime);
-    const stageDone = name => events.find(event => event.type === "stage_completed" && event.stage === name)?._creationTime;
-    rows.push({
-      id, provider: review.provider, model: review.model, status: review.status, reason: review.statusReasonCode,
-      created: review._creationTime,
-      contextDone: stageDone("context"), validationDone: stageDone("validation"), analysisDone: stageDone("analysis"),
-      completed: Math.max(...at("status_changed"), 0) || undefined,
-      calls: calls.filter(call => call.status !== "not_charged").map(call => ({ stage: call.stage, model: call.model, status: call.status,
-        input: call.inputTokens ?? 0, output: call.outputTokens ?? 0, cached: call.cachedInputTokens ?? 0, costMicros: call.costMicros ?? 0 })),
-      stageRuns: stages.map(run => ({ stage: run.stage, promptVersion: run.promptVersion, attempt: run.attempt, outcome: run.outcome, durationMs: run.durationMs ?? 0 })),
-      analysis: analysis ? { durationMs: analysis.durationMs, plannedStages: analysis.plannedStages, skippedStages: analysis.skippedStages,
-        coverage: analysis.coverage, coverageGap: analysis.coverageGap, filesSelected: analysis.filesSelected, filesChanged: analysis.filesChanged } : null,
-      findings: findings.map(item => ({ pathHmac: item.pathHmac.slice(0, 12), category: item.category, severity: item.severity,
-        lines: [item.startLine, item.endLine], blocking: item.blocking, resolution: item.resolution })),
-    });
-  }
-  return [JSON.stringify(rows)];
-});`;
-
-const raw = execFileSync("pnpm", ["exec", "convex", "run", "--prod", "--inline-query", query], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-const rows = JSON.parse(JSON.parse(raw.slice(raw.indexOf("["), raw.lastIndexOf("]") + 1))[0]);
+const rows = readProductionReviews({ ids });
 
 const seconds = (from, to) => from && to ? Math.round((to - from) / 100) / 10 : undefined;
 function summary(row) {

@@ -43,19 +43,28 @@ function textOf(finding: ReviewedFinding) {
   return [finding.title, finding.explanation, finding.impact].filter(Boolean).join(" ").toLowerCase();
 }
 
-export function findDetection(item: DetectionCase, findings: readonly ReviewedFinding[]) {
+// Which of the defect's own phrases a finding uses. Exported because a recorded benchmark run keeps
+// these instead of the model's prose, and must be scored by exactly the rule a live run is.
+export function mentionedPhrases(expect: NonNullable<DetectionCase["expect"]>, finding: ReviewedFinding) {
+  const text = textOf(finding);
+  return expect.anyOf.filter(phrase => text.includes(phrase.toLowerCase()));
+}
+
+export function findDetection(item: Pick<DetectionCase, "expect">, findings: readonly ReviewedFinding[]) {
   if (!item.expect) return undefined;
   const expect = item.expect;
+  const paths = [expect.path, ...(expect.alsoPaths ?? [])];
   return surviving(findings).find(finding =>
-    finding.path === expect.path
+    finding.path !== undefined && paths.includes(finding.path)
     && severityRank[finding.severity] >= severityRank[expect.severityAtLeast]
     && (!expect.blocking || finding.blocking)
     // Matching the defect's own vocabulary is what separates understanding it from noticing the
     // file changed.
-    && expect.anyOf.some(phrase => textOf(finding).includes(phrase.toLowerCase())));
+    && mentionedPhrases(expect, finding).length > 0);
 }
 
-export function scoreCase(item: DetectionCase, findings: readonly ReviewedFinding[]): CaseOutcome {
+// Only what scoring reads, so a historical case is scored by the same function as a snippet case.
+export function scoreCase(item: Pick<DetectionCase, "id" | "kind" | "expect">, findings: readonly ReviewedFinding[]): CaseOutcome {
   if (item.kind === "clean") {
     const blocking = surviving(findings).filter(finding => finding.blocking);
     return {
@@ -70,7 +79,8 @@ export function scoreCase(item: DetectionCase, findings: readonly ReviewedFindin
   if (hit) return { id: item.id, kind: item.kind, passed: true, because: `found: ${hit.title}` };
 
   const expect = item.expect!;
-  const onPath = surviving(findings).filter(finding => finding.path === expect.path);
+  const paths = [expect.path, ...(expect.alsoPaths ?? [])];
+  const onPath = surviving(findings).filter(finding => finding.path !== undefined && paths.includes(finding.path));
   const because = onPath.length === 0
     ? `nothing reported on ${expect.path}`
     : `reported on ${expect.path} but not this defect: ${onPath.map(finding => finding.title).join("; ")}`;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { historicalCases, historicalCleanCount, historicalDefectCount, historicalSetVersion } from "../src/historicalCases";
+import { historicalCases, historicalCleanCount, historicalDefectCount, historicalLabelDigest, historicalSetVersion } from "../src/historicalCases";
 import { compareVersions, versionRegressed, type VersionRun } from "../src/versionComparison";
 
 // The set is only worth anything if every case is real and openable. These assert the properties
@@ -11,8 +11,27 @@ describe("the historical pull request set", () => {
     expect(historicalCases.length).toBeGreaterThanOrEqual(10);
     for (const item of historicalCases) {
       expect(item.url, item.id).toMatch(/^https:\/\/github\.com\/[\w-]+\/[\w.-]+\/pull\/\d+$/);
-      expect(item.upstreamSha, item.id).toMatch(/^[0-9a-f]{40}$/);
+      // Pinned, because a benchmark run against a moved head is a different case.
+      expect(item.headSha, item.id).toMatch(/^[0-9a-f]{40}$/);
+      expect(item.baseSha, item.id).toMatch(/^[0-9a-f]{40}$/);
+      // Optional since v2: four v1 values existed nowhere upstream. Recorded only once verified.
+      if (item.upstreamSha !== undefined) expect(item.upstreamSha, item.id).toMatch(/^[0-9a-f]{40}$/);
     }
+  });
+
+  it("blocks only at high or critical, so a label never demands what the policy cannot do", () => {
+    // Only critical and high findings block a merge. A label that expected a blocking warning could
+    // never be met, and would score every reviewer as missing it.
+    for (const item of historicalCases.filter(entry => entry.expect?.blocking)) {
+      expect(["high", "critical"], item.id).toContain(item.expect?.severityAtLeast);
+    }
+  });
+
+  it("keeps its labels frozen while a baseline and a candidate are compared", () => {
+    // Changing a label changes what "detected" means. Do it on purpose: bump historicalSetVersion,
+    // re-run the baseline, then update this digest - never update the digest alone.
+    expect(historicalSetVersion).toBe("historical-v2");
+    expect(historicalLabelDigest()).toBe("a4cc04541a6e903356f3fa06004d26ca8614497a9960997f119f6dd9dacbfe10");
   });
 
   it("carries a clean case, so a reviewer that flags everything cannot score well", () => {

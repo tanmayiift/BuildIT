@@ -24,3 +24,6 @@ docs/release/deployment.md
 # and the JSON manifests - are committed; these are the 2.6MB of stdout behind them, and a
 # 1.3MB e2e server log in permanent history is bloat nobody will ever read.
 audit/**/*.log
+
+# Raw reports a production benchmark run reads; the run file in docs/evidence keeps what scoring needs.
+.eval-runs/
