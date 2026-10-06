@@ -16,9 +16,9 @@ describe("sandbox ceiling", () => {
   });
 
   it("keeps the default inside the shared provider quota for several tenants at once", () => {
-    // Vercel Hobby allows 18,000 sandbox seconds a month across the whole deployment, so no single
-    // tenant's default may be a large fraction of it.
-    expect(platformMonthlySandboxSeconds).toBe(18_000);
+    // The platform allows itself 180,000 sandbox seconds a month across the whole deployment (on
+    // Vercel Pro, a spend guard), so no single tenant's default may be a large fraction of it.
+    expect(platformMonthlySandboxSeconds).toBe(180_000);
     expect(defaultMonthlySandboxSeconds * 5).toBeLessThanOrEqual(platformMonthlySandboxSeconds);
   });
 
@@ -27,15 +27,15 @@ describe("sandbox ceiling", () => {
   // platform guard is the only thing holding the quota.
   it("does not bound the platform by per-tenant slices alone", () => {
     const tenantsThatFit = Math.floor(platformMonthlySandboxSeconds / defaultMonthlySandboxSeconds);
-    expect(tenantsThatFit).toBe(5);
+    expect(tenantsThatFit).toBe(50);
     expect(defaultMonthlySandboxSeconds * (tenantsThatFit + 1)).toBeGreaterThan(platformMonthlySandboxSeconds);
   });
 
   it("trips the platform guard before the provider does, not at the same moment", () => {
     expect(platformUsableMonthlySandboxSeconds).toBeLessThan(platformMonthlySandboxSeconds);
-    expect(platformUsableMonthlySandboxSeconds).toBe(16_200);
-    expect(platformCeilingExceeded(16_199)).toBe(false);
-    expect(platformCeilingExceeded(16_200)).toBe(true);
+    expect(platformUsableMonthlySandboxSeconds).toBe(162_000);
+    expect(platformCeilingExceeded(161_999)).toBe(false);
+    expect(platformCeilingExceeded(162_000)).toBe(true);
     // A provider-side refusal would arrive here, with no explanation and no reset date.
     expect(platformCeilingExceeded(platformMonthlySandboxSeconds)).toBe(true);
   });

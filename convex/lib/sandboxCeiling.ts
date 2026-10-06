@@ -20,18 +20,23 @@ export type SandboxCeilingState = {
   sandboxSecondsMonth?: string;
 };
 
-// Vercel's Hobby plan allows 5 hours of Sandbox Active CPU per month - 18,000 seconds - across
-// every sandbox the deployment opens. This counter measures wall-clock seconds a tenant held a
-// sandbox, which is always at least its active CPU, so the default is a conservative slice:
-// five tenants each spending their whole default allowance stay inside the platform quota.
-// Measured against four real reviews (12s, 26s, 72s, 159s of sandbox time), an hour is roughly
-// fifty reviews a month.
-export const platformMonthlySandboxSeconds = 18_000;
+// The sandbox time BuildIT allows itself in a month, across every sandbox the deployment opens.
+//
+// On Vercel Hobby this was the provider's whole quota, 5 hours (18,000 seconds), and past it every
+// review on every account failed until the reset: about 80 reviews a month for the entire platform.
+// The team moved to Pro on 6 Oct 2026, where Sandbox Active CPU is metered (about $0.13 an hour) rather
+// than capped, so this is now BuildIT's own spend guard: 50 hours of sandbox time, which at the
+// sandbox's 2 vCPUs is at most about $13 of CPU a month. Raise it deliberately, not by accident.
+//
+// This counter measures wall-clock seconds a tenant held a sandbox, which is always at least its
+// active CPU. Measured against four real reviews (12s, 26s, 72s, 159s of sandbox time), an hour is
+// roughly fifty reviews a month.
+export const platformMonthlySandboxSeconds = 180_000;
 export const defaultMonthlySandboxSeconds = 3_600;
 
 // Dividing the quota into per-tenant slices only bounds the platform while the number of tenants
-// times the default stays inside it: at 3,600 seconds each, the sixth workspace to sign up puts the
-// deployment over 18,000 with every tenant still inside its own ceiling. So the platform needs its
+// times the default stays inside it: at 3,600 seconds each, the fifty-first workspace puts the
+// deployment over 180,000 with every tenant still inside its own ceiling. So the platform needs its
 // own counter, and the per-tenant ceiling is a fairness rule rather than the thing that protects
 // the quota.
 //
