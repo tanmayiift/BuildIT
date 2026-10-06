@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { githubRequester, rateLimitDelayMs } from "../src/request.js";
+import { githubRequester, rateLimitDelayMs, secondaryLimitWaitMs } from "../src/request.js";
 
 // packages/github had no handling of 429, Retry-After, x-ratelimit-* or GitHub's secondary rate
 // limits: a 429 fell into the generic !response.ok branch and became an immediate hard failure.
@@ -48,6 +48,34 @@ describe("GitHub rate limits", () => {
     const request = githubRequester(http, { wait: async () => {} });
     await expect(request("https://api.github.com/x").then(response => response.status)).resolves.toBe(429);
     expect(http).toHaveBeenCalledTimes(4);
+  });
+
+  // GitHub's own bodies, as it sends them. A secondary limit can arrive with no Retry-After and an
+  // untouched primary counter; GitHub's documented answer is to wait at least a minute.
+  const secondary = () => new Response(JSON.stringify({ message: "You have exceeded a secondary rate limit. Please wait a few minutes before you try again. If you reach out to GitHub Support for help, please include the request ID 0000:0000:0000000:0000000:00000000.", documentation_url: "https://docs.github.com/rest/overview/rate-limits-for-the-rest-api#about-secondary-rate-limits", status: "403" }), { status: 403, headers: { "x-ratelimit-remaining": "4210" } });
+  const refused = () => new Response(JSON.stringify({ message: "Resource not accessible by integration", documentation_url: "https://docs.github.com/rest/git/blobs#get-a-blob", status: "403" }), { status: 403, headers: { "x-ratelimit-remaining": "4210" } });
+
+  it("waits out a secondary limit GitHub declared only in its message", async () => {
+    const waits: number[] = [];
+    const http = vi.fn().mockResolvedValueOnce(secondary()).mockResolvedValueOnce(new Response("ok", { status: 200 }));
+    const request = githubRequester(http, { wait: async ms => { waits.push(ms); } });
+    await expect(request("https://api.github.com/x").then(response => response.status)).resolves.toBe(200);
+    expect(waits).toEqual([secondaryLimitWaitMs]);
+  });
+
+  it("returns a real refusal at once, and leaves its body readable for the caller", async () => {
+    const http = vi.fn().mockResolvedValue(refused());
+    const response = await githubRequester(http, { wait: async () => { throw new Error("must not wait"); } })("https://api.github.com/x");
+    expect(response.status).toBe(403);
+    expect(http).toHaveBeenCalledTimes(1);
+    expect(await response.json()).toMatchObject({ message: "Resource not accessible by integration" });
+  });
+
+  it("treats a bare 429 as a wait even without headers", async () => {
+    const waits: number[] = [];
+    const http = vi.fn().mockResolvedValueOnce(new Response("", { status: 429 })).mockResolvedValueOnce(new Response("ok", { status: 200 }));
+    await githubRequester(http, { wait: async ms => { waits.push(ms); } })("https://api.github.com/x");
+    expect(waits).toEqual([secondaryLimitWaitMs]);
   });
 
   it("turns a hung socket into a timeout instead of hanging the review", async () => {
