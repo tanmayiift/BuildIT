@@ -1,0 +1,180 @@
+{
+  "kind": "buildit-production-benchmark-score",
+  "setVersion": "historical-v2",
+  "labelDigest": "a4cc04541a6e903356f3fa06004d26ca8614497a9960997f119f6dd9dacbfe10",
+  "label": "R0",
+  "policy": "critical-high",
+  "promptVersion": "findings-v6",
+  "promptVersions": {
+    "findings": "findings-v6",
+    "critic": "critic-v3",
+    "arbitration": "arbitration-v3",
+    "requirements": "requirements-v1"
+  },
+  "cases": [
+    {
+      "caseId": "hist-p-queue-weighted-concurrency",
+      "outcome": "missed"
+    },
+    {
+      "caseId": "hist-body-parser-async-verify-bypass",
+      "outcome": "missed"
+    },
+    {
+      "caseId": "hist-requests-env-ca-override",
+      "outcome": "missed"
+    },
+    {
+      "caseId": "hist-itsdangerous-salt-ignored",
+      "outcome": "missed"
+    },
+    {
+      "caseId": "hist-gson-millisecond-carry",
+      "outcome": "detected"
+    },
+    {
+      "caseId": "hist-axios-evicted-session-leak",
+      "outcome": "missed"
+    },
+    {
+      "caseId": "hist-got-retry-budget",
+      "outcome": "missed"
+    },
+    {
+      "caseId": "hist-express-view-cache-key",
+      "outcome": "detected"
+    },
+    {
+      "caseId": "hist-zod-int16-off-by-one",
+      "outcome": "detected"
+    },
+    {
+      "caseId": "hist-date-fns-holiday-whole-week",
+      "outcome": "detected"
+    },
+    {
+      "caseId": "hist-express-utils-unit-coverage",
+      "outcome": "clean_pass"
+    }
+  ],
+  "excluded": [],
+  "details": [
+    {
+      "caseId": "hist-p-queue-weighted-concurrency",
+      "kind": "defect",
+      "validRuns": 3,
+      "invalidParse": 0,
+      "invalidPlatform": 0,
+      "hits": 1,
+      "outcome": "missed",
+      "because": "found in 1 of 3 runs (needs 2)"
+    },
+    {
+      "caseId": "hist-body-parser-async-verify-bypass",
+      "kind": "defect",
+      "validRuns": 3,
+      "invalidParse": 0,
+      "invalidPlatform": 0,
+      "hits": 0,
+      "outcome": "missed",
+      "because": "found in 0 of 3 runs (needs 2)"
+    },
+    {
+      "caseId": "hist-requests-env-ca-override",
+      "kind": "defect",
+      "validRuns": 3,
+      "invalidParse": 0,
+      "invalidPlatform": 0,
+      "hits": 0,
+      "outcome": "missed",
+      "because": "found in 0 of 3 runs (needs 2)"
+    },
+    {
+      "caseId": "hist-itsdangerous-salt-ignored",
+      "kind": "defect",
+      "validRuns": 3,
+      "invalidParse": 0,
+      "invalidPlatform": 0,
+      "hits": 0,
+      "outcome": "missed",
+      "because": "found in 0 of 3 runs (needs 2)"
+    },
+    {
+      "caseId": "hist-gson-millisecond-carry",
+      "kind": "defect",
+      "validRuns": 3,
+      "invalidParse": 0,
+      "invalidPlatform": 0,
+      "hits": 3,
+      "outcome": "detected",
+      "because": "found in 3 of 3 runs (needs 2)"
+    },
+    {
+      "caseId": "hist-axios-evicted-session-leak",
+      "kind": "defect",
+      "validRuns": 3,
+      "invalidParse": 0,
+      "invalidPlatform": 0,
+      "hits": 0,
+      "outcome": "missed",
+      "because": "found in 0 of 3 runs (needs 2)"
+    },
+    {
+      "caseId": "hist-got-retry-budget",
+      "kind": "defect",
+      "validRuns": 3,
+      "invalidParse": 0,
+      "invalidPlatform": 0,
+      "hits": 0,
+      "outcome": "missed",
+      "because": "found in 0 of 3 runs (needs 2)"
+    },
+    {
+      "caseId": "hist-express-view-cache-key",
+      "kind": "defect",
+      "validRuns": 3,
+      "invalidParse": 0,
+      "invalidPlatform": 0,
+      "hits": 3,
+      "outcome": "detected",
+      "because": "found in 3 of 3 runs (needs 2)"
+    },
+    {
+      "caseId": "hist-zod-int16-off-by-one",
+      "kind": "defect",
+      "validRuns": 2,
+      "invalidParse": 0,
+      "invalidPlatform": 3,
+      "hits": 2,
+      "outcome": "detected",
+      "because": "found in 2 of 2 runs (needs 2)"
+    },
+    {
+      "caseId": "hist-date-fns-holiday-whole-week",
+      "kind": "defect",
+      "validRuns": 2,
+      "invalidParse": 0,
+      "invalidPlatform": 4,
+      "hits": 2,
+      "outcome": "detected",
+      "because": "found in 2 of 2 runs (needs 2)"
+    },
+    {
+      "caseId": "hist-express-utils-unit-coverage",
+      "kind": "clean",
+      "validRuns": 3,
+      "invalidParse": 0,
+      "invalidPlatform": 0,
+      "hits": 0,
+      "outcome": "clean_pass",
+      "because": "passed all 3 runs"
+    }
+  ],
+  "totals": {
+    "reviews": 36,
+    "validReviews": 31,
+    "costUsd": 2.4203,
+    "inputTokens": 938337,
+    "cachedInputTokens": 508800
+  }
+}
