@@ -286,7 +286,7 @@ export default defineSchema({
     category: value.findingCategory, severity: value.severity, confidence: v.number(), blocking: v.boolean(),
     contentArtifactId: v.id("artifacts"), evidenceIds: v.array(v.id("artifacts")), pathHmac: v.string(),
     startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()),
-    requirementId: v.optional(v.id("requirements")), resolution: value.findingResolution, uncertainPasses: v.optional(v.number()),
+    requirementId: v.optional(v.id("requirements")), resolution: value.findingResolution, resolutionReason: v.optional(value.findingResolutionReason), uncertainPasses: v.optional(v.number()),
     injectionSuspected: v.optional(v.boolean()),
     createdAt: v.number(), updatedAt: v.number(), expiresAt: v.number(),
   }).index("by_organization", ["organizationId"])

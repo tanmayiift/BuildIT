@@ -1,4 +1,5 @@
 "use node";
+import { isFindingResolutionReason } from "@buildit/contracts";
 import { invokeAccountedModel } from "./lib/accountedModel";
 import { findingFingerprint } from "./lib/findingFingerprint";
 import { createHash } from "node:crypto";
@@ -574,7 +575,7 @@ export const analyze = internalAction({
       findings: arbitrated.filter(item => item.resolution !== "rejected").map(item => ({ fingerprintHmac: findingFingerprint(item, fingerprintKey), pathHmac: fingerprint(item.path, fingerprintKey),
         category: item.category as "correctness" | "security" | "requirement" | "architecture" | "quality" | "dependency" | "test", severity: item.severity, confidence: item.confidence, blocking: item.blocking,
         evidenceIds: item.evidenceIds.map(id => headEvidence.get(id)!.artifactId), startLine: item.startLine, endLine: item.endLine, ...(item.origin === "scanner" ? { ruleId: item.id.split("-").slice(2).join("-") } : {}),
-        ...(item.criterionId ? { requirementExternalIdHash: fingerprint(item.criterionId, fingerprintKey) } : {}), resolution: item.resolution === "accepted" ? "open" as const : "uncertain" as const, ...(item.reason === "prompt_injection_detected" ? { injectionSuspected: true } : {}) })), ...(injectionUnscoped ? { injectionUnscoped: true } : {}), ...(injectionSurfaces.size ? { injectionSurfaces: [...injectionSurfaces] } : {}), now: Date.now() });
+        ...(item.criterionId ? { requirementExternalIdHash: fingerprint(item.criterionId, fingerprintKey) } : {}), resolution: item.resolution === "accepted" ? "open" as const : "uncertain" as const, ...(isFindingResolutionReason(item.reason) ? { resolutionReason: item.reason } : {}), ...(item.reason === "prompt_injection_detected" ? { injectionSuspected: true } : {}) })), ...(injectionUnscoped ? { injectionUnscoped: true } : {}), ...(injectionSurfaces.size ? { injectionSurfaces: [...injectionSurfaces] } : {}), now: Date.now() });
     return { artifactId: String(reserved.artifactId), stages: records.length, inputTokens, outputTokens };
   },
 });
