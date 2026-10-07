@@ -138,7 +138,7 @@ async function deleteReview(ctx: MutationCtx, review: Doc<"reviews">, now: numbe
   // A provider fallback is a child review sharing the parent's allowance; keep the parent while any
   // child is still inside the window, so a budget family is never half there.
   const children = await ctx.db.query("reviews").withIndex("by_parent", q => q.eq("parentReviewId", review._id)).collect();
-  if (children.some(child => !terminalStatuses.has(child.status) || child.updatedAt >= now - reviewRetentionMs)) return "descendant_active";
+  if (children.some(child => !removable(child.status) || child.createdAt >= now - reviewRetentionMs)) return "descendant_active";
 
   for (const find of Object.values(reviewCascade)) {
     for (const row of await find(ctx, review._id)) await ctx.db.delete(row._id);
@@ -152,30 +152,46 @@ async function deleteReview(ctx: MutationCtx, review: Doc<"reviews">, now: numbe
   return "deleted";
 }
 
-const terminalList = [...terminalStatuses];
+// A blocked review never started - it holds no sandbox, artifact or charge - and one that is still
+// blocked a month later is dead: on 7 Oct one from 1 Sep was still there, because blocked is not a
+// terminal status and nothing else would ever remove it.
+const removable = (status: string) => terminalStatuses.has(status) || status === "blocked";
 
-// One page of one terminal status per pass, oldest first, so a review that must wait is passed over
-// rather than read again on every pass. The pass schedules the next until every status is done or the
-// run's pass budget is spent; the daily cron starts the next run.
+// Thirty days from when the review was created. The first version went by updatedAt, and marking a
+// review stale when a newer commit arrives touches it - so two reviews created on 5 Sep would have
+// been kept until November. Read one workspace at a time on by_org_created, oldest first, five
+// reviews per pass; each pass schedules the next until every workspace is done or the run's pass
+// budget is spent, and the daily cron starts the next run.
 export const expireReviews = internalMutation({
-  args: { now: v.optional(v.number()), statusIndex: v.optional(v.number()), cursor: v.optional(v.union(v.string(), v.null())), pass: v.optional(v.number()),
+  // A function may paginate once, and that is the reviews; workspaces are stepped through by creation
+  // time instead (afterOrganization is the last one's _creationTime).
+  args: { now: v.optional(v.number()), organizationId: v.optional(v.id("organizations")), afterOrganization: v.optional(v.number()),
+    reviewCursor: v.optional(v.union(v.string(), v.null())), pass: v.optional(v.number()),
     totals: v.optional(v.object({ deleted: v.number(), waiting: v.number() })) },
   handler: async (ctx, args) => {
-    const now = args.now ?? Date.now(), statusIndex = args.statusIndex ?? 0, pass = args.pass ?? 0;
+    const now = args.now ?? Date.now(), pass = args.pass ?? 0, cutoff = now - reviewRetentionMs;
     const totals = { ...(args.totals ?? { deleted: 0, waiting: 0 }) };
-    const status = terminalList[statusIndex];
-    if (status === undefined || pass >= passesPerRun) {
-      console.info("buildit_review_retention", { ...totals, passes: pass, complete: status === undefined });
+    const finish = (complete: boolean) => {
+      console.info("buildit_review_retention", { ...totals, passes: pass, complete });
       return { ...totals, done: true };
-    }
-    const cutoff = now - reviewRetentionMs;
-    const page = await ctx.db.query("reviews").withIndex("by_status", q => q.eq("status", status as Doc<"reviews">["status"]).lt("updatedAt", cutoff))
-      .paginate({ cursor: args.cursor ?? null, numItems: reviewsPerPass });
-    for (const review of page.page) {
+    };
+    if (pass >= passesPerRun) return finish(false);
+
+    const nextOrganization = args.organizationId ? undefined
+      : await ctx.db.query("organizations").withIndex("by_creation_time", q => q.gt("_creationTime", args.afterOrganization ?? -1)).first();
+    if (!args.organizationId && !nextOrganization) return finish(true);
+    const organizationId = args.organizationId ?? nextOrganization!._id;
+    const afterOrganization = nextOrganization ? nextOrganization._creationTime : args.afterOrganization ?? -1;
+    const reviews = await ctx.db.query("reviews").withIndex("by_org_created", q => q.eq("organizationId", organizationId).lt("createdAt", cutoff))
+      .paginate({ cursor: args.reviewCursor ?? null, numItems: reviewsPerPass });
+    for (const review of reviews.page) {
+      if (!removable(review.status)) { totals.waiting += 1; continue; }
       const outcome = await deleteReview(ctx, review, now);
       if (outcome === "deleted") totals.deleted += 1; else totals.waiting += 1;
     }
-    const next = page.isDone ? { statusIndex: statusIndex + 1, cursor: null } : { statusIndex, cursor: page.continueCursor };
+    const next = reviews.isDone
+      ? { afterOrganization, reviewCursor: null }
+      : { organizationId, afterOrganization, reviewCursor: reviews.continueCursor };
     await ctx.scheduler.runAfter(0, internal.retention.expireReviews, { now, ...next, pass: pass + 1, totals });
     return { ...totals, done: false };
   },
