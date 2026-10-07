@@ -225,11 +225,16 @@ Released at `cae1235` and `ba75b74`:
 - **Real times (#145).** The review page's history reads 20:49:18 → 20:49:31 → 20:49:50 → 20:50:19 → 20:50:24 IST, the stored insert times. Before this, every stage showed the workflow's start time.
 - **Cost:** $0.095, 66 s from comment to verdict.
 
+## 15. Retention's first real run (#147, #150)
+
+- **#147's first run deleted nothing** (7 Oct, 15:26 UTC, 8 passes). It keyed on `updatedAt`, and marking a review stale when a newer commit arrives touches it, so the 5 Sep reviews looked fresh. It also skipped a review `blocked` since 1 Sep, because `blocked` is not a terminal status.
+- **#150 keys on creation and removes month-old blocked reviews.** Released at `54c7493`. Its first run (15:44 UTC) logged `buildit_review_retention {deleted: 3, waiting: 0, passes: 2, complete: true}`.
+- **Afterwards:** 121 reviews remain, and none is more than 30 days old. The daily cron keeps it that way.
+
 ## Not yet proven live
 
 | Claim | What is waiting |
 |---|---|
 | A failed `@buildit` command explains itself (#140) | A command failing in production. The path is tested end to end with GitHub stubbed |
 | gpt-5 and the Claude and Gemini models charged at their own price (#146) | A review that escalates, or runs on an Anthropic or Gemini key. The price table is tested for every approved model |
-| The 30-day retention deletes month-old history (#147, #150) | #147's first run (7 Oct, 15:26 UTC) deleted nothing: it keyed on `updatedAt`, which stale-marking touches, and missed a review `blocked` since 1 Sep. #150 keys on creation and removes month-old blocked reviews; its first run is recorded below once released |
 | Context egress below 1 MB a review (#148) | Merging #148, then a day of reviews on the Convex usage page |
