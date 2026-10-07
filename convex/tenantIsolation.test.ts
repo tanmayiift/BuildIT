@@ -4414,7 +4414,7 @@ describe("a tenant cannot consume the whole platform's sandbox quota", () => {
       .resolves.toMatchObject({ status: "queued" });
   });
 
-  // Five tenants at the default fit inside the 18,000 seconds Hobby allows; the sixth does not,
+  // Fifty tenants at the default fit inside the platform's 180,000 seconds; the fifty-first does not,
   // with every tenant still inside its own ceiling. So the per-tenant ceiling is a fairness rule
   // between workspaces and the platform counter is what actually protects the quota.
   it("refuses a dashboard review once the deployment's own capacity is spent", async () => {
@@ -4535,7 +4535,7 @@ describe("a tenant cannot consume the whole platform's sandbox quota", () => {
     const signedIn = t.withIdentity({ subject: `${userId}|session` });
     await expect(signedIn.mutation(api.organizations.updateCapacity, {
       organizationId: tenant.organizationId, requestId: "owner-sandbox-000001",
-      ...({ monthlySandboxSeconds: 18_000 } as unknown as { concurrencyLimit: number }),
+      ...({ monthlySandboxSeconds: platformMonthlySandboxSeconds } as unknown as { concurrencyLimit: number }),
     })).rejects.toThrow();
   });
 });

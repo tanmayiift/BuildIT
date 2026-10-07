@@ -117,9 +117,9 @@ export const setCapacityLimits = internalMutation({
     const valid = (value: number | undefined) => value === undefined || (Number.isFinite(value) && value >= 0);
     if (!valid(args.concurrencyLimit) || !valid(args.monthlyBudget) || !valid(args.monthlySandboxSeconds)) throw new ConvexError("capacity_limit_invalid");
     if (args.concurrencyLimit === undefined && args.monthlyBudget === undefined && args.monthlySandboxSeconds === undefined) throw new ConvexError("capacity_limit_invalid");
-    // The whole Hobby-plan quota is 18,000 sandbox seconds a month across every tenant. An
-    // operator may hand one tenant the lot, but not more than exists - a ceiling above the quota
-    // is not a ceiling, and the request is far more likely to be a units mistake than an intent.
+    // The platform's whole monthly sandbox allowance (platformMonthlySandboxSeconds). An operator
+    // may hand one tenant the lot, but not more than exists - a ceiling above the platform's is not a
+    // ceiling, and the request is far more likely to be a units mistake than an intent.
     if ((args.monthlySandboxSeconds ?? 0) > platformMonthlySandboxSeconds) throw new ConvexError("capacity_limit_invalid");
     await ctx.db.patch(args.organizationId, {
       ...(args.concurrencyLimit === undefined ? {} : { concurrencyLimit: args.concurrencyLimit }),

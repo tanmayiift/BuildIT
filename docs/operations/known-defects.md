@@ -278,6 +278,8 @@ and types, not by an autofix round that ran.
 
 ## Hobby runs BuildIT, but 5 hours of Sandbox CPU a month is the binding limit
 
+> **Resolved 6 October 2026.** The team is on Pro again, where Sandbox Active CPU is metered rather than capped. BuildIT's own platform ceiling (`platformMonthlySandboxSeconds`) moved from Hobby's 18,000 seconds to a 180,000-second spend guard of 50 hours, at most about $13 of CPU a month. On Hobby it had held the whole platform to about 80 reviews a month. The history below is kept as it was.
+
 The team was downgraded from Pro to Hobby on 2026-09-16 (refund $14.16 for 18 unused days).
 Deployments, the web app, the broker and Convex all work unchanged. Reviews then failed at the
 execution stage with `sandbox_unavailable` / `capacity_exhausted`.

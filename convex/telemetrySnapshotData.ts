@@ -36,7 +36,7 @@ export const snapshot = internalQuery({
       modelCostUsdHour: bounded(usage.length > rowLimit ? 1_000_000 : totalCostUsd(usage.filter(item => item.kind === "model_tokens"))),
       budgetExhaustedReviewsHour: bounded(Math.min(rowLimit, budgetStops.length)),
       effectiveLocDeliveredHour: bounded(effectiveLoc.length > rowLimit ? 1_000_000 : effectiveLoc.reduce((sum, item) => sum + item.value, 0)),
-      // A fraction of the usable quota rather than of the raw 18,000, so the gauge reads 1.0 at the
+      // A fraction of the usable allowance rather than of the raw platform total, so the gauge reads 1.0 at the
       // point reviews actually start being refused rather than at the point the provider cuts us off.
       sandboxQuotaUtilization: bounded(platformUsableMonthlySandboxSeconds > 0 ? platformSandboxUsed / platformUsableMonthlySandboxSeconds : 0),
       workspacesAtSandboxCeiling: bounded(workspacesAtCeiling),
