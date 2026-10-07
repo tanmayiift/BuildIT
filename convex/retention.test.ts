@@ -71,17 +71,17 @@ describe("review history past thirty days", () => {
   });
 
   const now = 400 * day, old = now - reviewRetentionMs - day;
-  async function review(t: Test, base: Awaited<ReturnType<typeof summaryFixture>>, over: { status: "checks_passed" | "queued"; updatedAt: number }) {
+  async function review(t: Test, base: Awaited<ReturnType<typeof summaryFixture>>, over: { status: "checks_passed" | "queued" | "blocked"; createdAt: number; updatedAt?: number }) {
     return t.run(async ctx => {
       const { _id, _creationTime, ...copy } = (await ctx.db.get(base.reviewId))!;
-      const reviewId = await ctx.db.insert("reviews", { ...copy, ...over, currentStage: over.status === "queued" ? "queue" : "complete" });
+      const reviewId = await ctx.db.insert("reviews", { ...copy, ...over, updatedAt: over.updatedAt ?? over.createdAt, currentStage: over.status === "checks_passed" ? "complete" : "queue" });
       const artifactId = await ctx.db.insert("artifacts", { organizationId: base.organizationId, repositoryId: base.repositoryId, reviewId, type: "review_message", storageKey: `artifacts/${base.organizationId}/${base.repositoryId}/${reviewId}/x/report`,
         encrypted: true, checksum: "a".repeat(64), size: 1, storageState: "stored", expiresAt: old + day, deletedAt: old + day, deletionAttempts: 1 });
-      await ctx.db.insert("reviewEvents", { organizationId: base.organizationId, reviewId, sequence: 1, type: "review_created", stage: "queue", internalCode: "test", metadata: {}, createdAt: over.updatedAt });
+      await ctx.db.insert("reviewEvents", { organizationId: base.organizationId, reviewId, sequence: 1, type: "review_created", stage: "queue", internalCode: "test", metadata: {}, createdAt: over.createdAt });
       await ctx.db.insert("findings", { organizationId: base.organizationId, reviewId, fingerprintHmac: "f".repeat(64), category: "correctness", severity: "high", confidence: 0.9, blocking: true,
-        contentArtifactId: artifactId, evidenceIds: [artifactId], pathHmac: "e".repeat(64), startLine: 1, endLine: 1, resolution: "open", createdAt: over.updatedAt, updatedAt: over.updatedAt, expiresAt: over.updatedAt + day });
-      await ctx.db.insert("usageLedger", { organizationId: base.organizationId, repositoryId: base.repositoryId, reviewId, kind: "model_tokens", quantity: 1, unitCost: 8, totalCostMicros: 8_000, currency: "provider_billed", occurredAt: over.updatedAt });
-      await ctx.db.insert("notificationFanouts", { organizationId: base.organizationId, reviewId, generation: 0, decisionStatus: "inconclusive", dedupeKey: `${reviewId}:0:inconclusive`, complete: true, createdAt: over.updatedAt });
+        contentArtifactId: artifactId, evidenceIds: [artifactId], pathHmac: "e".repeat(64), startLine: 1, endLine: 1, resolution: "open", createdAt: over.createdAt, updatedAt: over.createdAt, expiresAt: over.createdAt + day });
+      await ctx.db.insert("usageLedger", { organizationId: base.organizationId, repositoryId: base.repositoryId, reviewId, kind: "model_tokens", quantity: 1, unitCost: 8, totalCostMicros: 8_000, currency: "provider_billed", occurredAt: over.createdAt });
+      await ctx.db.insert("notificationFanouts", { organizationId: base.organizationId, reviewId, generation: 0, decisionStatus: "inconclusive", dedupeKey: `${reviewId}:0:inconclusive`, complete: true, createdAt: over.createdAt });
       return { reviewId, artifactId };
     });
   }
@@ -98,12 +98,16 @@ describe("review history past thirty days", () => {
     vi.useFakeTimers();
     try {
       const t = makeTest(), base = await summaryFixture(t, "retention", old);
-      const expired = await review(t, base, { status: "checks_passed", updatedAt: old });
-      const recent = await review(t, base, { status: "checks_passed", updatedAt: now - day });
-      const running = await review(t, base, { status: "queued", updatedAt: old });
+      const expired = await review(t, base, { status: "checks_passed", createdAt: old });
+      // Marked stale a day ago when a newer commit arrived: touching a review does not renew it.
+      const touched = await review(t, base, { status: "checks_passed", createdAt: old, updatedAt: now - day });
+      // Blocked is not terminal, but a review blocked for a month never ran and never will.
+      const blocked = await review(t, base, { status: "blocked", createdAt: old });
+      const recent = await review(t, base, { status: "checks_passed", createdAt: now - day });
+      const running = await review(t, base, { status: "queued", createdAt: old });
       // An object the cleanup worker has not yet proven gone keeps its review, and is expired so the
       // worker takes it on its next tick.
-      const pending = await review(t, base, { status: "checks_passed", updatedAt: old });
+      const pending = await review(t, base, { status: "checks_passed", createdAt: old });
       await t.run(ctx => ctx.db.patch(pending.artifactId, { deletedAt: undefined, expiresAt: now + day }));
       const usageMonth = await t.run(ctx => ctx.db.insert("usageMonths", { organizationId: base.organizationId, month: "1971-02", periodStart: 0, periodEnd: 1, estimatedMicros: 8_000, reservedMicros: 0,
         unknownInvocationCount: 0, legacyEstimatedMicros: 0, legacyUnknownCount: 0, legacyRows: 0, reconciliationComplete: true, createdAt: old, updatedAt: old }));
@@ -111,7 +115,10 @@ describe("review history past thirty days", () => {
       await t.mutation(internal.retention.expireReviews, { now });
       await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-      expect(await rowsOf(t, expired.reviewId)).toEqual({ review: null, events: 0, findings: 0, ledger: 0, artifacts: 0, fanouts: 0 });
+      const gone = { review: null, events: 0, findings: 0, ledger: 0, artifacts: 0, fanouts: 0 };
+      expect(await rowsOf(t, expired.reviewId)).toEqual(gone);
+      expect(await rowsOf(t, touched.reviewId)).toEqual(gone);
+      expect(await rowsOf(t, blocked.reviewId)).toEqual(gone);
       expect(await rowsOf(t, recent.reviewId)).toMatchObject({ events: 1, findings: 1, ledger: 1, artifacts: 1, fanouts: 1 });
       expect((await rowsOf(t, running.reviewId)).review).not.toBeNull();
       expect((await rowsOf(t, pending.reviewId)).review).not.toBeNull();
