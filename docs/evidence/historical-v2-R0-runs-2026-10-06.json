@@ -25,8 +25,24 @@
       "inputTokens": 35874,
       "cachedInputTokens": 16128,
       "consentToVerdictSeconds": 56.6,
-      "validity": "invalid_parse",
-      "because": "published_not_stored:high|true|accepted"
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Per-call salt is ignored for django-concat key derivation",
+          "path": "src/itsdangerous/signer.py",
+          "startLine": 217,
+          "endLine": 219,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "salt",
+            "django-concat",
+            "derive_key"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:53:59.945Z"
     },
     {
       "caseId": "hist-p-queue-weighted-concurrency",
@@ -66,8 +82,1047 @@
       "inputTokens": 21456,
       "cachedInputTokens": 0,
       "consentToVerdictSeconds": 60.1,
-      "validity": "invalid_parse",
-      "because": "published_not_stored:high|true|accepted"
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Async verify rejection does not stop parsing, so rejected requests can still succeed",
+          "path": "lib/read.js",
+          "startLine": 137,
+          "endLine": 163,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "verify",
+            "await",
+            "promise",
+            "reject"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:01.393Z"
+    },
+    {
+      "caseId": "hist-p-queue-weighted-concurrency",
+      "run": 2,
+      "attempt": 1,
+      "at": "2026-10-06T06:02:14.530Z",
+      "reviewId": "nx74djn1ynssr15t88at9yh1518fsyng",
+      "status": "inconclusive",
+      "reason": "tests_need_lockfile",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.080289,
+      "inputTokens": 31361,
+      "cachedInputTokens": 29184,
+      "consentToVerdictSeconds": 54.2,
+      "validity": "valid",
+      "findings": []
+    },
+    {
+      "caseId": "hist-itsdangerous-salt-ignored",
+      "run": 2,
+      "attempt": 1,
+      "at": "2026-10-06T06:02:14.515Z",
+      "reviewId": "nx779cba2wa7agw60c0e2rs2a18fsyny",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.078525,
+      "inputTokens": 35976,
+      "cachedInputTokens": 34048,
+      "consentToVerdictSeconds": 54,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Per-call salt is ignored for django-concat key derivation",
+          "path": "src/itsdangerous/signer.py",
+          "startLine": 211,
+          "endLine": 218,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "salt",
+            "django-concat",
+            "derive_key"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:02.916Z"
+    },
+    {
+      "caseId": "hist-body-parser-async-verify-bypass",
+      "run": 2,
+      "attempt": 1,
+      "at": "2026-10-06T06:02:15.398Z",
+      "reviewId": "nx7cvqyv11v4segrqczfkdttes8fss80",
+      "status": "inconclusive",
+      "reason": "tests_need_lockfile",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.055338,
+      "inputTokens": 21442,
+      "cachedInputTokens": 19712,
+      "consentToVerdictSeconds": 56.6,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Async verify rejection does not stop parsing, so invalid bodies can be accepted before the 403 arrives",
+          "path": "lib/read.js",
+          "startLine": 128,
+          "endLine": 142,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "verify",
+            "await",
+            "promise",
+            "reject"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:04.334Z"
+    },
+    {
+      "caseId": "hist-itsdangerous-salt-ignored",
+      "run": 3,
+      "attempt": 1,
+      "at": "2026-10-06T06:03:27.568Z",
+      "reviewId": "nx79q6y2t1m5kfb6nss9qzgyzd8fsht3",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.077658,
+      "inputTokens": 35896,
+      "cachedInputTokens": 34048,
+      "consentToVerdictSeconds": 55.2,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Per-call salt is ignored for django-concat key derivation",
+          "path": "src/itsdangerous/signer.py",
+          "startLine": 215,
+          "endLine": 217,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "salt",
+            "django-concat",
+            "default_key_derivation",
+            "derive_key"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:05.922Z"
+    },
+    {
+      "caseId": "hist-p-queue-weighted-concurrency",
+      "run": 3,
+      "attempt": 1,
+      "at": "2026-10-06T06:03:27.264Z",
+      "reviewId": "nx76z5pgdrf0tzgaghamqkwpx98fscjv",
+      "status": "inconclusive",
+      "reason": "tests_need_lockfile",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.091685,
+      "inputTokens": 42896,
+      "cachedInputTokens": 29184,
+      "consentToVerdictSeconds": 54.8,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Weighted tasks can exceed the declared concurrency limit",
+          "path": "source/index.ts",
+          "startLine": 202,
+          "endLine": 206,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "weight",
+            "concurrency",
+            "pendingWeight"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:07.301Z"
+    },
+    {
+      "caseId": "hist-body-parser-async-verify-bypass",
+      "run": 3,
+      "attempt": 1,
+      "at": "2026-10-06T06:03:28.249Z",
+      "reviewId": "nx7fvs38cgkahvx8e6wchyf3mh8fsk6v",
+      "status": "inconclusive",
+      "reason": "tests_need_lockfile",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.054681,
+      "inputTokens": 21386,
+      "cachedInputTokens": 19712,
+      "consentToVerdictSeconds": 56.7,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Async verify rejection can arrive after parsing and trigger next() twice",
+          "path": "lib/read.js",
+          "startLine": 140,
+          "endLine": 165,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "verify",
+            "await",
+            "promise",
+            "reject"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:08.696Z"
+    },
+    {
+      "caseId": "hist-requests-env-ca-override",
+      "run": 1,
+      "attempt": 1,
+      "at": "2026-10-06T06:01:00.938Z",
+      "reviewId": "nx7b263gm1vqwx297f843we7798fr4km",
+      "status": "inconclusive",
+      "reason": "human_review_required",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.360729,
+      "inputTokens": 17922,
+      "cachedInputTokens": 3456,
+      "consentToVerdictSeconds": 238.6,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Session-level verify path is now overridden by environment CA bundle variables",
+          "path": "src/requests/sessions.py",
+          "startLine": 850,
+          "endLine": 872,
+          "severity": "high",
+          "blocking": false,
+          "resolution": "uncertain",
+          "mentions": [
+            "verify",
+            "CA bundle",
+            "REQUESTS_CA_BUNDLE",
+            "environment"
+          ]
+        }
+      ]
+    },
+    {
+      "caseId": "hist-gson-millisecond-carry",
+      "run": 1,
+      "attempt": 1,
+      "at": "2026-10-06T06:04:40.121Z",
+      "reviewId": "nx7fckxd8fjwy4xm85vqj941ch8frcxc",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "requirements": "requirements-v1",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.066138,
+      "inputTokens": 35176,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 86.3,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Rounding fractional seconds can produce an invalid 1000 ms value",
+          "path": "gson/src/main/java/com/google/gson/internal/bind/util/ISO8601Utils.java",
+          "startLine": 238,
+          "endLine": 243,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "millisecond",
+            "1000",
+            "lenient",
+            "round"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:10.290Z"
+    },
+    {
+      "caseId": "hist-requests-env-ca-override",
+      "run": 2,
+      "attempt": 1,
+      "at": "2026-10-06T06:05:16.289Z",
+      "reviewId": "nx7afswt611ecc23hw77srsamd8fr1f4",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.047072,
+      "inputTokens": 17893,
+      "cachedInputTokens": 12800,
+      "consentToVerdictSeconds": 62.4,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Non-boolean verify values are now incorrectly overridden by SSL_CERT_FILE",
+          "path": "src/requests/sessions.py",
+          "startLine": 850,
+          "endLine": 867,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "verify",
+            "CA bundle",
+            "environment"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:11.692Z"
+    },
+    {
+      "caseId": "hist-requests-env-ca-override",
+      "run": 3,
+      "attempt": 1,
+      "at": "2026-10-06T06:06:28.788Z",
+      "reviewId": "nx737nczqcwypga5xbzkqnbtsd8fs4yd",
+      "status": "checks_passed",
+      "reason": "checks_complete",
+      "promptVersions": {
+        "findings": "findings-v6"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.033913,
+      "inputTokens": 10750,
+      "cachedInputTokens": 9984,
+      "consentToVerdictSeconds": 54.2,
+      "validity": "valid",
+      "findings": []
+    },
+    {
+      "caseId": "hist-gson-millisecond-carry",
+      "run": 2,
+      "attempt": 1,
+      "at": "2026-10-06T06:06:26.988Z",
+      "reviewId": "nx79r2t0xxhyqxcqzmxsfjpsrs8frcbn",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "requirements": "requirements-v1",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.066401,
+      "inputTokens": 35424,
+      "cachedInputTokens": 20736,
+      "consentToVerdictSeconds": 80.5,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Rounding can produce 1000 milliseconds and make valid timestamps fail to parse",
+          "path": "gson/src/main/java/com/google/gson/internal/bind/util/ISO8601Utils.java",
+          "startLine": 241,
+          "endLine": 244,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "millisecond",
+            "1000",
+            "lenient",
+            "round"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:13.329Z"
+    },
+    {
+      "caseId": "hist-gson-millisecond-carry",
+      "run": 3,
+      "attempt": 1,
+      "at": "2026-10-06T06:08:11.616Z",
+      "reviewId": "nx7em704j6mv4kxa42bb4h3p2s8frw27",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "requirements": "requirements-v1",
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.066847,
+      "inputTokens": 35348,
+      "cachedInputTokens": 31744,
+      "consentToVerdictSeconds": 83.6,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Rounding fractional seconds can produce an invalid 1000 millisecond field",
+          "path": "gson/src/main/java/com/google/gson/internal/bind/util/ISO8601Utils.java",
+          "startLine": 228,
+          "endLine": 239,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "millisecond",
+            "1000",
+            "carry",
+            "lenient",
+            "round"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:14.794Z"
+    },
+    {
+      "caseId": "hist-express-view-cache-key",
+      "run": 1,
+      "attempt": 1,
+      "at": "2026-10-06T06:07:41.356Z",
+      "reviewId": "nx714m4sw7aek0jpz273gjk4458frhrq",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.090419,
+      "inputTokens": 41180,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 134.9,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Per-render root is ignored for cached views after the first lookup",
+          "path": "lib/application.js",
+          "startLine": 539,
+          "endLine": 575,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "cache",
+            "key",
+            "root",
+            "name"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:16.211Z"
+    },
+    {
+      "caseId": "hist-axios-evicted-session-leak",
+      "run": 1,
+      "attempt": 1,
+      "at": "2026-10-06T06:04:40.129Z",
+      "reviewId": "nx7ce66vj341n2pr0cw6brvqks8frvyq",
+      "status": "inconclusive",
+      "reason": "test_suite_failing",
+      "promptVersions": {
+        "requirements": "requirements-v1",
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.048891,
+      "inputTokens": 25508,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 313.3,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Custom cap of 0 is ignored and still allows eight pooled sessions",
+          "path": "lib/helpers/Http2Sessions.js",
+          "startLine": 17,
+          "endLine": 17,
+          "severity": "warning",
+          "blocking": false,
+          "resolution": "accepted",
+          "mentions": []
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:17.697Z"
+    },
+    {
+      "caseId": "hist-express-view-cache-key",
+      "run": 2,
+      "attempt": 1,
+      "at": "2026-10-06T06:10:16.958Z",
+      "reviewId": "nx7fwbhj6dmxehnkhcegqvx3518fs021",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.089374,
+      "inputTokens": 41083,
+      "cachedInputTokens": 39168,
+      "consentToVerdictSeconds": 137,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Per-render root is ignored when a cached view exists",
+          "path": "lib/application.js",
+          "startLine": 555,
+          "endLine": 570,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "cache",
+            "key",
+            "root",
+            "name"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:19.093Z"
+    },
+    {
+      "caseId": "hist-got-retry-budget",
+      "run": 1,
+      "attempt": 1,
+      "at": "2026-10-06T06:04:41.366Z",
+      "reviewId": "nx7ebqb2a7bhs1c97jgp9r2pnx8fssc3",
+      "status": "inconclusive",
+      "reason": "test_suite_failing",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "requirements": "requirements-v1",
+        "critic": "critic-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.113674,
+      "inputTokens": 50402,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 537,
+      "validity": "valid",
+      "findings": []
+    },
+    {
+      "caseId": "hist-express-view-cache-key",
+      "run": 3,
+      "attempt": 1,
+      "at": "2026-10-06T06:12:51.972Z",
+      "reviewId": "nx7edqh0saw331h92m6m6s1cb18fsq15",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.089935,
+      "inputTokens": 41145,
+      "cachedInputTokens": 39168,
+      "consentToVerdictSeconds": 100.8,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Per-render root is ignored for cached views with the same name",
+          "path": "lib/application.js",
+          "startLine": 542,
+          "endLine": 572,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "cache",
+            "key",
+            "root",
+            "name"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:20.589Z"
+    },
+    {
+      "caseId": "hist-zod-int16-off-by-one",
+      "run": 1,
+      "attempt": 1,
+      "at": "2026-10-06T06:09:58.412Z",
+      "reviewId": "nx72r1mrey3jrrkvbe8nqmjm8s8fsk8s",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.113313,
+      "inputTokens": 51238,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 348.6,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "int16 upper bound is off by one in shared range table",
+          "path": "packages/zod/src/v4/core/util.ts",
+          "startLine": 747,
+          "endLine": 747,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "32767",
+            "32768",
+            "int16",
+            "bound",
+            "NUMBER_FORMAT_RANGES"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:22.055Z"
+    },
+    {
+      "caseId": "hist-axios-evicted-session-leak",
+      "run": 2,
+      "attempt": 1,
+      "at": "2026-10-06T06:10:17.133Z",
+      "reviewId": "nx7etz37efad0xwq24prae6k118fr56q",
+      "status": "inconclusive",
+      "reason": "test_suite_failing",
+      "promptVersions": {
+        "requirements": "requirements-v1",
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.047889,
+      "inputTokens": 25461,
+      "cachedInputTokens": 13568,
+      "consentToVerdictSeconds": 386.9,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Custom cap of 0 is ignored and falls back to 8 sessions",
+          "path": "lib/helpers/Http2Sessions.js",
+          "startLine": 19,
+          "endLine": 19,
+          "severity": "warning",
+          "blocking": false,
+          "resolution": "accepted",
+          "mentions": []
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:23.538Z"
+    },
+    {
+      "caseId": "hist-express-utils-unit-coverage",
+      "run": 1,
+      "attempt": 1,
+      "at": "2026-10-06T06:14:54.081Z",
+      "reviewId": "nx7f5pwznvh1wcr6xd4vw3sw8s8fr7w3",
+      "status": "checks_passed",
+      "reason": "checks_complete",
+      "promptVersions": {
+        "findings": "findings-v6"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.029825,
+      "inputTokens": 9442,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 120.2,
+      "validity": "valid",
+      "findings": []
+    },
+    {
+      "caseId": "hist-express-utils-unit-coverage",
+      "run": 2,
+      "attempt": 1,
+      "at": "2026-10-06T06:17:13.313Z",
+      "reviewId": "nx7cg354w7cp10hhjry7h5zvtn8frftc",
+      "status": "checks_passed",
+      "reason": "checks_complete",
+      "promptVersions": {
+        "findings": "findings-v6"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.029825,
+      "inputTokens": 9442,
+      "cachedInputTokens": 8960,
+      "consentToVerdictSeconds": 144.4,
+      "validity": "valid",
+      "findings": []
+    },
+    {
+      "caseId": "hist-got-retry-budget",
+      "run": 2,
+      "attempt": 1,
+      "at": "2026-10-06T06:13:52.314Z",
+      "reviewId": "nx7a5g5z0bt833rh9knmpfznn58fsr67",
+      "status": "inconclusive",
+      "reason": "test_suite_failing",
+      "promptVersions": {
+        "requirements": "requirements-v1",
+        "findings": "findings-v6",
+        "critic": "critic-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.103659,
+      "inputTokens": 48813,
+      "cachedInputTokens": 44288,
+      "consentToVerdictSeconds": 364.5,
+      "validity": "valid",
+      "findings": []
+    },
+    {
+      "caseId": "hist-zod-int16-off-by-one",
+      "run": 2,
+      "attempt": 1,
+      "at": "2026-10-06T06:16:08.378Z",
+      "reviewId": "nx7cjcscx7tfdqnv8rdgtwxg698fs87k",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.11505,
+      "inputTokens": 47922,
+      "cachedInputTokens": 24320,
+      "consentToVerdictSeconds": 343.6,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "int16 upper bound is off by one in shared range table",
+          "path": "packages/zod/src/v4/core/util.ts",
+          "startLine": 748,
+          "endLine": 748,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "32767",
+            "32768",
+            "int16",
+            "bound",
+            "NUMBER_FORMAT_RANGES"
+          ]
+        },
+        {
+          "title": "Compiled int16 validator also accepts 32768",
+          "path": "packages/zod/src/v4/core/compile.ts",
+          "startLine": 551,
+          "endLine": 553,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "32767",
+            "32768",
+            "int16",
+            "bound"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:25.033Z"
+    },
+    {
+      "caseId": "hist-express-utils-unit-coverage",
+      "run": 3,
+      "attempt": 1,
+      "at": "2026-10-06T06:19:50.309Z",
+      "reviewId": "nx7b0mvrj6tw0c892kjdc2zmh58frpjv",
+      "status": "checks_passed",
+      "reason": "checks_complete",
+      "promptVersions": {
+        "findings": "findings-v6"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.029825,
+      "inputTokens": 9442,
+      "cachedInputTokens": 8960,
+      "consentToVerdictSeconds": 117.6,
+      "validity": "valid",
+      "findings": []
+    },
+    {
+      "caseId": "hist-axios-evicted-session-leak",
+      "run": 3,
+      "attempt": 1,
+      "at": "2026-10-06T06:16:58.712Z",
+      "reviewId": "nx7ajtytyezyb3mh05k16s8a458fsxv8",
+      "status": "inconclusive",
+      "reason": "test_suite_failing",
+      "promptVersions": {
+        "requirements": "requirements-v1",
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.049687,
+      "inputTokens": 25792,
+      "cachedInputTokens": 19456,
+      "consentToVerdictSeconds": 361.3,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Constructor cannot disable pooling with a zero cap because it falls back to 8",
+          "path": "lib/helpers/Http2Sessions.js",
+          "startLine": 18,
+          "endLine": 18,
+          "severity": "warning",
+          "blocking": false,
+          "resolution": "accepted",
+          "mentions": [
+            "evict"
+          ]
+        }
+      ],
+      "revalidatedAt": "2026-10-06T06:54:26.496Z"
+    },
+    {
+      "caseId": "hist-zod-int16-off-by-one",
+      "run": 3,
+      "attempt": 1,
+      "at": "2026-10-06T06:22:04.442Z",
+      "reviewId": "nx70xcn1wg6a6mpf5ked8ay0fd8fs83r",
+      "status": "platform_failed",
+      "reason": "repository_access_refused",
+      "promptVersions": {},
+      "model": "gpt-5.4-mini",
+      "costUsd": 0,
+      "inputTokens": 0,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 292,
+      "validity": "invalid_platform",
+      "because": "review ended platform_failed/repository_access_refused"
+    },
+    {
+      "caseId": "hist-date-fns-holiday-whole-week",
+      "run": 1,
+      "attempt": 1,
+      "at": "2026-10-06T06:22:08.574Z",
+      "reviewId": "nx79ff7kv4anp5z5v3nm1nk2es8fs1br",
+      "status": "platform_failed",
+      "reason": "repository_access_refused",
+      "promptVersions": {},
+      "model": "gpt-5.4-mini",
+      "costUsd": 0,
+      "inputTokens": 0,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 290.5,
+      "validity": "invalid_platform",
+      "because": "review ended platform_failed/repository_access_refused"
+    },
+    {
+      "caseId": "hist-got-retry-budget",
+      "run": 3,
+      "attempt": 1,
+      "at": "2026-10-06T06:20:19.947Z",
+      "reviewId": "nx7e3ysp4qg01catc5zt3ga1as8frh2r",
+      "status": "inconclusive",
+      "reason": "test_suite_failing",
+      "promptVersions": {
+        "requirements": "requirements-v1",
+        "findings": "findings-v6",
+        "critic": "critic-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.100549,
+      "inputTokens": 46481,
+      "cachedInputTokens": 40448,
+      "consentToVerdictSeconds": 412.7,
+      "validity": "valid",
+      "findings": []
+    },
+    {
+      "caseId": "hist-zod-int16-off-by-one",
+      "run": 3,
+      "attempt": 2,
+      "at": "2026-10-06T06:27:07.232Z",
+      "reviewId": "nx74rn2d9d31n8yc1g7wbfnb6x8fsm17",
+      "status": "platform_failed",
+      "reason": "repository_access_refused",
+      "promptVersions": {},
+      "model": "gpt-5.4-mini",
+      "costUsd": 0,
+      "inputTokens": 0,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 291.9,
+      "validity": "invalid_platform",
+      "because": "review ended platform_failed/repository_access_refused"
+    },
+    {
+      "caseId": "hist-date-fns-holiday-whole-week",
+      "run": 1,
+      "attempt": 2,
+      "at": "2026-10-06T06:27:11.957Z",
+      "reviewId": "nx78ewqbxy8frwdj6s2adrdtcd8fstas",
+      "status": "platform_failed",
+      "reason": "repository_access_refused",
+      "promptVersions": {},
+      "model": "gpt-5.4-mini",
+      "costUsd": 0,
+      "inputTokens": 0,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 290.4,
+      "validity": "invalid_platform",
+      "because": "review ended platform_failed/repository_access_refused"
+    },
+    {
+      "caseId": "hist-zod-int16-off-by-one",
+      "run": 3,
+      "attempt": 3,
+      "at": "2026-10-06T06:37:37.054Z",
+      "reviewId": "nx743d10jf6hm5cewwfd94n5558fsd30",
+      "status": "platform_failed",
+      "reason": "platform_error",
+      "promptVersions": {},
+      "model": "gpt-5.4-mini",
+      "costUsd": 0,
+      "inputTokens": 0,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 288.4,
+      "validity": "invalid_platform",
+      "because": "review ended platform_failed/platform_error"
+    },
+    {
+      "caseId": "hist-date-fns-holiday-whole-week",
+      "run": 1,
+      "attempt": 3,
+      "at": "2026-10-06T06:42:48.581Z",
+      "validity": "invalid_platform",
+      "because": "no review started"
+    },
+    {
+      "caseId": "hist-date-fns-holiday-whole-week",
+      "run": 2,
+      "attempt": 1,
+      "at": "2026-10-06T06:46:01.454Z",
+      "validity": "invalid_platform",
+      "because": "no review started"
+    },
+    {
+      "caseId": "hist-date-fns-holiday-whole-week",
+      "run": 2,
+      "attempt": 2,
+      "at": "2026-10-06T07:10:28.800Z",
+      "reviewId": "nx75rhc5qzxmdwdqym7rjjthfs8fsfqq",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.037919,
+      "inputTokens": 17398,
+      "cachedInputTokens": 0,
+      "consentToVerdictSeconds": 127.3,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Holiday exclusion is skipped for dates inside full-week fast path",
+          "path": "pkgs/core/src/differenceInBusinessDays/index.ts",
+          "startLine": 89,
+          "endLine": 97,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "whole week",
+            "weeks * 5",
+            "fast path"
+          ]
+        }
+      ]
+    },
+    {
+      "caseId": "hist-date-fns-holiday-whole-week",
+      "run": 3,
+      "attempt": 1,
+      "at": "2026-10-06T07:12:49.415Z",
+      "reviewId": "nx705aepaqrhcmk1mgep5hgayx8fsgs1",
+      "status": "changes_requested",
+      "reason": "blocking_findings",
+      "promptVersions": {
+        "findings": "findings-v6",
+        "critic": "critic-v3",
+        "arbitration": "arbitration-v3"
+      },
+      "model": "gpt-5.4-mini",
+      "costUsd": 0.038091,
+      "inputTokens": 17423,
+      "cachedInputTokens": 9728,
+      "consentToVerdictSeconds": 106.1,
+      "validity": "valid",
+      "findings": [
+        {
+          "title": "Holiday exclusions are skipped for full-week spans",
+          "path": "pkgs/core/src/differenceInBusinessDays/index.ts",
+          "startLine": 89,
+          "endLine": 99,
+          "severity": "high",
+          "blocking": true,
+          "resolution": "accepted",
+          "mentions": [
+            "whole week",
+            "weeks * 5",
+            "remainder"
+          ]
+        }
+      ]
     }
   ]
 }

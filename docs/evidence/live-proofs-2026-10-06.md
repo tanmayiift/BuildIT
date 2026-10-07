@@ -76,12 +76,79 @@ Production web at `20fa09c` (release completed 11:31 IST):
 
 - **Vercel plan.** At 11:20 IST the owner moved the Vercel team to Pro. Sandbox CPU is now metered at about $0.13 an hour, instead of the 5-hour monthly cap.
 - **Workspace allowance.** BuildIT's own per-workspace allowance for the owner's workspace was raised from 9,000 to 18,000 sandbox-seconds this month, for the R0/R1 benchmark. This was done through the audited operator mutation `organizations:setCapacityLimits`; audit request `sandbox-allowance-benchmark-2026-10-06`.
-- **Platform ceiling.** It is still the Hobby figure in code (`platformMonthlySandboxSeconds = 18,000`), which now caps BuildIT well below what Vercel allows. See the scorecard.
+- **Platform ceiling.** BuildIT's own platform ceiling moved from Hobby's 18,000 seconds to a 180,000-second (50-hour) spend guard in #133, merged 7 Oct. Before that it still capped the whole platform at about 80 reviews a month.
+
+## 8. The R0 baseline, and cached tokens (#126, #134)
+
+- **What ran.** `pnpm eval:production post --label R0`: 11 historical pull requests × 3 runs on production with findings-v6 (`historical-v2-R0-runs-2026-10-06.json`).
+- **Valid runs.** 31 of 36 attempts were valid; every case ended with at least 2.
+- **Platform failures, recorded separately.** Five attempts failed on zod and date-fns. GitHub refused file reads (`repository_access_refused`, status 403) after about 30 reviews in 30 minutes, which used up the installation's API budget. The runner now goes one repository at a time with a pause, and #136 waits out GitHub's undeclared secondary limit.
+- **Scored** (`…-R0-critical-high-2026-10-06.json`):
+  - **4 of 10 defects detected** (gson, express, zod, date-fns), each by a majority of valid runs;
+  - the clean control passed all 3 runs;
+  - $2.42 over 36 reviews.
+- **Cached tokens.** **508,800 of 938,337 input tokens were served from OpenAI's cache.** Repeated runs of one pull request share long prefixes. This proves cached tokens above 0.
+- **A bookkeeping defect, found and corrected.** R0's first runs were marked unparseable because the cross-check compared the report's `accepted` with the table's `open`, which is how a confirmed finding is stored. Fixed in #134. `revalidate` re-checked those runs from their saved reports and stored rows, and marks each record it corrected.
+
+**A confirmed warning is advisory (#127).** R0's axios review `nx7ce66vj341n2pr0cw6brvqks8frvyq` published "**Warning · Advisory · Confirmed by evidence** · `lib/helpers/Http2Sessions.js:17`" under the sentence "Only Critical and High findings block a merge; Warning and Info are advisory". The verdict was `inconclusive`, not `changes_requested`.
+
+## 9. Convex over its plan, and fixed (#138)
+
+**The email.** Convex wrote on 6 Oct that the team had exceeded the Free plan.
+
+**The cause.** The usage page showed **database I/O at 1.72 GB of 1 GB** after six days of October; every other resource was under its limit. Three live subscriptions accounted for 1.57 GB:
+
+| Query | Reads |
+|---|---|
+| `publicProof.summary` | 862 MB |
+| `activation.funnel` | 434 MB |
+| `reviews.list` | 272 MB |
+
+Each re-read hundreds to thousands of rows for every open page on every write.
+
+**The fix (#138)**
+- the `/proof` summary is now summarised every six hours into one row;
+- the queue reads `activation.path` (five steps only) and a 100-review window;
+- unhandled webhook events are no longer stored;
+- `reviewLocks` (write-only) is gone;
+- a daily `retention.sweep` runs.
+
+**After the 09:41 IST release**
+
+| Table | Before | After |
+|---|---|---|
+| `webhookDeliveries` | 5,564 | 651 |
+| `authRefreshTokens` | 1,488 | 52 |
+| `authSessions` | 14 | 3 |
+| `authVerifiers` | 43 | 12 |
+| `reviewLocks` | 267 | 0 |
+
+Reviews (280), check results and usage rows were untouched.
+
+**Checked live afterwards**
+- Still signed in.
+- `/reviews` shows the activation steps and the verdict summary.
+- `/proof` reads "Production data · no account, no key" and "Summarised at 2026-10-07 04:06:51 UTC".
+
+**Still the owner's decision.** October's reads were already past 1 GB before the fix. On Convex Starter (pay as you go) the overage costs about $0.22 per GB; Professional adds daily backups.
+
+## 10. The GitHub failure emails
+
+**Upstream automation in the benchmark demo repositories.** The repositories are copies of upstream projects and kept the upstream scheduled workflows, which failed in this account. Eleven were disabled with `gh workflow disable`, and each can be re-enabled:
+- CodeQL in express, gson, requests and body-parser;
+- Scorecard in express, gson and body-parser;
+- the issue lockers in itsdangerous and zod;
+- zod's npm lockstep check;
+- axios's AI Moderator, which fired on our own `@buildit` comments.
+
+The demo pull requests' own CI stays on.
+
+**`sharp` 0.35.4.** A new advisory (GHSA-wq5f-xc86-pv6w) failed the release audit on every pull request. Patched to 0.35.5 in #138.
+
+**Cancelled runs on main.** GitHub cancels older *waiting* runs in a concurrency group even with `cancel-in-progress: false`, so five quick merges cancelled three CI runs on main. #139 gives each push to main its own CI group and serialises only the deploy job.
 
 ## Not yet proven live
 
 | Claim | What is waiting |
 |---|---|
-| A warning-only finding is published as Advisory (#127) | #127 deploying, then one review with a warning-only finding |
-| Cached input tokens above 0 (#128) | the candidate prompts enabled for a repository, then two reviews of it |
-| Prompt v7 does no worse than v6 on the historical set | R0 and R1: 66 reviews, about 4.2 sandbox CPU-hours, more than the plan has left this month |
+| Prompt v7 does no worse than v6 on the historical set | R1 running (v7 enabled for the 10 demo repositories on 7 Oct); compared with R0 by `pnpm eval:compare` when it completes |
