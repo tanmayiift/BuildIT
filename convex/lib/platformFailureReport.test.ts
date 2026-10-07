@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { archiveMaxBytes } from "../../packages/github/src/repository-content";
 import { classifyPlatformFailure, isPlatformFailureReason, platformFailureReport } from "./platformFailureReport";
 
 describe("source-free platform failure report", () => {
@@ -44,6 +45,8 @@ describe("a review that could not run says why", () => {
     // It must not read as the author's fault, and it must say nothing was spent.
     expect(report.summary).toContain("not a problem with your pull request");
     expect(report.summary).toContain("stopped before spending anything");
+    // The size it names is the one the fetch actually uses.
+    expect(report.summary).toContain(`up to ${archiveMaxBytes / 1_000_000} MB of source as a single archive`);
   });
 
   it("explains a refusal as volume, not permission", () => {

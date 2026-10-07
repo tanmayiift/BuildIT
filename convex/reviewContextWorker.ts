@@ -107,6 +107,9 @@ export const gather = internalAction({
         new RepositoryContentClient().fetchExactCommit({ installationToken: token, repositoryId: scope.githubRepositoryId,
           commitSha: scope.baseSha, limits, select: baseSelect }),
       ]);
+      // Whether each revision came from the commit's archive, and how many files still cost a
+      // GitHub request: the number that bounds how many reviews an installation can run an hour.
+      console.info("buildit_repository_fetch", { head: headSnapshot.fetch, base: baseSnapshot.fetch });
       const repositoryMatch = pullContext.htmlUrl.match(/^(https:\/\/github\.com\/[^/]+\/[^/]+)\/pull\/\d+$/i);
       if (!repositoryMatch) throw new Error("pull_request_url_invalid");
       const repositoryUrl = repositoryMatch[1]!, issueClient = new GitHubIssueContextClient(),repositoryIntent=repositoryRequirementSources({files:headSnapshot.files,headSha:scope.headSha,now:Date.now()}),brokerUrl=required("BUILDIT_BROKER_URL").replace(/\/$/,""),trackerSecret=Buffer.from(required("TRACKER_GRANT_SECRET"),"base64url");

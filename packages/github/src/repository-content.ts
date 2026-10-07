@@ -1,3 +1,4 @@
+import { gitBlobSha, readTarball } from "./archive.js";
 import { githubRequester, type GitHubHttp } from "./request.js";
 
 const headers = {
@@ -36,6 +37,9 @@ export type RepositorySnapshot = {
   omitted: RepositoryOmission[];
   fetchedBytes: number;
   coverage: "full" | "partial";
+  // How the files arrived, for the log: whether the commit's archive was used, and how many files
+  // still took a blob request each.
+  fetch?: { archive: "used" | "skipped" | "failed"; blobRequests: number };
 };
 
 // Which paths this review actually reads, and the tree size past which that starts to matter.
@@ -64,6 +68,40 @@ export type RepositoryFetchLimits = {
 const defaults: RepositoryFetchLimits = { maxFiles: 10_000, maxFetchFiles: 2_500, maxFileBytes: 1_000_000, maxMustFetchBytes: 2_000_000, maxTotalBytes: 50_000_000 };
 const excludedSegment = /(^|\/)(?:\.git|node_modules|vendor|dist|build|coverage|\.next|target|__pycache__)(\/|$)/;
 const excludedFile = /(?:\.min\.(?:js|css)|\.(?:png|jpe?g|gif|webp|ico|pdf|zip|gz|jar|class|wasm|woff2?|ttf|eot))$/i;
+
+// One archive instead of a request per file. GitHub allows an installation 5,000 API requests an
+// hour, and a review read every file it needed as a separate blob request, for head and for base:
+// about 800 requests for a 400-file repository, so roughly 30 reviews an hour per installation. The
+// R0 benchmark ran into exactly that on 6 Oct 2026 (repository_access_refused, status 403, after
+// about 30 reviews). A commit's tarball is one API request; the download itself comes from
+// codeload and is not counted.
+//
+// The archive is never trusted for content. A file is taken from it only when its git blob id
+// equals the tree's, which makes it the same bytes the blob API returns. Anything the archive
+// leaves out or alters - export-ignore, export-subst, LFS, a symlink - is fetched as a blob, as is
+// everything when the archive cannot be read.
+//
+// Below archiveAbove files (three rounds of eight), the blob requests cost less than a download.
+// Above archiveMaxBytes of source the archive is not attempted: it is held in memory, twice over
+// while head and base are read side by side.
+const archiveAbove = 24;
+export const archiveMaxBytes = 64_000_000;
+const archiveTimeoutMs = 120_000;
+
+async function boundedBody(response: Response, maxBytes: number) {
+  const reader = response.body?.getReader();
+  if (!reader) return undefined;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) { await reader.cancel().catch(() => undefined); return undefined; }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
 
 function safePath(path: string) {
   return path.length > 0 && !path.startsWith("/") && !path.includes("\0") && !path.split("/").includes("..");
@@ -105,10 +143,11 @@ export class RepositoryContentClient {
 
     const omitted: RepositoryOmission[] = [];
     const selected: Array<{ path: string; sha: string; size: number }> = [];
-    let plannedBytes = 0;
+    let plannedBytes = 0, treeBytes = 0;
     for (const entry of treeBody.tree) {
       if (entry.type !== "blob" || typeof entry.path !== "string" || typeof entry.sha !== "string" || typeof entry.size !== "number") continue;
       if (!safePath(entry.path)) throw new Error("github_tree_unsafe_path");
+      treeBytes += entry.size;
       if (excludedSegment.test(entry.path) || excludedFile.test(entry.path)) { omitted.push({ path: entry.path, reason: "excluded" }); continue; }
       if (entry.size > (input.select?.mustFetch?.(entry.path) ? limits.maxMustFetchBytes : limits.maxFileBytes)) { omitted.push({ path: entry.path, reason: "oversized" }); continue; }
       if (selected.length >= limits.maxFiles || plannedBytes + entry.size > limits.maxTotalBytes) { omitted.push({ path: entry.path, reason: "budget" }); continue; }
@@ -125,32 +164,68 @@ export class RepositoryContentClient {
       for (const entry of selected) if (!keep(entry.path)) omitted.push({ path: entry.path, reason: "not_selected" });
     }
 
+    const contents = new Map<string, string | null>();
+    let archive: "used" | "skipped" | "failed" = "skipped";
+    if (fetchList.length > archiveAbove && treeBytes <= archiveMaxBytes) {
+      const wanted = new Map(fetchList.map(entry => [entry.path, entry.sha.toLowerCase()]));
+      const read = await this.readArchive(input, authHeaders, wanted, fetchList.length);
+      archive = read ? "used" : "failed";
+      for (const [path, bytes] of read ?? []) contents.set(path, bytes.includes(0) ? null : bytes.toString("utf8"));
+    }
+    const remaining = fetchList.filter(entry => !contents.has(entry.path));
+
     // Blobs are fetched one at a time, eight in flight, so a repository with thousands of files
     // means hundreds of sequential rounds and GitHub eventually refuses with a 403. Refusing here
     // costs nothing and tells the author a number; discovering it four minutes in tells them
-    // "a required platform step failed". The count is of what will actually be fetched, so a large
-    // repository with a small change is no longer refused for files nobody was going to read.
-    if (fetchList.length > limits.maxFetchFiles) {
-      throw new Error(`repository_too_large:files=${fetchList.length};limit=${limits.maxFetchFiles}`);
+    // "a required platform step failed". The count is of what will actually be fetched as blobs, so
+    // neither a large repository with a small change nor one read from its archive is refused for
+    // requests nobody is going to make.
+    if (remaining.length > limits.maxFetchFiles) {
+      throw new Error(`repository_too_large:files=${remaining.length};limit=${limits.maxFetchFiles}`);
+    }
+
+    for (let offset = 0; offset < remaining.length; offset += 8) {
+      const batch = remaining.slice(offset, offset + 8);
+      await Promise.all(batch.map(async entry => {
+        const response = await this.http(`https://api.github.com/repositories/${input.repositoryId}/git/blobs/${entry.sha}`, { headers: authHeaders });
+        if (response.status === 403 || response.status === 429) {
+          throw new Error(`repository_access_refused:files=${remaining.length};status=${response.status}`);
+        }
+        if (!response.ok) throw new Error(`github_blob_${response.status}`);
+        contents.set(entry.path, decodeBlob(await response.json() as { encoding?: string; content?: string }, entry.path));
+      }));
     }
 
     const files: RepositoryFile[] = [];
-    for (let offset = 0; offset < fetchList.length; offset += 8) {
-      const batch = fetchList.slice(offset, offset + 8);
-      const values = await Promise.all(batch.map(async entry => {
-        const response = await this.http(`https://api.github.com/repositories/${input.repositoryId}/git/blobs/${entry.sha}`, { headers: authHeaders });
-        if (response.status === 403 || response.status === 429) {
-          throw new Error(`repository_access_refused:files=${fetchList.length};status=${response.status}`);
-        }
-        if (!response.ok) throw new Error(`github_blob_${response.status}`);
-        const content = decodeBlob(await response.json() as { encoding?: string; content?: string }, entry.path);
-        if (content === null) { omitted.push({ path: entry.path, reason: "binary" }); return null; }
-        return { ...entry, content };
-      }));
-      files.push(...values.filter((value): value is RepositoryFile => value !== null));
+    for (const entry of fetchList) {
+      const content = contents.get(entry.path);
+      if (content === undefined) throw new Error("repository_content_missing");
+      if (content === null) omitted.push({ path: entry.path, reason: "binary" });
+      else files.push({ ...entry, content });
     }
     const fetchedBytes = files.reduce((sum, file) => sum + file.size, 0);
-    return { repositoryId: input.repositoryId, commitSha: input.commitSha.toLowerCase(), files, omitted, fetchedBytes, coverage: omissionCoverage(omitted) };
+    return { repositoryId: input.repositoryId, commitSha: input.commitSha.toLowerCase(), files, omitted, fetchedBytes, coverage: omissionCoverage(omitted),
+      fetch: { archive, blobRequests: remaining.length } };
+  }
+
+  // The files of fetchList that the commit's archive holds byte for byte, or undefined when the
+  // archive could not be read. A refusal is GitHub's rate limit, and the blob requests that would
+  // follow are refused the same way, so it fails here with the same code they would.
+  private async readArchive(input: { repositoryId: number; commitSha: string }, authHeaders: Record<string, string>, wanted: Map<string, string>, files: number) {
+    let response: Response;
+    try {
+      response = await this.http(`https://api.github.com/repositories/${input.repositoryId}/tarball/${input.commitSha}`, { headers: authHeaders, signal: AbortSignal.timeout(archiveTimeoutMs) });
+    } catch { return undefined; }
+    if (response.status === 403 || response.status === 429) throw new Error(`repository_access_refused:files=${files};status=${response.status}`);
+    if (!response.ok) return undefined;
+    try {
+      const gzipped = await boundedBody(response, archiveMaxBytes);
+      if (!gzipped) return undefined;
+      // A tar adds at most 1,536 bytes a file: its header, padding, and a pax header for a long path.
+      const read = readTarball(gzipped, { maxBytes: archiveMaxBytes + wanted.size * 1_536 + 1_048_576, wanted: path => wanted.has(path) });
+      if (read.commit && read.commit.toLowerCase() !== input.commitSha.toLowerCase()) return undefined;
+      return [...read.files].filter(([path, bytes]) => gitBlobSha(bytes) === wanted.get(path));
+    } catch { return undefined; }
   }
 }
 

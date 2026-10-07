@@ -76,7 +76,7 @@ function body(reason: PlatformFailureReason, detail: string | undefined, solePro
   if (reason === "repository_too_large") {
     return [`This repository is larger than BuildIT can read one file at a time${files ? `: ${files.toLocaleString()} files against a limit of ${(limit ?? 0).toLocaleString()}` : ""}.`,
       "BuildIT stopped before spending anything, and made no code decision.",
-      "This is a limit of how BuildIT fetches source, not a problem with your pull request. Reviewing a repository this size needs an archive download rather than per-file reads, which BuildIT does not do yet."];
+      "This is a limit of how BuildIT fetches source, not a problem with your pull request. BuildIT reads a repository with up to 64 MB of source as a single archive; this one is larger, or its archive could not be read, so its files had to be read one at a time."];
   }
   if (reason === "repository_access_refused") {
     return [`GitHub refused to serve this repository's files${files ? ` after ${files.toLocaleString()} were requested` : ""}, which it does when too many are read in a short window.`,
