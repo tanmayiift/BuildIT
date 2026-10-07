@@ -2,12 +2,12 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { chunkRepositorySnapshot } from "../../github/src/repository-chunks";
-import { decodeContextArtifact, encodeContextArtifact } from "../src/contextArtifact";
+import { chunkRepositorySnapshot } from "../../packages/github/src/repository-chunks";
+import { decodeContextArtifact, encodeContextArtifact } from "../../packages/runner/src/contextArtifact";
 
 // A chunk the way the context worker builds one: real source, through the real chunker.
 function realChunk() {
-  const dir = join(__dirname, "../../github/src");
+  const dir = join(__dirname, "../../packages/github/src");
   const files = readdirSync(dir).filter(name => name.endsWith(".ts")).map(name => {
     const content = readFileSync(join(dir, name), "utf8");
     return { path: `packages/github/src/${name}`, sha: "a".repeat(40), size: Buffer.byteLength(content), content };
