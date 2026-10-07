@@ -85,10 +85,18 @@ export type StoredReview = { status: string; findings: ReadonlyArray<{ severity:
 // The parse is trusted only when it agrees with what the review stored. The report and the table
 // are written from the same arbitrated list, but the table keeps one row per fingerprint, so this
 // compares distinct findings rather than counts.
+// The table never says "accepted" for what the report published as confirmed: it stores such a finding
+// as "open", and later "dismissed", "fixed" or "accepted" as people act on it. Only "uncertain" was
+// uncertain when the report went out. R0's first runs compared the raw values and called every
+// confirmed finding unpublished.
+export function publishedResolution(stored: string) {
+  return stored === "uncertain" ? "uncertain" : "accepted";
+}
+
 export function crossCheck(published: PublishedReport, stored: StoredReview): string | undefined {
   if (published.status !== stored.status) return `status:${published.status ?? "none"}≠${stored.status}`;
   const coarse = (item: { severity: string; blocking: boolean; resolution: string }) => `${item.severity}|${item.blocking}|${item.resolution}`;
-  const kept = stored.findings.filter(item => item.resolution !== "rejected");
+  const kept = stored.findings.filter(item => item.resolution !== "rejected").map(item => ({ ...item, resolution: publishedResolution(item.resolution) }));
   const storedFull = new Set(kept.map(item => `${coarse(item)}|${item.lines[0]}-${item.lines[1]}`));
   const storedCoarse = new Set(kept.map(coarse));
   for (const item of published.findings) {
@@ -147,6 +155,9 @@ export type RunRecord = {
   promptVersions?: Record<string, string>; model?: string;
   costUsd?: number; inputTokens?: number; cachedInputTokens?: number; consentToVerdictSeconds?: number;
   findings?: RecordedFinding[];
+  // Set when a run first recorded as unparseable was re-checked later from its saved report and the
+  // review's stored rows, after a defect in the check itself was fixed. Kept so the correction shows.
+  revalidatedAt?: string;
 };
 
 export type RunsFile = {
