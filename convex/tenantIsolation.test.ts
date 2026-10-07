@@ -1679,8 +1679,10 @@ describe("Convex tenant isolation", () => {
       expectedGeneration: 0,
       provider: "anthropic",
       model: "claude-sonnet-4-5",
-      inputBytes: 80_000,
-      maxOutputTokens: 8_000,
+      // Four times the Mini call below: Sonnet is now charged at its own price, a quarter of the
+      // generic ceiling this was sized against, so the same $1.86 upper bound needs a larger call.
+      inputBytes: 332_288,
+      maxOutputTokens: 32_000,
       now,
     })).resolves.toMatchObject({ allowed: false });
     expect(await t.run(async ctx => ctx.db.get(alpha.reviewId))).toMatchObject({

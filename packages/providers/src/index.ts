@@ -29,7 +29,27 @@ const pinnedPrices: Readonly<Record<string, { inputPerMillion: number; outputPer
   // was reserved at the generic $15/$75, and a review the size of buildit-demo-zod's (five calls of
   // ~95k tokens) could not fit a $5 ceiling at all.
   "gemini:gemini-3.1-pro-preview": { inputPerMillion: 4, outputPerMillion: 18 },
+  // The rest of the approved models were unpinned and charged at the generic $15/$75 - which is what
+  // a retired Opus cost, and five to twelve times what these do. gpt-5 is the escalation critic, so in
+  // the R1 benchmark (7 Oct) one second opinion of 4,370 tokens in and 2,106 out was recorded as
+  // $0.2235 against the author's review budget, where OpenAI bills about $0.027. Prices checked
+  // 2026-10-07 on each provider's own page:
+  // https://developers.openai.com/api/docs/models/gpt-5 - $1.25 / $10
+  "openai:gpt-5": { inputPerMillion: 1.25, outputPerMillion: 10 },
+  // https://platform.claude.com/docs/en/about-claude/pricing - Sonnet 4.5 and 4.6 $3 / $15, Opus 4.6
+  // $5 / $25; 4.6 models bill their whole context window at these rates, and BuildIT does not send
+  // the long-context header that would take Sonnet 4.5 past 200k tokens.
+  "anthropic:claude-sonnet-4-5": { inputPerMillion: 3, outputPerMillion: 15 },
+  "anthropic:claude-sonnet-4-6": { inputPerMillion: 3, outputPerMillion: 15 },
+  "anthropic:claude-opus-4-6": { inputPerMillion: 5, outputPerMillion: 25 },
+  // https://ai.google.dev/gemini-api/docs/pricing - 2.5 Pro $1.25 / $10 up to 200k tokens and
+  // $2.50 / $15 above (the higher tier is pinned, as for 3.1); 2.5 Flash $0.30 / $2.50, thinking
+  // included in output.
+  "gemini:gemini-2.5-pro": { inputPerMillion: 2.5, outputPerMillion: 15 },
+  "gemini:gemini-2.5-flash": { inputPerMillion: 0.3, outputPerMillion: 2.5 },
 };
+// Whether a model is charged at its own price rather than the generic ceiling.
+export function hasPinnedPrice(provider: ProviderName, model: string) { return `${provider}:${model}` in pinnedPrices; }
 const priceSafetyMargin = 1.25;
 export type ProviderKeyValidation = { availableModels: string[] };
 

@@ -17,10 +17,12 @@ async function fixture() {
   });
   return { t, b, now };
 }
+// claude-sonnet-4-5 is now charged at its own price, a quarter of the generic ceiling these amounts
+// were written against, so the token counts are four times larger and every charge is unchanged.
 const stage = (b: Awaited<ReturnType<typeof summaryFixture>>, now: number) => ({
   organizationId: b.organizationId, reviewId: b.reviewId, expectedHeadSha: "a".repeat(40), expectedGeneration: 0,
   stage: "findings" as const, provider: "anthropic" as const, model: "claude-sonnet-4-5", promptVersion: "v1", schemaVersion: "v1",
-  finishReason: "tool_use", requestHash: "9".repeat(64), requestId: "paid-late", attempt: 1, outcome: "valid" as const, inputTokens: 1_000, outputTokens: 1_000, now,
+  finishReason: "tool_use", requestHash: "9".repeat(64), requestId: "paid-late", attempt: 1, outcome: "valid" as const, inputTokens: 4_000, outputTokens: 4_000, now,
 });
 
 describe("execution evidence always names the intended run", () => {
