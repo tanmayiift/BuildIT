@@ -213,10 +213,23 @@ Released at `cae1235` and `ba75b74`:
 
 **Vercel (Pro).** This cycle used $1.79 of the $20 included credit, with 28 days left. Sandbox memory was $0.88 and sandbox CPU $0.40 of that.
 
+## 14. One live review after the release (`ba75b74`, 7 Oct 15:19 UTC)
+
+`@buildit review provider=openai` on `buildit-demo-p-queue#2`, the same commit R1 reviewed. Review `nx7ajxnfrg0bke6015fx9v02jd8fvjhj`:
+- **v7 is the default.** The stage records show findings-v7, critic-v4 and arbitration-v4 with no allowlist set.
+- **A confirmed blocker decides (#144).** The verdict is `changes_requested` / `blocking_findings`, where R1 got `inconclusive` / `tests_need_lockfile` on this commit. The check went up as `failure`, so it blocks the merge.
+  - The comment reads: "**1 blocking issue**. `test` did not run at this commit because there is no lockfile to install from, so this verdict rests on the findings and the checks that did."
+  - The inline comment posted (`buildit_inline_publication {outcome: posted, posted: 1}`).
+- **One archive per revision (#141).** The log shows `buildit_repository_fetch {head: {archive: 'used', blobRequests: 0}, base: {archive: 'used', blobRequests: 0}}`: no per-file GitHub request on either revision.
+- **The reason is stored (#143).** The High finding carries `critic_and_arbitration_supported`.
+- **Real times (#145).** Context finished at 15:19:31, analysis at 15:20:19 and the verdict at 15:20:24. That is what the history now shows, instead of the workflow's start time.
+- **Cost:** $0.095, 66 s from comment to verdict.
+
 ## Not yet proven live
 
 | Claim | What is waiting |
 |---|---|
-| #140, #141, #143–#146 behave as tested, on a live review | A review on p-queue#2 after the `cae1235` release. GitHub refused every write from this account from 15:07 UTC on 7 Oct (HTTP 500 on pushes, merges and comments, in every repository), so the confirming `@buildit review` could not be posted |
-| The 30-day retention's first run, with counts (#147) | Merging #147 (same outage) |
-| Context egress below 1 MB a review (#148) | Merging #148, then a day of reviews on the usage page |
+| A failed `@buildit` command explains itself (#140) | A command failing in production. The path is tested end to end with GitHub stubbed |
+| gpt-5 and the Claude and Gemini models charged at their own price (#146) | A review that escalates, or runs on an Anthropic or Gemini key. The price table is tested for every approved model |
+| The 30-day retention's first run, with counts (#147) | The `fbb999d` release |
+| Context egress below 1 MB a review (#148) | Merging #148, then a day of reviews on the Convex usage page |
