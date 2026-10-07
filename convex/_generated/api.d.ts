@@ -41,6 +41,7 @@ import type * as lib_authz from "../lib/authz.js";
 import type * as lib_autofixBounds from "../lib/autofixBounds.js";
 import type * as lib_blockingFindings from "../lib/blockingFindings.js";
 import type * as lib_budgetAccounting from "../lib/budgetAccounting.js";
+import type * as lib_commandFailureNotice from "../lib/commandFailureNotice.js";
 import type * as lib_coverageGate from "../lib/coverageGate.js";
 import type * as lib_credentialRevocation from "../lib/credentialRevocation.js";
 import type * as lib_durableStages from "../lib/durableStages.js";
@@ -167,6 +168,7 @@ declare const fullApi: ApiFromModules<{
   "lib/autofixBounds": typeof lib_autofixBounds;
   "lib/blockingFindings": typeof lib_blockingFindings;
   "lib/budgetAccounting": typeof lib_budgetAccounting;
+  "lib/commandFailureNotice": typeof lib_commandFailureNotice;
   "lib/coverageGate": typeof lib_coverageGate;
   "lib/credentialRevocation": typeof lib_credentialRevocation;
   "lib/durableStages": typeof lib_durableStages;

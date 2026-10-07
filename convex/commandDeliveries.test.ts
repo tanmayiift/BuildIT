@@ -74,3 +74,56 @@ describe("a question with no finished review to answer from", () => {
     expect(posted?.body).toContain(JSON.stringify(noReviewToAnswerFrom).slice(1, 40));
   });
 });
+
+describe("a review command GitHub refused before it could start", () => {
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+
+  const runtime = () => {
+    vi.stubEnv("GITHUB_APP_ID", "1");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ type: "pkcs8", format: "pem" }).toString());
+    vi.stubEnv("BUILDIT_UNTRUSTED_EXECUTION_ENABLED", "true");
+    for (const name of ["BUILDIT_BROKER_URL", "ARTIFACT_GRANT_SECRET", "TRACKER_GRANT_SECRET", "EXECUTION_GRANT_SECRET", "MODEL_GRANT_SECRET", "FINDING_FINGERPRINT_SECRET"]) vi.stubEnv(name, `test-${name.toLowerCase()}`);
+  };
+  const scheduled = (t: ReturnType<typeof convexTest>) => t.run(ctx => ctx.db.system.query("_scheduled_functions").collect());
+
+  // R0, 6 Oct 2026: date-fns comments made during a GitHub rate limit vanished without a word.
+  it("tells the commenter why on the pull request", async () => {
+    runtime();
+    const calls: Array<{ url: string; method: string; body?: string }> = [];
+    const github = stubGitHub(calls);
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL, init?: RequestInit) =>
+      String(input).endsWith("/pulls/7") ? new Response("{}", { status: 403 }) : github(input, init)));
+    const t = convexTest(schema, modules); await seed(t);
+    await t.run(ctx => ctx.db.insert("webhookDeliveries", { deliveryId: "delivery-refused", event: "issue_comment", action: "created", installationId: 123,
+      signatureValid: true, disposition: "processed", status: "received", receivedAt: 1 }));
+    await t.action(internal.githubWebhookProcessor.processWebhook, { deliveryId: "delivery-refused", installationId: 123, githubRepositoryId: 42, prNumber: 7,
+      senderLogin: "maintainer", senderType: "User", commentAction: "created", command: "@buildit review provider=openai" });
+    expect(await delivery(t, "delivery-refused")).toMatchObject({ disposition: "rejected", status: "failed", failureCode: "pull_request_lookup_403" });
+
+    // The notice runs with exactly what the handler scheduled.
+    const jobs = (await scheduled(t)).filter(job => job.name.includes("reviewCommandWorker") && job.name.includes("reportFailure"));
+    expect(jobs).toHaveLength(1);
+    const [scheduledArgs] = jobs[0]!.args as [{ installationId: number; githubRepositoryId: number; prNumber: number; failureCode: string; verb?: string; at: number; attempt: number }];
+    expect(await t.action(internal.reviewCommandWorker.reportFailure, scheduledArgs)).toEqual({ posted: true });
+    const posted = calls.find(call => call.method === "POST" && call.url.endsWith("/issues/7/comments"));
+    const body = JSON.parse(posted!.body!).body as string;
+    expect(body).toContain("<!-- buildit-review:failed-pr-7 -->");
+    expect(body).toContain("**BuildIT could not carry out `@buildit review`**");
+    expect(body).toContain("GitHub refused BuildIT's request for this pull request.");
+    expect(body).toContain("Reference: `pull_request_lookup_403`");
+  });
+
+  it("tries the comment once more if GitHub refuses that too, and then stops", async () => {
+    runtime();
+    const github = stubGitHub([]);
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL, init?: RequestInit) =>
+      String(input).includes("/comments") ? new Response("{}", { status: 403 }) : github(input, init)));
+    const t = convexTest(schema, modules);
+    const args = { installationId: 123, githubRepositoryId: 42, prNumber: 7, failureCode: "pull_request_lookup_403", verb: "review", at: 1, attempt: 1 };
+    expect(await t.action(internal.reviewCommandWorker.reportFailure, args)).toEqual({ posted: false });
+    const retry = (await scheduled(t)).filter(job => job.name.includes("reportFailure"));
+    expect(retry.map(job => (job.args as [{ attempt: number }])[0].attempt)).toEqual([2]);
+    expect(await t.action(internal.reviewCommandWorker.reportFailure, { ...args, attempt: 2 })).toEqual({ posted: false });
+    expect((await scheduled(t)).filter(job => job.name.includes("reportFailure"))).toHaveLength(1);
+  });
+});

@@ -4,6 +4,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { GitHubAppClient, GitHubRepositoryWriter } from "@buildit/github";
 import { neverMergedSentence } from "@buildit/orchestrator";
+import { commandFailureNotice } from "./lib/commandFailureNotice";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
 
@@ -55,5 +56,31 @@ export const respond = internalAction({
           : "**Automatic reviews resumed on this pull request.** The next push will be reviewed." });
       return { posted: true };
     } finally { await github.revoke(tokenScope); }
+  },
+});
+
+// A command that failed before anything ran used to leave the commenter looking at nothing. The most
+// common cause is GitHub's API limit, which can refuse this comment too, so a refused post is tried
+// once more after the limit has had time to reset. Keyed per pull request: repeated failures edit
+// one comment rather than stacking.
+const failureRetryMs = 10 * 60_000;
+export const reportFailure = internalAction({
+  args: { installationId: v.number(), githubRepositoryId: v.number(), prNumber: v.number(), failureCode: v.string(),
+    verb: v.optional(v.string()), at: v.number(), attempt: v.number() },
+  handler: async (ctx, args): Promise<{ posted: boolean }> => {
+    const body = commandFailureNotice({ code: args.failureCode, verb: args.verb, at: args.at });
+    if (!body) return { posted: false };
+    const github = new GitHubAppClient({ appId: required("GITHUB_APP_ID"), privateKey: required("GITHUB_APP_PRIVATE_KEY") });
+    const tokenScope = { installationId: args.installationId, repositoryId: args.githubRepositoryId, stage: "review" as const };
+    try {
+      const token = await github.tokenFor(tokenScope);
+      const writer = new GitHubRepositoryWriter({ repositoryId: args.githubRepositoryId, installationToken: token });
+      await writer.upsertIssueComment({ prNumber: args.prNumber, marker: `buildit-review:failed-pr-${args.prNumber}`, body });
+      return { posted: true };
+    } catch {
+      console.info("buildit_command_notice_failed", { attempt: args.attempt });
+      if (args.attempt < 2) await ctx.scheduler.runAfter(failureRetryMs, internal.reviewCommandWorker.reportFailure, { ...args, attempt: args.attempt + 1 });
+      return { posted: false };
+    } finally { await github.revoke(tokenScope).catch(() => undefined); }
   },
 });
