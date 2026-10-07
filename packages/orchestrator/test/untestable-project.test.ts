@@ -27,6 +27,22 @@ describe("the pull request comment for a project whose tests could not run", () 
   });
 });
 
+// The R1 benchmark's p-queue review: the critic and arbitration confirmed a high-severity defect, and
+// the comment said "1 blocking issue" under "Review needs attention" and a next step of "Commit a
+// lockfile". BuildIT's check run was neutral, so it did not block the merge it had found a reason to.
+describe("the comment for a confirmed defect in a project whose tests could not run", () => {
+  const blocker = { title: "Heavy task can exceed configured concurrency", severity: "high" as const, resolution: "accepted" as const, blocking: true,
+    evidenceIds: ["ev-1"], path: "source/index.ts", startLine: 202, endLine: 204, impact: "More tasks run at once than configured.", explanation: "Check the weight accounting." };
+
+  it("requests changes, points at the finding, and says which check did not run and why", () => {
+    const { body, decision } = composeVerifiedReport({ ...base, findings: [blocker],
+      checks: [...scanners, { name: "test", required: true, conclusion: "not_run", evidenceComplete: true, notRunReason: "no_lockfile" }] });
+    expect(decision).toMatchObject({ status: "changes_requested", reason: "blocking_findings", nextAction: "inspect_findings", missingChecks: ["test"] });
+    expect(body).toContain("**1 blocking issue**. `test` did not run at this commit because there is no lockfile to install from, so this verdict rests on the findings and the checks that did.");
+    expect(body).not.toMatch(/Commit a lockfile/);
+  });
+});
+
 // buildit-demo-zod#1 printed "All 5 required checks passed with complete evidence" and then listed two
 // required checks as already failing.
 describe("the comment for required checks that were already failing", () => {

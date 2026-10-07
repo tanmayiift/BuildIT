@@ -102,7 +102,14 @@ export function composeVerifiedReport(input: { autofixDecline?: keyof typeof aut
     blockingFindings ? `**${blockingFindings} blocking ${blockingFindings === 1 ? "issue" : "issues"}**` : "",
     failedRequiredChecks ? `**${failedRequiredChecks} required ${failedRequiredChecks === 1 ? "check" : "checks"} failed**` : "",
   ].filter(Boolean).join(" and ");
-  const summary = problems
+  // A confirmed problem now decides the review even when a check could not run, so the reader is told
+  // what the verdict did not get to see rather than left to find "Not run" in the table.
+  const notRun = decision.status === "changes_requested" && "missingChecks" in decision ? decision.missingChecks ?? [] : [];
+  const noLockfile = notRun.length > 0 && input.checks.some(check => notRun.includes(check.name) && check.notRunReason === "no_lockfile");
+  const notRunNote = notRun.length
+    ? `. ${notRun.map(name => `\`${code(name)}\``).join(", ")} did not run at this commit${noLockfile ? " because there is no lockfile to install from" : ""}, so this verdict rests on the findings and the checks that did`
+    : "";
+  const summary = (problems && `${problems}${notRunNote}`)
     || (decision.status === "checks_passed"
       ? `${requiredChecks.some(check => check.conclusion === "failed") ? `This change introduced no new failure in its ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"}` : `All ${requiredChecks.length} required ${requiredChecks.length === 1 ? "check" : "checks"} passed with complete evidence`}${input.ecosystem === "none" ? ", and no test, lint or typecheck command was run because BuildIT recognised no package manager in this repository" : ""}`
       : decision.reason === "test_suite_failing"
