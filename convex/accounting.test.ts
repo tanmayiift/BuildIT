@@ -33,14 +33,14 @@ describe("charges already incurred remain accountable", () => {
   it("records an over-limit response and preserves the stop, instead of rolling both back", async () => {
     const t = convexTest(schema, modules), args = await seed(t, 0.01);
     const { repositoryId: _repositoryId, ...scope } = args;
-    await t.mutation(internal.reviewModelData.recordStageRun, { ...scope, stage: "findings", provider: "anthropic", model: "claude-sonnet-4-5", promptVersion: "v1", schemaVersion: "v1", finishReason: "tool_use", requestHash: "9".repeat(64), requestId: "paid-1", attempt: 1, outcome: "valid", inputTokens: 1_000, outputTokens: 1_000, now }).catch(() => undefined);
+    await t.mutation(internal.reviewModelData.recordStageRun, { ...scope, stage: "findings", provider: "anthropic", model: "claude-sonnet-4-5", promptVersion: "v1", schemaVersion: "v1", finishReason: "tool_use", requestHash: "9".repeat(64), requestId: "paid-1", attempt: 1, outcome: "valid", inputTokens: 4_000, outputTokens: 4_000, now }).catch(() => undefined);
     expect(await t.run(ctx => ctx.db.query("usageLedger").collect())).toHaveLength(1);
     expect(await t.run(ctx => ctx.db.get(args.reviewId))).toMatchObject({ status: "budget_exhausted", budgetConsumed: 0.09 });
   });
   it("does not stamp away pre-existing spend when an Ask is the first new writer", async () => {
     const t = convexTest(schema, modules), args = await seed(t);
     await t.run(ctx => ctx.db.insert("usageLedger", { organizationId: args.organizationId, repositoryId: args.repositoryId, reviewId: args.reviewId, kind: "model_tokens", quantity: 1, unitCost: 8, totalCostMicros: 8_000_000, currency: "provider_billed", occurredAt: now - 1 }));
-    await t.mutation(internal.reviewAskData.recordAsk, { organizationId: args.organizationId, reviewId: args.reviewId, provider: "anthropic", model: "claude-sonnet-4-5", inputTokens: 1_000, outputTokens: 1_000, now });
+    await t.mutation(internal.reviewAskData.recordAsk, { organizationId: args.organizationId, reviewId: args.reviewId, provider: "anthropic", model: "claude-sonnet-4-5", inputTokens: 4_000, outputTokens: 4_000, now });
     expect(await t.run(ctx => ctx.db.get(args.organizationId))).toMatchObject({ monthlySpendMicros: 8_090_000 });
   });
 });
@@ -51,11 +51,15 @@ const reserveCall = makeFunctionReference<"mutation">("modelAccounting:reserve")
 const settleCall = makeFunctionReference<"mutation">("modelAccounting:settle");
 const snapshotCall = makeFunctionReference<"query">("modelAccounting:snapshot");
 const reconcileCall = makeFunctionReference<"mutation">("modelAccounting:reconcile");
+// claude-sonnet-4-5 is now charged at its own price ($3.75/$18.75 per million with the margin), exactly
+// a quarter of the generic $15/$75 these amounts were written against. Every token count and
+// reservation size is four times what it was - 0 input bytes plus the 4,096-token overhead becomes
+// 12,288 plus the overhead - so every charge, ceiling and threshold below is unchanged.
 const reservation = (scope: Awaited<ReturnType<typeof seed>>, key: string, extra: Record<string, unknown> = {}) => {
   const { repositoryId: _repositoryId, ...args } = scope;
-  return { ...args, invocationKey: key.padEnd(20, "x"), requestHash: "7".repeat(64), stage: "findings", provider: "anthropic", model: "claude-sonnet-4-5", inputBytes: 0, maxOutputTokens: 100, now, ...extra };
+  return { ...args, invocationKey: key.padEnd(20, "x"), requestHash: "7".repeat(64), stage: "findings", provider: "anthropic", model: "claude-sonnet-4-5", inputBytes: 12_288, maxOutputTokens: 400, now, ...extra };
 };
-const payment = (organizationId: Awaited<ReturnType<typeof seed>>["organizationId"], invocationId: string, extra: Record<string, unknown> = {}) => ({ organizationId, invocationId, outcome: "estimated", inputTokens: 1_000, outputTokens: 1_000, finishReason: "tool_use", now, ...extra });
+const payment = (organizationId: Awaited<ReturnType<typeof seed>>["organizationId"], invocationId: string, extra: Record<string, unknown> = {}) => ({ organizationId, invocationId, outcome: "estimated", inputTokens: 4_000, outputTokens: 4_000, finishReason: "tool_use", now, ...extra });
 
 describe("durable invocation accounting", () => {
   it.each(["cancelling", "requested", "installation_suspended", "expired"])("refuses a new paid call after %s", async stopped => {
@@ -158,7 +162,7 @@ describe("durable invocation accounting", () => {
     const t = convexTest(schema, modules), scope = await seed(t);
     await t.run(async ctx => { for (let index = 0; index < 450; index += 1) await ctx.db.insert("usageLedger", { organizationId: scope.organizationId, repositoryId: scope.repositoryId, reviewId: scope.reviewId, kind: "model_tokens", quantity: 1, unitCost: 0.01, totalCostMicros: 10_000, currency: "provider_billed", occurredAt: now - 1_000 + index }); });
     expect(await t.mutation(reconcileCall, { organizationId: scope.organizationId, now })).toEqual({ complete: false });
-    await t.mutation(internal.reviewAskData.recordAsk, { organizationId: scope.organizationId, reviewId: scope.reviewId, provider: "anthropic", model: "claude-sonnet-4-5", inputTokens: 1_000, outputTokens: 1_000, now });
+    await t.mutation(internal.reviewAskData.recordAsk, { organizationId: scope.organizationId, reviewId: scope.reviewId, provider: "anthropic", model: "claude-sonnet-4-5", inputTokens: 4_000, outputTokens: 4_000, now });
     await t.mutation(reconcileCall, { organizationId: scope.organizationId, now });
     await t.mutation(reconcileCall, { organizationId: scope.organizationId, now });
     expect(await t.query(snapshotCall, { organizationId: scope.organizationId, now })).toMatchObject({ estimatedSpendUsd: 4.59, reconciliationComplete: true, legacyCostsMayBeIncomplete: true, accountingComplete: false });
@@ -168,17 +172,17 @@ describe("durable invocation accounting", () => {
     const t = convexTest(schema, modules), scope = await seed(t);
     const plain = await t.mutation(reserveCall, reservation(scope, "plain")), cached = await t.mutation(reserveCall, reservation(scope, "cached"));
     await t.mutation(settleCall, payment(scope.organizationId, plain.invocationId));
-    await t.mutation(settleCall, payment(scope.organizationId, cached.invocationId, { cachedInputTokens: 900 }));
+    await t.mutation(settleCall, payment(scope.organizationId, cached.invocationId, { cachedInputTokens: 3_600 }));
     const invocations = await t.run(ctx => ctx.db.query("modelInvocations").collect());
     const rows = [plain, cached].map(item => invocations.find(row => row._id === item.invocationId));
-    expect(rows[1]).toMatchObject({ cachedInputTokens: 900, inputTokens: 1_000 });
+    expect(rows[1]).toMatchObject({ cachedInputTokens: 3_600, inputTokens: 4_000 });
     expect(rows[0]).not.toHaveProperty("cachedInputTokens");
     expect(rows[1]!.costMicros).toBe(rows[0]!.costMicros);
   });
   it("refuses a cached count larger than the input it is part of", async () => {
     const t = convexTest(schema, modules), scope = await seed(t);
     const reserved = await t.mutation(reserveCall, reservation(scope, "overcached"));
-    await expect(t.mutation(settleCall, payment(scope.organizationId, reserved.invocationId, { cachedInputTokens: 1_001 }))).rejects.toThrow("model_settlement_invalid");
+    await expect(t.mutation(settleCall, payment(scope.organizationId, reserved.invocationId, { cachedInputTokens: 4_001 }))).rejects.toThrow("model_settlement_invalid");
   });
   it("rejects a settlement against another organization's invocation", async () => {
     const t = convexTest(schema, modules), scope = await seed(t), other = await seed(t);
@@ -203,17 +207,17 @@ describe("worker accounting transport", () => {
     const t = convexTest(schema, modules), scope = await seed(t);
     const http: typeof fetch = async (_url, init) => {
       const body = JSON.parse(String(init?.body));
-      return Response.json({ invocationId: body.invocationId, result: { provider: "anthropic", model: "claude-sonnet-4-5", value: {}, finishReason: "tool_use", inputTokens: 1_000, outputTokens: 10, cachedInputTokens: 600, usageKnown: true } });
+      return Response.json({ invocationId: body.invocationId, result: { provider: "anthropic", model: "claude-sonnet-4-5", value: {}, finishReason: "tool_use", inputTokens: 4_000, outputTokens: 40, cachedInputTokens: 2_400, usageKnown: true } });
     };
     await invokeAccountedModel(actionContext(t), { ...modelInput(scope), http });
-    expect(await t.run(ctx => ctx.db.query("modelInvocations").collect())).toEqual([expect.objectContaining({ inputTokens: 1_000, cachedInputTokens: 600 })]);
+    expect(await t.run(ctx => ctx.db.query("modelInvocations").collect())).toEqual([expect.objectContaining({ inputTokens: 4_000, cachedInputTokens: 2_400 })]);
   });
   it("uses a distinct reservation and signed grant for each retry", async () => {
     const t = convexTest(schema, modules), scope = await seed(t), ids: string[] = [], grants: string[] = [];
     const http: typeof fetch = async (_url, init) => {
       const body = JSON.parse(String(init?.body)); ids.push(body.invocationId); grants.push(new Headers(init?.headers).get("authorization")!);
       if (ids.length === 1) return Response.json({ invocationId: body.invocationId, error: "rate_limited", providerStatus: 429, notCharged: true }, { status: 429 });
-      return Response.json({ invocationId: body.invocationId, result: { provider: "anthropic", model: "claude-sonnet-4-5", value: {}, finishReason: "tool_use", inputTokens: 1_000, outputTokens: 1_000, usageKnown: true } });
+      return Response.json({ invocationId: body.invocationId, result: { provider: "anthropic", model: "claude-sonnet-4-5", value: {}, finishReason: "tool_use", inputTokens: 4_000, outputTokens: 4_000, usageKnown: true } });
     };
     await invokeAccountedModel(actionContext(t), { ...modelInput(scope), http });
     expect(new Set(ids).size).toBe(2); expect(new Set(grants).size).toBe(2);
@@ -222,7 +226,7 @@ describe("worker accounting transport", () => {
   });
   it("records paid truncation before the worker reports failure", async () => {
     const t = convexTest(schema, modules), scope = await seed(t);
-    const http: typeof fetch = async (_url, init) => Response.json({ invocationId: JSON.parse(String(init?.body)).invocationId, error: "truncated", usage: { inputTokens: 1_000, outputTokens: 1_000, usageKnown: true } }, { status: 422 });
+    const http: typeof fetch = async (_url, init) => Response.json({ invocationId: JSON.parse(String(init?.body)).invocationId, error: "truncated", usage: { inputTokens: 4_000, outputTokens: 4_000, usageKnown: true } }, { status: 422 });
     await expect(invokeAccountedModel(actionContext(t), { ...modelInput(scope), http })).rejects.toThrow("truncated");
     expect(await t.query(snapshotCall, { organizationId: scope.organizationId, now })).toMatchObject({ estimatedSpendUsd: 0.09, reservedUsd: 0, unknownInvocationCount: 0 });
   });
@@ -267,7 +271,7 @@ describe("Ask accounts before presentation side effects", () => {
       if (String(url).endsWith("/api/artifacts")) return new Response(report);
       const body = JSON.parse(String(init?.body));
       return Response.json({ invocationId: body.invocationId, result: { provider: "anthropic", model: "claude-sonnet-4-5", finishReason: "tool_use",
-        value: { answer: outcome === "empty" ? "" : "The published evidence says this.", groundedInReview: true }, inputTokens: 1_000, outputTokens: 1_000, usageKnown: true } });
+        value: { answer: outcome === "empty" ? "" : "The published evidence says this.", groundedInReview: true }, inputTokens: 4_000, outputTokens: 4_000, usageKnown: true } });
     });
     try {
       const action = t.action(makeFunctionReference<"action">("reviewAskWorker:answer"), { organizationId: scope.organizationId, repositoryId: scope.repositoryId, prNumber: 1, question: "What changed?", askedBy: "test" });
@@ -284,7 +288,7 @@ it("links stage evidence to its invocation without charging the provider call ag
   const reserved = await t.mutation(reserveCall, reservation(scope, "first"));
   await t.mutation(settleCall, payment(scope.organizationId, reserved.invocationId));
   const { repositoryId: _repositoryId, ...args } = scope;
-  const stage = { ...args, invocationId: reserved.invocationId, stage: "findings" as const, provider: "anthropic" as const, model: "claude-sonnet-4-5", promptVersion: "v1", schemaVersion: "v1", finishReason: "tool_use", requestHash: "9".repeat(64), requestId: "paid-1", attempt: 1, outcome: "valid" as const, inputTokens: 1_000, outputTokens: 1_000, now };
+  const stage = { ...args, invocationId: reserved.invocationId, stage: "findings" as const, provider: "anthropic" as const, model: "claude-sonnet-4-5", promptVersion: "v1", schemaVersion: "v1", finishReason: "tool_use", requestHash: "9".repeat(64), requestId: "paid-1", attempt: 1, outcome: "valid" as const, inputTokens: 4_000, outputTokens: 4_000, now };
   await t.mutation(internal.reviewModelData.recordStageRun, stage); await t.mutation(internal.reviewModelData.recordStageRun, stage);
   expect(await t.query(snapshotCall, { organizationId: scope.organizationId, now })).toMatchObject({ estimatedSpendUsd: 0.09, reservedUsd: 0 });
   expect(await t.run(ctx => ctx.db.query("usageLedger").collect())).toHaveLength(1);
@@ -299,7 +303,12 @@ async function fallbackScope(t: ReturnType<typeof convexTest>, scope: Awaited<Re
   });
   return { ...scope, reviewId };
 }
-const fallbackReservation = (scope: Awaited<ReturnType<typeof seed>>, key: string) => reservation(scope, key, { provider: "gemini", model: "gemini-2.5-pro" });
+// The fallback runs on gemini-2.5-pro, now charged at its own price ($3.125/$18.75 per million with the
+// margin), which is not a whole fraction of the old ceiling. Its call is sized to reserve exactly $0.07
+// and to cost exactly $0.09 - on the same side of every threshold below as the $0.06894 and $0.09 it
+// replaced.
+const fallbackReservation = (scope: Awaited<ReturnType<typeof seed>>, key: string) => reservation(scope, key, { provider: "gemini", model: "gemini-2.5-pro", inputBytes: 15_904, maxOutputTokens: 400 });
+const fallbackPayment = (organizationId: Awaited<ReturnType<typeof seed>>["organizationId"], invocationId: string, extra: Record<string, unknown> = {}) => payment(organizationId, invocationId, { inputTokens: 4_800, outputTokens: 4_000, ...extra });
 
 describe("one allowance across a review and provider fallback", () => {
   it("does not grant a fallback a second budget after a paid parent failure", async () => {
@@ -326,7 +335,7 @@ describe("one allowance across a review and provider fallback", () => {
   it("counts a descendant's paid work when Ask uses the original review", async () => {
     const t = convexTest(schema, modules), root = await seed(t, 0.15), child = await fallbackScope(t, root);
     const paid = await t.mutation(reserveCall, fallbackReservation(child, "child-paid"));
-    await t.mutation(settleCall, payment(root.organizationId, paid.invocationId));
+    await t.mutation(settleCall, fallbackPayment(root.organizationId, paid.invocationId));
     await t.run(ctx => ctx.db.patch(root.reviewId, { status: "checks_passed", completedAt: now }));
     expect(await t.mutation(reserveCall, reservation(root, "root-ask", { stage: "ask" }))).toMatchObject({ allowed: false, reason: "budget_exhausted" });
     expect(await t.run(ctx => ctx.db.get(root.reviewId))).toMatchObject({ status: "checks_passed", budgetConsumed: 0 });
@@ -338,16 +347,16 @@ describe("one allowance across a review and provider fallback", () => {
     const calls = await Promise.all([t.mutation(reserveCall, fallbackReservation(first, "sibling-one")), t.mutation(reserveCall, fallbackReservation(second, "sibling-two"))]);
     expect(calls.filter(call => call.allowed)).toHaveLength(1);
     expect(calls.filter(call => !call.allowed)).toMatchObject([{ reason: "budget_exhausted" }]);
-    expect(await t.query(snapshotCall, { organizationId: root.organizationId, now })).toMatchObject({ reservedUsd: 0.06894 });
+    expect(await t.query(snapshotCall, { organizationId: root.organizationId, now })).toMatchObject({ reservedUsd: 0.07 });
   });
 
   it.each(["cancelled", "platform_failed"] as const)("keeps late parent charges after %s and prevents more child spending", async status => {
     const t = convexTest(schema, modules), root = await seed(t, 0.2);
     const parent = await t.mutation(reserveCall, reservation(root, "late-parent")), child = await fallbackScope(t, root);
     const childPaid = await t.mutation(reserveCall, fallbackReservation(child, "early-child"));
-    await t.mutation(settleCall, payment(root.organizationId, childPaid.invocationId));
+    await t.mutation(settleCall, fallbackPayment(root.organizationId, childPaid.invocationId));
     await t.run(ctx => ctx.db.patch(root.reviewId, { status, executionGeneration: 1 }));
-    await t.mutation(settleCall, payment(root.organizationId, parent.invocationId, { inputTokens: 2_000, outputTokens: 2_000 }));
+    await t.mutation(settleCall, payment(root.organizationId, parent.invocationId, { inputTokens: 8_000, outputTokens: 8_000 }));
     expect(await t.run(ctx => ctx.db.get(root.reviewId))).toMatchObject({ status, budgetConsumed: 0.18 });
     expect(await t.run(ctx => ctx.db.get(child.reviewId))).toMatchObject({ budgetConsumed: 0.09 });
     expect(await t.query(snapshotCall, { organizationId: root.organizationId, now })).toMatchObject({ estimatedSpendUsd: 0.27, reservedUsd: 0 });
@@ -361,7 +370,7 @@ describe("one allowance across a review and provider fallback", () => {
     const t = convexTest(schema, modules), root = await seed(t, 0.1);
     const parent = await t.mutation(reserveCall, reservation(root, "rejected-parent")), child = await fallbackScope(t, root);
     await t.mutation(settleCall, { organizationId: root.organizationId, invocationId: parent.invocationId, outcome: "not_charged", finishReason: "invalid_key", now });
-    expect(await t.mutation(reserveCall, fallbackReservation(child, "allowed-fallback"))).toMatchObject({ allowed: true, reservedUsd: 0.06894 });
+    expect(await t.mutation(reserveCall, fallbackReservation(child, "allowed-fallback"))).toMatchObject({ allowed: true, reservedUsd: 0.07 });
   });
 
   it("keeps a separately authorized same-commit review's allowance independent", async () => {
@@ -384,7 +393,7 @@ describe("one allowance across a review and provider fallback", () => {
     const t = convexTest(schema, modules), root = await seed(t, 0.15), child = await fallbackScope(t, root);
     await t.run(ctx => ctx.db.patch(root.reviewId, { budgetConsumed: 0.09 }));
     const { repositoryId: _repositoryId, ...scope } = child;
-    expect(await t.mutation(internal.reviewModelData.preflightStageSpend, { ...scope, provider: "gemini", model: "gemini-2.5-pro", inputBytes: 0, maxOutputTokens: 100, now })).toMatchObject({ allowed: false });
+    expect(await t.mutation(internal.reviewModelData.preflightStageSpend, { ...scope, provider: "gemini", model: "gemini-2.5-pro", inputBytes: 15_904, maxOutputTokens: 400, now })).toMatchObject({ allowed: false });
   });
 });
 
@@ -450,9 +459,9 @@ it("returns the same allowance receipt from a parent and its fallback without do
   const before = await t.query(receipt, { organizationId: root.organizationId, reviewId: root.reviewId });
   expect(before).toEqual(await t.query(receipt, { organizationId: root.organizationId, reviewId: child.reviewId }));
   expect(before).toMatchObject({ rootReviewId: root.reviewId, reviewIds: [root.reviewId, child.reviewId], budgetLimitUsd: 0.3,
-    estimatedSpendUsd: 0.09, reservedUsd: 0.06894, remainingUsd: 0.14106, unresolvedInvocationCount: 1 });
-  await t.mutation(settleCall, payment(root.organizationId, pending.invocationId));
-  await t.mutation(settleCall, payment(root.organizationId, pending.invocationId));
+    estimatedSpendUsd: 0.09, reservedUsd: 0.07, remainingUsd: 0.14, unresolvedInvocationCount: 1 });
+  await t.mutation(settleCall, fallbackPayment(root.organizationId, pending.invocationId));
+  await t.mutation(settleCall, fallbackPayment(root.organizationId, pending.invocationId));
   expect(await t.query(receipt, { organizationId: root.organizationId, reviewId: child.reviewId })).toMatchObject({ estimatedSpendUsd: 0.18, reservedUsd: 0, remainingUsd: 0.12, unresolvedInvocationCount: 0 });
   const foreign = await seed(t);
   await expect(t.query(receipt, { organizationId: foreign.organizationId, reviewId: root.reviewId })).rejects.toThrow("parent_scope_mismatch");
@@ -485,7 +494,7 @@ it("counts a late legacy receipt against the shared allowance without rewriting 
   const { repositoryId: _repositoryId, ...scope } = root;
   await t.run(ctx => ctx.db.patch(root.reviewId, { status: "platform_failed", completedAt: now }));
   const receipt = { ...scope, stage: "findings" as const, provider: "anthropic" as const, model: "claude-sonnet-4-5", promptVersion: "v1", schemaVersion: "v1", finishReason: "tool_use",
-    requestHash: "9".repeat(64), requestId: "legacy-parent", attempt: 1, outcome: "valid" as const, inputTokens: 1_000, outputTokens: 1_000, now };
+    requestHash: "9".repeat(64), requestId: "legacy-parent", attempt: 1, outcome: "valid" as const, inputTokens: 4_000, outputTokens: 4_000, now };
   await t.mutation(internal.reviewModelData.recordStageRun, receipt);
   await t.mutation(internal.reviewModelData.recordStageRun, receipt);
   expect(await t.mutation(reserveCall, fallbackReservation(child, "after-legacy"))).toMatchObject({ allowed: false, reason: "budget_exhausted" });
@@ -498,7 +507,7 @@ it("retains an already incurred charge even if the family's parent link becomes 
   const t = convexTest(schema, modules), root = await seed(t), child = await fallbackScope(t, root), foreign = await seed(t);
   const reserved = await t.mutation(reserveCall, fallbackReservation(child, "before-invalid-link"));
   await t.run(ctx => ctx.db.patch(child.reviewId, { parentReviewId: foreign.reviewId }));
-  await expect(t.mutation(settleCall, payment(root.organizationId, reserved.invocationId))).resolves.toMatchObject({ accounted: true, costUsd: 0.09 });
+  await expect(t.mutation(settleCall, fallbackPayment(root.organizationId, reserved.invocationId))).resolves.toMatchObject({ accounted: true, costUsd: 0.09 });
   expect(await t.run(ctx => ctx.db.get(child.reviewId))).toMatchObject({ budgetConsumed: 0.09 });
   expect(await t.query(snapshotCall, { organizationId: root.organizationId, now })).toMatchObject({ estimatedSpendUsd: 0.09, reservedUsd: 0 });
   await expect(t.mutation(reserveCall, fallbackReservation(child, "after-invalid-link"))).rejects.toThrow("review_budget_family_invalid");

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { assertStrictSchema, checked, conservativeProviderModelCost, conservativeProviderStageCost, geminiThinkingAllowance, ProviderClient, ProviderError, selectProviderModel, validateSchemaValue } from "../src/index.js";
+import { approvedProviderModels, assertStrictSchema, checked, conservativeProviderModelCost, conservativeProviderStageCost, geminiThinkingAllowance, hasPinnedPrice, ProviderClient, ProviderError, selectProviderModel, validateSchemaValue } from "../src/index.js";
 const request={model:"allowed",system:"policy",input:"data",schemaName:"result",schema:{type:"object",properties:{ok:{type:"boolean"}},required:["ok"],additionalProperties:false},maxOutputTokens:100};
 describe("provider adapters",()=>{
   // `key in record` walks the prototype chain, so "constructor", "toString" and "__proto__" are
@@ -35,7 +35,17 @@ describe("provider adapters",()=>{
   it("reserves Gemini 3.1 Pro at its published price, not the generic ceiling",()=>{
     expect(conservativeProviderModelCost("gemini","gemini-3.1-pro-preview",1_000_000,1_000_000)).toBe(27.5);
     expect(conservativeProviderModelCost("gemini","gemini-3.1-pro-preview",95_000,1_000)).toBeLessThan(0.5);
-    expect(conservativeProviderModelCost("gemini","gemini-2.5-pro",1_000_000,1_000_000)).toBe(90);
+    // 2.5 Pro is pinned too now, at its own >200k tier ($2.50/$15), with the same margin.
+    expect(conservativeProviderModelCost("gemini","gemini-2.5-pro",1_000_000,1_000_000)).toBe(21.875);
+  });
+  // An approved model with no pinned price was charged at the generic $15/$75 against the author's
+  // budget. gpt-5 is the escalation critic: R1's second opinion on got, 4,370 tokens in and 2,106 out,
+  // was recorded as $0.2235. Every model BuildIT will call has its own price.
+  it("prices every approved model at its own rate, so none falls to the generic ceiling", () => {
+    for (const [provider, models] of Object.entries(approvedProviderModels)) {
+      for (const model of models) expect({ provider, model, pinned: hasPinnedPrice(provider as keyof typeof approvedProviderModels, model) }).toEqual({ provider, model, pinned: true });
+    }
+    expect(conservativeProviderModelCost("openai", "gpt-5", 4_370, 2_106)).toBeCloseTo(0.0332, 4);
   });
   it("uses pinned model prices with a safety margin and a fail-closed fallback",()=>{
     expect(conservativeProviderModelCost("openai","gpt-5.4-mini",1_000_000,1_000_000)).toBe(6.5625);
