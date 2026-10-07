@@ -110,8 +110,13 @@ export const getEvidence = query({
         ...(testCountsSummary(item.testCounts) ? { testSummary: testCountsSummary(item.testCounts) } : {}) })),
       rounds: rounds.map(item => ({ id: item._id, roundNumber: item.roundNumber, candidateCommitSha: item.candidateCommitSha,
         validationOutcome: item.validationOutcome, completedValidation: item.completedValidation, startedAt: item.startedAt, completedAt: item.completedAt })),
+      // When each event actually happened. createdAt is whatever clock the writer passed, and the
+      // durable workflow passes its deterministic one - startedAt plus the stage index - so a review
+      // that took a minute showed every stage completing within two seconds of starting (R1, 7 Oct:
+      // checks at 09:57:42 and the verdict at 09:58:13 both read 09:57:09). _creationTime is set by
+      // the database on insert, for every event and every past review alike.
       events: events.map(item => ({ id: item._id, sequence: item.sequence, type: item.type, stage: item.stage,
-        code: item.internalCode, hasPublicMessage: Boolean(item.publicMessageArtifactId), createdAt: item.createdAt })),
+        code: item.internalCode, hasPublicMessage: Boolean(item.publicMessageArtifactId), createdAt: item._creationTime })),
       // Every field a reviewer of BuildIT asked for and could not find: what each stage was given,
       // what it returned, how long it took, what it cost, and the provider's own id for the call so
       // the claim can be checked against a bill. durationMs and costMicros were both computable
