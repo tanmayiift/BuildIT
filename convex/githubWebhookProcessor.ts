@@ -12,6 +12,7 @@ import {
 } from "@buildit/github";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { executionEnabled, requireExecutionEnabled, reviewRuntimeReady } from "./lib/executionGate";
+import { commandVerb } from "./lib/commandFailureNotice";
 
 
 // Every review starts here, whoever asked for it. The comment path grew this pipeline - fetch the
@@ -346,6 +347,13 @@ export const processWebhook = internalAction({
         failureCode,
         now: Date.now(),
       });
+      // Someone typed this and is waiting for something to happen; say why nothing will.
+      if (Number.isInteger(args.prNumber) && args.prNumber >= 1) {
+        await ctx.scheduler.runAfter(0, internal.reviewCommandWorker.reportFailure, {
+          installationId: args.installationId, githubRepositoryId: args.githubRepositoryId, prNumber: args.prNumber,
+          failureCode, verb: commandVerb(args.command), at: Date.now(), attempt: 1,
+        });
+      }
     }
   },
 });
