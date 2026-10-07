@@ -5,7 +5,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
-  credentialTeardownRevisions, defaultExecutionPlans, stampCredentialTeardown,
+  credentialTeardownRevisions, decodeContextArtifact, defaultExecutionPlans, stampCredentialTeardown,
   type ExecutionRevision, type ExecutionStage, type PackageManager,
 } from "@buildit/runner";
 import { issueArtifactGrant } from "@buildit/security";
@@ -66,7 +66,7 @@ export const validate = internalAction({
       if (!response.ok) throw new Error(`context_artifact_download_${response.status}`);
       const body = Buffer.from(await response.arrayBuffer());
       if (body.byteLength !== context.size || createHash("sha256").update(body).digest("hex") !== context.checksum) throw new Error("context_artifact_integrity_failed");
-      const chunk = JSON.parse(body.toString("utf8")) as { revision?: string; snapshot?: { files?: Array<{ path?: string; content?: string }> } };
+      const chunk = decodeContextArtifact(body) as { revision?: string; snapshot?: { files?: Array<{ path?: string; content?: string }> } };
       if (chunk.revision !== revision || !Array.isArray(chunk.snapshot?.files)) throw new Error("context_artifact_revision_invalid");
       for (const file of chunk.snapshot.files) {
         if (typeof file.path !== "string") throw new Error("context_artifact_path_invalid");

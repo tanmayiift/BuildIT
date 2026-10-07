@@ -60,6 +60,7 @@ export * from "./vercelSandbox.js";
 export * from "./providerFailure.js";
 export * from "./executionSegments.js";
 export * from "./executionJob.js";
+export * from "./contextArtifact.js";
 
 // A published review said `typecheck  Advisory  **Failed**` and quoted npm's whole complaint
 // beneath it, when the repository simply has no typecheck script. That is a configuration fact

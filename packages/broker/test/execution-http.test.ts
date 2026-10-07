@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { issueExecutionGrant } from "@buildit/security";
-import { defaultExecutionPlans, executionSandboxName, type ExecutionSegment } from "@buildit/runner";
+import { defaultExecutionPlans, encodeContextArtifact, executionSandboxName, type ExecutionSegment } from "@buildit/runner";
 import { handleExecution, pinnedSandboxImage, safeExecutionError, safeExecutionErrorCategory } from "../src/execution-http";
 
 const secret = new Uint8Array(32).fill(3), now = 1_000, baseSha = "b".repeat(40), headSha = "a".repeat(40), plans = defaultExecutionPlans("pnpm");
@@ -9,7 +9,9 @@ const jobKey = "validation:review-a:0:" + headSha;
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const scannersSegment: ExecutionSegment = { stage: "scanners", index: 0 };
 const checksSegment: ExecutionSegment = { stage: "checks", index: 0, planId: "test", revisions: ["base", "head"] };
-function artifactBody(revision: "base" | "head") { const commitSha = revision === "base" ? baseSha : headSha, content = revision === "base" ? "export const value = 1" : "export const value = eval(input)"; return Buffer.from(JSON.stringify({ revision, snapshot: { commitSha, files: [{ path: "src/a.ts", content }, { path: "package-lock.json", content: '{"lockfileVersion":3,"packages":{}}' }, { path: ".gitleaks.toml", content: "repo-owned scanner configuration" }, { path: ".gitleaksignore", content: "repo-owned scanner exclusions" }] } })); }
+// Chunks stored before 7 Oct 2026 are plain JSON; the context worker now writes them gzipped. Both must read.
+let encodeBody: (value: unknown) => Buffer = value => Buffer.from(JSON.stringify(value));
+function artifactBody(revision: "base" | "head") { const commitSha = revision === "base" ? baseSha : headSha, content = revision === "base" ? "export const value = 1" : "export const value = eval(input)"; return encodeBody({ revision, snapshot: { commitSha, files: [{ path: "src/a.ts", content }, { path: "package-lock.json", content: '{"lockfileVersion":3,"packages":{}}' }, { path: ".gitleaks.toml", content: "repo-owned scanner configuration" }, { path: ".gitleaksignore", content: "repo-owned scanner exclusions" }] } }); }
 function fixture(changes: Record<string, unknown> = {}, segment: ExecutionSegment = scannersSegment) {
   const artifacts = (["base", "head"] as const).map(revision => { const content = artifactBody(revision); return { revision, artifactId: `${revision}-artifact`, storageKey: `artifacts/org-a/repo-a/review-a/${revision}-artifact/context.json`, checksum: createHash("sha256").update(content).digest("hex"), size: content.byteLength, readGrant: `${revision}-read-grant` }; });
   const body = { organizationId: "org-a", repositoryId: "repo-a", reviewId: "review-a", jobKey, segment, baseSha, headSha, runnerImageVersion: `buildit-runner@sha256:${"f".repeat(64)}`, runtime: "node22" as const, artifacts, ...plans, ...changes };
@@ -53,6 +55,20 @@ describe("native base/head execution boundary", () => {
       expect(run.files!.map((file: { path: string }) => file.path)).toEqual(["src/a.ts", "package-lock.json"]);
     }
     expect(output).toMatchObject({ scanners: { head: { runs: [{ scanner: "builditRules", scannerVersion: "1.0.0" }, { scanner: "gitleaks", scannerVersion: "8.28.0" }, { scanner: "osvScanner", scannerVersion: "2.2.3" }], findings: [expect.objectContaining({ ruleId: "buildit-dynamic-eval" })] } } });
+  });
+
+  it("reads the compressed chunks the context worker writes exactly as it read plain ones", async () => {
+    encodeBody = encodeContextArtifact;
+    try {
+      const f = fixture(), deps = dependencies();
+      expect((await deps.artifactBroker.get("head-read-grant")).body.subarray(0, 2)).toEqual(Buffer.from([0x1f, 0x8b]));
+      const response = await post(f, deps);
+      expect(response.status).toBe(200);
+      for (const [run] of deps.runner.runSegment.mock.calls) {
+        expect(run.files!.map((file: { path: string }) => file.path)).toEqual(["src/a.ts", "package-lock.json"]);
+      }
+      expect(await response.json()).toMatchObject({ scanners: { head: { findings: [expect.objectContaining({ ruleId: "buildit-dynamic-eval" })] } } });
+    } finally { encodeBody = value => Buffer.from(JSON.stringify(value)); }
   });
 
   it("runs exact trusted plans on both revisions and returns bounded deterministic evidence", async () => {
