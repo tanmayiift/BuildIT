@@ -28,12 +28,6 @@ on:
 permissions:
   contents: read
 
-# One release at a time. A newer commit queued behind this one supersedes any older one still
-# pending, and preflight refuses to deploy a commit main has already moved past.
-concurrency:
-  group: buildit-release
-  cancel-in-progress: false
-
 env:
   # A CI-triggered release has no inputs; it releases everything.
   TARGET: ${{ inputs.target || 'all' }}
@@ -112,6 +106,13 @@ jobs:
   release:
     needs: preflight
     if: ${{ needs.preflight.outputs.current == 'true' }}
+    # One deploy at a time, serialised on the deploy itself rather than the whole workflow. As a
+    # workflow-level group, GitHub kept one run waiting and cancelled every older waiting run, so a
+    # burst of merges left a trail of "cancelled" releases; preflight already skips any commit main
+    # has moved past, so at most two deploys are ever in this group.
+    concurrency:
+      group: buildit-deploy
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: production

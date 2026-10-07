@@ -14,8 +14,11 @@ env:
 
 # A newer push to a pull request replaces the older run. A push to main never cancels: every commit
 # on main gets its own verdict, and the release waits on that verdict for exactly that commit.
+# A pull request's runs share a group, so a new push cancels its stale run. Each push to main gets a
+# group of its own: GitHub keeps one waiting run per group and cancels older waiting ones even with
+# cancel-in-progress off, so five quick merges on 7 Oct 2026 cancelled three main runs.
 concurrency:
-  group: buildit-ci-${{ github.ref }}
+  group: buildit-ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
