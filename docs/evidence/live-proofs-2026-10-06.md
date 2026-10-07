@@ -222,7 +222,7 @@ Released at `cae1235` and `ba75b74`:
   - The inline comment posted (`buildit_inline_publication {outcome: posted, posted: 1}`).
 - **One archive per revision (#141).** The log shows `buildit_repository_fetch {head: {archive: 'used', blobRequests: 0}, base: {archive: 'used', blobRequests: 0}}`: no per-file GitHub request on either revision.
 - **The reason is stored (#143).** The High finding carries `critic_and_arbitration_supported`.
-- **Real times (#145).** Context finished at 15:19:31, analysis at 15:20:19 and the verdict at 15:20:24. That is what the history now shows, instead of the workflow's start time.
+- **Real times (#145).** The review page's history reads 20:49:18 → 20:49:31 → 20:49:50 → 20:50:19 → 20:50:24 IST, the stored insert times. Before this, every stage showed the workflow's start time.
 - **Cost:** $0.095, 66 s from comment to verdict.
 
 ## Not yet proven live
@@ -231,5 +231,5 @@ Released at `cae1235` and `ba75b74`:
 |---|---|
 | A failed `@buildit` command explains itself (#140) | A command failing in production. The path is tested end to end with GitHub stubbed |
 | gpt-5 and the Claude and Gemini models charged at their own price (#146) | A review that escalates, or runs on an Anthropic or Gemini key. The price table is tested for every approved model |
-| The 30-day retention's first run, with counts (#147) | The `fbb999d` release |
+| The 30-day retention deletes month-old history (#147, #150) | #147's first run (7 Oct, 15:26 UTC) deleted nothing: it keyed on `updatedAt`, which stale-marking touches, and missed a review `blocked` since 1 Sep. #150 keys on creation and removes month-old blocked reviews; its first run is recorded below once released |
 | Context egress below 1 MB a review (#148) | Merging #148, then a day of reviews on the Convex usage page |
