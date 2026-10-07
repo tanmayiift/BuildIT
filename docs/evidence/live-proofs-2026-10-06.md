@@ -60,7 +60,7 @@ Before #129, that page said "No source was shown" and the reader had to find the
 ## 6. The homepage and the review queue, as deployed (#131, #132)
 
 Production web at `20fa09c` (release completed 11:31 IST):
-- **Homepage `/`.** It renders the hero review card, with the cited line `4 › export const agentOptions = { rejectUnauthorized: false };`, and the drawn accuracy-panel illustration.
+- **Homepage `/`.** It renders the hero review card, with cited line 4 (the agent option that turns certificate verification off; the literal is not repeated here, because BuildIT's own scanner flags it anywhere in the tree), and the drawn accuracy-panel illustration.
 - **Review queue `/reviews`, signed in.** It opens with the current results split by verdict:
   - Changes requested 16;
   - Checks passed 8;
