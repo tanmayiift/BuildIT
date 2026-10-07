@@ -7,7 +7,7 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { chunkRepositorySnapshot, compilePathFilters, fetchFileAtCommit, GitHubAppClient, GitHubIssueContextClient, omissionCoverage, type PullRequestContext, PullRequestContextClient, RepositoryContentClient, type RepositorySnapshot, trustedConfiguration } from "@buildit/github";
-import { executionPlanInput } from "@buildit/runner";
+import { encodeContextArtifact, executionPlanInput } from "@buildit/runner";
 import { acquireRequirements, describeUnreadableSources, instructionsForPaths, isRequirementSourcePath, parseRepositoryConfig, type RepositoryConfig, repositoryRequirementSources, summariseChange } from "@buildit/orchestrator";
 import { issueArtifactGrant,issueTrackerGrant } from "@buildit/security";
 
@@ -154,7 +154,7 @@ export const gather = internalAction({
         const chunks = chunkRepositorySnapshot(snapshot, 3_700_000, 64, revision === "head" ? Math.max(1_100_000, 3_700_000 - pullBytes) : 3_700_000);
         chunkCount += chunks.length;
         for (const chunk of chunks) {
-          const body = Buffer.from(JSON.stringify({ version: 1, revision, pull: revision === "head" && chunk.chunkIndex === 0 ? pull : undefined, snapshot: chunk }));
+          const body = encodeContextArtifact({ version: 1, revision, pull: revision === "head" && chunk.chunkIndex === 0 ? pull : undefined, snapshot: chunk });
           if (body.byteLength > 4_000_000) throw new Error("context_artifact_too_large");
           const checksum = createHash("sha256").update(body).digest("hex"), now = Date.now();
           const reserved: { artifactId: Id<"artifacts">; repositoryId: Id<"repositories">; reviewId: Id<"reviews">; storageKey: string; expiresAt: number } = await ctx.runMutation(internal.reviewArtifactData.reserve, { ...args, checksum, size: body.byteLength, chunkIndex: chunk.chunkIndex, revision, now });

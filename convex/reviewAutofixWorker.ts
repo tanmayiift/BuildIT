@@ -11,7 +11,7 @@ import type { DataModel } from "./_generated/dataModel";
 import type { GenericActionCtx } from "convex/server";
 import { chunkRepositorySnapshot, GitHubAppClient, GitHubRepositoryWriter, isForcedOmission, RepositoryContentClient, sideEffectKey } from "@buildit/github";
 import { assertAutofixBounds, candidateWorsened, contentHash, neverMergedSentence, type PatchProposal, runModelPatchChain, stageSchemas, validatePatchProposals } from "@buildit/orchestrator";
-import { defaultExecutionPlans, stampCredentialTeardown, type ExecutionStage } from "@buildit/runner";
+import { decodeContextArtifact, defaultExecutionPlans, stampCredentialTeardown, type ExecutionStage } from "@buildit/runner";
 import {
   fingerprint,
   issueArtifactGrant,
@@ -355,7 +355,7 @@ export const runConvergence = internalAction({
     )
       throw new Error("autofix_analysis_pinning_failed");
     const chunks = contextBodies.map(
-        (body) => JSON.parse(body.toString("utf8")) as SnapshotChunk,
+        (body) => decodeContextArtifact(body) as SnapshotChunk,
       ),
       originalHeadFiles = chunks
         .filter((item) => item.revision === "head")

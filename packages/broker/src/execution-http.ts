@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { assertExecutionSegment, providerFailureOf, EXECUTION_JOB_PLAN_BUDGET_MS, EXECUTION_JOB_WORK_BUDGET_MS, executionSandboxName, isUnsafeInstallControlPath, SANDBOX_DIAGNOSTIC_RERUN_LIMIT, SANDBOX_SCANNER_TIMEOUT_MS, validatePlan, VercelSandboxRunner, type CommandPlan, type ExecutionRevision, type ExecutionSegment, type SandboxCredentials, type SegmentOutcome } from "@buildit/runner";
+import { assertExecutionSegment, decodeContextArtifact, providerFailureOf, EXECUTION_JOB_PLAN_BUDGET_MS, EXECUTION_JOB_WORK_BUDGET_MS, executionSandboxName, isUnsafeInstallControlPath, SANDBOX_DIAGNOSTIC_RERUN_LIMIT, SANDBOX_SCANNER_TIMEOUT_MS, validatePlan, VercelSandboxRunner, type CommandPlan, type ExecutionRevision, type ExecutionSegment, type SandboxCredentials, type SegmentOutcome } from "@buildit/runner";
 import { combineScannerRuns, parseGitleaks, parseOsv, scanBuildITRules, scannerInventory } from "@buildit/scanners";
 import { verifyExecutionGrant } from "@buildit/security";
 import type { ArtifactBroker } from "./artifacts.js";
@@ -136,7 +136,7 @@ export async function handleExecution(request: Request, input: { artifactBroker:
         if (!/^[0-9a-f]{64}$/.test(descriptor.checksum) || descriptor.size < 1 || descriptor.size > 4_000_000) throw new Error("invalid_execution_request");
         const artifact = await input.artifactBroker.get(descriptor.readGrant);
         if (artifact.artifactId !== descriptor.artifactId || artifact.body.byteLength !== descriptor.size || artifact.checksum !== descriptor.checksum) throw new Error("artifact_integrity_failed");
-        const chunk = JSON.parse(Buffer.from(artifact.body).toString("utf8")) as { revision?: string; snapshot?: { commitSha?: string; files?: Array<{ path?: string; content?: string }> } };
+        const chunk = decodeContextArtifact(artifact.body) as { revision?: string; snapshot?: { commitSha?: string; files?: Array<{ path?: string; content?: string }> } };
         const expected = descriptor.revision === "base" ? body.baseSha : body.headSha;
         if (chunk.revision !== descriptor.revision || chunk.snapshot?.commitSha !== expected || !Array.isArray(chunk.snapshot.files)) throw new Error("artifact_revision_mismatch");
         for (const file of chunk.snapshot.files) { if (typeof file.path !== "string" || typeof file.content !== "string" || files[descriptor.revision].has(file.path)) throw new Error("artifact_file_conflict"); files[descriptor.revision].set(file.path, file.content); }

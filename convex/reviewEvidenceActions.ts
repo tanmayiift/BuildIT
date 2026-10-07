@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { decodeContextArtifact } from "@buildit/runner";
 import { issueArtifactGrant, redact } from "@buildit/security";
 
 type FindingDetail = {
@@ -140,6 +141,6 @@ export const getFindingEvidence = action({
     const scope: EvidenceScope = await ctx.runQuery(internal.reviewEvidenceData.findingEvidenceScope, args);
     if (scope.state !== "available") return scope;
     const [analysis, ...heads] = await Promise.all([scope.analysis, ...scope.heads].map(artifact => downloadArtifact(scope, artifact)));
-    return reviewEvidenceView(JSON.parse(analysis!.toString("utf8")), heads.map(body => JSON.parse(body.toString("utf8"))), { headSha: scope.headSha, baseSha: scope.baseSha });
+    return reviewEvidenceView(JSON.parse(analysis!.toString("utf8")), heads.map(body => decodeContextArtifact(body)), { headSha: scope.headSha, baseSha: scope.baseSha });
   },
 });

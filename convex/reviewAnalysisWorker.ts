@@ -9,6 +9,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { runEscalationCritic, arbitrateFindings, hunkWindows, relatedPaths, type ArbitrationDecision, type CriticDecision, dedupeSameDefect, type EvidenceRecord, type FindingCandidate, type ModelStageRequest, normalizeFindingCriteria, type PromptStage, type PromptVariant, reconcileArbitration, runModelReviewChain, type ReviewPlan, type ValidatedStage, validateFindingCandidates } from "@buildit/orchestrator";
 import { approvedProviderModels, type ProviderName, type ProviderResult } from "@buildit/providers";
+import { decodeContextArtifact } from "@buildit/runner";
 import { fingerprint, issueArtifactGrant, redact, redactForModel } from "@buildit/security";
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`missing_${name.toLowerCase()}`); return value; }
@@ -409,7 +410,7 @@ export const analyze = internalAction({
       Promise.all(scope.artifacts.map(artifact => download(artifact, "context_artifact"))),
       download(scope.validationArtifact, "validation_artifact"),
     ]);
-    const chunks: SnapshotChunk[] = contextBodies.map((body, index) => ({ ...(JSON.parse(body.toString("utf8")) as SnapshotChunk), artifactId: scope.artifacts[index]!.id }));
+    const chunks: SnapshotChunk[] = contextBodies.map((body, index) => ({ ...(decodeContextArtifact(body) as SnapshotChunk), artifactId: scope.artifacts[index]!.id }));
     const revisions = new Set(chunks.map(chunk => chunk.revision));
     if (!revisions.has("base") || !revisions.has("head")) throw new Error("base_head_context_incomplete");
     const validationValue = JSON.parse(validationBody.toString("utf8")) as ValidationArtifact;
