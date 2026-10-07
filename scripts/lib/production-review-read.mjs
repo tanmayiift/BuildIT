@@ -55,7 +55,7 @@ export default query(async (ctx) => {
       analysis: analysis ? { durationMs: analysis.durationMs, plannedStages: analysis.plannedStages, skippedStages: analysis.skippedStages,
         coverage: analysis.coverage, coverageGap: analysis.coverageGap, filesSelected: analysis.filesSelected, filesChanged: analysis.filesChanged } : null,
       findings: findings.map(item => ({ pathHmac: item.pathHmac.slice(0, 12), category: item.category, severity: item.severity,
-        lines: [item.startLine, item.endLine], blocking: item.blocking, resolution: item.resolution })),
+        lines: [item.startLine, item.endLine], blocking: item.blocking, resolution: item.resolution, reason: item.resolutionReason })),
     });
   }
   return [JSON.stringify(rows)];

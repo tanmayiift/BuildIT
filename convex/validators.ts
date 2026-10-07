@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { findingResolutionReasons } from "@buildit/contracts";
 
 export const role = v.union(
   v.literal("owner"), v.literal("admin"), v.literal("developer"), v.literal("viewer"),
@@ -170,3 +171,6 @@ export const executionJobStatus = v.union(
   v.literal("queued"), v.literal("running"), v.literal("checkpointed"),
   v.literal("completed"), v.literal("failed"), v.literal("cancelled"),
 );
+
+// Why a finding ended where it did (packages/contracts/src/findingResolutionReason.ts): one list, read here.
+export const findingResolutionReason = v.union(...findingResolutionReasons.map(reason => v.literal(reason)));

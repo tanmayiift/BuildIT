@@ -4,7 +4,7 @@ import { internalMutation, internalQuery, type MutationCtx } from "./_generated/
 import { assertReviewParent } from "./lib/parentConsistency";
 import { runIdFor } from "./lib/runIdentity";
 import { monthlyBudgetExceeded, noLimit } from "./lib/tenantLimits";
-import { findingCategory, findingResolution, injectionSurface, modelStage, modelStageOutcome, provider, requirementStatus, severity, sourceType } from "./validators";
+import { findingCategory, findingResolution, findingResolutionReason, injectionSurface, modelStage, modelStageOutcome, provider, requirementStatus, severity, sourceType } from "./validators";
 import type { Doc, Id } from "./_generated/dataModel";
 import { approvedProviderModels, conservativeProviderModelCost, conservativeProviderStageCost } from "@buildit/providers";
 import { toMicros } from "./lib/usageCost";
@@ -161,7 +161,7 @@ export const reserveOutput = internalMutation({
 export const completeAnalysis = internalMutation({
   args: { ...executionArgs, analysisDroppedChangedFile: v.optional(v.boolean()), artifactId: v.id("artifacts"), checksum: v.string(), size: v.number(), credentialId: v.id("providerCredentials"), inputTokens: v.number(), outputTokens: v.number(),
     requirements: v.array(v.object({ externalIdHash: v.string(), sourceType, sourceUrlHash: v.string(), fetchedVersion: v.string(), status: requirementStatus, confidence: v.number() })),
-    findings: v.array(v.object({ fingerprintHmac: v.string(), pathHmac: v.string(), category: findingCategory, severity, confidence: v.number(), blocking: v.boolean(), evidenceIds: v.array(v.id("artifacts")), startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()), requirementExternalIdHash: v.optional(v.string()), resolution: findingResolution, injectionSuspected: v.optional(v.boolean()) })), injectionUnscoped: v.optional(v.boolean()), injectionSurfaces: v.optional(v.array(injectionSurface)), now: v.number() },
+    findings: v.array(v.object({ fingerprintHmac: v.string(), pathHmac: v.string(), category: findingCategory, severity, confidence: v.number(), blocking: v.boolean(), evidenceIds: v.array(v.id("artifacts")), startLine: v.number(), endLine: v.number(), ruleId: v.optional(v.string()), requirementExternalIdHash: v.optional(v.string()), resolution: findingResolution, resolutionReason: v.optional(findingResolutionReason), injectionSuspected: v.optional(v.boolean()) })), injectionUnscoped: v.optional(v.boolean()), injectionSurfaces: v.optional(v.array(injectionSurface)), now: v.number() },
   handler: async (ctx, args) => {
     const review = await assertReviewParent(ctx.db, args.organizationId, args.reviewId), artifact = await ctx.db.get(args.artifactId), credential = await ctx.db.get(args.credentialId);
     if (review.headSha !== args.expectedHeadSha || review.executionGeneration !== args.expectedGeneration || review.isStale) throw new ConvexError("stale_or_replaced_review");
@@ -205,7 +205,7 @@ export const completeAnalysis = internalMutation({
         }
       } else await ctx.db.insert("findings", { organizationId: args.organizationId, reviewId: review._id, fingerprintHmac: item.fingerprintHmac, category: item.category, severity: item.severity,
         confidence: item.confidence, blocking: item.blocking, contentArtifactId: artifact._id, evidenceIds: item.evidenceIds, pathHmac: item.pathHmac, startLine: item.startLine, endLine: item.endLine,
-        ...(item.ruleId ? { ruleId: item.ruleId } : {}), ...(requirementId ? { requirementId } : {}), ...(item.injectionSuspected ? { injectionSuspected: true } : {}), resolution: item.resolution, ...(item.resolution === "uncertain" ? { uncertainPasses: 1 } : {}), createdAt: args.now, updatedAt: args.now, expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000) });
+        ...(item.ruleId ? { ruleId: item.ruleId } : {}), ...(requirementId ? { requirementId } : {}), ...(item.injectionSuspected ? { injectionSuspected: true } : {}), resolution: item.resolution, ...(item.resolutionReason ? { resolutionReason: item.resolutionReason } : {}), ...(item.resolution === "uncertain" ? { uncertainPasses: 1 } : {}), createdAt: args.now, updatedAt: args.now, expiresAt: Math.min(review.expiresAt, args.now + 7 * 86_400_000) });
     }
     // An injection signal with no changed file to attribute it to leaves nothing safe to scope,
     // so record it on the review. reviewValidationData refuses a pass/fail verdict on this.

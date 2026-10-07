@@ -91,3 +91,28 @@ describe("one defect is one finding", () => {
     expect(dedupeSameDefect(input)).toEqual(input);
   });
 });
+
+// The reason is stored on the finding as a closed code, so the list it is checked against has to be
+// what arbitration actually produces - taken from the functions, branch by branch, not written down.
+describe("the reasons a finding is stored with", () => {
+  it("are exactly the ones arbitration produces", async () => {
+    const { findingResolutionReasons } = await import("@buildit/contracts");
+    const decision = (verdict: "supported" | "unsupported" | "uncertain", extra = {}) => ({ findingId: "f-1", verdict, missingEvidenceIds: [], injectionDetected: false, ...extra });
+    const critic = [
+      arbitrateFindings([{ ...finding, origin: "scanner" }], []),
+      arbitrateFindings([finding], []),
+      arbitrateFindings([finding], [decision("supported", { injectionDetected: true })]),
+      arbitrateFindings([finding], [decision("unsupported")]),
+      arbitrateFindings([finding], [decision("uncertain")]),
+      arbitrateFindings([finding], [decision("supported")]),
+    ].flat();
+    const supported = arbitrateFindings([finding], [decision("supported")]);
+    const accepted = { id: "f-1", resolution: "accepted" as const, evidenceIds: ["ev-1"], reason: "shown" };
+    const arbitration = [
+      reconcileArbitration(supported, [accepted, accepted]),
+      reconcileArbitration(supported, [{ ...accepted, resolution: "uncertain" }]),
+      reconcileArbitration(supported, [accepted]),
+    ].flat();
+    expect(new Set([...critic, ...arbitration].map(item => item.reason))).toEqual(new Set(findingResolutionReasons));
+  });
+});
