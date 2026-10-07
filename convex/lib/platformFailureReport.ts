@@ -81,7 +81,7 @@ function body(reason: PlatformFailureReason, detail: string | undefined, solePro
   if (reason === "repository_access_refused") {
     return [`GitHub refused to serve this repository's files${files ? ` after ${files.toLocaleString()} were requested` : ""}, which it does when too many are read in a short window.`,
       "No code decision was made and no code was changed.",
-      "A smaller repository will review normally. This one needs a different fetch strategy, which BuildIT does not do yet."];
+      "BuildIT already waits when GitHub asks it to, so this usually means several reviews read files at once. Starting a new review in a few minutes normally succeeds; if it fails the same way every time, the repository is larger than BuildIT can read one file at a time."];
   }
   if (reason === "model_unavailable") {
     return ["The connected model key could not be used for this review: the provider refused it, or the selected model is not available to that key.",

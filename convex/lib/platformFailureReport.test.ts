@@ -51,6 +51,8 @@ describe("a review that could not run says why", () => {
     expect(report.summary).toContain("3,900");
     expect(report.summary).toContain("too many are read in a short window");
     expect(report.summary).not.toContain("permission");
+    // Throttling clears; the advice is to come back, not that the repository can never be reviewed.
+    expect(report.summary).toContain("Starting a new review in a few minutes normally succeeds");
   });
 
   it("still works when the numbers are missing or malformed", () => {

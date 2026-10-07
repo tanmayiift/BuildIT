@@ -28,6 +28,22 @@ export function rateLimitDelayMs(response: Response, now: number): number | unde
   return Math.min(Math.max(0, reset * 1_000 - now), maxBackoffMs);
 }
 
+// GitHub's documented fallback: a secondary limit that carries neither Retry-After nor an exhausted
+// primary counter means "wait at least one minute". Those responses were returned as ordinary 403s,
+// so a review reading a few hundred files beside another review failed as "repository access
+// refused" (the R0 benchmark, 6 Oct 2026: date-fns and zod, files=219 and 60, status=403).
+export const secondaryLimitWaitMs = 60_000;
+const secondaryLimitMessage = /secondary rate limit|abuse detection|rate limit exceeded/i;
+
+// Only the body says which 403 this is. "Resource not accessible by integration" is a refusal and
+// must not be retried; the secondary-limit message is a wait.
+async function undeclaredLimitDelayMs(response: Response): Promise<number | undefined> {
+  if (response.status === 429) return secondaryLimitWaitMs;
+  if (response.status !== 403) return undefined;
+  const text = await response.clone().text().catch(() => "");
+  return secondaryLimitMessage.test(text) ? secondaryLimitWaitMs : undefined;
+}
+
 export function githubRequester(
   http: GitHubHttp = fetch,
   options: { timeoutMs?: number; now?: () => number; wait?: (ms: number) => Promise<void> } = {},
@@ -46,7 +62,7 @@ export function githubRequester(
         if (isTimeout(error) || signal.aborted) throw new Error("github_timeout");
         throw error;
       }
-      const delay = rateLimitDelayMs(response, now());
+      const delay = rateLimitDelayMs(response, now()) ?? await undeclaredLimitDelayMs(response);
       // Retrying past the cap would hold the review's lease longer than waiting is worth; the
       // caller sees the rate-limit response and fails with a code that says so.
       if (delay === undefined || attempt >= maxRetries) return response;
