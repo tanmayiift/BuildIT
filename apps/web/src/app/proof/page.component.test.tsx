@@ -159,7 +159,10 @@ describe("what the query is allowed to return", () => {
     // adding a correctly-bounded read does not fail and adding an unbounded one still does.
     const reads = [...code.matchAll(/ctx\.db\.query\(/g)].length;
     expect(reads).toBeGreaterThanOrEqual(4);
-    expect([...code.matchAll(/\.take\(rowCeiling \+ 1\)/g)]).toHaveLength(reads);
+    // A scan is capped at rowCeiling; the stored summary is one row found by its index.
+    const scans = [...code.matchAll(/\.take\(rowCeiling \+ 1\)/g)].length;
+    const pointReads = [...code.matchAll(/\.withIndex\("by_name", q => q\.eq\("name", snapshotName\)\)\.unique\(\)/g)].length;
+    expect(scans + pointReads).toBe(reads);
     // The list query subscribes the same way and has to be bounded the same way.
     expect(listCode).toContain(".take(repositoryLimit + 1)");
     expect(listCode).toContain(".take(reviewsPerRepository + 1)");

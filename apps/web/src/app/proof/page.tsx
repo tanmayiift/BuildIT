@@ -11,7 +11,7 @@ import { EmptyState } from "../empty-state";
 // snapshot of whenever someone last remembered to run the script. A stranger evaluating a product
 // whose entire pitch is "do not take our word for it" had to take our word for it.
 //
-// This page is the live answer: a public, unauthenticated Convex query against the same production
+// This page is the checkable answer: a public, unauthenticated Convex query against the same production
 // database the product runs on, rendering counts only. It shows the platform failures next to the
 // completed reviews, because a proof page that reports only the flattering half is marketing.
 
@@ -66,10 +66,10 @@ export default function Proof() {
   const reviewed = useQuery(publicReviewsQuery, {});
 
   return <div className="content trust-page">
-    <p className="eyebrow">Live production data · no account, no key</p>
+    <p className="eyebrow">Production data · no account, no key</p>
     <h1 className="title">BuildIT&rsquo;s own operating numbers</h1>
     <p className="lede">
-      Read live from the database BuildIT runs on, by public queries that return counts, plus links to the
+      Read from the database BuildIT runs on, by public queries that return counts, plus links to the
       pull requests BuildIT reviewed on its own public repositories. No customer&rsquo;s repository, organization,
       person or finding is identifiable from anything on this page. The failures are here beside the successes,
       because a number you can only see when it flatters us is not evidence.
@@ -172,8 +172,9 @@ function Numbers({ data, reviewed }: { data: ProofSummary; reviewed: PublicRevie
     </dl>
 
     <div className="next">
-      <strong>Read at {readAt(data.generatedAt)}.</strong> This page holds an open subscription, so the numbers change
-      under you as production moves. Verify it the hard way: the query is <code>convex/publicProof.ts</code>, its
+      <strong>Summarised at {readAt(data.generatedAt)}.</strong> The counts are recomputed from production every six
+      hours rather than on every change: as a live view, each review that moved made every open copy of this page
+      re-read BuildIT&rsquo;s whole history. Verify it the hard way: the query is <code>convex/publicProof.ts</code>, its
       authorization is declared in <code>convex/publicFunctionPolicy.ts</code>, and both are in the repository.
     </div>
     <div className="button-row">

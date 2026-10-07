@@ -1,4 +1,4 @@
-import { query } from "./_generated/server";
+import { internalMutation, query, type QueryCtx } from "./_generated/server";
 import { decisiveStatuses } from "./lib/reviewOutcome";
 import { rowCostUsd } from "./lib/usageCost";
 
@@ -32,74 +32,110 @@ import { rowCostUsd } from "./lib/usageCost";
 const rowCeiling = 2_000;
 
 
+// The summary is computed on a schedule and read from one row, not recomputed per viewer. As a live
+// subscription it re-read every review, finding and ledger row (about 1.1 MB) on every write to any
+// of them, for every open /proof page: 862 MB of the 1 GB monthly database-read allowance in the
+// first six days of October 2026, half of all reads. Every six hours it costs a handful of
+// megabytes a month, and the page says when it was summarised.
+export const proofRefreshIntervalHours = 6;
+
+export async function computeProofSummary(ctx: QueryCtx) {
+  const [reviewRows, findingRows, ledgerRows, feedbackRows] = await Promise.all([
+    ctx.db.query("reviews").order("desc").take(rowCeiling + 1),
+    ctx.db.query("findings").order("desc").take(rowCeiling + 1),
+    ctx.db.query("usageLedger").withIndex("by_time").order("desc").take(rowCeiling + 1),
+    // The second half of the north star. "Findings raised" says BuildIT spoke; it says nothing
+    // about whether anyone listened, and a reviewer nobody reads is worth reporting as such.
+    ctx.db.query("findingFeedback").order("desc").take(rowCeiling + 1),
+  ]);
+
+  const reviews = reviewRows.slice(0, rowCeiling), findings = findingRows.slice(0, rowCeiling), ledger = ledgerRows.slice(0, rowCeiling);
+  const feedback = feedbackRows.slice(0, rowCeiling);
+  // Counted per finding, not per row: two people dismissing the same finding is one judgement
+  // about one finding, and counting both would report more feedback than there were findings.
+  const judged = new Set(feedback.map(row => row.fingerprintHmac));
+  const acceptedFingerprints = new Set(feedback.filter(row => row.verdict === "accepted").map(row => row.fingerprintHmac));
+  const decisive = decisiveStatuses;
+  const distinctCompletedPullRequests = new Set(reviews.filter(review => review.completedAt !== undefined && decisive.has(review.status)).map(review => `${review.repositoryId}:${review.prNumber}`)).size;
+
+  // Present statuses only. Zero-filling the whole enum would put eighteen rows on the page,
+  // most of them stating that something never happened.
+  const byStatus: Record<string, number> = {};
+  for (const review of reviews) byStatus[review.status] = (byStatus[review.status] ?? 0) + 1;
+
+  // The id is used to size a set and is then discarded; it is never returned.
+  const repositoriesReviewed = new Set(reviews.map(review => String(review.repositoryId))).size;
+
+  // No duration statistic. It was on this page and it was wrong: verdict-reaching reviews showed
+  // a median of 0.1s while platform failures showed 87s, because a review row's createdAt and
+  // startedAt are both re-stamped per execution generation, so neither pair measures the wait a
+  // person experienced. A latency number nobody can defend does not belong on a page whose whole
+  // claim is that the numbers are checkable - so it is absent, and the absence is deliberate.
+
+  // kind "model_tokens" is the only priced kind; sandbox_seconds is recorded at unitCost 0. The
+  // ledger's currency label is "provider_billed" because the spend lands on the customer's own
+  // provider key, not on BuildIT - so this is what BuildIT's reviews have cost to run, and the
+  // page has to say that rather than implying revenue.
+  const modelRows = ledger.filter(row => row.kind === "model_tokens");
+  const modelSpendUsd = modelRows.reduce((sum, row) => sum + rowCostUsd(row), 0);
+  const modelTokens = modelRows.reduce((sum, row) => sum + row.quantity, 0);
+
+  return {
+    generatedAt: Date.now(),
+    rowCeiling,
+    reviews: {
+      counted: reviews.length,
+      truncated: reviewRows.length > rowCeiling,
+      distinctCompletedPullRequests,
+      byStatus,
+      repositoriesReviewed,
+    },
+    findings: {
+      counted: findings.length,
+      truncated: findingRows.length > rowCeiling,
+      judged: judged.size,
+      accepted: acceptedFingerprints.size,
+      feedbackTruncated: feedbackRows.length > rowCeiling,
+    },
+    spend: {
+      costPending: modelRows.some(row => row.costStatus === "unknown"),
+      modelSpendUsd,
+      modelTokens,
+      counted: ledger.length,
+      truncated: ledgerRows.length > rowCeiling,
+    },
+  };
+}
+
+export type ProofSummary = Awaited<ReturnType<typeof computeProofSummary>>;
+const snapshotName = "summary";
+
 export const summary = query({
   args: {},
+  handler: async (ctx): Promise<ProofSummary> => {
+    const snapshot = await ctx.db.query("publicProofSnapshots").withIndex("by_name", q => q.eq("name", snapshotName)).unique();
+    // Only before the first scheduled refresh after a deploy; never per viewer afterwards.
+    return snapshot ? JSON.parse(snapshot.countsJson) as ProofSummary : await computeProofSummary(ctx);
+  },
+});
+
+// Rewrites the row only when a number changed, so an idle six hours invalidates no open page.
+export const refreshSummary = internalMutation({
+  args: {},
   handler: async (ctx) => {
-    const [reviewRows, findingRows, ledgerRows, feedbackRows] = await Promise.all([
-      ctx.db.query("reviews").order("desc").take(rowCeiling + 1),
-      ctx.db.query("findings").order("desc").take(rowCeiling + 1),
-      ctx.db.query("usageLedger").withIndex("by_time").order("desc").take(rowCeiling + 1),
-      // The second half of the north star. "Findings raised" says BuildIT spoke; it says nothing
-      // about whether anyone listened, and a reviewer nobody reads is worth reporting as such.
-      ctx.db.query("findingFeedback").order("desc").take(rowCeiling + 1),
-    ]);
-
-    const reviews = reviewRows.slice(0, rowCeiling), findings = findingRows.slice(0, rowCeiling), ledger = ledgerRows.slice(0, rowCeiling);
-    const feedback = feedbackRows.slice(0, rowCeiling);
-    // Counted per finding, not per row: two people dismissing the same finding is one judgement
-    // about one finding, and counting both would report more feedback than there were findings.
-    const judged = new Set(feedback.map(row => row.fingerprintHmac));
-    const acceptedFingerprints = new Set(feedback.filter(row => row.verdict === "accepted").map(row => row.fingerprintHmac));
-    const decisive = decisiveStatuses;
-    const distinctCompletedPullRequests = new Set(reviews.filter(review => review.completedAt !== undefined && decisive.has(review.status)).map(review => `${review.repositoryId}:${review.prNumber}`)).size;
-
-    // Present statuses only. Zero-filling the whole enum would put eighteen rows on the page,
-    // most of them stating that something never happened.
-    const byStatus: Record<string, number> = {};
-    for (const review of reviews) byStatus[review.status] = (byStatus[review.status] ?? 0) + 1;
-
-    // The id is used to size a set and is then discarded; it is never returned.
-    const repositoriesReviewed = new Set(reviews.map(review => String(review.repositoryId))).size;
-
-    // No duration statistic. It was on this page and it was wrong: verdict-reaching reviews showed
-    // a median of 0.1s while platform failures showed 87s, because a review row's createdAt and
-    // startedAt are both re-stamped per execution generation, so neither pair measures the wait a
-    // person experienced. A latency number nobody can defend does not belong on a page whose whole
-    // claim is that the numbers are checkable - so it is absent, and the absence is deliberate.
-
-    // kind "model_tokens" is the only priced kind; sandbox_seconds is recorded at unitCost 0. The
-    // ledger's currency label is "provider_billed" because the spend lands on the customer's own
-    // provider key, not on BuildIT - so this is what BuildIT's reviews have cost to run, and the
-    // page has to say that rather than implying revenue.
-    const modelRows = ledger.filter(row => row.kind === "model_tokens");
-    const modelSpendUsd = modelRows.reduce((sum, row) => sum + rowCostUsd(row), 0);
-    const modelTokens = modelRows.reduce((sum, row) => sum + row.quantity, 0);
-
-    return {
-      generatedAt: Date.now(),
-      rowCeiling,
-      reviews: {
-        counted: reviews.length,
-        truncated: reviewRows.length > rowCeiling,
-        distinctCompletedPullRequests,
-        byStatus,
-        repositoriesReviewed,
-      },
-      findings: {
-        counted: findings.length,
-        truncated: findingRows.length > rowCeiling,
-        judged: judged.size,
-        accepted: acceptedFingerprints.size,
-        feedbackTruncated: feedbackRows.length > rowCeiling,
-      },
-      spend: {
-        costPending: modelRows.some(row => row.costStatus === "unknown"),
-        modelSpendUsd,
-        modelTokens,
-        counted: ledger.length,
-        truncated: ledgerRows.length > rowCeiling,
-      },
-    };
+    const next = await computeProofSummary(ctx);
+    const existing = await ctx.db.query("publicProofSnapshots").withIndex("by_name", q => q.eq("name", snapshotName)).unique();
+    // Key order is not part of the answer: a stored row and a fresh computation can list the same
+    // numbers in different orders, and that must not count as a change.
+    const canonical = (value: unknown): unknown => value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)]))
+      : value;
+    const comparable = (value: ProofSummary) => JSON.stringify(canonical({ ...value, generatedAt: 0 }));
+    if (existing && comparable(JSON.parse(existing.countsJson) as ProofSummary) === comparable(next)) return { changed: false };
+    const countsJson = JSON.stringify(next);
+    if (existing) await ctx.db.patch(existing._id, { countsJson, generatedAt: next.generatedAt });
+    else await ctx.db.insert("publicProofSnapshots", { name: snapshotName, countsJson, generatedAt: next.generatedAt });
+    return { changed: true };
   },
 });
 

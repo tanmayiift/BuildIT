@@ -499,6 +499,15 @@ export default defineSchema({
     .index("by_review_name", ["reviewId", "name"])
     .index("by_org_event_key", ["organizationId", "eventKey"]),
 
+  // The public /proof summary, computed on a schedule (publicProof.refreshSummary) and read from this
+  // one row. Aggregate counts only, as publicProof.ts documents; never customer data.
+  publicProofSnapshots: defineTable({
+    name: v.literal("summary"), countsJson: v.string(), generatedAt: v.number(),
+  }).index("by_name", ["name"]),
+
+  // No longer written (7 Oct 2026). Every review inserted a lock here that nothing in production read -
+  // one active review per scope is enforced by materializeReview against reviews.by_repo_pr_head_mode -
+  // so the table only grew. Kept until the retention sweep has emptied it, then dropped.
   reviewLocks: defineTable({
     repositoryId: v.id("repositories"), prNumber: v.number(), headSha: v.string(),
     mode: value.reviewMode, reviewId: v.id("reviews"), createdAt: v.number(),

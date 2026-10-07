@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { query, type QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { requireOrganizationRole } from "./lib/authz";
 import { concludedStatuses, isAbandoned, isConcluded, isDecisive } from "./lib/reviewOutcome";
 import { isStored } from "./lib/artifactState";
@@ -27,34 +28,55 @@ export function summarizeActivation(times: StageTimes, outcomes: string[]) {
   return { times, chronologyValid, durationMs: { identityToRepository: duration(times.identityAt, times.repositoryAt), repositoryToPreview: duration(times.repositoryAt, times.previewAt), previewToReview: duration(times.previewAt, times.reviewAt), reviewToFirstEvidence: duration(times.reviewAt, times.evidenceAt), identityToFirstEvidence: duration(times.identityAt, times.evidenceAt), firstEvidenceToHumanDecision: duration(times.evidenceAt, times.humanDecisionAt) }, outcomes: { started: outcomes.length, completed, concluded, decisive, failed, active: Math.max(0, outcomes.length - concluded - failed) } };
 }
 
+// What the review queue shows: five steps to first evidence, nothing else. The page used to call the
+// funnel below, which also reads the workspace's last thousand reviews for outcome totals the page
+// never displays - and as a live subscription it re-ran on every write to any of them: 434 MB of the
+// deployment's 1 GB monthly read allowance in six days of October 2026.
+async function activationSteps(ctx: QueryCtx, organizationId: Id<"organizations">, earliestEvidence: boolean) {
+  const access = await requireOrganizationRole(ctx, organizationId, "viewer");
+  const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", organizationId).eq("userId", access.userId)).unique();
+  if (!membership || membership.status !== "active") throw new Error("not_found_or_forbidden");
+  // Existence checks use indexes before limiting. Unrelated audit events and model attempts
+  // cannot hide the first preview or a published report.
+  const [repository, credential, firstReview, preview, reportRows] = await Promise.all([
+    ctx.db.query("repositories").withIndex("by_org_enabled", q => q.eq("organizationId", organizationId).eq("enabled", true)).first(),
+    ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", organizationId).eq("status", "valid")).first(),
+    ctx.db.query("reviews").withIndex("by_org_created", q => q.eq("organizationId", organizationId)).first(),
+    ctx.db.query("auditEvents").withIndex("by_org_action_result_created", q => q.eq("organizationId", organizationId).eq("action", "review.previewed").eq("result", "allowed")).first(),
+    ctx.db.query("reviewEvents").withIndex("by_org_public_message", q => q.eq("organizationId", organizationId).gt("publicMessageArtifactId", undefined)).take(101),
+  ]);
+  const previewAt = preview?.createdAt;
+  const reviewAfterPreview = previewAt === undefined ? firstReview : await ctx.db.query("reviews").withIndex("by_org_created", q => q.eq("organizationId", organizationId).gte("createdAt", previewAt)).first();
+  const reviewAt = reviewAfterPreview?.createdAt;
+  const evidenceFloor = reviewAt ?? previewAt ?? membership.createdAt;
+  const evidenceTimes: number[] = [];
+  for (const event of reportRows.slice(0, 100)) {
+    const review = await ctx.db.get(event.reviewId);
+    const artifact = event.publicMessageArtifactId ? await ctx.db.get(event.publicMessageArtifactId) : null;
+    if (review?.organizationId === organizationId && completedEvidenceStatuses.has(review.status) && event.createdAt >= evidenceFloor && artifact?.organizationId === organizationId && artifact.reviewId === review._id && isStored(artifact) && !artifact.deletedAt && artifact.expiresAt > Date.now()) {
+      evidenceTimes.push(event.createdAt);
+      // Whether any evidence exists needs one; when it first appeared needs them all.
+      if (!earliestEvidence) break;
+    }
+  }
+  const evidencePartial = reportRows.length > 100;
+  const steps = { repositoryConnected: Boolean(repository), modelKeyReady: Boolean(credential),
+    pullRequestPreviewed: Boolean(preview), reviewStarted: Boolean(firstReview),
+    firstEvidenceReady: evidenceTimes.length > 0 ? true : evidencePartial ? null : false };
+  return { steps, membership, repository, credential, previewAt, reviewAt, evidenceTimes, evidencePartial };
+}
+
+export const path = query({
+  args: { organizationId: v.id("organizations") },
+  handler: async (ctx, args) => (await activationSteps(ctx, args.organizationId, false)).steps,
+});
+
 export const funnel = query({
   args: { organizationId: v.id("organizations") },
   handler: async (ctx, args) => {
-    const access = await requireOrganizationRole(ctx, args.organizationId, "viewer");
-    const membership = await ctx.db.query("memberships").withIndex("by_org_user", q => q.eq("organizationId", args.organizationId).eq("userId", access.userId)).unique();
-    if (!membership || membership.status !== "active") throw new Error("not_found_or_forbidden");
-    // Existence checks use indexes before limiting. Unrelated audit events and model attempts
-    // cannot hide the first preview or a published report. Outcome totals remain bounded and say so.
-    const [repository, credential, firstReview, preview, reviewRows, reportRows] = await Promise.all([
-      ctx.db.query("repositories").withIndex("by_org_enabled", q => q.eq("organizationId", args.organizationId).eq("enabled", true)).first(),
-      ctx.db.query("providerCredentials").withIndex("by_org_status", q => q.eq("organizationId", args.organizationId).eq("status", "valid")).first(),
-      ctx.db.query("reviews").withIndex("by_org_created", q => q.eq("organizationId", args.organizationId)).first(),
-      ctx.db.query("auditEvents").withIndex("by_org_action_result_created", q => q.eq("organizationId", args.organizationId).eq("action", "review.previewed").eq("result", "allowed")).first(),
-      ctx.db.query("reviews").withIndex("by_org_created", q => q.eq("organizationId", args.organizationId)).order("desc").take(rowCeiling + 1),
-      ctx.db.query("reviewEvents").withIndex("by_org_public_message", q => q.eq("organizationId", args.organizationId).gt("publicMessageArtifactId", undefined)).take(101),
-    ]);
-    const previewAt = preview?.createdAt;
-    const reviewAfterPreview = previewAt === undefined ? firstReview : await ctx.db.query("reviews").withIndex("by_org_created", q => q.eq("organizationId", args.organizationId).gte("createdAt", previewAt)).first();
-    const reviewAt = reviewAfterPreview?.createdAt;
-    const evidenceFloor = reviewAt ?? previewAt ?? membership.createdAt;
-    const evidenceTimes: number[] = [];
-    for (const event of reportRows.slice(0, 100)) {
-      const review = await ctx.db.get(event.reviewId);
-      const artifact = event.publicMessageArtifactId ? await ctx.db.get(event.publicMessageArtifactId) : null;
-      if (review?.organizationId === args.organizationId && completedEvidenceStatuses.has(review.status) && event.createdAt >= evidenceFloor && artifact?.organizationId === args.organizationId && artifact.reviewId === review._id && isStored(artifact) && !artifact.deletedAt && artifact.expiresAt > Date.now()) evidenceTimes.push(event.createdAt);
-    }
-    const evidencePartial = reportRows.length > 100;
-    const evidenceAt = !evidencePartial && evidenceTimes.length ? Math.min(...evidenceTimes) : undefined;
+    const state = await activationSteps(ctx, args.organizationId, true);
+    const reviewRows = await ctx.db.query("reviews").withIndex("by_org_created", q => q.eq("organizationId", args.organizationId)).order("desc").take(rowCeiling + 1);
+    const evidenceAt = !state.evidencePartial && state.evidenceTimes.length ? Math.min(...state.evidenceTimes) : undefined;
     // The funnel used to end at "evidence rendered", which answers whether BuildIT produced
     // something and not whether it mattered to anyone. humanDecisionAt was declared in StageTimes
     // from the start and never populated, so firstEvidenceToHumanDecision was permanently
@@ -66,12 +88,11 @@ export const funnel = query({
     const decision = evidenceAt === undefined ? null : await ctx.db.query("findingFeedback")
       .withIndex("by_org_time", q => q.eq("organizationId", args.organizationId).gte("occurredAt", evidenceAt))
       .first();
-    const times = { identityAt: membership.createdAt, repositoryAt: repository?.createdAt, modelKeyAt: credential?.lastValidatedAt ?? credential?.createdAt,
-      previewAt, reviewAt, evidenceAt, humanDecisionAt: decision?.occurredAt };
-    return { repositoryConnected: Boolean(repository), modelKeyReady: Boolean(credential),
-      pullRequestPreviewed: Boolean(preview), reviewStarted: Boolean(firstReview),
-      firstEvidenceReady: evidenceTimes.length > 0 ? true : evidencePartial ? null : false,
-      partial: { outcomes: reviewRows.length > rowCeiling, evidence: evidencePartial },
+    const times = { identityAt: state.membership.createdAt, repositoryAt: state.repository?.createdAt, modelKeyAt: state.credential?.lastValidatedAt ?? state.credential?.createdAt,
+      previewAt: state.previewAt, reviewAt: state.reviewAt, evidenceAt, humanDecisionAt: decision?.occurredAt };
+    return { ...state.steps,
+      partial: { outcomes: reviewRows.length > rowCeiling, evidence: state.evidencePartial },
       ...summarizeActivation(times, reviewRows.slice(0, rowCeiling).map(item => item.status)) };
   },
 });
+

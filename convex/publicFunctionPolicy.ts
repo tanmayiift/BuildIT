@@ -12,6 +12,7 @@ export type ResponseClassification = "none" | "metadata" | "personal_identity" |
 
 export const publicFunctionPolicies = {
   "activation:funnel": { authorization: "active_organization_viewer", response: "metadata" },
+  "activation:path": { authorization: "active_organization_viewer", response: "metadata" },
   "audit:list": { authorization: "active_organization_viewer", response: "metadata" },
   "audit:verifyChain": { authorization: "active_organization_viewer", response: "metadata" },
   "evalLoop:listPendingCandidates": { authorization: "active_organization_admin", response: "metadata" },

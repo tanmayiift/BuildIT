@@ -154,7 +154,7 @@ test("a stranger with no account can read a real review, understand every setup 
   await page.getByRole("link", { name: "Live numbers" }).click();
   await page.waitForURL(/\/proof$/);
   await expect(page.getByRole("heading", { name: /BuildIT.s own operating numbers/, level: 1 })).toBeVisible();
-  await expect(page.getByText("Live production data · no account, no key", { exact: true })).toBeVisible();
+  await expect(page.getByText("Production data · no account, no key", { exact: true })).toBeVisible();
 
   // Live data over an open subscription, so the figures are whatever production says right now.
   // What is pinned is that real ones arrived and are legible as numbers.

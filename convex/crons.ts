@@ -13,4 +13,6 @@ crons.interval("purge deleted workspace connection metadata",{hours:1},internal.
 // Keeps the visibility confirmation behind the public evidence list inside publicProof's freshness
 // window. Four times the window's length apart, so a single missed run never ages a row out.
 crons.interval("confirm visibility of published evidence repositories",{hours:6},internal.githubInstallations.refreshEvidenceVisibility,{});
+crons.interval("summarise the public proof page",{hours:6},internal.publicProof.refreshSummary,{});
+crons.interval("delete spent sign-in tokens and rows nothing reads",{hours:24},internal.retention.sweep,{});
 export default crons;
