@@ -15,4 +15,6 @@ crons.interval("purge deleted workspace connection metadata",{hours:1},internal.
 crons.interval("confirm visibility of published evidence repositories",{hours:6},internal.githubInstallations.refreshEvidenceVisibility,{});
 crons.interval("summarise the public proof page",{hours:6},internal.publicProof.refreshSummary,{});
 crons.interval("delete spent sign-in tokens and rows nothing reads",{hours:24},internal.retention.sweep,{});
+// Review history older than 30 days, and everything it owns (retention.ts).
+crons.interval("delete review history older than 30 days",{hours:24},internal.retention.expireReviews,{});
 export default crons;
