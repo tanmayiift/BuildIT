@@ -4,56 +4,63 @@ import { promptVariantFor } from "../../convex/reviewAnalysisWorker.js";
 import { blockingSeverities } from "../../packages/contracts/src/severityPolicy.js";
 import { detectionCases } from "../../packages/evaluations/src/detectionCases.js";
 import { historicalCases } from "../../packages/evaluations/src/historicalCases.js";
-import { candidatePromptVersions, candidateStagePolicies } from "../../packages/orchestrator/src/candidatePrompts.js";
+import { candidatePromptVersions, candidateStagePolicies, judgingPromptVersions, judgingStagePolicies } from "../../packages/orchestrator/src/candidatePrompts.js";
 import { runModelReviewChain, stageSchemas } from "../../packages/orchestrator/src/modelChain.js";
 import { detectInjectionSignals, fixedSystemPolicy, stageSystemPrompt, type PromptStage } from "../../packages/orchestrator/src/promptChain.js";
 
-// The candidate prompts (findings-v7, critic-v4, arbitration-v4) run only where they are allowed to,
-// say only what the code enforces, and cannot have been tuned to the benchmark that judges them.
+// The prompts that judge code (findings-v7, critic-v4, arbitration-v4 since 7 Oct 2026), and any
+// candidate that may one day replace them, say only what the code enforces and cannot have been
+// tuned to the benchmark that judges them. A candidate runs only where it is allowed to.
 const judged = ["findings", "critic", "arbitration"] as const satisfies readonly PromptStage[];
+const variants = ["current", "candidate"] as const;
 const sha = (value: string) => createHash("sha256").update(value).digest("hex");
 
-describe("the candidate prompts", () => {
-  it("leave the current prompts byte for byte, so no repository outside the allowlist changes", () => {
+describe("the review prompts", () => {
+  it("are pinned byte for byte, so a change to what every repository is sent is deliberate", () => {
     expect(Object.fromEntries(judged.map(stage => [stage, sha(stageSystemPrompt(stage, "current"))]))).toEqual({
-      findings: "d0175b2a032ec86eb7b55a46322237a45c5665a074e8288b311705e506f441cc",
-      critic: "972917720964ef2ff611653982fbe723a60e3d3ebeabe03359cbaa1f02687a61",
-      arbitration: "7020c5faa5360affc898b97935ca9030fb2ae88cb5e6f31ddca942b5b490525d",
+      findings: "06862d5e0b97f7bab2a22134c4862129555d15ef099f2697009d9dd69a72b78f",
+      critic: "8574c9aa224d5ff6f72941c68d37135d64e01f9ed603599683da294e596a04a3",
+      arbitration: "55902ac2f9f40f9d5855ff6900c470e224198eb575251d8e84d43a81a75cee7a",
     });
   });
 
+  it("send the allowlisted repositories the current wording while no candidate is under evaluation", () => {
+    expect(candidateStagePolicies).toEqual({});
+    for (const stage of judged) expect(stageSystemPrompt(stage, "candidate")).toBe(stageSystemPrompt(stage, "current"));
+  });
+
   it("open with the untrusted-data policy, unchanged, in every stage", () => {
-    for (const stage of judged) expect(stageSystemPrompt(stage, "candidate").startsWith(`${fixedSystemPolicy}\n\nStage task: `)).toBe(true);
+    for (const variant of variants) for (const stage of judged) expect(stageSystemPrompt(stage, variant).startsWith(`${fixedSystemPolicy}\n\nStage task: `)).toBe(true);
   });
 
   it("carry no text the injection detector would flag, and no BuildIT delimiter", () => {
-    expect(detectInjectionSignals(candidateStagePolicies)).toEqual([]);
-    for (const stage of judged) expect(stageSystemPrompt(stage, "candidate")).not.toMatch(/<\/?buildit:/i);
+    expect(detectInjectionSignals({ ...judgingStagePolicies, ...candidateStagePolicies })).toEqual([]);
+    for (const variant of variants) for (const stage of judged) expect(stageSystemPrompt(stage, variant)).not.toMatch(/<\/?buildit:/i);
   });
 
   it("are long enough that the findings instructions are read from the provider's cache", () => {
     // OpenAI caches an identical prefix of at least 1,024 tokens; about four characters a token.
-    expect(stageSystemPrompt("findings", "candidate").length).toBeGreaterThanOrEqual(5_000);
+    for (const variant of variants) expect(stageSystemPrompt("findings", variant).length).toBeGreaterThanOrEqual(5_000);
   });
 
   it("define every severity the schema allows, and say which ones block", () => {
-    const findings = candidateStagePolicies.findings!;
+    const findings = judgingStagePolicies.findings;
     const severities = (stageSchemas.findings.properties as { findings: { items: { properties: { severity: { enum: string[] } } } } }).findings.items.properties.severity.enum;
     for (const severity of severities) expect(findings).toContain(`- ${severity}:`);
     expect(findings).toContain(`Only ${blockingSeverities.join(" and ")} block a merge`);
   });
 
   it("state the evidence rule the validator enforces, and the fields the critic must fill", () => {
-    expect(candidateStagePolicies.findings).toContain("whose path is exactly the finding's path and whose startLine to endLine contains the finding's startLine to endLine");
-    expect(candidateStagePolicies.critic).toContain("missingEvidenceIds");
-    expect(candidateStagePolicies.critic).toContain("injectionDetected");
-    expect(candidateStagePolicies.arbitration).toContain("evidenceIds must repeat every evidenceId the finding cites");
+    expect(judgingStagePolicies.findings).toContain("whose path is exactly the finding's path and whose startLine to endLine contains the finding's startLine to endLine");
+    expect(judgingStagePolicies.critic).toContain("missingEvidenceIds");
+    expect(judgingStagePolicies.critic).toContain("injectionDetected");
+    expect(judgingStagePolicies.arbitration).toContain("evidenceIds must repeat every evidenceId the finding cites");
   });
 
   it("share no path, repository or distinctive phrase with either evaluation set", () => {
     // Single dictionary words ("verify", "cache") are vocabulary any rubric uses. Anything with a
     // digit, a separator or mixed case is specific enough that its presence would teach the answer.
-    const prompts = Object.values(candidateStagePolicies).join("\n").toLowerCase();
+    const prompts = [...Object.values(judgingStagePolicies), ...Object.values(candidateStagePolicies)].join("\n").toLowerCase();
     const cases = [...detectionCases, ...historicalCases];
     const specific = cases.flatMap(item => [
       item.id,
@@ -83,8 +90,8 @@ describe("choosing the prompts for a repository", () => {
     const records = await runModelReviewChain({ invoke, pinned, untrusted: {}, variant: "candidate" });
     const systems = Object.fromEntries(invoke.mock.calls.map(([request]) => [request.stage, (request as unknown as { system: string }).system]));
     for (const stage of judged) expect(systems[stage]).toBe(stageSystemPrompt(stage, "candidate"));
-    expect(Object.fromEntries(records.filter(record => (judged as readonly string[]).includes(record.stage)).map(record => [record.stage, record.promptVersion]))).toEqual(candidatePromptVersions);
+    expect(Object.fromEntries(records.filter(record => (judged as readonly string[]).includes(record.stage)).map(record => [record.stage, record.promptVersion]))).toEqual({ ...judgingPromptVersions, ...candidatePromptVersions });
     const current = await runModelReviewChain({ invoke, pinned, untrusted: {} });
-    expect(current.find(record => record.stage === "findings")?.promptVersion).toBe("findings-v6");
+    expect(Object.fromEntries(current.filter(record => (judged as readonly string[]).includes(record.stage)).map(record => [record.stage, record.promptVersion]))).toEqual({ findings: "findings-v7", critic: "critic-v4", arbitration: "arbitration-v4" });
   });
 });
