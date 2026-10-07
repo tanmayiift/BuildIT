@@ -16,7 +16,7 @@ Grades:
 | Product | **B** | Review, inline comments and autofix are proven live: fix PR `buildit-public-fixture#25`. Sandbox capacity moved from Hobby's ~80 reviews a month to a 50-hour Pro spend guard. Convex reads were cut at the source, but the plan decision is open. |
 | Core customer | **B−** | A solo developer's path works and its cost is measured. The monthly cap that ruled out teams is lifted. Bursts are now bounded by GitHub's per-installation API budget: about 30 reviews an hour. |
 | QA | **B** | The new tests drive code. Three live defects in two days each had a test that encoded the consumer's expectation instead of the producer's output. The release pipeline no longer fails or cancels in public. |
-| CTO / LLM | **C+** | A severity rule, prompt v7 and a benchmark runner exist. None of it is measured: R0 and R1 have not run. |
+| CTO / LLM | **B−** | Measured now. Prompt v7 detects 5 of 10 historical defects against v6's 4, with no regression and no false block. It is the default. Reading R1 found three defects no test covered: a confirmed blocker that did not block, a history clock, and six mispriced models. All are fixed and released. 5 of 10 is still the ceiling to raise. |
 
 ## UI/UX: B
 
@@ -87,15 +87,31 @@ Grades:
 
 All three are fixed with production-shaped fixtures. The rule now in memory is to take a fixture from the writer, never from the reader.
 
-## CTO / LLM: C+
+## CTO / LLM: B−
 
-**Done**
+**Done, with evidence**
 - **One severity rule** (`blockingSeverities`), shared by arbitration, the report and the evaluation labels.
-- **Prompt v7 (#128).** It adds a rubric, the validator's evidence rule, confidence anchors, three synthetic examples and a 1,200-token instruction prefix that OpenAI can cache. It runs behind a repository allowlist; the current prompts are pinned unchanged.
-- **Anti-overfitting.** No case path, repository or distinctive phrase from either evaluation set appears in the prompts, and a test pins that.
 - **The benchmark runner (#126, `pnpm eval:production`).** It pins every case to its commits, parses what BuildIT published, cross-checks it against what was stored, and scores by majority of runs. It never counts a platform failure as a miss.
-- **Label fixes.** The historical labels were corrected. zod's label named a file the defect was never in, and four "upstream" SHAs did not exist.
+- **R0 against R1** (live proofs §8 and §11). The same 11 pinned pull requests, 3 runs each, on production:
+
+  | | R0, findings-v6 | R1, findings-v7 |
+  |---|---|---|
+  | Defects detected | 4 of 10 | **5 of 10** |
+  | Regressions / false blocks | — | **0 / 0** |
+  | Valid runs | 31 of 36 | 33 of 33 |
+  | Schema-invalid stage outputs | 0 of 89 | 0 of 89 |
+  | Input tokens from OpenAI's cache | 54.2% | 56.4% |
+  | Model cost per review, at corrected prices | $0.060 | $0.073 |
+
+  v7 became the default for every repository (#142) and the allowlist was removed.
+- **Anti-overfitting.** No case path, repository or distinctive phrase from either evaluation set appears in the prompts, and a test pins that against the prompts every repository now receives.
+- **Defects found by reading R1, all fixed and released:**
+  - **A confirmed High did not block a merge (#144).** Any check that could not run outranked it, so a repository without a lockfile got a neutral check.
+  - **Six approved models were charged at the generic $15/$75 (#146).** These were gpt-5, which is the escalation critic, plus the Sonnet, Opus and Gemini 2.5 models. A $0.027 call was recorded as $0.22. Prices are now checked on each provider's page, and a test requires every approved model to have one.
+  - **The review history showed the workflow's replay clock (#145).**
+- **Where the money goes.** Cost by stage in R1: findings 63%, critic 26%, arbitration 6%, requirements 6%. Arbitration takes a median 2.9 s.
 
 **Still not done**
-- **R0 and R1 have not run.** Neither the 11 × 3 baseline nor the candidate comparison exists, because the 66 reviews need about 4.2 sandbox CPU-hours and Hobby has about 2 left this month.
-- **So nothing yet says v7 is better, or even no worse.** A cached-token hit is also unproven. v7 stays opt-in until those runs exist.
+- **5 of 10.** body-parser, requests, itsdangerous, axios and got are missed by both prompts. itsdangerous is found at High in every run, but its label requires Critical. Raising detection is the next prompt candidate's job, measured the same way.
+- **Retiring arbitration is still data-gated.** The reason a finding ended uncertain is now stored (#143). The next benchmark is the first that can show whether arbitration's 6% buys anything.
+- **v7 costs about 1.3 cents more a review** than v6, for longer instructions.

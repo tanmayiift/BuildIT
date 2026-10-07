@@ -156,8 +156,67 @@ The demo pull requests' own CI stays on.
 
 **Cancelled runs on main.** GitHub cancels older *waiting* runs in a concurrency group even with `cancel-in-progress: false`, so five quick merges cancelled three CI runs on main. #139 gives each push to main its own CI group and serialises only the deploy job.
 
+## 11. R1: prompt v7 against v6 (#128, #142)
+
+**What ran.** `pnpm eval:production post --label R1`: the same 11 pinned pull requests × 3 runs as R0. findings-v7, critic-v4 and arbitration-v4 were enabled for the ten demo repositories by allowlist (`historical-v2-R1-runs-2026-10-07.json`). **All 33 runs were valid.** The one-repository-at-a-time runner and #136's wait meant GitHub refused nothing.
+
+**Scored** (`…-R1-critical-high-2026-10-07.json`, then `pnpm eval:compare` against R0):
+
+| | R0 (v6) | R1 (v7) |
+|---|---|---|
+| Defects detected | 4 of 10 | **5 of 10** |
+| Improved / regressed | — | **1 / 0** |
+| Clean control | passed 3/3 | passed 3/3 |
+| Schema-invalid stage outputs | 0 of 89 | 0 of 89 |
+| Cached input tokens | 508,800 of 938,337 (54.2%) | 573,952 of 1,017,438 (56.4%) |
+| Cost per review, recorded | $0.067 | $0.086 |
+| Cost per review, at corrected prices (#146) | $0.060 | $0.073 |
+
+- **Improved:** p-queue, from 1 run of 3 to 2 of 3.
+- **Unchanged:** gson, express, zod and date-fns stay detected; body-parser, requests, itsdangerous, axios and got stay missed.
+- **The cost gap is mostly a pricing bug.** $0.44 of R1's recorded $2.85 was two gpt-5 escalation calls charged at the generic $15/$75 ceiling (see §12).
+
+**Decision.** No regression and no false block, so v7 became the default (#142), released at `cae1235`. `BUILDIT_PROMPT_CANDIDATE_REPOSITORIES` was removed from production.
+
+## 12. Found by reading R1, fixed and released
+
+Released at `cae1235` and `ba75b74`:
+- **A confirmed blocker that did not block (#144).** R1's p-queue review `nx7d1v6y82f4e69m15wtbpn1zx8fvxyc` confirmed a High finding.
+  - **What it published:** "1 blocking issue" under the heading "Review needs attention", with the next step "Commit a lockfile". The check was `neutral`.
+  - **Cause:** any check that couldn't run outranked a confirmed problem.
+  - **Now:** a confirmed blocker or a failed required check requests changes, and the report names what did not run.
+- **The history clock (#145).** The same review's page listed every stage between 09:57:07 and 09:57:09. The database recorded 09:57:21, 09:57:42, 09:58:08 and 09:58:13; the page was showing the workflow's deterministic replay clock. The page also said "Coverage: Full" and "Coverage: Partial" for two different things.
+- **Six mispriced models (#146).** gpt-5, Claude Sonnet 4.5 and 4.6, Opus 4.6, and Gemini 2.5 Pro and Flash had no pinned price and were charged at $15/$75. One gpt-5 second opinion was recorded as $0.2235; OpenAI's price for it is about $0.027.
+- **From the scorecard's open list:**
+  - a failed `@buildit` command now explains itself on the pull request (#140);
+  - a commit is read as one archive, not one request per file (#141);
+  - each finding stores why it ended accepted or uncertain (#143).
+
+## 13. Staying inside the free limits (owner's decisions, 7 Oct)
+
+**The owner's decisions:** keep review history for 30 days, and stay on Vercel Pro.
+
+**Convex, as of 7 Oct about 07:15 UTC**
+
+| Resource | Used | Free plan |
+|---|---|---|
+| Database I/O | 1.82 GB | 1 GB |
+| Data egress | 416 MB | 1 GB |
+| Database storage | 55.7 MB | 512 MB |
+| Function calls | 78K | 1M |
+| Action compute | 5.8 GB-h | 20 GB-h |
+
+- **Reads by function, month to date.** The three queries #138 fixed are flat since it (`publicProof.summary` 881 MB, `activation.funnel` 434 MB, `reviews.list` 272 MB). What remains is small: `reviews.runHistory` 46 MB, the workflow pool's loops about 43 MB, and the benchmark's own polling 21 MB.
+- **Egress by function.** 294 of the 416 MB was `reviewContextWorker.gather` uploading each review's source as plain JSON, roughly 3–4 MB a review. #148 gzips it: a 3.20 MB chunk of zod's source becomes 0.66 MB (0.207).
+- **Retention (#147).** A finished review older than 30 days is deleted with everything it owns, including its workflow journal. Monthly billing totals, the audit log and learned suppressions stay.
+- **October cannot be undone.** Its reads were counted before the fix, and deleting rows costs I/O rather than refunding it.
+
+**Vercel (Pro).** This cycle used $1.79 of the $20 included credit, with 28 days left. Sandbox memory was $0.88 and sandbox CPU $0.40 of that.
+
 ## Not yet proven live
 
 | Claim | What is waiting |
 |---|---|
-| Prompt v7 does no worse than v6 on the historical set | R1 running (v7 enabled for the 10 demo repositories on 7 Oct); compared with R0 by `pnpm eval:compare` when it completes |
+| #140, #141, #143–#146 behave as tested, on a live review | A review on p-queue#2 after the `cae1235` release. GitHub refused every write from this account from 15:07 UTC on 7 Oct (HTTP 500 on pushes, merges and comments, in every repository), so the confirming `@buildit review` could not be posted |
+| The 30-day retention's first run, with counts (#147) | Merging #147 (same outage) |
+| Context egress below 1 MB a review (#148) | Merging #148, then a day of reviews on the usage page |
