@@ -2,8 +2,8 @@
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { Component, Fragment, useCallback, useEffect, useState } from "react";
 import { makeFunctionReference } from "convex/server";
-import { comparisonRefusal, dismissalReasonLabel, notRunExplanation, preExistingFailurePresentation, dismissalReasons, dismissalRefusal, eventPresentation, evidenceRefusal, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, checkLabel, technicalLabel as label } from "./review-presentation";
-import type { DismissalReason, SuppressionScope } from "./review-presentation";
+import { comparisonRefusal, dismissalReasonLabel, notRunExplanation, preExistingFailurePresentation, dismissalReasons, dismissalRefusal, eventPresentation, evidenceRefusal, findingCategoryLabel, findingResolutionLabel, findingSeverityLabel, lineRange, nextActionPresentation, pairFindingDetails, suppressionScopeLabel, suppressionScopes, terminalReviewStatuses, pullRequestHref, stagePresentation, statusPresentation, summarizeChecks, checkLabel, evidenceChain, technicalLabel as label } from "./review-presentation";
+import type { ChainLink, DismissalReason, SuppressionScope } from "./review-presentation";
 import { StatePanel } from "../../state-panel";
 import { CheckOutput } from "../../evidence/check-output";
 import { CodeExcerpt, type ExcerptLine } from "../../evidence/code-excerpt";
@@ -362,6 +362,7 @@ function ReviewEvidence({ id }: { id: string }) {
           {cancelError ? <p role="alert">{cancelError}</p> : null}
         </div>
       </section>
+      {!stoppedBeforeEvidence && hasEvidence ? <EvidenceChain links={evidenceChain({ headSha: review.headSha, checks: checkSummaries, findings: evidence.findings, verdict })} /> : null}
       <section className={`commit-strip${stoppedBeforeEvidence ? " minimal" : ""}`} aria-label="Review scope">
         <Fact
           label="Repository"
@@ -408,6 +409,7 @@ function ReviewEvidence({ id }: { id: string }) {
         ) : null}
       </Section> : null}
       {evidence.findings.length ? <Section
+        id="findings"
         eyebrow="Decision support"
         title="Issues to fix"
         detail={`${evidence.findings.length} supported by evidence`}
@@ -425,6 +427,7 @@ function ReviewEvidence({ id }: { id: string }) {
         ))}
       </Section> : null}
       {evidence.checks.length ? <Section
+        id="checks"
         eyebrow="Verification"
         title="Checks run"
         detail={`${checkSummaries.filter((item) => item.required).length} required · ${evidence.checks.length} executions`}
@@ -615,13 +618,25 @@ function Fact({
     </span>
   );
 }
+// The verdict and what it rests on, in reading order. Links jump to the section that holds the detail.
+function EvidenceChain({ links }: { links: ChainLink[] }) {
+  return <ol className="evidence-chain" aria-label="How this verdict was reached">
+    {links.map(link => <li key={link.label} className={link.tone}>
+      <small>{link.label}</small>
+      {link.href ? <a href={link.href}>{link.value}</a> : <strong>{link.value}</strong>}
+    </li>)}
+  </ol>;
+}
+
 function Section({
+  id,
   eyebrow,
   title,
   detail,
   children,
   foot,
 }: {
+  id?: string;
   eyebrow: string;
   title: string;
   detail: string;
@@ -629,7 +644,7 @@ function Section({
   foot: string;
 }) {
   return (
-    <section className="evidence-section">
+    <section className="evidence-section" id={id}>
       <div className="evidence-heading">
         <div>
           <p className="eyebrow">{eyebrow}</p>

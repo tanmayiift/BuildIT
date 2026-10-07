@@ -357,3 +357,29 @@ export function preExistingFailurePresentation(status: string, checks: CheckSumm
     nextDetail: `The other required checks produced evidence for this exact commit; ${list} ${failing.length === 1 ? "was" : "were"} already failing before it. You own the merge decision.`,
   };
 }
+
+// The verdict and the evidence it rests on, as one line a reader takes in before any section: the
+// commit read, what the checks said, what the findings were, and the verdict they add up to. The
+// page used to state each of these in its own section, several screens apart.
+export type ChainLink = { label: string; value: string; tone: "neutral" | "success" | "danger" | "warning"; href?: string };
+
+export function evidenceChain(input: {
+  headSha: string;
+  checks: ReadonlyArray<Pick<CheckSummary, "conclusion">>;
+  findings: ReadonlyArray<{ blocking: boolean; resolution: string }>;
+  verdict: { label: string; tone: string };
+}): ChainLink[] {
+  const passed = input.checks.filter(check => check.conclusion === "passed").length;
+  const failed = input.checks.filter(check => check.conclusion === "failed" || check.conclusion === "timed_out").length;
+  const other = input.checks.length - passed - failed;
+  const shown = input.findings.filter(finding => finding.resolution !== "rejected");
+  const blocking = shown.filter(finding => finding.blocking).length, advisory = shown.length - blocking;
+  const counted = (parts: Array<[number, string]>, none: string) => parts.filter(([count]) => count > 0).map(([count, word]) => `${count} ${word}`).join(" · ") || none;
+  const verdictTone = (["success", "danger", "warning"] as const).find(tone => tone === input.verdict.tone) ?? "neutral";
+  return [
+    { label: "Commit", value: input.headSha.slice(0, 7), tone: "neutral" },
+    { label: "Checks", value: counted([[passed, "passed"], [failed, "failed"], [other, "not run"]], "none ran"), tone: failed ? "danger" : passed ? "success" : "neutral", ...(input.checks.length ? { href: "#checks" } : {}) },
+    { label: "Findings", value: counted([[blocking, "blocking"], [advisory, "advisory"]], "none"), tone: blocking ? "danger" : advisory ? "warning" : "success", ...(shown.length ? { href: "#findings" } : {}) },
+    { label: "Verdict", value: input.verdict.label, tone: verdictTone },
+  ];
+}
