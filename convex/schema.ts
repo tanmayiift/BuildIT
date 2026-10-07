@@ -457,6 +457,10 @@ export default defineSchema({
     baseSha: v.optional(v.string()), headRefHash: v.optional(v.string()), baseRefHash: v.optional(v.string()),
     isFork: v.optional(v.boolean()), triggerVerb: v.optional(value.triggerVerb),
     receivedAt: v.number(), completedAt: v.optional(v.number()), expiresAt: v.optional(v.number()),
+    // Why a delivery was rejected after processing began: the error code only, never its text. An
+    // "@buildit review" that threw - a GitHub 403 while reading the pull request - was recorded as
+    // "rejected" with no reason, and the person who commented saw nothing happen at all.
+    failureCode: v.optional(v.string()),
   }).index("by_delivery_id", ["deliveryId"])
     .index("by_status_received", ["status", "receivedAt"])
     .index("by_expiry", ["expiresAt"]),

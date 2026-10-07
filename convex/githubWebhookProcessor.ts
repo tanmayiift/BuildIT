@@ -1,4 +1,5 @@
 "use node";
+import { workflowErrorCode } from "./lib/autofixBounds";
 import { v } from "convex/values";
 import { internalAction, type ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -187,6 +188,14 @@ async function startReviewForPullRequest(ctx: ActionCtx, input: StartReviewInput
     });
 }
 
+
+// The code a failed command threw, for the delivery record and the log - never the message text,
+// which can carry repository content. A thrown "repository_access_refused:files=60;status=403" is
+// recorded as repository_access_refused; anything unrecognisable as "unexpected".
+export function commandFailureCode(error: unknown) {
+  const code = workflowErrorCode(error instanceof Error ? error.message : String(error));
+  return /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/.test(code) && code.length <= 64 ? code : "unexpected";
+}
 export const processWebhook = internalAction({
   args: {
     deliveryId: v.string(),
@@ -327,11 +336,14 @@ export const processWebhook = internalAction({
         ...(decision.provider ? { provider: decision.provider } : {}),
         ...(decision.budgetLimit ? { budgetLimit: decision.budgetLimit } : {}),
       });
-    } catch {
+    } catch (error) {
+      const failureCode = commandFailureCode(error);
+      console.info("buildit_command_failed", { failureCode });
       await ctx.runMutation(internal.githubWebhookData.complete, {
         deliveryId: args.deliveryId,
         disposition: "rejected",
         status: "failed",
+        failureCode,
         now: Date.now(),
       });
     }
@@ -422,11 +434,14 @@ export const processPullRequestWebhook = internalAction({
         now: Date.now(),
       });
       return result;
-    } catch {
+    } catch (error) {
+      const failureCode = commandFailureCode(error);
+      console.info("buildit_command_failed", { failureCode });
       await ctx.runMutation(internal.githubWebhookData.complete, {
         deliveryId: args.deliveryId,
         disposition: "rejected",
         status: "failed",
+        failureCode,
         now: Date.now(),
       });
     }
@@ -459,11 +474,14 @@ export const processPushWebhook = internalAction({
         status: "completed",
         now: Date.now(),
       });
-    } catch {
+    } catch (error) {
+      const failureCode = commandFailureCode(error);
+      console.info("buildit_command_failed", { failureCode });
       await ctx.runMutation(internal.githubWebhookData.complete, {
         deliveryId: args.deliveryId,
         disposition: "rejected",
         status: "failed",
+        failureCode,
         now: Date.now(),
       });
     }
