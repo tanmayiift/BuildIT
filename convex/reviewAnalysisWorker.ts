@@ -103,6 +103,17 @@ export function boundedValidationEvidence(value: ValidationArtifact, pinned: { h
   return { manager: value.manager, base, head, scanners: boundedScanners.value, scannersTruncated: boundedScanners.truncated };
 }
 
+// Why the model saw part of what was gathered, most specific first, for the stage's handoff record.
+// It used to record a reason only for a dropped changed file, so every other partial context read
+// "Partial" with nothing after it - on a page whose facts said "Coverage: Full".
+export function analysisContextGap(context: Pick<ReturnType<typeof boundedAnalysisContext>, "coverage" | "pull" | "exclusions">, droppedChangedFile: boolean) {
+  if (context.coverage === "full") return undefined;
+  if (droppedChangedFile) return "analysis_budget";
+  if (context.pull.requirementCoverage !== "complete") return "requirements";
+  if ((context.exclusions.totals.changedExcerpts ?? 0) > 0) return "changed_excerpts";
+  return "shortened";
+}
+
 export function boundedAnalysisContext(chunks: SnapshotChunk[], maxBytes = 80_000) {
   const headChunks = chunks.filter(chunk => chunk.revision !== "base"), pull = headChunks.find(chunk => chunk.pull)?.pull;
   if (!pull) throw new Error("pull_request_context_missing");
@@ -556,6 +567,7 @@ export const analyze = internalAction({
       || (untrusted.exclusions.totals?.changedFiles ?? 0) > 0
       || (untrusted.exclusions.totals?.repositoryFiles ?? 0) > 0
       || untrusted.exclusions.paths.some(path => changedPathSet.has(path));
+    const contextGap = analysisContextGap(untrusted, analysisDroppedChangedFile);
     // The handoff record for this stage: what it actually looked at, how completely, how long the
     // model work took, and which artifact carries the output. Written before the verdict mutation so
     // a failure in that mutation still leaves a trace of what the stage did.
@@ -564,7 +576,7 @@ export const analyze = internalAction({
       filesSelected: untrusted.files.length,
       filesChanged: changedPathSet.size,
       coverage: untrusted.coverage,
-      ...(analysisDroppedChangedFile ? { coverageGap: "analysis_budget" } : {}),
+      ...(contextGap ? { coverageGap: contextGap } : {}),
       artifactIds: [reserved.artifactId],
       durationMs: Math.max(0, Date.now() - analysisStartedAt),
       now: Date.now(),

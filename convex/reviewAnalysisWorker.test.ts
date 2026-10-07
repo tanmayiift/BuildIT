@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analysisSkipReason, mergeSecondOpinion, rearbitrateAfterEscalation, selectEscalationModel, boundedAnalysisContext, boundedValidationEvidence, introducedScannerFindings, redactModelOutput,requireIndependentCritic,selectCriticModel,selectFindingsModel } from "./reviewAnalysisWorker";
+import { analysisContextGap, analysisSkipReason, mergeSecondOpinion, rearbitrateAfterEscalation, selectEscalationModel, boundedAnalysisContext, boundedValidationEvidence, introducedScannerFindings, redactModelOutput,requireIndependentCritic,selectCriticModel,selectFindingsModel } from "./reviewAnalysisWorker";
 
 const pull = { title: "Fix transfer limit", body: "Must reject amounts above the daily limit", files: [{ path: "src/changed.ts", status: "modified", patch: "@@ guard" }], omitted: [], urlHash: "a".repeat(64) };
 describe("bounded model evidence selection", () => {
@@ -162,6 +162,18 @@ describe("what the model reads of the repository", () => {
     // Every changed line was shown, so nothing was dropped.
     expect(result.exclusions.totals.repositoryFiles).toBeUndefined();
     expect(result.exclusions.paths).toEqual([]);
+  });
+
+  it("says why the model saw part of what was gathered, so the review page can", () => {
+    const content = Array.from({ length: 3_000 }, (_, index) => `line ${index + 1}`).join("\n");
+    const patch = "@@ -100,3 +100,4 @@ one\n+x";
+    const excerpted = boundedAnalysisContext([{ pull: { ...complete, files: [{ path: "src/big.ts", status: "modified", patch }] }, snapshot: snapshot([{ path: "src/big.ts", content }]) }], 80_000);
+    expect(analysisContextGap(excerpted, false)).toBe("changed_excerpts");
+    const unreadRequirement = boundedAnalysisContext([{ pull: { ...pull, requirementCoverage: "partial" as const, files: [{ path: "src/a.ts", status: "modified", patch: "@@ -1 +1 @@" }] }, snapshot: snapshot([{ path: "src/a.ts", content: "export const a = 1;" }]) }], 80_000);
+    expect(analysisContextGap(unreadRequirement, false)).toBe("requirements");
+    expect(analysisContextGap(excerpted, true)).toBe("analysis_budget");
+    const whole = boundedAnalysisContext([{ pull: { ...complete, files: [{ path: "src/a.ts", status: "modified", patch: "@@ -1 +1 @@" }] }, snapshot: snapshot([{ path: "src/a.ts", content: "export const a = 1;" }]) }], 80_000);
+    expect(analysisContextGap(whole, false)).toBeUndefined();
   });
 
   it("sends an added file once: as the file when it has it, as the patch when it does not", () => {

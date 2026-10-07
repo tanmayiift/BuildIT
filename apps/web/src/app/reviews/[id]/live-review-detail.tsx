@@ -15,6 +15,8 @@ const coverageGapLabel: Record<string, string> = {
   changed_files: "a changed file could not be read",
   diff_truncated: "the diff was too large to read in full",
   requirements: "a linked requirement source could not be read",
+  changed_excerpts: "changed files reached it as the changed regions and their surroundings, not whole",
+  shortened: "some of it was left out or shortened to fit",
 };
 
 // Sub-second stages are common, and "0s" reads as a missing measurement rather than a fast one.
@@ -555,7 +557,11 @@ function ReviewEvidence({ id }: { id: string }) {
                     <><dt>Files read</dt><dd>{item.filesSelected.toLocaleString()}{item.filesChanged === undefined ? "" : ` of which ${item.filesChanged.toLocaleString()} changed`}</dd></>
                   )}
                   {item.coverage === undefined ? null : (
-                    <><dt>Coverage</dt><dd>{item.coverage === "full" ? "Complete" : `Partial${item.coverageGap ? ` — ${coverageGapLabel[item.coverageGap] ?? item.coverageGap}` : ""}`}</dd></>
+                    // Not "Coverage": the facts above use that word for whether the repository was read
+                    // in full, and the two disagreed on one page ("Full" there, "Partial" here). This is
+                    // whether everything this stage gathered reached the model whole, rather than as
+                    // excerpts or shortened to fit its context.
+                    <><dt>Model context</dt><dd>{item.coverage === "full" ? "Everything gathered, in full" : `Part of what was gathered${item.coverageGap ? ` — ${coverageGapLabel[item.coverageGap] ?? item.coverageGap}` : ""}`}</dd></>
                   )}
                   {item.plannedStages === undefined ? null : (
                     <><dt>Stages planned</dt><dd>{item.plannedStages.map(stagePresentation).join(" → ")}{item.findingsSpecialists && item.findingsSpecialists > 1 ? ` · ${item.findingsSpecialists} findings specialists` : ""}</dd></>

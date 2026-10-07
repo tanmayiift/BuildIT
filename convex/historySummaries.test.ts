@@ -174,6 +174,21 @@ describe("history boundaries and incomplete evidence", () => {
     expect(rows).toHaveLength(1); expect(rows[0]?.verdict).toBe("accepted");
     expect((await t.run(ctx => ctx.db.get(id)))?.resolution).toBe("open");
   });
+  // The durable workflow stamps events with its deterministic clock, startedAt plus the stage index,
+  // so the history showed every stage of a minute-long review finishing within two seconds of the
+  // start. The history now shows when the database recorded each event.
+  it("shows when each stage actually finished, not the workflow's replay clock", async () => {
+    const t = makeTest(), b = await seed(t);
+    await t.run(ctx => ctx.db.patch(b.reviewId, { status: "gathering_context", currentStage: "context", completedAt: undefined }));
+    const startedAt = b.now - 60_000;
+    await t.mutation(internal.durableReview.checkpoint, { organizationId: b.organizationId, reviewId: b.reviewId,
+      expectedHeadSha: b.review.headSha, expectedGeneration: b.review.executionGeneration, stage: "context", sequence: 2, now: startedAt + 1 });
+    const stored = await t.run(ctx => ctx.db.query("reviewEvents").withIndex("by_review", q => q.eq("reviewId", b.reviewId).eq("sequence", 2)).unique());
+    const shown = (await signed(t).query(api.reviews.getEvidence, { reviewId: b.reviewId })).events.find(event => event.sequence === 2);
+    expect(stored?.createdAt).toBe(startedAt + 1);
+    expect(shown?.createdAt).toBe(stored?._creationTime);
+    expect(shown!.createdAt).toBeGreaterThan(startedAt + 1);
+  });
   it("says when retention erased the artifact a review's finding text comes from", async () => {
     const t = makeTest(), b = await seed(t);
     await finding(t, b);
