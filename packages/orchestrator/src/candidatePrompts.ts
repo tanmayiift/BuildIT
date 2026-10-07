@@ -1,19 +1,22 @@
-// The candidate prompts: findings-v7, critic-v4 and arbitration-v4. They run only for repositories in
-// BUILDIT_PROMPT_CANDIDATE_REPOSITORIES until the historical benchmark shows they do no worse than the
-// current ones (pnpm eval:production, then pnpm eval:compare), and then become the default.
+// The review prompts for the three stages that judge code: findings-v7, critic-v4 and arbitration-v4.
+// They ran first as a candidate for the ten benchmark repositories (BUILDIT_PROMPT_CANDIDATE_REPOSITORIES)
+// and became the default on 7 Oct 2026, after the historical benchmark compared them with v6 run for
+// run (docs/evidence/historical-v2-R0-*.json and -R1-*.json; pnpm eval:compare).
 //
-// What v7 adds over v6, and why:
+// What v7 added over v6, and why:
 // - A severity rubric. The model chose severities with no definition, while only critical and high
 //   block a merge (severityPolicy.ts); a label with no criteria is a coin the author pays for.
 // - The evidence rule validateFindingCandidates enforces, stated. A finding citing the wrong record
 //   was discarded silently; telling the model the rule costs less than the findings it loses.
 // - Confidence anchored to observable facts, and three worked examples of the bar.
-// - Length. OpenAI caches an identical instruction prefix of 1,024 tokens or more; v6 was about 500,
-//   so no review ever read its instructions from cache. This is about 1,200.
+// - Length. OpenAI caches an identical instruction prefix of 1,024 tokens or more; v6 was about 500.
 //
 // The examples are synthetic and share no path, identifier or phrase with the benchmark set
 // (pinned by tests/architecture/candidate-prompts.test.ts), so the benchmark measures the rubric
 // rather than recognition.
+//
+// The variant mechanism stays: the next candidate goes in candidateStagePolicies with its versions,
+// runs for the allowlisted repositories, and replaces these only after the same comparison.
 import type { PromptStage } from "./promptChain.js";
 
 const findings = [
@@ -58,5 +61,8 @@ const arbitration = [
   "A file marked excerpt holds only lines startLine to endLine; when the evidence a finding needs lies outside them, mark it uncertain rather than guessing.",
 ].join("\n");
 
-export const candidateStagePolicies: Partial<Record<PromptStage, string>> = { findings, critic, arbitration };
-export const candidatePromptVersions: Partial<Record<PromptStage, string>> = { findings: "findings-v7", critic: "critic-v4", arbitration: "arbitration-v4" };
+export const judgingStagePolicies = { findings, critic, arbitration } satisfies Partial<Record<PromptStage, string>>;
+export const judgingPromptVersions = { findings: "findings-v7", critic: "critic-v4", arbitration: "arbitration-v4" } satisfies Partial<Record<PromptStage, string>>;
+// No candidate is under evaluation.
+export const candidateStagePolicies: Partial<Record<PromptStage, string>> = {};
+export const candidatePromptVersions: Partial<Record<PromptStage, string>> = {};

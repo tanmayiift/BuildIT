@@ -4,7 +4,7 @@ import { redactForModel } from "@buildit/security";
 import { partitionFiles, planReview, type ReviewPlan } from "./reviewPlan.js";
 import { citedEvidenceView } from "./stageContracts.js";
 import { autofixPromptStages, promptStages, reviewPromptStages, runPromptChain, type InjectionScope, type InjectionSignal, type PromptStage, type PromptVariant, type StageDefinition, type ValidatedStage } from "./promptChain.js";
-import { candidatePromptVersions } from "./candidatePrompts.js";
+import { candidatePromptVersions, judgingPromptVersions } from "./candidatePrompts.js";
 
 const string = { type: "string" } as const;
 const stringArray = { type: "array", items: string } as const;
@@ -50,10 +50,11 @@ function repairInput(input: string, repairOf: unknown) {
 // findings-v4: no repository memory in its input or policy, and a compact validation view.
 // findings-v5: changed files may arrive as hunk excerpts, and unchanged files only as import neighbours.
 // findings-v6: runs beside the requirements stage, so it cites canonical requirement ids directly.
-// findings-v7, critic-v4, arbitration-v4: the candidate wording (candidatePrompts.ts).
+// findings-v7, critic-v4, arbitration-v4: a severity rubric and the evidence rule, stated; the default
+// since 7 Oct 2026 after the historical benchmark compared them with v6 (candidatePrompts.ts).
 const stagePromptVersions: Record<PromptVariant, Partial<Record<PromptStage, string>>> = {
-  current: { findings: "findings-v6", critic: "critic-v3", arbitration: "arbitration-v3" },
-  candidate: { findings: "findings-v6", critic: "critic-v3", arbitration: "arbitration-v3", ...candidatePromptVersions },
+  current: { ...judgingPromptVersions },
+  candidate: { ...judgingPromptVersions, ...candidatePromptVersions },
 };
 const judgingStages = new Set<PromptStage>(["critic", "arbitration"]);
 const citedView = (untrusted: Record<string, unknown>) => (stage: PromptStage, records: ValidatedStage[]) => {
