@@ -2,6 +2,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import { api, internal } from "./_generated/api";
+import { listCeiling } from "./reviews";
 import type { Id } from "./_generated/dataModel";
 import { summaryFixture } from "./testing/summaryFixture";
 import schema from "./schema";
@@ -33,20 +34,20 @@ async function charge(t: ReturnType<typeof makeTest>, b: Awaited<ReturnType<type
 const signed = (t: ReturnType<typeof makeTest>) => t.withIdentity({ subject: "summary|session" });
 
 describe("bounded history remains truthful", () => {
-  it("keeps newest active work despite 500 old failures and discloses the cap", async () => {
+  it("keeps newest active work despite a full window of old failures and discloses the cap", async () => {
     const t = makeTest(), b = await seed(t);
     await t.run(async ctx => {
-      for (let i = 0; i < 500; i++) await ctx.db.insert("reviews", { ...b.review, prNumber: i + 2, status: "platform_failed", createdAt: b.now - 1000 - i });
+      for (let i = 0; i < listCeiling; i++) await ctx.db.insert("reviews", { ...b.review, prNumber: i + 2, status: "platform_failed", createdAt: b.now - 1000 - i });
       await ctx.db.patch(b.reviewId, { status: "analyzing", createdAt: b.now, currentStage: "analysis" });
     });
     const result = await signed(t).query(api.reviews.list, { organizationId: b.organizationId });
     expect(result.rows[0]?.id).toBe(b.reviewId); expect(result.truncated).toBe(true);
   });
-  it("does not claim truncation at exactly 500 reviews", async () => {
+  it("does not claim truncation at exactly the window's size", async () => {
     const t = makeTest(), b = await seed(t);
-    await t.run(async ctx => { for (let i = 0; i < 499; i++) await ctx.db.insert("reviews", { ...b.review, prNumber: i + 2 }); });
+    await t.run(async ctx => { for (let i = 0; i < listCeiling - 1; i++) await ctx.db.insert("reviews", { ...b.review, prNumber: i + 2 }); });
     const result = await signed(t).query(api.reviews.list, { organizationId: b.organizationId });
-    expect(result.rows).toHaveLength(500); expect(result.truncated).toBe(false);
+    expect(result.rows).toHaveLength(listCeiling); expect(result.truncated).toBe(false);
   });
   it("chooses the latest 50 runs by time, not commit spelling", async () => {
     const t = makeTest(), b = await seed(t);
@@ -116,6 +117,11 @@ describe("bounded history remains truthful", () => {
     });
     const result = await signed(t).query(api.activation.funnel, { organizationId: b.organizationId });
     expect(result.pullRequestPreviewed).toBe(true); expect(result.firstEvidenceReady).toBe(true);
+    // The queue reads the five steps from activation:path, which skips the outcome totals; it must
+    // answer exactly as the funnel does.
+    const path = await signed(t).query(api.activation.path, { organizationId: b.organizationId });
+    expect(path).toEqual({ repositoryConnected: result.repositoryConnected, modelKeyReady: result.modelKeyReady,
+      pullRequestPreviewed: result.pullRequestPreviewed, reviewStarted: result.reviewStarted, firstEvidenceReady: result.firstEvidenceReady });
   });
   it("distinguishes review attempts from distinct completed pull requests", async () => {
     const t = makeTest(), b = await seed(t);

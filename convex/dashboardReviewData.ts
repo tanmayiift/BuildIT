@@ -138,7 +138,6 @@ export const create = internalMutation({
       provider: credential.provider, model, modelVersion: "pinned-at-execution", promptVersion: "chain-v1", evalSetVersion: "buildit-eval-v1",
       coverageLevel: "limited", currentStage: "queue", executionGeneration: 0, queuePriority: 0, runnerImageVersion: RUNNER_IMAGE_VERSION,
       expiresAt: args.now + retentionMs(organization?.retentionHours), createdAt: args.now, updatedAt: args.now });
-    await ctx.db.insert("reviewLocks", { repositoryId: repository._id, prNumber: args.prNumber, headSha: args.headSha, mode: "review", reviewId, createdAt: args.now });
     await ctx.db.insert("reviewEvents", { organizationId: repository.organizationId, reviewId, sequence: 1, type: "review_created", stage: "queue", internalCode: "dashboard_consent", metadata: {}, createdAt: args.now });
     await appendAuditEvent(ctx, { organizationId: repository.organizationId, actorId: args.actorId, action: "review.created", resourceType: "review", resourceId: reviewId, requestId: `dashboard-review:${reviewId}`, result: "allowed", createdAt: args.now });
     return { reviewId, status: "queued" as const, headSha: args.headSha, executionGeneration: 0 };

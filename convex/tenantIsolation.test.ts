@@ -2262,31 +2262,6 @@ describe("Convex review state integrity", () => {
     ).rejects.toThrow("invalid_event_sequence");
   });
 
-  it("allows only one active review per repository, PR, head, and mode", async () => {
-    const t = convexTest(schema, modules);
-    const seeded = await seedTenant(t, "alpha", "alice");
-    const duplicateReviewId = await t.run(async (ctx) => {
-      const original = await ctx.db.get(seeded.reviewId);
-      if (!original) throw new Error("missing fixture");
-      const {
-        _id: _ignoredId,
-        _creationTime: _ignoredTime,
-        ...copy
-      } = original;
-      return ctx.db.insert("reviews", copy);
-    });
-    await t.mutation(internal.reviewState.claimActiveReview, {
-      reviewId: seeded.reviewId,
-      now: 1,
-    });
-    await expect(
-      t.mutation(internal.reviewState.claimActiveReview, {
-        reviewId: duplicateReviewId,
-        now: 2,
-      }),
-    ).rejects.toThrow("active_review_exists");
-  });
-
   it("deduplicates identical side effects and rejects key reuse with new content", async () => {
     const t = convexTest(schema, modules);
     const seeded = await seedTenant(t, "alpha", "alice");
@@ -3422,11 +3397,12 @@ describe("GitHub webhook durability", () => {
     await expect(
       t.mutation(internal.githubWebhookData.materializeReview, args),
     ).rejects.toThrow("review_request_not_materializable");
+    // One review for the scope: the guarantee lives on reviews.by_repo_pr_head_mode, not in a lock row.
     expect(
       await t.run((ctx) =>
         ctx.db
-          .query("reviewLocks")
-          .withIndex("by_scope", (q) =>
+          .query("reviews")
+          .withIndex("by_repo_pr_head_mode", (q) =>
             q
               .eq("repositoryId", tenant.repositoryId)
               .eq("prNumber", 7)

@@ -121,3 +121,6 @@ export const sandboxReclaimMaxAttempts = 5;
 // a replay starting a second review of the same event - so deleting a row sooner than GitHub can
 // resend it would make a replay read as new. 30 days is therefore the floor, not a preference.
 export const webhookDeliveryRetentionMs = 30 * 86_400_000;
+// A delivery BuildIT ignored on arrival (a bot's comment, an edit) is only kept long enough to
+// answer a quick redelivery as a duplicate; nothing reads it after that.
+export const ignoredWebhookDeliveryRetentionMs = 86_400_000;

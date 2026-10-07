@@ -12,7 +12,12 @@ import { testCountsSummary } from "@buildit/contracts";
 // limit, where the query does not degrade but hard-fails. completeAnalysis already refuses more
 // than 500 findings or requirements per review, so the evidence ceiling is well clear of any
 // real review.
-const listCeiling = 500;
+// The queue's window: the latest hundred review attempts. It was 500, and as a live subscription the
+// queue re-read all of them on every write to any review in the workspace - 272 MB of the
+// deployment's 1 GB monthly read allowance in six days of October 2026. A hundred attempts is the
+// last fifty or so pull requests; older ones stay on the history page and in the audit trail, and
+// the queue says when it is showing a window rather than everything.
+export const listCeiling = 100;
 const evidenceCeiling = 1_000;
 // A pull request reviewed more times than this is being debugged, not read: the newest runs are
 // the ones a diff is asked about.

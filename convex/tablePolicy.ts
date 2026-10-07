@@ -42,6 +42,7 @@ export const tablePolicies = {
   // Deployment-wide by design: a counter scoped to one organization could not bound the quota
   // every organization draws on. It holds a month string and a seconds total, nothing tenant-specific.
   platformSandboxUsage: { scope: "global_ingress", parents: [], data: "metadata" },
+  publicProofSnapshots: { scope: "global_ingress", parents: [], data: "metadata" },
   notificationFanouts: { scope: "review", parents: ["organizationId", "reviewId"], data: "metadata" },
   emailBatches: { scope: "organization", parents: ["organizationId", "userId", "notificationIds"], data: "metadata" },
   notifications: { scope: "organization", parents: ["organizationId", "userId", "reviewId", "repositoryId", "batchId"], data: "metadata" },

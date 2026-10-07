@@ -29,6 +29,7 @@ import { publicFunctionPolicies } from "../../convex/publicFunctionPolicy";
 // reason is the gap, not an excuse: when the gap closes, the entry is deleted, and the test below
 // fails until it is.
 const deliberatelyUnreferenced: Record<string, string> = {
+  "activation:funnel": "the review queue reads activation:path, the five steps only - no screen yet shows the activation durations and outcome totals this computes.",
   "artifacts:getMetadata": "no screen shows an artifact's size, storage state or expiry - the review page renders evidence only.",
   "audit:verifyChain": "the audit log is listed but never verified, so a customer cannot tell a sound hash chain from a tampered one.",
   "memberships:invite": "superseded by memberships:inviteByGitHubLogin, which the members panel calls - this by-userId variant has no caller left.",

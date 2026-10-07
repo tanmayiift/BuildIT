@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
 import { describe, expect, it } from "vitest";
 import schema from "./schema";
+import { internal } from "./_generated/api";
 import { publishableAsEvidence } from "./publicProof";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -311,5 +312,32 @@ describe("the public evidence list publishes only what was chosen", () => {
     await seedEvidenceRepository(t, "unchosen", "tanmayiift", { visibility: "public", visibilityVerifiedAt: now }, now);
     const names = (await t.query(publicReviews, {})).reviews.map(review => review.name);
     expect(names).toEqual(["chosen-repo"]);
+  });
+});
+
+// The summary used to be a live subscription that re-read every review, finding and ledger row on
+// any write to them, for every open /proof page: half of the deployment's monthly read allowance in
+// six days. It is now summarised on a schedule and read from one row.
+describe("the public summary, summarised on a schedule", () => {
+  it("reads the stored summary, and rewrites it only when a number changed", async () => {
+    const t = convexTest(schema, modules);
+    expect(await t.mutation(internal.publicProof.refreshSummary, {})).toEqual({ changed: true });
+    // Nothing changed, so no write - and no open page is invalidated.
+    expect(await t.mutation(internal.publicProof.refreshSummary, {})).toEqual({ changed: false });
+    const stored = await t.query(proofSummary, {});
+    expect(stored.reviews.counted).toBe(0);
+    // Viewers get the stored row, not a fresh read of the tables: change the row and they see that.
+    const store = (value: Proof) => t.run(async ctx => {
+      const row = (await ctx.db.query("publicProofSnapshots").collect())[0]!;
+      await ctx.db.patch(row._id, { countsJson: JSON.stringify(value) });
+    });
+    await store({ ...stored, generatedAt: 42 });
+    expect((await t.query(proofSummary, {})).generatedAt).toBe(42);
+    // Same numbers, written in a different key order and at another time: not a change, no write.
+    expect(await t.mutation(internal.publicProof.refreshSummary, {})).toEqual({ changed: false });
+    // A stale number is corrected by the next scheduled summary.
+    await store({ ...stored, reviews: { ...stored.reviews, counted: 99 } });
+    expect(await t.mutation(internal.publicProof.refreshSummary, {})).toEqual({ changed: true });
+    expect((await t.query(proofSummary, {})).reviews.counted).toBe(0);
   });
 });

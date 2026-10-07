@@ -5,7 +5,7 @@ import { selectProviderModel } from "@buildit/providers";
 import { RUNNER_IMAGE_VERSION } from "./lib/runtimeVersion";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { retentionMs, terminalStatuses, webhookDeliveryRetentionMs } from "./lib/lifecycle";
+import { ignoredWebhookDeliveryRetentionMs, retentionMs, terminalStatuses, webhookDeliveryRetentionMs } from "./lib/lifecycle";
 import { activeReviewCount, concurrencyExceeded } from "./lib/tenantLimits";
 import { platformCeilingExceeded, platformSandboxSecondsThisMonth, sandboxCeilingExceeded, sandboxCeilingSeconds, sandboxSecondsThisMonth } from "./lib/sandboxCeiling";
 import { monthKey } from "./lib/monthlySpend";
@@ -56,7 +56,7 @@ export const reserve = internalMutation({
       return { duplicate: false, id: existing._id };
     }
     const id = await ctx.db.insert("webhookDeliveries", {
-      expiresAt: args.now + webhookDeliveryRetentionMs,
+      expiresAt: args.now + (args.disposition === "processed" ? webhookDeliveryRetentionMs : ignoredWebhookDeliveryRetentionMs),
       deliveryId: args.deliveryId,
       event: args.event,
       action: args.action,
@@ -385,14 +385,6 @@ export const materializeReview = internalMutation({
       expiresAt: args.now + retentionMs(organization?.retentionHours),
       createdAt: args.now,
       updatedAt: args.now,
-    });
-    await ctx.db.insert("reviewLocks", {
-      repositoryId: repository._id,
-      prNumber: delivery.prNumber,
-      headSha: delivery.headSha,
-      mode,
-      reviewId,
-      createdAt: args.now,
     });
     await ctx.db.insert("reviewEvents", {
       organizationId: args.organizationId,

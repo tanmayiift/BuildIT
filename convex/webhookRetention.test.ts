@@ -2,7 +2,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import { internal } from "./_generated/api";
 import schema from "./schema";
-import { webhookDeliveryRetentionMs } from "./lib/lifecycle";
+import { ignoredWebhookDeliveryRetentionMs, webhookDeliveryRetentionMs } from "./lib/lifecycle";
 
 const modules = import.meta.glob("./**/*.ts");
 
@@ -77,5 +77,17 @@ describe("webhook delivery retention", () => {
     const t = convexTest(schema, modules);
     const rows = await t.run(async ctx => ctx.db.query("webhookDeliveries").collect());
     expect(rows.every(row => typeof row.expiresAt === "number")).toBe(true);
+  });
+
+  // A delivery ignored on arrival is decided by its payload alone - a bot sender, an edit - so a
+  // redelivery after a day is ignored again rather than acted on. Only the 30-day floor for
+  // deliveries BuildIT acts on protects against a replay starting a second review.
+  it("keeps an ignored delivery for a day and an acted-on one for GitHub's 30-day window", async () => {
+    const t = convexTest(schema, modules), now = 1_000_000;
+    await t.mutation(internal.githubWebhookData.reserve, { deliveryId: "bot-1", event: "issue_comment", action: "created", disposition: "ignored_bot", signatureValid: true, now });
+    await t.mutation(internal.githubWebhookData.reserve, { deliveryId: "cmd-1", event: "issue_comment", action: "created", disposition: "processed", signatureValid: true, now });
+    const rows = await t.run(ctx => ctx.db.query("webhookDeliveries").collect());
+    expect(rows.find(row => row.deliveryId === "bot-1")?.expiresAt).toBe(now + ignoredWebhookDeliveryRetentionMs);
+    expect(rows.find(row => row.deliveryId === "cmd-1")?.expiresAt).toBe(now + webhookDeliveryRetentionMs);
   });
 });

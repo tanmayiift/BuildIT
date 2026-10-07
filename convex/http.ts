@@ -3,8 +3,10 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { auth } from "./auth";
 import { validSignature } from "./lib/webhookSignature";
+import { handledWebhookEvents } from "./lib/webhookEvents";
 
 const http = httpRouter();
+
 auth.addHttpRoutes(http);
 http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(async (ctx, request) => {
   const rawBody = await request.arrayBuffer(), body = new Uint8Array(rawBody), signature = request.headers.get("x-hub-signature-256"), secret = process.env.GITHUB_WEBHOOK_SECRET;
@@ -13,6 +15,7 @@ http.route({ path: "/api/github/webhooks", method: "POST", handler: httpAction(a
   try { payload = JSON.parse(new TextDecoder().decode(body)) as Record<string, unknown>; } catch { return new Response("invalid json", { status: 400 }); }
   const deliveryId = request.headers.get("x-github-delivery"), event = request.headers.get("x-github-event") ?? "unknown";
   if (!deliveryId) return new Response("missing delivery", { status: 400 });
+  if (!handledWebhookEvents.has(event)) return new Response("not handled", { status: 202 });
   const action = typeof payload.action === "string" ? payload.action : "unknown", sender = payload.sender as { login?: unknown; type?: unknown } | undefined, installation = payload.installation as { id?: unknown } | undefined, repository = payload.repository as { id?: unknown } | undefined, comment = payload.comment as { body?: unknown } | undefined, issue = payload.issue as { number?: unknown; pull_request?: unknown } | undefined;
   const pullRequest = payload.pull_request as { number?: unknown; head?: { sha?: unknown } } | undefined;
   const pushRef = payload.ref, pushAfter = payload.after;

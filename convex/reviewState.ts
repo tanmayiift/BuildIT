@@ -5,7 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import * as value from "./validators";
 import { activeStatuses, cancellationNotice, terminalStatuses, transitionAllowed } from "./lib/lifecycle";
-import { assertAttemptParent, assertRepositoryParent, assertReviewParent } from "./lib/parentConsistency";
+import { assertAttemptParent, assertReviewParent } from "./lib/parentConsistency";
 import { queueReviewNotification } from "./lib/queueNotification";
 
 // Cancelling a review used to be a database write and nothing else, so the acknowledgement check
@@ -172,24 +172,6 @@ export const expireBlocked = internalMutation({
     });
     await queueReviewNotification(ctx, args.reviewId, args.now);
     return true;
-  },
-});
-
-export const claimActiveReview = internalMutation({
-  args: { reviewId: v.id("reviews"), now: v.number() },
-  handler: async (ctx, args) => {
-    const review = await ctx.db.get(args.reviewId);
-    if (!review || terminalStatuses.has(review.status)) throw new ConvexError("review_not_active");
-    await assertRepositoryParent(ctx.db, review.organizationId, review.repositoryId);
-    const existing = await ctx.db.query("reviewLocks").withIndex("by_scope", (q) =>
-      q.eq("repositoryId", review.repositoryId).eq("prNumber", review.prNumber)
-        .eq("headSha", review.headSha).eq("mode", review.mode)).unique();
-    if (existing && existing.reviewId !== args.reviewId) throw new ConvexError("active_review_exists");
-    if (existing) return existing._id;
-    return ctx.db.insert("reviewLocks", {
-      repositoryId: review.repositoryId, prNumber: review.prNumber, headSha: review.headSha,
-      mode: review.mode, reviewId: args.reviewId, createdAt: args.now,
-    });
   },
 });
 

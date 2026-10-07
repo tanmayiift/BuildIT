@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { handledWebhookEvents } from "../../convex/lib/webhookEvents";
 
 // The feedback signal was first written to listen for a "reaction" event. GitHub emits no such
 // webhook - not for repositories and not for Apps - so it could never have fired, and nothing in
@@ -95,5 +96,14 @@ describe("every webhook event BuildIT listens for", () => {
     const stale = Object.keys(unsubscribedHandlers)
       .filter(event => subscribedEvents.has(event) || alwaysDeliveredEvents.has(event));
     expect(stale, "these events are subscribed now and must leave unsubscribedHandlers").toEqual([]);
+  });
+
+  // The set the handler checks before storing anything must be exactly the events a branch acts on:
+  // one missing would drop a real command unseen, one extra would store rows nothing reads.
+  it("stores only the deliveries a handler acts on", () => {
+    const handled = new Set([...http.matchAll(/event === "([a-z_]+)"/g)].map(match => match[1]!));
+    expect([...handledWebhookEvents].sort()).toEqual([...handled].sort());
+    for (const unread of ["check_run", "check_suite"]) expect(handledWebhookEvents.has(unread), unread).toBe(false);
+    expect(http.indexOf("handledWebhookEvents.has(event)")).toBeLessThan(http.indexOf("githubWebhookData.reserve"));
   });
 });
