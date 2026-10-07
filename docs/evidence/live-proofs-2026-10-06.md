@@ -130,6 +130,15 @@ Reviews (280), check results and usage rows were untouched.
 - `/reviews` shows the activation steps and the verdict summary.
 - `/proof` reads "Production data · no account, no key" and "Summarised at 2026-10-07 04:06:51 UTC".
 
+**Reads, measured after** (Convex usage page, UTC days, read 7 Oct about 05:00 UTC):
+
+| Day | Database reads |
+|---|---|
+| 6 Oct, before the fix | 891.78 MB |
+| 7 Oct, 00:00 to about 05:00 UTC | 35.7 MB |
+
+The 7 Oct window holds the four hours before the 04:11 UTC release and the first hour of the R1 benchmark. A whole day after the fix has not been measured yet. October stands at 1.75 GB.
+
 **Still the owner's decision.** October's reads were already past 1 GB before the fix. On Convex Starter (pay as you go) the overage costs about $0.22 per GB; Professional adds daily backups.
 
 ## 10. The GitHub failure emails
