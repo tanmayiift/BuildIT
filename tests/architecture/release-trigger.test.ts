@@ -39,6 +39,11 @@ describe("a release follows CI, never a push", () => {
 
   it("never cancels CI on main, and exercises the release plan on every pull request without secrets", () => {
     expect(ci).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
+    // A queued main run is never displaced either: each push to main has a group of its own.
+    expect(ci).toContain("group: buildit-ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}");
+    // And no release is cancelled for waiting: only the deploy job is serialised.
+    expect(release).not.toMatch(/^concurrency:/m);
+    expect(release).toMatch(/release:\n[\s\S]*?concurrency:\n\s+group: buildit-deploy\n\s+cancel-in-progress: false/);
     expect(ci).not.toMatch(/cancel-in-progress: true/);
     const contract = ci.slice(ci.indexOf("  deploy-contract:"), ci.indexOf("\n  browser:"));
     expect(contract).toContain("pnpm deploy:check");
